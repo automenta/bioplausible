@@ -21,13 +21,11 @@ from __future__ import annotations
 
 import math
 from abc import abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from computronium.config.experiment import ExperimentConfig
 
 import torch
 from torch import Tensor, nn
@@ -90,6 +88,23 @@ __all__ = [
     "TernarySubstrate",
     "ThermodynamicContrast",
 ]
+
+
+def _set_param_name(tensor: Tensor, name: str) -> None:
+    """Tag a parameter tensor with its substrate keying name."""
+    setattr(tensor, "_param_name", name)
+
+
+def _layer_stack(geometry: Geometry) -> nn.ModuleList | None:
+    """Return the geometry's ordered module stack if it is layer-based."""
+    layers = getattr(geometry, "_layers", None)
+    return layers if isinstance(layers, nn.ModuleList) else None
+
+
+def _recurrent_weight(geometry: Geometry) -> Tensor | None:
+    """Return the geometry's recurrent weight matrix if present."""
+    weight = getattr(geometry, "_recurrent_weight", None)
+    return weight if isinstance(weight, Tensor) else None
 
 
 # ============================================================
@@ -1526,150 +1541,6 @@ class SystemConfig:
             )
 
     @classmethod
-    def from_experiment(cls, exp: ExperimentConfig) -> SystemConfig:
-        """Build from unified ExperimentConfig — single entry point.
-
-        Args:
-            exp: Unified experiment configuration.
-
-        Returns:
-            Validated SystemConfig composed from experiment's ontology and model config.
-        """
-
-        ont = exp.ontology
-        model = exp.model
-
-        # Build substrate config
-        if ont.substrate is not None:
-            substrate = ont.substrate
-        else:
-            # Map substrate_type to factory method
-            substrate_map = {
-                "digital": SubstrateConfig.digital,
-                "analog": SubstrateConfig.analog,
-                "memristive": SubstrateConfig.memristive,
-                "neuromorphic": SubstrateConfig.neuromorphic,
-                "optical": SubstrateConfig.optical,
-                "quantum": SubstrateConfig.quantum,
-                "complex": SubstrateConfig.complex,
-                "sparse": SubstrateConfig.sparse,
-                "ternary": SubstrateConfig.ternary,
-            }
-            substrate_factory = substrate_map.get(
-                ont.substrate_type, SubstrateConfig.digital
-            )
-            substrate = substrate_factory(precision=ont.substrate_precision)
-
-        # Build geometry config
-        if ont.geometry is not None:
-            geometry = ont.geometry
-        else:
-            hidden_dims = ont.hidden_dims or tuple(model.hidden_dims)
-            topology_map = {
-                "feedforward": GeometryConfig.feedforward,
-                "recurrent": GeometryConfig.recurrent,
-                "recurrent_attractor": GeometryConfig.recurrent,
-                "tile_mesh": GeometryConfig.tile_mesh,
-                "tile": GeometryConfig.tile_mesh,
-            }
-            geometry_factory = topology_map.get(
-                ont.topology_type, GeometryConfig.feedforward
-            )
-
-            if ont.topology_type in ("tile_mesh", "tile"):
-                geometry = geometry_factory(
-                    input_dim=model.input_dim,
-                    output_dim=model.output_dim,
-                    num_layers=model.num_layers,
-                    neurons_per_tile=model.neurons_per_tile,
-                    tiles_per_layer=model.tiles_per_layer,
-                )
-            else:
-                geometry = geometry_factory(
-                    input_dim=model.input_dim,
-                    output_dim=model.output_dim,
-                    hidden_dims=hidden_dims,
-                )
-
-        # Build dynamics config
-        if ont.dynamics is not None:
-            dynamics = ont.dynamics
-        else:
-            dynamics_map = {
-                "energy_minimization": StateDynamicsConfig.energy_minimization,
-                "predictive_settling": StateDynamicsConfig.predictive_settling,
-                "spike_integration": StateDynamicsConfig.spike_integration,
-                "instantaneous": StateDynamicsConfig.instantaneous,
-                "diffusion": StateDynamicsConfig.diffusion,
-            }
-            dynamics_factory = dynamics_map.get(
-                ont.dynamics_type, StateDynamicsConfig.instantaneous
-            )
-            dynamics = dynamics_factory(max_steps=ont.max_steps, beta=ont.beta)
-
-        # Build credit config
-        if ont.credit is not None:
-            credit = ont.credit
-        else:
-            credit_map = {
-                "thermodynamic_contrast": CreditAssignmentConfig.thermodynamic_contrast,
-                "equilibrium": CreditAssignmentConfig.thermodynamic_contrast,
-                "random_projections": CreditAssignmentConfig.random_projections,
-                "feedback_alignment": CreditAssignmentConfig.random_projections,
-                "local_goodness": CreditAssignmentConfig.local_goodness,
-                "forward_only": CreditAssignmentConfig.local_goodness,
-                "temporal_trace": CreditAssignmentConfig.temporal_trace,
-                "spiking": CreditAssignmentConfig.temporal_trace,
-                "target_inversion": CreditAssignmentConfig.target_inversion,
-                "target_prop": CreditAssignmentConfig.target_inversion,
-                "gradient": CreditAssignmentConfig.gradient,
-                "backprop": CreditAssignmentConfig.gradient,
-            }
-            credit_factory = credit_map.get(
-                ont.credit_type, CreditAssignmentConfig.gradient
-            )
-            credit = credit_factory(beta=ont.beta)
-
-        # Build update config
-        if ont.update is not None:
-            update = ont.update
-        else:
-            update_map = {
-                "riemannian_orthogonal": ParameterUpdateConfig.riemannian_orthogonal,
-                "muon": ParameterUpdateConfig.riemannian_orthogonal,
-                "spectral_constrained": ParameterUpdateConfig.spectral_constrained,
-                "spectral": ParameterUpdateConfig.spectral_constrained,
-                "natural_gradient": ParameterUpdateConfig.natural_gradient,
-                "fisher": ParameterUpdateConfig.natural_gradient,
-                "elastic_consolidation": ParameterUpdateConfig.elastic_consolidation,
-                "ewc": ParameterUpdateConfig.elastic_consolidation,
-                "euclidean": ParameterUpdateConfig.euclidean,
-            }
-        update_factory = update_map.get(
-            ont.update_type, ParameterUpdateConfig.euclidean
-        )
-        update = update_factory(step_size=ont.step_size)
-
-        # Build plasticity config (6th axis)
-        if hasattr(ont, "plasticity") and ont.plasticity is not None:
-            plasticity = ont.plasticity
-        else:
-            # Default to NullPlasticity for backward compatibility
-            plasticity = PlasticityConfig.null()
-
-        # Create and validate
-        sys_config = cls(
-            substrate=substrate,
-            geometry=geometry,
-            dynamics=dynamics,
-            plasticity=plasticity,
-            credit=credit,
-            update=update,
-        )
-        sys_config.validate()
-        return sys_config
-
-    @classmethod
     def valid_combinations(cls) -> list[dict]:
         """Return all valid 6-D coordinate combinations for AutoScientist.
 
@@ -1948,9 +1819,9 @@ class FeedforwardGeometry(nn.Module):
         """Set _param_name attribute on weight tensors for substrate keying."""
         for i, layer in enumerate(self._layers):
             if isinstance(layer, nn.Linear):
-                layer.weight._param_name = f"layer_{i}_weight"
+                _set_param_name(layer.weight, f"layer_{i}_weight")
                 if layer.bias is not None:
-                    layer.bias._param_name = f"layer_{i}_bias"
+                    _set_param_name(layer.bias, f"layer_{i}_bias")
 
     @property
     def params(self) -> dict[str, Tensor]:
@@ -2092,11 +1963,11 @@ class RecurrentGeometry(nn.Module):
         """Set _param_name attribute on weight tensors for substrate keying."""
         for i, layer in enumerate(self._layers):
             if isinstance(layer, nn.Linear):
-                layer.weight._param_name = f"layer_{i}_weight"
+                _set_param_name(layer.weight, f"layer_{i}_weight")
                 if layer.bias is not None:
-                    layer.bias._param_name = f"layer_{i}_bias"
+                    _set_param_name(layer.bias, f"layer_{i}_bias")
         if self._recurrent_weight is not None:
-            self._recurrent_weight._param_name = "recurrent_weight"
+            _set_param_name(self._recurrent_weight, "recurrent_weight")
 
     @property
     def params(self) -> dict[str, Tensor]:
@@ -2262,26 +2133,26 @@ class TileGeometry(nn.Module):
             if tile.is_input:
                 continue
             bias = nn.Parameter(torch.zeros(tile.neurons))
-            bias._param_name = f"tile_bias_{tid}"
+            _set_param_name(bias, f"tile_bias_{tid}")
             self._tile_biases[str(tid)] = bias
             for src_id in tile.bwd_neighbors:
                 src = self._graph.tiles[src_id]
                 bound = 1.0 / math.sqrt(src.neurons) if src.neurons > 0 else 0.0
                 w = torch.empty(tile.neurons, src.neurons).uniform_(-bound, bound)
                 param = nn.Parameter(w)
-                param._param_name = f"tile_weight_{src_id}_{tid}"
+                _set_param_name(param, f"tile_weight_{src_id}_{tid}")
                 self._tile_weights[f"{src_id}_{tid}"] = param
 
     def _set_projection_param_names(self) -> None:
         """Set _param_name on input/output projection weights."""
         if self._input_projection is not None:
-            self._input_projection.weight._param_name = "input_proj_weight"
+            _set_param_name(self._input_projection.weight, "input_proj_weight")
             if self._input_projection.bias is not None:
-                self._input_projection.bias._param_name = "input_proj_bias"
+                _set_param_name(self._input_projection.bias, "input_proj_bias")
         if self._output_projection is not None:
-            self._output_projection.weight._param_name = "output_proj_weight"
+            _set_param_name(self._output_projection.weight, "output_proj_weight")
             if self._output_projection.bias is not None:
-                self._output_projection.bias._param_name = "output_proj_bias"
+                _set_param_name(self._output_projection.bias, "output_proj_bias")
 
     @staticmethod
     def _weight_key(src_id: int, dst_id: int) -> str:
@@ -2582,7 +2453,7 @@ class InstantaneousDynamics:
         if state.x is not None:
             acts = geometry.forward_with_intermediates(state.x, substrate)
         else:
-            acts = [state.activations] if state.activations is not None else []
+            acts = state.activations if state.activations is not None else []
         if target is None:
             state.free_state = acts
         else:
@@ -2667,7 +2538,7 @@ class ThermodynamicContrast:
     ) -> Tensor:
         """Surrogate objective for EqProp: negative free energy difference."""
         if free_state.energy is not None and nudged_state.energy is not None:
-            return nudged_state.energy - free_state.energy
+            return torch.as_tensor(nudged_state.energy - free_state.energy)
         return torch.tensor(0.0)
 
 
@@ -2701,7 +2572,7 @@ class EuclideanUpdate:
                         grad_norm = grad.norm()
                         if grad_norm > self.config.grad_clip:
                             grad = grad * (self.config.grad_clip / (grad_norm + 1e-8))
-                    
+
                     if self.config.momentum > 0:
                         buf = self._momentum_buffers.get(name, torch.zeros_like(param))
                         buf.mul_(self.config.momentum).add_(grad)
@@ -3000,8 +2871,11 @@ class ModelAdapter:
         return geometry
 
     def _infer_input_dim(self) -> int:
-        if hasattr(self.model, "input_dim"):
-            return int(self.model.input_dim)
+        dim = getattr(self.model, "input_dim", None)
+        if isinstance(dim, int):
+            return dim
+        if isinstance(dim, Tensor) and dim.numel() == 1:
+            return int(dim.item())
         if isinstance(self.model, nn.Sequential):
             for layer in self.model:
                 if isinstance(layer, nn.Linear):
@@ -3009,8 +2883,11 @@ class ModelAdapter:
         return 0
 
     def _infer_output_dim(self) -> int:
-        if hasattr(self.model, "output_dim"):
-            return int(self.model.output_dim)
+        dim = getattr(self.model, "output_dim", None)
+        if isinstance(dim, int):
+            return dim
+        if isinstance(dim, Tensor) and dim.numel() == 1:
+            return int(dim.item())
         if isinstance(self.model, nn.Sequential):
             for layer in reversed(self.model):
                 if isinstance(layer, nn.Linear):
@@ -3151,6 +3028,7 @@ class ModelAdapter:
                     convergence_start=5,
                     step_size=0.1,
                     beta=getattr(self.model, "beta", 0.5),
+                    momentum=0.0,
                     track_free_energy_per_iter=False,
                 )
             )
@@ -3178,6 +3056,7 @@ class ModelAdapter:
                     convergence_start=5,
                     step_size=0.1,
                     beta=0.5,
+                    momentum=0.0,
                     track_free_energy_per_iter=False,
                 )
             )
@@ -3278,7 +3157,7 @@ class ModelAdapter:
                     feedback_scale=0.01,
                 )
             )
-        credit_map: dict[str, type[CreditAssignment]] = {
+        credit_map = {
             "random_projections": RandomProjectionsCredit,
             "feedback_alignment": RandomProjectionsCredit,
             "local_goodness": LocalGoodnessCredit,
@@ -3304,7 +3183,7 @@ class ModelAdapter:
         )
 
     def _credit_from_family(self, family: str) -> CreditAssignment | None:  # ruff: ignore[no-self-use]
-        family_map: list[tuple[tuple[str, ...], type[CreditAssignment]]] = [
+        family_map = [
             (("eqprop", "equilibrium", "ep"), ThermodynamicContrast),
             (("fa", "feedback", "dfa"), RandomProjectionsCredit),
             (("hebbian", "chl"), ThermodynamicContrast),
@@ -3538,9 +3417,10 @@ class ModelAdapter:
 
         # Run legacy model train_step
         legacy_metrics: dict[str, object] = {}
-        if hasattr(self.model, "train_step"):
+        legacy_train_step = getattr(self.model, "train_step", None)
+        if callable(legacy_train_step):
             try:
-                legacy_result = self.model.train_step(x, y)
+                legacy_result = legacy_train_step(x, y)
                 if legacy_result is not None:
                     legacy_metrics = legacy_result  # type: ignore[assignment]
             except Exception as e:
@@ -3957,7 +3837,7 @@ class EnergyMinimizationDynamics:
 
     def _compute_energy(self, all_acts: list[Tensor], geometry: Geometry) -> float:
         """Compute Hopfield energy for the current state.
-        
+
         E = 0.5 * sum(h_i^2) - sum_{i,j} W_{ij} h_i h_j - sum_i b_i h_i
         For ReLU networks with symmetric weights approximation.
         """
@@ -3974,12 +3854,17 @@ class EnergyMinimizationDynamics:
         # Exclude recurrent_weight which is not a feedforward weight
         params = geometry.params
         weight_names = [
-            n for n in params
+            n
+            for n in params
             if "weight" in n and params[n].ndim == 2 and not n.startswith("recurrent")
         ]
         # Sort by layer index (e.g., "0.weight" -> 0, "2.weight" -> 2)
-        weight_names.sort(key=lambda x: int(x.split("_")[1]) if "_" in x and x.split("_")[1].isdigit() else 0)
-        
+        weight_names.sort(
+            key=lambda x: (
+                int(x.split("_")[1]) if "_" in x and x.split("_")[1].isdigit() else 0
+            )
+        )
+
         if not weight_names:
             return 0.0
 
@@ -4004,7 +3889,7 @@ class EnergyMinimizationDynamics:
                 # Output layer: last feedforward weight (hidden -> output)
                 weight_idx = num_ff_weights - 1
                 h_prev = acts[i - 1]  # Last hidden layer
-            
+
             if weight_idx < num_ff_weights:
                 W = params[weight_names[weight_idx]]
                 # h^T * W * h_prev -> sum over batch, then mean
@@ -4015,10 +3900,15 @@ class EnergyMinimizationDynamics:
 
         # Subtract bias terms (exclude recurrent bias if any)
         bias_names = [
-            n for n in params
+            n
+            for n in params
             if "bias" in n and params[n].ndim == 1 and not n.startswith("recurrent")
         ]
-        bias_names.sort(key=lambda x: int(x.split("_")[1]) if "_" in x and x.split("_")[1].isdigit() else 0)
+        bias_names.sort(
+            key=lambda x: (
+                int(x.split("_")[1]) if "_" in x and x.split("_")[1].isdigit() else 0
+            )
+        )
         num_ff_biases = len(bias_names)
         for i in range(len(acts)):
             h = acts[i]
@@ -4046,43 +3936,42 @@ class EnergyMinimizationDynamics:
         """One settling step, pure function for gradient checkpointing."""
         num_hidden = len(all_acts) - 2
         new_acts = [all_acts[0]]  # Input layer is fixed
-        new_velocity = None
+        new_velocity: list[Tensor] | None = (
+            [] if momentum > 0 and velocity is not None else None
+        )
 
-        if momentum > 0 and velocity is not None:
-            new_velocity = []
+        layers = _layer_stack(geometry)
+        if layers is None:
+            raise TypeError("Energy-based settling requires a layered geometry")
+        recurrent_weight = _recurrent_weight(geometry)
+        linears = [m for m in layers if isinstance(m, nn.Linear)]
+        activations = [m for m in layers if not isinstance(m, nn.Linear)]
 
         # Update each hidden layer
         for i in range(num_hidden):
-            layer = geometry._layers[i * 2]  # Linear layer at even indices
-            pre = layer(all_acts[i])  # Bottom-up from previous layer
+            pre = linears[i](all_acts[i])  # Bottom-up from previous layer
 
             # Recurrent term (for RecurrentGeometry, last hidden layer only)
-            if hasattr(geometry, '_recurrent_weight') and geometry._recurrent_weight is not None:
-                if i == num_hidden - 1:  # Last hidden layer has recurrent connection
-                    pre = pre + all_acts[i + 1] @ geometry._recurrent_weight.T
+            if recurrent_weight is not None and i == num_hidden - 1:
+                pre = pre + all_acts[i + 1] @ recurrent_weight.T
 
             # Top-down drive from layer above
-            next_layer = geometry._layers[(i + 1) * 2]  # Next Linear layer
-            top_down = all_acts[i + 2] @ next_layer.weight
+            top_down = all_acts[i + 2] @ linears[i + 1].weight
 
             total = pre + top_down
 
             # Apply momentum (heavy-ball)
-            if momentum > 0 and velocity is not None:
+            if velocity is not None and new_velocity is not None:
                 total = momentum * velocity[i] + total
                 new_velocity.append(total.detach().clone())
 
             # Apply activation (ReLU)
-            if i < len(geometry._layers) - 2 and isinstance(geometry._layers[i * 2 + 1], nn.Module):
-                act_fn = geometry._layers[i * 2 + 1]
-                h_new = act_fn(total)
-            else:
-                h_new = total
+            h_new = activations[i](total) if i < len(activations) else total
 
             new_acts.append(h_new)
 
         # Output layer
-        out_layer = geometry._layers[-1] if isinstance(geometry._layers[-1], nn.Linear) else None
+        out_layer = linears[-1] if linears else None
         if out_layer is not None:
             out = out_layer(new_acts[-1])
             # Apply nudging to output layer during nudged phase
@@ -4155,14 +4044,24 @@ class EnergyMinimizationDynamics:
             try:
                 free_vram, _ = torch.cuda.mem_get_info(device)
                 # Estimate: params + optimizer state + activations (max_steps * layers * batch * hidden)
-                total_params = sum(p.numel() for p in geometry.params.values() if p.requires_grad)
-                hidden_size = all_acts[1].numel() // all_acts[1].shape[0]  # per-sample hidden dim
+                total_params = sum(
+                    p.numel() for p in geometry.params.values() if p.requires_grad
+                )
+                hidden_size = (
+                    all_acts[1].numel() // all_acts[1].shape[0]
+                )  # per-sample hidden dim
                 batch_size = all_acts[0].shape[0]
                 # Rough estimate: activations for all settle steps (each step has ~layers activations)
                 est_activation_mem = (
-                    self.config.max_steps * len(geometry._layers) * batch_size * hidden_size * 4  # fp32 bytes
+                    self.config.max_steps
+                    * (len(_layer_stack(geometry) or ()))
+                    * batch_size
+                    * hidden_size
+                    * 4  # fp32 bytes
                 )
-                est_total = (total_params * 4 * 3) + est_activation_mem  # params + optimizer + activations
+                est_total = (
+                    total_params * 4 * 3
+                ) + est_activation_mem  # params + optimizer + activations
                 if est_total > free_vram * 0.8:
                     use_checkpointing = True
             except Exception:
@@ -4187,83 +4086,41 @@ class EnergyMinimizationDynamics:
 
                 # Track free energy if enabled
                 if self._free_energy_history is not None:
-                    self._free_energy_history.append(self._compute_energy(all_acts, geometry))
+                    self._free_energy_history.append(
+                        self._compute_energy(all_acts, geometry)
+                    )
 
                 # Check convergence (can't checkpoint this as it's not differentiable)
                 if step >= self.config.convergence_start:
-                    delta = torch.dist(all_acts[-1], all_acts[-1], p=float("inf")).item()
+                    delta = torch.dist(
+                        all_acts[-1], all_acts[-1], p=float("inf")
+                    ).item()
                     if delta < self.config.convergence_threshold:
                         break
         else:
             # Original non-checkpointed path
             for step in range(self.config.max_steps):
-                new_acts = [all_acts[0]]  # Input layer is fixed
-                new_velocity = None
-
-                if momentum > 0 and self._velocity is not None:
-                    new_velocity = []
-
-                # Update each hidden layer
-                for i in range(num_hidden):
-                    layer = geometry._layers[i * 2]  # Linear layer at even indices
-                    pre = layer(all_acts[i])  # Bottom-up from previous layer
-
-                    # Recurrent term (for RecurrentGeometry, last hidden layer only)
-                    if hasattr(geometry, '_recurrent_weight') and geometry._recurrent_weight is not None:
-                        if i == num_hidden - 1:  # Last hidden layer has recurrent connection
-                            pre = pre + all_acts[i + 1] @ geometry._recurrent_weight.T
-
-                    # Top-down drive from layer above
-                    next_layer = geometry._layers[(i + 1) * 2]  # Next Linear layer
-                    top_down = all_acts[i + 2] @ next_layer.weight
-
-                    total = pre + top_down
-
-                    # Apply momentum (heavy-ball)
-                    if momentum > 0 and self._velocity is not None:
-                        total = momentum * self._velocity[i] + total
-                        new_velocity.append(total.detach().clone())
-
-                    # Apply activation (ReLU)
-                    if i < len(geometry._layers) - 2 and isinstance(geometry._layers[i * 2 + 1], nn.Module):
-                        act_fn = geometry._layers[i * 2 + 1]
-                        h_new = act_fn(total)
-                    else:
-                        h_new = total
-
-                    new_acts.append(h_new)
-
-                # Output layer
-                out_layer = geometry._layers[-1] if isinstance(geometry._layers[-1], nn.Linear) else None
-                if out_layer is not None:
-                    out = out_layer(new_acts[-1])
-                    # Apply nudging to output layer during nudged phase
-                    if beta > 0 and target is not None:
-                        # Convert target to one-hot if needed
-                        if target.dim() == 1:
-                            target_oh = torch.zeros_like(out)
-                            target_oh.scatter_(1, target.unsqueeze(1), 1.0)
-                        else:
-                            target_oh = target
-                        out = out + beta * (target_oh - out)
-
-                    new_acts.append(out)
-                else:
-                    new_acts.append(all_acts[-1])
+                new_acts, new_velocity = self._settle_step(
+                    all_acts, geometry, beta, target, self._velocity, momentum
+                )
+                if new_velocity is not None:
+                    self._velocity = new_velocity
 
                 # Track free energy if enabled
                 if self._free_energy_history is not None:
-                    self._free_energy_history.append(self._compute_energy(new_acts, geometry))
+                    self._free_energy_history.append(
+                        self._compute_energy(new_acts, geometry)
+                    )
 
                 # Check convergence
                 if step >= self.config.convergence_start:
-                    delta = torch.dist(new_acts[-1], all_acts[-1], p=float("inf")).item()
+                    delta = torch.dist(
+                        new_acts[-1], all_acts[-1], p=float("inf")
+                    ).item()
                     if delta < self.config.convergence_threshold:
                         all_acts = new_acts
                         break
                 all_acts = new_acts
-                if new_velocity is not None:
-                    self._velocity = new_velocity
 
         if target is None:
             state.free_state = all_acts
@@ -4589,55 +4446,61 @@ class SpikeIntegrationDynamics:
         # all_acts = [input, hidden1, hidden2, ..., output]
         # We'll simulate spiking dynamics on hidden layers
         num_layers = len(all_acts) - 1  # Exclude input
-        
+
         spike_counts_per_layer = []
-        
+
         for step in range(self.config.max_steps):
             # Forward pass with spiking at each layer
             h = all_acts[0]  # Input layer (no spiking)
             new_acts = [h]
-            
+
             for i in range(num_layers):
                 # Get weight matrix for this layer
-                if hasattr(geometry, '_layers'):
-                    layer_idx = i * 2
-                    if layer_idx < len(geometry._layers) and isinstance(geometry._layers[layer_idx], nn.Linear):
-                        layer = geometry._layers[layer_idx]
-                        h = layer(h)
-                    else:
-                        # Fallback: use route
-                        h = geometry.route(h)
+                layers = _layer_stack(geometry)
+                layer_idx = i * 2
+                if (
+                    layers is not None
+                    and layer_idx < len(layers)
+                    and isinstance(layers[layer_idx], nn.Linear)
+                ):
+                    h = layers[layer_idx](h)
                 else:
                     h = geometry.route(h)
-                
+
                 # Apply activation if present
-                if hasattr(geometry, '_layers'):
+                if layers is not None:
                     act_idx = i * 2 + 1
-                    if act_idx < len(geometry._layers):
-                        act_layer = geometry._layers[act_idx]
-                        if isinstance(act_layer, nn.Module) and not isinstance(act_layer, nn.Linear):
+                    if act_idx < len(layers):
+                        act_layer = layers[act_idx]
+                        if isinstance(act_layer, nn.Module) and not isinstance(
+                            act_layer, nn.Linear
+                        ):
                             h = act_layer(h)
-                
+
                 # Spike thresholding (LIF)
                 spikes = (h > 1.0).float()
-                spike_counts_per_layer.append(spikes.sum(dim=0))  # Per neuron spike count
+                spike_counts_per_layer.append(
+                    spikes.sum(dim=0)
+                )  # Per neuron spike count
                 h = torch.where(h > 1.0, torch.zeros_like(h), h)  # Reset after spike
-                
+
                 new_acts.append(h)
-            
+
             # Check convergence on output layer
             if step >= self.config.convergence_start:
                 delta = torch.dist(new_acts[-1], all_acts[-1], p=float("inf")).item()
                 if delta < self.config.convergence_threshold:
                     all_acts = new_acts
                     break
-            
+
             all_acts = new_acts
 
         state.activations = all_acts
         state.spike_counts = spike_counts_per_layer
-        if state.metrics is not None:
-            state.metrics["spike_counts"] = spike_counts_per_layer
+        total_spikes = sum(sc.sum().item() for sc in spike_counts_per_layer)
+        state.metrics["avg_spikes_per_neuron"] = total_spikes / max(
+            len(spike_counts_per_layer), 1
+        )
         return state
 
     def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:  # ruff: ignore[no-self-use]
@@ -4973,7 +4836,7 @@ class RandomProjectionsCredit:
     ) -> Tensor:
         """Surrogate objective for FA: output error norm."""
         if nudged_state.loss is not None:
-            return nudged_state.loss
+            return torch.as_tensor(nudged_state.loss)
         return torch.tensor(0.0)
 
 
@@ -5011,7 +4874,7 @@ class LocalGoodnessCredit:
         acts = free_state.activations
         if isinstance(acts, list):
             total_goodness = sum((torch.sigmoid(act) ** 2).sum() for act in acts[1:])
-            return total_goodness
+            return torch.as_tensor(total_goodness)
         return torch.tensor(0.0)
 
 
@@ -5046,7 +4909,7 @@ class BackpropCredit:
     ) -> Tensor:
         """Surrogate objective for Backprop: task loss."""
         if nudged_state.loss is not None:
-            return nudged_state.loss
+            return torch.as_tensor(nudged_state.loss)
         return torch.tensor(0.0)
 
 
@@ -5237,8 +5100,15 @@ class HomeostaticCredit:
         self._velocity_threshold_low = 0.01
         self._adaptation_rate = 0.01
 
-    def _estimate_layer_lipschitz(self, layer_idx: int, geometry: Geometry) -> float:
-        """Estimate Lipschitz constant for a layer using power iteration."""
+    def _estimate_layer_lipschitz(
+        self, layer_idx: int, geometry: Geometry | None
+    ) -> float:
+        """Estimate Lipschitz constant for a layer using power iteration.
+
+        Returns the neutral value 1.0 when no geometry is available.
+        """
+        if geometry is None:
+            return 1.0
         params = geometry.params
         weight_names = [n for n in params if "weight" in n and params[n].ndim == 2]
 
@@ -5406,7 +5276,7 @@ class HomeostaticCredit:
             base_obj = nudged_state.energy - free_state.energy
             # Add homeostatic regularization
             reg = sum((s - 1.0) ** 2 for s in self._layer_scales.values())
-            return base_obj + 0.01 * reg
+            return torch.as_tensor(base_obj + 0.01 * reg)
         return torch.tensor(0.0)
 
     def get_stability_report(self) -> str:
@@ -5662,6 +5532,22 @@ class _AdaptedSystem:
 
     def forward(self, x: Tensor) -> Tensor:
         return self._model(x)  # type: ignore[operator]
+
+    def to_spec(self) -> dict:
+        """Serialize the wrapped system's 5 axis configs (model weights excluded)."""
+        spec: dict[str, object] = {"schema_version": "1.0"}
+        for axis in ("substrate", "geometry", "dynamics", "credit", "update"):
+            config = getattr(getattr(self, axis), "config")
+            spec[axis] = {f.name: getattr(config, f.name) for f in fields(config)}
+        return spec
+
+    @classmethod
+    def from_spec(cls, spec: dict) -> System:
+        """Unsupported: adapted legacy models cannot be rebuilt from axis specs."""
+        raise NotImplementedError(
+            "_AdaptedSystem wraps a legacy nn.Module that is not part of the "
+            "spec; reconstruct via ModelAdapter instead."
+        )
 
     def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:  # ruff: ignore[no-self-use]
         """Compute task loss from final state (required by System protocol)."""

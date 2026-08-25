@@ -43,6 +43,7 @@ TIGHT = {"rtol": 1e-5, "atol": 1e-6, "equal_nan": False}
 @dataclass(frozen=True, slots=True)
 class _EqPropTestConfig:
     """Configuration for EqProp test systems."""
+
     input_dim: int = 10
     hidden_dim: int = 20
     num_layers: int = 2
@@ -58,9 +59,7 @@ class _EqPropTestConfig:
 
 def _create_eqprop_system(config: _EqPropTestConfig):
     """Create an EqProp system for testing."""
-    substrate = DigitalSubstrate(
-        SubstrateConfig.digital(device=config.device)
-    )
+    substrate = DigitalSubstrate(SubstrateConfig.digital(device=config.device))
     # Use RecurrentGeometry for EqProp (not FeedforwardGeometry)
     geometry = RecurrentGeometry(
         GeometryConfig.recurrent(
@@ -84,9 +83,7 @@ def _create_eqprop_system(config: _EqPropTestConfig):
     credit = ThermodynamicContrast(
         CreditAssignmentConfig.thermodynamic_contrast(beta=config.beta)
     )
-    update = EuclideanUpdate(
-        ParameterUpdateConfig.euclidean(step_size=0.01)
-    )
+    update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))
     return compose_system(substrate, geometry, dynamics, credit, update)
 
 
@@ -122,7 +119,9 @@ def _get_layer_activations(system, x: Tensor, target: Tensor | None) -> list[Ten
     num_layers=st.integers(min_value=1, max_value=3),
     output_dim=st.integers(min_value=2, max_value=8),
     batch_size=st.integers(min_value=1, max_value=8),
-    beta=st.floats(min_value=0.01, max_value=1.0, allow_nan=False, allow_infinity=False),
+    beta=st.floats(
+        min_value=0.01, max_value=1.0, allow_nan=False, allow_infinity=False
+    ),
     seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
 @settings(max_examples=50, deadline=None)
@@ -200,9 +199,9 @@ def test_thermodynamic_contrast_depends_only_on_local_activities(
         )
 
         if l < len(system_grads):
-            assert torch.allclose(
-                local_grad, system_grads[l], **TIGHT
-            ), f"Layer {l}: Local computation differs from system"
+            assert torch.allclose(local_grad, system_grads[l], **TIGHT), (
+                f"Layer {l}: Local computation differs from system"
+            )
 
 
 @given(
@@ -211,8 +210,12 @@ def test_thermodynamic_contrast_depends_only_on_local_activities(
     num_layers=st.integers(min_value=1, max_value=3),
     output_dim=st.integers(min_value=2, max_value=8),
     batch_size=st.integers(min_value=1, max_value=8),
-    beta=st.floats(min_value=0.01, max_value=1.0, allow_nan=False, allow_infinity=False),
-    scale=st.floats(min_value=0.5, max_value=2.0, allow_nan=False, allow_infinity=False),
+    beta=st.floats(
+        min_value=0.01, max_value=1.0, allow_nan=False, allow_infinity=False
+    ),
+    scale=st.floats(
+        min_value=0.5, max_value=2.0, allow_nan=False, allow_infinity=False
+    ),
     seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
 @settings(max_examples=30, deadline=None)
@@ -287,7 +290,9 @@ def test_thermodynamic_contrast_scale_free_property(
     num_layers=st.integers(min_value=2, max_value=4),
     output_dim=st.integers(min_value=2, max_value=8),
     batch_size=st.integers(min_value=1, max_value=8),
-    beta=st.floats(min_value=0.01, max_value=1.0, allow_nan=False, allow_infinity=False),
+    beta=st.floats(
+        min_value=0.01, max_value=1.0, allow_nan=False, allow_infinity=False
+    ),
     target_layer=st.integers(min_value=0, max_value=3),  # Will be clamped
     seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
@@ -342,8 +347,12 @@ def test_eqprop_gradient_strictly_local_per_layer(
         if l == 0:
             continue  # Never perturb input
         if l != target_layer and l != target_layer + 1:
-            perturbed_free[l] = free_acts[l] + torch.randn_like(free_acts[l]) * noise_scale
-            perturbed_nudged[l] = nudged_acts[l] + torch.randn_like(nudged_acts[l]) * noise_scale
+            perturbed_free[l] = (
+                free_acts[l] + torch.randn_like(free_acts[l]) * noise_scale
+            )
+            perturbed_nudged[l] = (
+                nudged_acts[l] + torch.randn_like(nudged_acts[l]) * noise_scale
+            )
 
     free_state_orig = SystemState(x=x)
     free_state_orig.activations = free_acts
@@ -381,7 +390,9 @@ def test_eqprop_gradient_strictly_local_per_layer(
     num_layers=st.integers(min_value=2, max_value=4),
     output_dim=st.integers(min_value=2, max_value=8),
     batch_size=st.integers(min_value=1, max_value=8),
-    beta=st.floats(min_value=0.01, max_value=1.0, allow_nan=False, allow_infinity=False),
+    beta=st.floats(
+        min_value=0.01, max_value=1.0, allow_nan=False, allow_infinity=False
+    ),
     seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
 @settings(max_examples=30, deadline=None)
@@ -468,8 +479,12 @@ def test_eqprop_all_layers_strictly_local(
     num_layers=st.integers(min_value=2, max_value=4),
     output_dim=st.integers(min_value=2, max_value=8),
     batch_size=st.integers(min_value=1, max_value=8),
-    beta=st.floats(min_value=0.01, max_value=1.0, allow_nan=False, allow_infinity=False),
-    noise_scale=st.floats(min_value=1.0, max_value=100.0, allow_nan=False, allow_infinity=False),
+    beta=st.floats(
+        min_value=0.01, max_value=1.0, allow_nan=False, allow_infinity=False
+    ),
+    noise_scale=st.floats(
+        min_value=1.0, max_value=100.0, allow_nan=False, allow_infinity=False
+    ),
     seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
 @settings(max_examples=30, deadline=None)
@@ -550,7 +565,9 @@ def test_eqprop_invariance_to_non_adjacent_noise(
     num_layers=st.integers(min_value=2, max_value=4),
     output_dim=st.integers(min_value=2, max_value=8),
     batch_size=st.integers(min_value=1, max_value=8),
-    beta=st.floats(min_value=0.01, max_value=1.0, allow_nan=False, allow_infinity=False),
+    beta=st.floats(
+        min_value=0.01, max_value=1.0, allow_nan=False, allow_infinity=False
+    ),
     seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
 @settings(max_examples=20, deadline=None)
@@ -633,7 +650,9 @@ def test_eqprop_feedback_alignment_still_local(
     num_layers=st.integers(min_value=1, max_value=3),
     output_dim=st.integers(min_value=2, max_value=8),
     batch_size=st.integers(min_value=1, max_value=8),
-    beta=st.floats(min_value=0.01, max_value=1.0, allow_nan=False, allow_infinity=False),
+    beta=st.floats(
+        min_value=0.01, max_value=1.0, allow_nan=False, allow_infinity=False
+    ),
     seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
 @settings(max_examples=30, deadline=None)
@@ -662,7 +681,9 @@ def test_energy_minimization_dynamics_free_energy_decreases(
     init_state = SystemState(x=x)
     init_state.activations = system.geometry.forward(x, system.substrate)
     if init_state.activations is not None:
-        init_state.activations = system.substrate.inject_state_noise(init_state.activations)
+        init_state.activations = system.substrate.inject_state_noise(
+            init_state.activations
+        )
 
     # Energy before settling
     init_energy = system.dynamics.compute_energy(init_state, system.geometry)
@@ -694,7 +715,9 @@ def test_energy_minimization_dynamics_free_energy_decreases(
     num_layers=st.integers(min_value=2, max_value=3),
     output_dim=st.integers(min_value=2, max_value=8),
     batch_size=st.integers(min_value=1, max_value=8),
-    beta=st.floats(min_value=0.01, max_value=1.0, allow_nan=False, allow_infinity=False),
+    beta=st.floats(
+        min_value=0.01, max_value=1.0, allow_nan=False, allow_infinity=False
+    ),
     seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
 @settings(max_examples=20, deadline=None)
@@ -721,7 +744,9 @@ def test_full_train_step_gradient_locality(
     y = torch.randint(0, output_dim, (batch_size,))
 
     # Capture original parameters
-    orig_params = {name: param.clone() for name, param in system.geometry.params.items()}
+    orig_params = {
+        name: param.clone() for name, param in system.geometry.params.items()
+    }
 
     # Run one train step
     metrics = system.train_step(x, y)

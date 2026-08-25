@@ -1,6 +1,6 @@
 # Computronium Sprint Plan: TODO4 — Sprint Close-Out & Research Foundation
 
-## Status: TODO3 Remnants CARRIED FORWARD | Phase 7 (Close-Out) OPEN | Phase 8 (Research Prerequisites) NOT STARTED
+## Status: 7.1.1 ✅ PROVED | 7.4 ✅ CORE CLEAN | Phase 7 remainder OPEN | Phase 8 NOT STARTED
 
 > Consolidates all unchecked work from `TODO3.md` with the preliminary infrastructure defined in `RESEARCH3.md`. After Phase 7 + 8, work hands off to the RESEARCH3 catalog (15 items, 5 critical paths) under its Execution Protocol (E-1…E-11).
 
@@ -11,11 +11,13 @@
 ### 7.1 Rocq Proof Artifact (was TODO3 §4.3.4, PARTIAL)
 **State**: statements repaired & compiling via `make` in `rocq/`. Proved: `Utils.v` (8 Qed, 0 admits), `gradE_diagonal`, `energyFunction_diagonal`, `stationary_is_fixed_point`.
 
-- [ ] **7.1.1** Prove `energy_decreases_diagonal` — **NEXT, plumbing only**
-  - Paper derivation complete: per-index Δ = −(η/2)(2−ηu)t² ≤ 0 with u = 1−Wᵢᵢ > 0, t = u·hᵢ − bᵢ, ηu < 2
-  - Recipe (in STUB comment): remember u/t → rewrite Hstep/Hb → difference by `field` → sign chain `Rmult_le_pos` + `sq_nonneg` + `lra`
-  - Watch-outs learned: no `nra`/`nlinarith` in this install (use `lra` + factored atoms + explicit sign certificates); `ring` cannot clear `/2` (use `field`); `remember` already substitutes (skip follow-up rewrites); `assert .. := tactic.` invalid (use `{ tactic }` or `by`)
+- [x] **7.1.1** Prove `energy_decreases_diagonal` — **DONE (2026-08-25)**
+  - Closed via new scalar lemma `per_index_descent` (`rocq/EnergyDynamics.v`): per-index difference = −(η/2)(2−ηu)t² with u = 1−Wᵢᵢ > 0, t = u·h−b; identity discharged by `field`, sign chain by `Rmult_le_pos` ×2 + `sq_nonneg` + `lra`.
+  - Main theorem lifts pointwise via `sum_R_le`; `settleStep i` rewritten through `gradE_diagonal`.
+  - Verified: `make` clean; `Print Assumptions energy_decreases_diagonal` shows only stdlib axioms (classical choice via `Rle_lt_dec` in `sq_nonneg`, funext from Reals) — **0 admits** in the dependency chain.
+  - Recipe note for future proofs: scalar-lemma-first beats inline `remember` plumbing — keeps `field`/`lra` goals small and reusable.
 - [ ] **7.1.2** General-case `energy_decreases`: Cauchy-Schwarz descent inequality on symmetrized form *(currently admitted w/ paper proof — CP-B pull-based)*
+  - Hint from 7.1.1 close-out: the scalar-lemma + `sum_R_le` lifting pattern applies here too once the Cauchy–Schwarz estimate is factored as its own lemma.
 - [ ] **7.1.3** `settle_converges`: classical coercivity/completeness argument (fixed-point half already proved) *(CP-B pull-based)*
 - [ ] **7.1.4** EqProp module split-out → new `rocq/EqProp.v` importing EnergyDynamics: controlLyapunov + nudgedSettleStep + locality axiom stub (numeric counterpart exists: `tests/property/test_eqprop_locality.py`) *(CP-B pull-based)*
 - [~] **7.1.5** Optional CI: `rocq-prover` apt job `-I` flags vs. real runner — **SUPERSEDED by RESEARCH3 Theory Program ψ-coverage proposition**; job already exists (`ci.yml:91–97`) — touch only if it fails on a real runner
@@ -32,19 +34,41 @@ Locked-in fixes: separate free/nudged state objects in `train_step`; multi-layer
 ### 7.3 CI Gates (TODO3 DoD remainder)
 Gate = current *configured* baseline (`pyproject.toml [tool.pyright]` — `strict` was deliberately relaxed to a per-rule profile; do NOT reintroduce), not aspirational strictness:
 
-- [ ] pytest (full suite) green; coverage ≥15% measured on **full suite** only (partial runs read ~13%)
-- [ ] `make` in `rocq/` compiles clean
-- [ ] `ruff format --check .` + no *new* violations on touched files (9,578 existing findings are parked debt — burn-down deferred to the post-settlement dead-code purge, which shrinks the problem first)
-- [ ] Pyright green at its configured per-rule profile — requires 7.4
+- [ ] pytest (full suite) green; coverage ≥15% measured on **full suite** only (partial runs read ~13%). *Targeted suites re-run after 7.4 (352 passed, 7 pre-existing failures in `TestDAxisSpikeIntegration`/`test_ontology_locks` — identical at baseline via `git stash` A/B); full-suite run still pending.*
+- [x] `make` in `rocq/` compiles clean *(re-verified after 7.1.1)*
+- [x] `ruff format --check .` **green repo-wide** (formatted the 2 core files touched by 7.4 + last 2 stragglers `tests/property/test_eqprop_locality.py`, `tests/property/test_plasticity_properties.py`; formatting-only, tests re-run green). No *new* lint violations on touched files (9,578 existing findings remain parked debt — burn-down deferred to the post-settlement dead-code purge)
+- [~] Pyright green at its configured per-rule profile — **7.4 closed: `core/ontology.py` + `core/registry.py` now 0 errors**; repo-wide count 3918 → 3853 (−65). Remaining errors concentrated in `acceleration/` (`compile.py`, `contrastive_kernels.py`, `eqprop_kernel_backend.py`) and `experiments/` — see new work item below
 
 **De-prioritized by design**: lint burn-down and coverage growth wait until the architecture settles and dead code is purged; both get cheaper then.
 
-### 7.4 Hard Type Errors in Core (blocks the 7.3 pyright gate)
-Genuine correctness errors surfacing even under the relaxed profile — invariants, not cosmetics:
+### 7.4 Hard Type Errors in Core — **DONE (2026-08-25)**
+Genuine correctness errors surfacing even under the relaxed profile — invariants, not cosmetics. All cleared; `pyright core/ontology.py core/registry.py` = **0 errors** (was 61 errors incl. ~52 enumerated).
 
-- [ ] `computronium/core/ontology.py` (~52): `ExperimentConfig.ontology` unknown attr (:1539); `update_map` possibly unbound (:1648); `_param_name` assigned on `Tensor`/`Parameter` ×12 (:1951–:2284); `SystemState` list-invariance assignments `free_state`/`nudged_state`/`activations` (:2587–:2590 → widen to `Sequence`); `Tensor | float` returned as `Tensor` (:2670); `_AdaptedSystem` missing `to_spec`/`from_spec` protocol members (:2795); `int(Tensor | Module)` (:3004)
-- [ ] `computronium/core/registry.py` (2): phantom `ComponentCategory.PROPAGATOR` attribute (:547); unbound generic params `num_layers`/`topology_type`/`connectivity`/`recurrent_weight` (:637)
+**registry.py (2 → 0):**
+- `ComponentCategory.PROPAGATOR` (:547): `check_compatibility` had zero callers repo-wide → **deleted** (dead path per policy)
+- Unbound generic params (:637): call switched to `GeometryConfig.feedforward(...)` factory (matches the classmethod pattern used everywhere else)
+
+**ontology.py (~52 → 0):**
+- `ExperimentConfig.ontology` + `update_map` unbound: `SystemConfig.from_experiment` was written for a config shape that no longer exists and would `AttributeError` at runtime; its sole caller `SystemTrainer.from_configs` also had zero live callers (docstring mention only) → **both deleted**, plus now-unused TYPE_CHECKING imports
+- `_param_name` ×12: new module helper `_set_param_name(tensor, name)` (`setattr`) — single choke point, readers already use `getattr(...,"_param_name","default")`
+- SystemState assignments: root cause was `[state.activations]` wrapping (nested-list bug, not just typing); fixed to pass-through. NOTE: widening fields to `Sequence[Tensor]` was tried and **reverted** — consumers do tensor ops on these fields and the widening cascaded ~30 new errors; keep `list[Tensor] | Tensor | None`
+- `surrogate_objective` ×2 + homeostatic variant: `torch.as_tensor(...)` wrap (no-op on Tensor, lifts float)
+- LocalGoodness goodness sum: empty-range int-0 case handled by same wrap
+- `_AdaptedSystem`: real `to_spec()` added (5 axis configs via `fields()`, schema_version 1.0); `from_spec` raises `NotImplementedError` with pointer to ModelAdapter (wrapped legacy nn.Module is not spec-reconstructable)
+- `int(Tensor | Module)` in `_infer_input_dim/_infer_output_dim`: `hasattr` on nn.Module can't narrow (submodule hazard); replaced with `getattr` + `isinstance(int)`/1-element-Tensor checks
+- `momentum` missing ×2: required `StateDynamicsConfig` field added (`momentum=0.0`) to the two raw constructor calls
+- "Expected 0 positional arguments" ×2: caused by annotating maps as `dict[str, type[CreditAssignment]]` / `list[tuple[..., type[CreditAssignment]]]` — protocol `type[...]` constructors expose 0 params; dropped annotations so pyright infers the concrete union
+- `Tensor not callable`: `self.model.train_step` under `hasattr` → `getattr` + `callable()` narrowing
+- Geometry `_layers`/`_recurrent_weight` reaches (~20 errors): new `_layer_stack(geometry)` / `_recurrent_weight(geometry)` helpers; **non-checkpointed settle path deduplicated into a direct `self._settle_step(...)` call** (−70 lines of duplicated loop body — checkpointed/non-checkpointed now share one implementation)
+- Spike-count metrics contract violation: producer stored `list[Tensor]` in `metrics: dict[str, float]`; consumer summed it. Fixed both ends: producer writes pre-aggregated float `avg_spikes_per_neuron`; consumer reads it directly (also fixes 2 latent pyright errors in `system_trainer.py`)
+- `_estimate_layer_lipschitz(i, None)` crash path: geometry param widened to `Geometry | None`, neutral 1.0 return
+
+**Verification:** targeted suites (unit/core, test_refactor, ontology_locks, axis_certifications): 352 passed, failures identical to baseline; parity suite timeout pre-exists at baseline. Repo-wide pyright −65 errors.
+
 - Policy: prefer deletion over patching where the code path is already dead (architecture settling); each fix either restores an invariant or removes the path
+
+### 7.5 New work item (discovered during 7.4): repo-wide pyright burn-down to gate
+Remaining ~3853 errors are concentrated in `acceleration/compile.py`, `acceleration/contrastive_kernels.py`, `acceleration/eqprop_kernel_backend.py` (attribute-in-init patterns like the old `_param_name` issue), and `experiments/`. Same fix vocabulary applies: `getattr`+`isinstance` narrowing over `hasattr`, declared-instance helpers instead of duck-typed attribute writes, deletion of dead branches. Suggest tackling per-module after the post-settlement dead-code purge shrinks the surface.
 
 ---
 
@@ -136,12 +160,25 @@ Bridge points from Phase 7:
 
 ## Definition of Done (TODO4 Complete)
 
-- [ ] **7.1.1** `energy_decreases_diagonal` proved (0-admit diagonal case); 7.1.2–7.1.4 either closed or explicitly parked under CP-B pull-based policy
+- [x] **7.1.1** `energy_decreases_diagonal` proved (0-admit diagonal case) ✅ 2026-08-25; 7.1.2–7.1.4 remain explicitly parked under CP-B pull-based policy
 - [ ] **7.2** EqProp 20-epoch MNIST >80% accuracy (or documented why not)
-- [ ] **7.4** Hard type errors cleared from `ontology.py`/`registry.py` — fixed or dead paths deleted
-- [ ] **7.3** CI green at configured baseline: pytest full suite, coverage ≥15% (full-suite measure), `make` in `rocq/`, `ruff format --check`, pyright per-rule profile; full lint burn-down explicitly deferred to post-settlement purge
+- [x] **7.4** Hard type errors cleared from `ontology.py`/`registry.py` — fixed or dead paths deleted ✅ 2026-08-25 (0 pyright errors on both files; dead paths `from_experiment`/`from_configs`/`check_compatibility` removed)
+- [~] **7.3** CI green at configured baseline: `make` in `rocq/` ✅, `ruff format --check` ✅, pyright per-rule profile green on core ✅ / repo-wide burn-down tracked as new item 7.5; full-suite pytest + coverage run still pending
 - [ ] **PR-0…PR-4** merged and green
 - [ ] **PR-7** shakedown green w/ harvested good/bad config sets
 - [ ] **PR-5** calibrated + **PR-9** commissioned
 - [ ] **PR-6** drafted; PR-3b procured/order placed; PR-8 parked pending CP-D
 - [ ] Handoff: RESEARCH3 catalog unblocked — no further planning docs; execution moves to CP-A spine
+
+---
+
+## Session Log & Future-Work Notes
+
+### 2026-08-25 session (7.1.1 + 7.4 + partial 7.3)
+- **Rocq**: `per_index_descent` lemma added; `energy_decreases_diagonal` closed with zero admits (stdlib classical axioms only). The scalar-lemma-first pattern is the reusable recipe for 7.1.2.
+- **Dead code deleted**: `SystemConfig.from_experiment`, `SystemTrainer.from_configs` (~170 lines), `Registry.check_compatibility`. If a config-driven trainer factory is needed again, rebuild it against the *current* `ExperimentConfig.system: SystemConfig` field rather than resurrecting these.
+- **Settle-path dedup**: non-checkpointed settling now calls `_settle_step` directly; future dynamics changes have exactly one place to edit. Gradient-checkpointing semantics unchanged (`use_reentrant=False` path untouched).
+- **Contract fix to remember**: `SystemState.metrics` is `dict[str, float]`; spike stats are now pre-aggregated (`avg_spikes_per_neuron`) by the producer. Do not store tensors/lists in metrics dicts.
+- **Type-narrowing vocabulary that worked**: `getattr`+`isinstance`/`callable()` instead of `hasattr` (nn.Module submodule hazard); drop `type[Protocol]` annotations on class-tables (0-positional-arg artifact); module-level instance helpers (`_layer_stack`, `_recurrent_weight`, `_set_param_name`) over duck-typed attribute access.
+- **Test hygiene**: baseline A/B via `git stash` proved all current property-test failures pre-exist (hypothesis-generated `test_membrane_boundedness` cases + ontology_locks). `tests/property/test_ontology_parity.py` hangs at baseline too — investigate before relying on it for 7.2 verification.
+- **Next cheapest wins**: (1) full-suite pytest run to close the remaining 7.3 checkbox; (2) 7.2.1 gradient-clip/settle stabilization then 20-epoch run; (3) PR-0 gate doc + PR-4 statistics kit (pure code, no hardware dependency).

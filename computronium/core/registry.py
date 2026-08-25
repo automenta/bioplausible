@@ -539,18 +539,6 @@ class Registry:
         return compat
 
     @classmethod
-    def check_compatibility(cls, propagator_name: str, model_name: str) -> bool:
-        """Return True if the model provides all capabilities the propagator requires.
-
-        Relies on declarative ``requires`` and ``provides`` metadata only.
-        """
-        prop_meta = cls.get_metadata(ComponentCategory.PROPAGATOR, propagator_name)
-        model_meta = cls.get_metadata(ComponentCategory.MODEL, model_name)
-        required = set(prop_meta.requires)
-        provided = set(model_meta.provides)
-        return required.issubset(provided)
-
-    @classmethod
     def to_system(cls, model_name: str, **model_kwargs) -> System:
         """Project a registered model into the 5-D ontology as a System.
 
@@ -634,7 +622,7 @@ class Registry:
         # and the component mapped to its layer
         substrate = DigitalSubstrate()
         geometry = FeedforwardGeometry(
-            GeometryConfig(input_dim=10, output_dim=3, hidden_dims=(20,))
+            GeometryConfig.feedforward(input_dim=10, output_dim=3, hidden_dims=(20,))
         )
         dynamics = InstantaneousDynamics()
         credit = ThermodynamicContrast()

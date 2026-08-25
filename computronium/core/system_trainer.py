@@ -37,8 +37,6 @@ from computronium.core.ontology import (
 if TYPE_CHECKING:
     from types import TracebackType
 
-    from computronium.config.experiment import ExperimentConfig
-
 
 class JointSystem[
     TS: Substrate,
@@ -140,176 +138,6 @@ class SystemTrainer:
         # Move system components to device
         if hasattr(self.system.geometry, "to"):
             self.system.geometry.to(self.device)  # type: ignore[attr-defined]
-
-    @classmethod
-    def from_configs(
-        cls,
-        experiment_config: ExperimentConfig,
-        train_data: _DataProvider,
-        val_data: _DataProvider | None = None,
-    ) -> SystemTrainer:
-        """Create a SystemTrainer from an ExperimentConfig.
-
-        This is the primary factory for creating trainers from the unified
-        configuration. It composes the 5-D ontology system from the ontology
-        config and creates a SystemTrainer with the training config.
-
-        Args:
-            experiment_config: Unified ExperimentConfig with all hyperparameters.
-            train_data: Training data provider (DataLoader, Task, etc.).
-            val_data: Optional validation data provider.
-
-        Returns:
-            A configured SystemTrainer ready to call fit().
-        """
-        from computronium.core.ontology import (
-            AnalogSubstrate,
-            BackpropCredit,
-            DigitalSubstrate,
-            ElasticConsolidationUpdate,
-            EnergyMinimizationDynamics,
-            EuclideanUpdate,
-            FeedforwardGeometry,
-            InstantaneousDynamics,
-            LocalGoodnessCredit,
-            MemristiveSubstrate,
-            NaturalGradientUpdate,
-            NeuromorphicSubstrate,
-            OpticalSubstrate,
-            PredictiveSettlingDynamics,
-            QuantumSubstrate,
-            RandomProjectionsCredit,
-            RecurrentGeometry,
-            RiemannianOrthogonalUpdate,
-            SpectralConstrainedUpdate,
-            SpikeIntegrationDynamics,
-            SystemConfig,
-            TargetInversionCredit,
-            TemporalTraceCredit,
-            ThermodynamicContrast,
-            TileGeometry,
-        )
-        from computronium.core.system_trainer import compose_system
-
-        exp = experiment_config
-        model = exp.model
-        training = exp.training
-        hardware = exp.hardware
-
-        # Build validated SystemConfig from experiment
-        sys_config = SystemConfig.from_experiment(exp)
-
-        # Build substrate from validated config
-        substrate_cfg = sys_config.substrate
-        substrate_map = {
-            "digital": DigitalSubstrate,
-            "analog": AnalogSubstrate,
-            "memristive": MemristiveSubstrate,
-            "neuromorphic": NeuromorphicSubstrate,
-            "optical": OpticalSubstrate,
-            "quantum": QuantumSubstrate,
-        }
-        # Determine substrate type from precision field
-        substrate_key = substrate_cfg.precision.lower()
-        if substrate_key in (
-            "float32",
-            "float16",
-            "bfloat16",
-            "int8",
-            "int4",
-            "binary",
-        ):
-            substrate_key = "digital"
-        substrate_cls = substrate_map.get(substrate_key, DigitalSubstrate)
-        substrate = substrate_cls(substrate_cfg)
-
-        # Build geometry from validated config
-        geometry_cfg = sys_config.geometry
-        topology_type = geometry_cfg.topology_type.lower()
-        if topology_type == "feedforward":
-            geometry = FeedforwardGeometry(geometry_cfg)
-        elif topology_type in ("recurrent", "recurrent_attractor"):
-            hidden_dim = (
-                geometry_cfg.hidden_dims[-1]
-                if geometry_cfg.hidden_dims
-                else model.output_dim
-            )
-            geometry = RecurrentGeometry(geometry_cfg, hidden_dim=hidden_dim)
-        elif topology_type in ("tile_mesh", "tile"):
-            geometry = TileGeometry(
-                geometry_cfg,
-                neurons_per_tile=model.neurons_per_tile,
-                tiles_per_layer=model.tiles_per_layer,
-            )
-        else:
-            geometry = FeedforwardGeometry(geometry_cfg)
-
-        # Build dynamics from validated config
-        dynamics_cfg = sys_config.dynamics
-        dynamics_type = dynamics_cfg.dynamics_type.lower()
-        if dynamics_type == "energy_minimization":
-            dynamics = EnergyMinimizationDynamics(dynamics_cfg)
-        elif dynamics_type == "predictive_settling":
-            dynamics = PredictiveSettlingDynamics(dynamics_cfg)
-        elif dynamics_type == "spike_integration":
-            dynamics = SpikeIntegrationDynamics(dynamics_cfg)
-        else:
-            dynamics = InstantaneousDynamics(dynamics_cfg)
-
-        # Build credit from validated config
-        credit_cfg = sys_config.credit
-        credit_type = credit_cfg.credit_type.lower()
-        if credit_type in ("thermodynamic_contrast", "equilibrium"):
-            credit = ThermodynamicContrast(credit_cfg)
-        elif credit_type in ("random_projections", "feedback_alignment"):
-            credit = RandomProjectionsCredit(credit_cfg)
-        elif credit_type in ("local_goodness", "forward_only"):
-            credit = LocalGoodnessCredit(credit_cfg)
-        elif credit_type in ("temporal_trace", "spiking"):
-            credit = TemporalTraceCredit(credit_cfg)
-        elif credit_type in ("target_inversion", "target_prop"):
-            credit = TargetInversionCredit(credit_cfg)
-        else:
-            credit = BackpropCredit(credit_cfg)
-
-        # Build update from validated config
-        update_cfg = sys_config.update
-        update_type = update_cfg.update_type.lower()
-        if update_type in ("riemannian_orthogonal", "muon"):
-            update = RiemannianOrthogonalUpdate(update_cfg)
-        elif update_type in ("spectral_constrained", "spectral"):
-            update = SpectralConstrainedUpdate(update_cfg)
-        elif update_type in ("natural_gradient", "fisher"):
-            update = NaturalGradientUpdate(update_cfg)
-        elif update_type in ("elastic_consolidation", "ewc"):
-            update = ElasticConsolidationUpdate(update_cfg)
-        else:
-            update = EuclideanUpdate(update_cfg)
-
-        # Compose the system
-        system = compose_system(substrate, geometry, dynamics, credit, update)
-
-        # Create trainer config
-        trainer_config = SystemTrainerConfig(
-            max_epochs=training.epochs,
-            batch_size=training.batch_size,
-            val_batch_size=training.val_batch_size,
-            device=hardware.device,
-            grad_clip=training.grad_clip,
-            track_energy=training.track_energy,
-            track_flops=training.track_flops,
-            track_memory=training.track_memory,
-            log_every_n_steps=training.log_every_n_steps,
-            seed=exp.seed,
-            deterministic=exp.deterministic,
-        )
-
-        return cls(
-            system=system,
-            config=trainer_config,
-            train_data=train_data,
-            val_data=val_data,
-        )
 
     def _setup_device(self) -> None:
         if self.config.device == "auto":
@@ -686,7 +514,9 @@ def compose_system[
             # 1. Substrate + Geometry: Forward pass (initial state for both phases)
             free_state.activations = self.geometry.forward(x, self.substrate)
             if free_state.activations is not None:
-                free_state.activations = self.substrate.inject_state_noise(free_state.activations)
+                free_state.activations = self.substrate.inject_state_noise(
+                    free_state.activations
+                )
             # Nudged phase starts from same initial state
             nudged_state.activations = free_state.activations
 
@@ -733,8 +563,9 @@ def compose_system[
             }
 
             # Track free energy history for Control-Lyapunov analysis
-            if hasattr(self.dynamics, "get_free_energy_history"):
-                free_energy_hist = self.dynamics.get_free_energy_history()
+            get_history = getattr(self.dynamics, "get_free_energy_history", None)
+            if callable(get_history):
+                free_energy_hist = get_history()
                 if free_energy_hist is not None:
                     metrics["free_energy_per_iter"] = free_energy_hist
 
@@ -792,11 +623,10 @@ def compose_system[
             }
 
             # Add spike statistics if available
-            if hasattr(nudged_state, "metrics") and nudged_state.metrics:
-                if "spike_counts" in nudged_state.metrics:
-                    metrics["avg_spikes_per_neuron"] = sum(
-                        nudged_state.metrics["spike_counts"]
-                    ) / max(len(nudged_state.metrics["spike_counts"]), 1)
+            if nudged_state.metrics:
+                avg_spikes = nudged_state.metrics.get("avg_spikes_per_neuron")
+                if avg_spikes is not None:
+                    metrics["avg_spikes_per_neuron"] = avg_spikes
 
             return metrics
 

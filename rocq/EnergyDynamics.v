@@ -120,6 +120,32 @@ Qed.
 (** Energy decrease — diagonal case (proved)                            *)
 (** ------------------------------------------------------------------ *)
 
+(** Per-index descent identity: one settle step never increases the
+    diagonal energy term. Difference equals
+    -(eta/2)*(2 - eta*u)*t^2 with u = 1 - W i i > 0 and t = u*h - b. *)
+Lemma per_index_descent :
+  forall (eta u bb hh : R),
+    0 < eta ->
+    0 < u ->
+    eta * u < 2 ->
+    1 / 2 * u * (hh - eta * (u * hh - bb)) * (hh - eta * (u * hh - bb))
+      - bb * (hh - eta * (u * hh - bb))
+    <= 1 / 2 * u * hh * hh - bb * hh.
+Proof.
+  intros eta u bb hh Heta Hu Hlu.
+  assert (Hprod : 0 <= 1 / 2 * eta * (2 - eta * u) * ((u * hh - bb) * (u * hh - bb))).
+  { apply Rmult_le_pos.
+    - apply Rmult_le_pos; lra.
+    - apply sq_nonneg. }
+  assert (Hid :
+    1 / 2 * u * (hh - eta * (u * hh - bb)) * (hh - eta * (u * hh - bb))
+      - bb * (hh - eta * (u * hh - bb))
+      - (1 / 2 * u * hh * hh - bb * hh)
+    = - (1 / 2 * eta * (2 - eta * u)) * ((u * hh - bb) * (u * hh - bb))).
+  { field. }
+  lra.
+Qed.
+
 Theorem energy_decreases_diagonal :
   forall (n : nat) (cfg : EnergyConfig) (W : Matrix) (b h : Vector),
     (forall p q : nat, p <> q -> W p q = 0) ->
@@ -131,13 +157,16 @@ Proof.
   intros n cfg W b h Hdiag Hu Heta.
   rewrite (energyFunction_diagonal W b (settleStep cfg W b h n) n Hdiag).
   rewrite (energyFunction_diagonal W b h n Hdiag).
-(* STUB (admitted): per-index descent identity already derived on paper:
-   A_i - B_i = -(eta/2)*(2 - eta*u)*t^2 <= 0  with u = 1 - W i i > 0,
-   t = u*h i - b i, eta*u < 2. Remaining work is Ltac plumbing only:
-   [remember] u/t; rewrite Hstep/Hb; prove difference by [field]; close
-   sign chain via Rmult_le_pos + sq_nonneg + lra. All supporting lemmas
-   are proved above. *)
-Admitted.
+  apply sum_R_le.
+  intros i Hi.
+  assert (Hstep :
+    settleStep cfg W b h n i
+      = h i - cfg.(stepSize) * ((1 - W i i) * h i - b i)).
+  { unfold settleStep. rewrite (gradE_diagonal W b h n i Hdiag Hi). reflexivity. }
+  rewrite Hstep.
+  exact (per_index_descent cfg.(stepSize) (1 - W i i) (b i) (h i)
+           cfg.(stepSize_pos) (Hu i Hi) (Heta i Hi)).
+Qed.
 
 (** ------------------------------------------------------------------ *)
 (** General case (stated honestly, not yet proved)                      *)
