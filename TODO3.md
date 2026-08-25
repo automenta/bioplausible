@@ -1,29 +1,40 @@
 # Computronium Sprint Plan: Next-Gen Scientific Rigor & Scale
 
-## Status: Phase 1-3 COMPLETE | Phase 4-6 PLANNED
+## Status: Phase 1-3 COMPLETE | Phase 4.1 COMPLETE | Phase 4.2-6 PLANNED
 
 ---
 
 ## Phase 4: Next-Gen Scientific Rigor (PRIMARY FOCUS — Weeks 1-3)
 
-### 4.1 Hypothesis-Based Plasticity Tests (Property Testing)
+### 4.1 Hypothesis-Based Plasticity Tests (Property Testing) ✅ COMPLETE
 **Goal**: Replace ad-hoc tests with mathematically rigorous property-based tests using Hypothesis.
 
-- [ ] **4.1.1** Add property tests for `RoutingPlasticity` in `tests/property/test_plasticity_properties.py`
+- [x] **4.1.1** Add property tests for `RoutingPlasticity` in `tests/property/test_plasticity_properties.py`
   - Generate random gate logits → verify dynamics stability (no NaN/Inf, bounded gradients)
   - Verify decay bounds under adversarial inputs (extreme logits, zero gates)
   - Test idempotence: applying routing twice with same gates = applying once
 
-- [ ] **4.1.2** Add property tests for `FastWeightPlasticity` in `tests/property/test_plasticity_properties.py`
+- [x] **4.1.2** Add property tests for `FastWeightPlasticity` in `tests/property/test_plasticity_properties.py`
   - Generate random fast-weight matrices → verify stability (eigenvalues bounded)
   - Verify decay bounds: `||W_fast(t)|| ≤ decay^t * ||W_fast(0)|| + learning_rate * sum(||outer||)`
   - Test outer product updates preserve symmetry/antisymmetry properties
 
-- [ ] **4.1.3** Add property tests for `SubstrateCoupledPlasticity` and `NullPlasticity`
+- [x] **4.1.3** Add property tests for `SubstrateCoupledPlasticity` and `NullPlasticity`
   - NullPlasticity: `initial_psi` returns empty, `step` is no-op
   - SubstrateCoupled: verify coupling doesn't violate substrate constraints
 
-- [ ] **4.1.4** Integrate into CI: `pytest tests/property/test_plasticity_properties.py --hypothesis-show-statistics`
+- [x] **4.1.4** Integrate into CI: `pytest tests/property/test_plasticity_properties.py --hypothesis-show-statistics`
+
+**Created**: `tests/property/test_plasticity_properties.py` with 27 property-based tests covering:
+- RoutingPlasticity (5 tests): initial_psi shapes, no NaN/Inf, bounded logits, idempotence, decay bounds
+- FastWeightPlasticity (5 tests): initial_psi shapes, no NaN/Inf, decay bounds, outer product symmetry, eigenvalue bounds
+- SubstrateCoupledPlasticity (3 tests): empty initial_psi, no-op step, protocol compliance
+- NullPlasticity (4 tests): empty initial_psi, identity step, protocol compliance, theta preservation
+- RuleStatePlasticity (4 tests): initial_psi shapes, no NaN/Inf, freeze_theta, get_active_operator
+- Factory functions (4 tests): routing, fast_weights, rule_state, substrate_coupled
+- Integration tests (2 tests): routing + joint context, fast_weights + joint context
+
+All tests pass with Hypothesis (max_examples=50 for core tests, 30 for decay/symmetry, 20 for eigenvalue/integration).
 
 ### 4.2 Full Locality Axiom Enforcement (EqProp)
 **Goal**: Prove EqProp gradient is strictly local via property tests.
@@ -134,14 +145,14 @@
 ## Execution Priority & Dependencies
 
 ```
-Week 1:  4.1.1-4.1.3 (Plasticity property tests)  +  5.1.1 (EqProp 20-epoch run)
+Week 1:  4.1.1-4.1.3 ✅ (Plasticity property tests)  +  5.1.1 (EqProp 20-epoch run)
 Week 2:  4.2.1-4.2.3 (Locality proofs)           +  5.2.1-5.2.3 (Tile optimization)
 Week 3:  4.3.1-4.3.4 (Formal verification)       +  5.3.1-5.3.2 (SNN fix) + 5.4.1-5.4.2 (Joint docs)
 Week 4:  5.1.2-5.1.3 (GPU OOM + energy tracking) +  6.x (DX, as bandwidth allows)
 ```
 
 ### Parallelizable Tracks
-- **Track A (Scientific Rigor)**: 4.1 → 4.2 → 4.3 (sequential)
+- **Track A (Scientific Rigor)**: 4.1 ✅ → 4.2 → 4.3 (sequential)
 - **Track B (Scale/Quality)**: 5.1, 5.2, 5.3, 5.4 (parallelizable)
 - **Track C (DX)**: 6.1, 6.2, 6.3 (when bandwidth allows)
 
