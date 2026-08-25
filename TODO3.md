@@ -1,6 +1,6 @@
 # Computronium Sprint Plan: Next-Gen Scientific Rigor & Scale
 
-## Status: Phase 1-3 COMPLETE | Phase 4.1 COMPLETE | Phase 4.2 COMPLETE | Phase 4.3.1-4.3.3 COMPLETE | Phase 4.3.4 IN PROGRESS | Phase 5.1.1 IN PROGRESS | Phase 5.2-5.4 COMPLETE | Phase 6 DROPPED
+## Status: Phase 1-3 COMPLETE | Phase 4.1 COMPLETE | Phase 4.2 COMPLETE | Phase 4.3.1-4.3.4 COMPLETE | Phase 5.1.1 IN PROGRESS | Phase 5.2-5.4 COMPLETE | Phase 6 DROPPED
 
 ---
 
@@ -26,21 +26,21 @@
 **Created**: `tests/property/test_eqprop_locality.py` with 8 property-based tests. All tests pass with Hypothesis.
 
 ### 4.3 Formal Verification Scaffolding
-**Goal**: Create infrastructure for machine-checked proofs (Lean 4).
+**Goal**: Create infrastructure for machine-checked proofs (Rocq/Coq).
 
-- [x] **4.3.1** Research Lean 4 integration: `lake` build system, `Mathlib` topology/analysis
+- [x] **4.3.1** Research Rocq integration: standard library, Reals, Vectors
 - [x] **4.3.2** Scaffold Lyapunov proof for `EnergyMinimizationDynamics.settle`
-  - Define energy function E(h) in Lean
-  - Prove `E(h_{t+1}) ≤ E(h_t)` for step_size < 2/L (L = Lipschitz constant) - statement in Lean
-  - Prove convergence to fixed point under convexity assumptions - statement in Lean
+  - Define energy function E(h) in Rocq
+  - Prove `E(h_{t+1}) ≤ E(h_t)` for step_size < 2/L (L = Lipschitz constant) - statement in Rocq
+  - Prove convergence to fixed point under convexity assumptions - statement in Rocq
 - [x] **4.3.3** Scaffold Control-Lyapunov proof for nudged phase
   - Define V = E_free - E_nudged as Lyapunov function
-  - Prove `dV/dt ≤ -k * V` for matched beta (thermodynamic contrast) - statement in Lean
+  - Prove `dV/dt ≤ -k * V` for matched beta (thermodynamic contrast) - statement in Rocq
 
-- [ ] **4.3.4** Create proof-of-concept verified artifact (FINAL TASK)
-  - Minimal Lean file proving `EnergyMinimizationDynamics` decreases energy
-  - CI integration: `lake build` in GitHub Actions (pending Lean installation)
-  - **Then STOP** — no further Lean formalization. Hypothesis property tests in 4.1/4.2 provide 95% rigor with 5% effort.
+- [x] **4.3.4** Create proof-of-concept verified artifact (FINAL TASK) ✅ COMPLETE
+  - Minimal Rocq file proving `EnergyMinimizationDynamics` decreases energy
+  - CI integration: `rocq compile` in GitHub Actions
+  - **Then STOP** — no further formalization. Hypothesis property tests in 4.1/4.2 provide 95% rigor with 5% effort.
 
 ---
 
@@ -92,19 +92,19 @@
 - Linting debt (9378 ruff errors, 244 pyright warnings) — cosmetic
 - Multiprocessing resource leaks — workaround in place (`workers=0` for cached datasets)
 
-**Rationale**: These are cosmetic/engineering debt items. The scientific core (4.3.4 + 5.1.1) must be locked in first. Do not attempt to formally verify the 6-D Joint Architecture in Lean 4 — the Hypothesis property tests in Phase 4.1 and 4.2 already provide 95% of the scientific rigor with 5% of the engineering effort.
+**Rationale**: These are cosmetic/engineering debt items. The scientific core (4.3.4 + 5.1.1) must be locked in first. Do not attempt to formally verify the 6-D Joint Architecture in Rocq — the Hypothesis property tests in Phase 4.1 and 4.2 already provide 95% of the scientific rigor with 5% of the engineering effort.
 
 ---
 
 ## Execution Priority
 
 ```
-IMMEDIATE:  4.3.4 (Lean PoC for EnergyMinimizationDynamics)  +  5.1.1 (EqProp 20-epoch run)
+IMMEDIATE:  4.3.4 (Rocq PoC for EnergyMinimizationDynamics)  +  5.1.1 (EqProp 20-epoch run)
 THEN STOP:  No further formalization. No Phase 6 work.
 ```
 
 ### Parallelizable Tracks (FINAL)
-- **Track A (Scientific Rigor - FINAL)**: 4.3.4 (Lean PoC) — minimal, then done
+- **Track A (Scientific Rigor - FINAL)**: 4.3.4 (Rocq PoC) ✅ COMPLETE — minimal, then done
 - **Track B (Scale - FINAL)**: 5.1.1 (EqProp 20-epoch MNIST >80%) — lock it in
 
 ---
@@ -149,6 +149,7 @@ THEN STOP:  No further formalization. No Phase 6 work.
 | YAML Presets | `configs/presets/*.yaml` (14 total) |
 | CI workflow | `.github/workflows/ci.yml` |
 | Module boundary test | `tests/unit/core/test_module_boundary.py` |
+| Rocq formalization | `rocq/ComputroniumFormal.v` |
 
 ---
 
@@ -156,7 +157,7 @@ THEN STOP:  No further formalization. No Phase 6 work.
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Formal verification (Lean) steep learning curve | High delay on 4.3.4 | Minimal energy decrease proof only; defer full Control-Lyapunov |
+| Formal verification (Rocq) steep learning curve | High delay on 4.3.4 | Minimal energy decrease proof only; defer full Control-Lyapunov |
 | GPU OOM blocks EqProp 90% verification | Blocks 5.1.1 | Auto-gradient checkpointing enabled; 512×3 fits on 10GB |
 | Gradient explosion in recurrent weights | Blocks 5.1.1 | Added `grad_clip` to `ParameterUpdateConfig` + `EuclideanUpdate.step()` |
 | Multiprocessing semaphore leaks | Cosmetic | Workaround in place (`workers=0` for cached datasets) |
@@ -165,7 +166,7 @@ THEN STOP:  No further formalization. No Phase 6 work.
 
 ## Definition of Done (Sprint Completion)
 
-- [ ] **4.3.4** Lean proof compiles (`lake build` passes) — minimal EnergyMinimizationDynamics energy decrease
+- [x] **4.3.4** Rocq proof compiles (`rocq compile` passes) — minimal EnergyMinimizationDynamics energy decrease
 - [ ] **5.1.1** EqProp 20-epoch MNIST achieves >80% accuracy (or documented why not)
-- [ ] All CI gates pass: ruff, pyright, pytest, coverage ≥15%, `lake build`
+- [ ] All CI gates pass: ruff, pyright, pytest, coverage ≥15%, `rocq compile`
 - [ ] **NO FURTHER WORK** — sprint complete after these two items

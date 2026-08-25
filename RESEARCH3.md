@@ -4,6 +4,12 @@
 
 ---
 
+## Program Identity
+
+**Verification-first, negative results first.** This is the differentiator, not support structure: gates that fail get published with autopsies (the deep-EqProp boundary analysis is the institutional proof), pre-registration precedes comparison, nulls are first-class results, and every formal claim has an executable numeric counterpart. Competitors can copy individual experiments; they cannot copy this culture without adopting it. Every item below inherits this stance by default.
+
+---
+
 ## Z3 Fixed Weights (Level 4)
 
 **Question:** *Can frozen $\theta$ solve multiple tasks via $\psi$-mediated rule selection?* No direct analogue exists in the literature (see the ICL-bridge item for the nearest competitor and why it differs). Tests the thesis that elevating the computational rule to a dynamical variable (the M-axis) yields a qualitatively different capability.
@@ -47,11 +53,13 @@ never from weight edits.
 2. Hold data, budget, and evaluation fixed; vary mechanism only.
 3. Measure: adaptation data efficiency (demonstrations needed vs. gradient steps needed), parameter-update requirement (all comparators except ICL require some training; ICL requires none but pays attention-compute per query), OOD task generalization (tasks outside the meta-training distribution).
 
+**Scale-matching rule (pre-committed here, recorded in PR-6):** comparator qualification is performance-gated, not parameter-matched — each mechanism must reach ≥95% on each task individually (no switching) within the E-4 equal tuning budget, at whatever architecture scale achieves it; only qualified mechanisms enter the switching comparison. If the transformer cannot qualify, the head-to-head is reported as invalid-with-autopsy rather than silently compared. Parameter count and adaptation FLOPs are reported per arm so residual scale asymmetry stays visible.
+
 **Discriminating predictions:** Z3's ψ state persists across queries within a task without re-computation per token (unlike ICL); ψ capacity scales with operator-library size, not sequence length; switching latency is constant rather than growing with context.
 
 **Deliverable:** position table + one head-to-head figure (accuracy vs. adaptation cost, four mechanisms).
 
-**Risks:** transformer comparator needs careful scale-matching or reviewers dismiss it; scope creep — cap at one architecture per comparator family.
+**Risks:** scope creep — cap at one architecture per comparator family.
 
 ---
 
@@ -173,8 +181,9 @@ $$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \
 
 **Design:**
 1. Systems ladder: Heat → Wave → Burgers → Navier-Stokes (2-D periodic). Each adds one conservation law; failures localize cleanly.
-2. `EnergyMinimizationDynamics` configured so descent energy ≡ physical Hamiltonian; verify discrete descent property numerically before claiming physics (the Lean-scaffolded statement `E(h_{t+1}) ≤ E(h_t)` becomes an executable check).
-3. Comparators at matched compute: PINN (soft penalty), Hamiltonian NN (structure-preserving but backprop-trained), vanilla integrator baseline.
+2. `EnergyMinimizationDynamics` configured so descent energy ≡ physical Hamiltonian; verify discrete descent property numerically before claiming physics (the formally scaffolded statement `E(h_{t+1}) ≤ E(h_t)` becomes an executable check).
+3. **Scope against the internal depth boundary:** prior autopsies establish where the EqProp family works — the O(1)-memory single-layer path is solid; deep vanilla settling loses the contrastive signal entirely. Scope these PDE systems to the proven shallow-width regime and say so up front; depth-scaling is explicitly out of claim scope unless new evidence reopens it.
+4. Comparators at matched compute: PINN (soft penalty), Hamiltonian NN (structure-preserving but backprop-trained), vanilla integrator baseline.
 
 **Metrics:** relative invariant drift per horizon; long-horizon rollout divergence; penalty-overhead (zero by construction for EqProp — report PINN's for contrast).
 
@@ -184,18 +193,18 @@ $$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \
 
 ---
 
-## Theory Program (Lean + Expressivity)
+## Theory Program (Rocq + Expressivity)
 
 **Goal:** convert scaffolded statements into checked artifacts, and add the missing Z3 expressivity piece.
 
 **Design:**
-1. Complete the existing Lean scaffold (`lean/ComputroniumFormal`): energy decrease for `EnergyMinimizationDynamics.settle` under step-size < 2/L; control-Lyapunov bound $dV/dt \le -kV$ for matched β in the nudged phase. CI integration pending Lean toolchain install (`TODO3` Phase 4.3.4 — the last planned formalization task).
+1. **Port and complete the formalization under Rocq** (project is mid-migration from Lean): the energy-decrease statement for `EnergyMinimizationDynamics.settle` under step-size < 2/L and the control-Lyapunov bound $dV/dt \le -kV$ for matched β were originally scaffolded in Lean (`lean/ComputroniumFormal`) — port both statements to Rocq (Coq 9.x, opam/dune build), prove them, and gate CI on a Rocq build (supersedes the pending-Lean-CI item in `TODO3` Phase 4.3.4).
 2. **New statement — ψ-selection coverage:** for a finite operator library $\{T_k\}$ and softmax gating, the function class realized by $T_t = \sum_k g_k(\psi_t) T_k$ contains every deterministic selection when $g$ concentrates; prove the approximation-rate statement for Lipschitz controllers. This is the formal kernel of the Z3 claim: fixed hardware, tape-programmable behaviour.
 3. Stability-plasticity frontier: state and prove the contraction-vs-plasticity trade-off for composite transition operator $z_{t+1} = F_\theta(z_t; G, S)$ — even a restricted version (RoutingPlasticity preserves spectral radius bounds; FastWeightPlasticity perturbs them by a bounded factor) gives the paper a theorem.
 
-**Deliverables:** machine-checked Lean file in CI; one proposition per item above with Hypothesis property-test counterparts (95%-rigor-at-5%-cost policy from TODO3 stands).
+**Deliverables:** machine-checked Rocq file in CI; one proposition per item above with Hypothesis property-test counterparts (95%-rigor-at-5%-cost policy from TODO3 stands).
 
-**Risks:** Lean/Mathlib friction is high — hard-stop after the scaffolded statements per existing policy; expressivity statement may reduce to known mixture-of-experts results (check literature before writing; if so, cite and narrow the delta).
+**Risks:** proof-assistant migration friction is the main schedule risk — statement porting, Rocq/Stdlib idioms differing from the Lean/Mathlib originals, toolchain churn mid-migration; hard-stop after these statements per existing policy. Expressivity statement may reduce to known mixture-of-experts results (check literature before writing; if so, cite and narrow the delta).
 
 ---
 
@@ -205,14 +214,14 @@ $$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \
 
 **Design:**
 1. Freeze evaluation contract *first*: per-rule tuning budget (equal GPU-hours, not equal epochs), early-stopping policy, seeds, data protocols — pre-registered, published before results exist.
-2. Inventory: zoo currently ships backprop, eqprop, FA, forward-only (FF), hebbian, predictive coding, target prop, spiking, tile variants, MEP, o1memory — the "20 rules" target is reachable via propagators/optimizers/transitions combinations; register the canonical 20 and lock.
+2. Inventory: zoo currently ships backprop, eqprop, FA, forward-only (FF), hebbian, predictive coding, target prop, spiking, tile variants, MEP, o1memory — with ~59 registration sites across propagators/optimizers/transitions, the binding constraint is family coverage, not feasibility. Lock the canonical set by **rule-family coverage** (every credit-assignment × update family represented, plus the substrate-specialized variants); working target ≥30 coordinates, headline number set by that cutoff and defended as principled — never a round number chosen for the title.
 3. Report: capability matrix, accuracy-per-resource overlays, stability audits per rule, failure modes from the manifesto.
 
-**Deliverables:** benchmark paper (*"A Fair, 6-D Evaluation of 20 Local Learning Rules"*), public leaderboard, machine-readable results release.
+**Output:** benchmark paper *"A Fair, Family-Coverage Evaluation of Local Learning Rules on Equal Footing"* — N set by the coverage cutoff above (working target ≥30) — plus machine-readable results release and reproducibility scripts. Scope is **frozen at release version**: the locked coordinate set and contract ship as-is with regeneration scripts; the living-leaderboard ambition is explicitly post-publication and contingent on demonstrated community demand, so the paper depends on no infrastructure not yet built.
 
-**Stretch:** external submission pipeline (containerized rule API) converting the benchmark from static paper to living infrastructure — this is what makes it "de facto standard" rather than "one more table".
+**Stretch (post-publication only):** external submission pipeline (containerized rule API) with named maintainers converting the benchmark from static paper to living infrastructure — pursued solely if the paper generates community pull.
 
-**Risks:** house-rule bias perception — mitigate via pre-registration + external submissions; maintenance burden of 20 rules under one contract — gate new registrations on CI-green property locks.
+**Risks:** house-rule bias perception — mitigate via pre-registration; maintenance burden of the locked set — frozen release scope caps it, and new registrations remain gated on CI-green property locks.
 
 ---
 
@@ -290,7 +299,7 @@ $$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \
 
 ## Biological Twin
 
-**Strategy:** 1:1 simulation of a documented microcircuit in the 6-D ontology; predict responses to held-out stimuli/lesions.
+**Strategy:** create a 1:1 simulation of a documented microcircuit in the 6-D ontology; predict responses to held-out stimuli/lesions. **Net-new domain work:** no biology domain module exists today — this item *builds* one (connectome ingestion, cell-type parameter mapping) rather than consuming existing substrate, which is precisely why it ranks last.
 
 **Candidates:** *C. elegans* anterior touch circuit or full somatic nervous system connectome (302 neurons, wiring measured, laser-ablation literature abundant) vs. a named cortical column (higher data quality per neuron, heavier fitting burden).
 
@@ -302,6 +311,8 @@ $$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \
 **Claim under test:** ontology-native modeling (explicit substrate/state-dynamics separation) predicts lesion responses better than black-box RNNs fit to the same activity data.
 
 **Deliverables:** prediction-vs-measurement tables for held-out perturbations; mapped ontology file released alongside.
+
+**Kill date:** if *C. elegans* parameter fitting does not reproduce ≥70% of published stimulus-response accuracy within 4 weeks of dedicated effort, the item is archived — no further investment until CP-A delivers its flagship result.
 
 **Risks:** highest-risk item — parameter identifiability, data-quality ceilings, domain-expert review barriers; payoff is interdisciplinary credibility, not ML impact. Scope discipline: one circuit, one dataset release, no "whole brain" rhetoric.
 
@@ -316,12 +327,14 @@ Shared infrastructure extracted from the item catalog. Each is built once; consu
 | **PR-0** | **Verification gate** | `docs/baseline.md` gates at-or-better (pytest/pyright strict/ruff) + TIER 0/digits campaign green | Every empirical item — no result trusted otherwise |
 | **PR-1** | **Optimizer-phase hygiene** | Rebuild optimizer between meta-train and ψ-adaptation phases; `evaluate_z3` currently carries Adam momentum buffers over frozen θ into adaptation — contaminates the exact-zero Δθ claim | Z3, Algorithm Migration |
 | **PR-2** | **θ-invariance audit harness** | Snapshot → freeze → run → re-snapshot → exact-diff, emitted as a reusable context manager with per-seed reports | Z3, Algorithm Migration, continual-learning claims |
-| **PR-3** | **Calibrated resource instrumentation** | `ResourceUsage` + `core/profiling.py` wired into every suite runner; ≥1 *measured* Joule/FLOP anchor workload to calibrate proxies; proxy error bars reported thereafter | Z3 energy metrics, L2 effective-FLOPs, AutoScientist frontier, Edge/Green AI, Hardware pilot |
+| **PR-3a** | **Software resource instrumentation** | `ResourceUsage` + `core/profiling.py` wired into every suite runner emitting proxy FLOPs/memory/latency; requires no hardware — proxy-tier reporting unblocked immediately | Z3 energy metrics (proxy tier), L2 effective-FLOPs, AutoScientist frontier |
+| **PR-3b** | **Physical calibration anchor** | One *measured* Joule/FLOP anchor workload on an instrumented device (board power sensor, wall meter, or RAPL — instrument chosen per `docs/hardware_targets.md`); calibrates proxies and upgrades reporting to measured-tier with error bars; procurement starts day one alongside CP-D | Measured-tier energy claims, Edge/Green AI, Hardware pilot |
 | **PR-4** | **Pre-registration & statistics kit** | Seed count (≥5), bootstrap-CI utility, paired-comparison harness, threshold-registration template checked into repo | Z3, L1–L3.5, benchmark contract, discovery replication gates |
 | **PR-5** | **Calibrated stability guard** | ROC-calibrated kill thresholds (<5% false-kill on known-good set, >95% kill rate, <10% overhead); `_fast_proxy` vs. full-Jacobian disagreement rate quantified | Unattended AutoScientist campaigns, discovery |
-| **PR-6** | **Evaluation fairness contract** | One pre-registered document: per-rule tuning budgets (GPU-hours, not epochs), early-stopping policy, seeds, data splits — written once, consumed by three different items | Benchmark paper, discovery pre-registration, edge comparisons |
+| **PR-6** | **Evaluation fairness contract** | One pre-registered document: per-rule tuning budgets (GPU-hours, not epochs), early-stopping policy, seeds, data splits, and the ICL-bridge comparator scale-matching rule — written once, consumed by four different items | Benchmark paper, discovery pre-registration, edge comparisons, ICL bridge |
 | **PR-7** | **Switching-machinery shakedown** | L3.5 two-task migration + L1 adaptation run as *instrumentation tests* before Z3: validates ψ reset, temperature schedule, diversity entropy, Δθ audit end-to-end on the cheapest settings | Z3 (its minimal sibling de-risks it directly) |
 | **PR-8** | **Export pipeline parity** | ONNX/ternary export verified round-trip (accuracy delta ≤ noise) on one representative model | Edge/Green AI, Hardware pilot |
+| **PR-9** | **Campaign commissioning** | One tiny AutoScientist campaign completing a full iterate → interrupt → checkpoint → resume cycle end-to-end (`autoscientist_campaigns/` is empty today — the machinery is built but has zero completed runs) | Frontier campaign, Algorithm discovery — nothing consumes the campaign stack until this passes |
 
 ---
 
@@ -333,14 +346,14 @@ One protocol governs every item — efficiency comes from never re-deciding thes
 Every experiment runs at three scales with fixed promotion criteria between rungs:
 1. **Smoke** (≤5 min, single seed, tiny dims): does the pipeline run end-to-end and emit every metric? Catches schema/wiring bugs at ~0.1% of full cost.
 2. **Pilot** (≤2 h, 2 seeds, reduced dims/steps): is the effect direction visible? Are variances sane? Promotion to full requires: no NaNs, all metrics populated, effect sign matches hypothesis or shows an interpretable pattern.
-3. **Full** (registered budget): only ever launched on a promoted pilot.
+3. **Full** (registered budget): only ever launched on a promoted pilot. The pre-registration artifact — threshold, statistical test, minimum detectable effect size — is written and committed immediately after pilot promotion and *before* full-run configuration is finalized: early enough to precede all full-scale data, late enough to rest on measured pilot variances.
 Rung failures loop back one level — never debug at full scale.
 
 ### E-2 Timeboxed Tuning Rounds
 A *round* = one bounded sweep over ≤8 configurations chosen using evidence from prior rounds (not a grid). Maximum 3 rounds per experiment; then the item's fallback/kill criterion triggers automatically. Infra-failures (OOM, toolchain breaks) don't consume rounds — distinguish "hypothesis failed" from "we failed to run it" in the log.
 
 ### E-3 Reproducibility Contract
-Any promoted figure must regenerate from stored artifacts alone: pinned config hash + seed manifest + environment lock + versioned results schema, checked in next to the plot script. If a figure can't be regenerated without rerunning training, it doesn't exist yet.
+Any promoted figure must regenerate from stored artifacts alone: pinned config hash + seed manifest + environment lock + versioned results schema, checked in next to the plot script. If a figure can't be regenerated without rerunning training, it doesn't exist yet. Every promoted artifact writes outputs to a versioned results directory (`results/<item>/<seed>/<timestamp>/`) whose `manifest.json` records config hash, git commit, and environment lock; cross-item consumers (Z3 baseline-(a) forgetting numbers → continual-learning control arm, PR-7 shakedown configs → PR-5 guard calibration, L2 effective-FLOPs → $\mathcal{C}$ vector definition) read only from these directories — never from live training state.
 
 ### E-4 Baseline Protection Rules
 Baselines receive equal GPU-hour tuning budgets, identical data pipelines, and identical early-stopping treatment — set before seeing any comparison. No post-hoc baseline adjustments. When multiple comparisons are reported, either apply a correction or show all of them unfiltered.
@@ -375,6 +388,9 @@ Whenever CP-A blocks (long runs, procurement, review), pull work from CP-C (wrap
 ### E-10 Minimum-Viable Control Set
 No comparative claim ships without all four: matched-capacity control, matched-budget baseline, floor control (the claim disabled), ≥5 seeds with paired structure (PR-4). Items may add controls; none may ship fewer.
 
+### E-11 Decision Log
+One append-only file (`DECISIONS.md`) records, timestamped: every pre-registration threshold (date + rationale), every kill-criterion invocation (what was killed, why, what was salvaged), and every deviation from this plan (what changed, what triggered it). Internally it prevents re-litigating settled questions; externally it is the audit trail that answers "pre-registered or fished?" with timestamps rather than recollection.
+
 ---
 
 ## Dependency Graph
@@ -387,23 +403,27 @@ flowchart TD
 
     PR1[PR-1 Optimizer hygiene] --> PR2[PR-2 θ-audit harness] --> CHEAP
     PR1 --> Z3[Z3 Flagship]
-    PR3[PR-3 Resource calibration] --> Z3
-    PR3 --> FRONTIER[Pareto frontier campaign]
-    PR3 --> EDGE[Edge/Green AI]
+    PR3A[PR-3a Proxy instrumentation] --> Z3
+    PR3A --> FRONTIER[Pareto frontier campaign]
+    PR3B[PR-3b Measured anchor ⏳ hardware lead time] --> EDGE[Edge/Green AI]
+    PR3B -.->|calibration ratio| FRONTIER
 
     PR4[PR-4 Stats kit] --> CHEAP & Z3
 
     CHEAP -->|machinery validated| Z3
     CHEAP -->|known-good/bad configs| PR5[PR-5 Guard calibration]
+    CHEAP -->|smoke-scale configs| PR9[PR-9 Campaign commissioning]
     Z3 -->|flagship result| FRONTIER[AutoScientist M-axis campaign]
     PR5 --> FRONTIER
+    PR9 --> FRONTIER
+    PR9 --> DISCOVERY[Algorithm discovery]
     FRONTIER --> MANIFESTO[Failure-manifesto dataset]
-    MANIFESTO --> DISCOVERY[Algorithm discovery]
+    MANIFESTO --> DISCOVERY
     PR6[PR-6 Fairness contract] --> BENCH[20-rules benchmark]
     PR6 --> DISCOVERY
     FRONTIER --> BENCH
 
-    TLEAN[Lean toolchain install] --> PROOFS[Scaffolded proofs + ψ-coverage prop]
+    TLEAN[Rocq migration] --> PROOFS[Ported + new proofs incl. ψ-coverage prop]
     PROOFS -.->|numeric counterparts| PHYS
     Z3 -.->|inform statement scope| PROOFS
 
@@ -426,7 +446,7 @@ Reading notes: solid arrows are hard dependencies; dashed are informational/info
 
 ### CP-A — Empirical Spine *(carries most of the catalog)*
 
-`PR-0 → PR-1 → PR-2 → PR-4 → PR-7 (shakedown) → Z3 flagship → PR-5 (guard, overlapping) → AutoScientist frontier campaign → manifesto dataset`
+`PR-0 → PR-1 → PR-2 → PR-4 → PR-7 (shakedown) → Z3 flagship → PR-5 (guard, overlapping) → PR-9 (campaign commissioning) → AutoScientist frontier campaign → manifesto dataset`
 
 Then fan-out, all gated only on CP-A's tail:
 - **Benchmark paper** (needs frontier + PR-6 contract + locked rule registry)
@@ -437,7 +457,7 @@ This is the longest chain and the one that gates the two highest-leverage strate
 
 ### CP-B — Verification Spine *(parallel to CP-A)*
 
-`Lean toolchain install → complete scaffolded proofs → ψ-selection coverage proposition (scope refined by early Z3 observations) → numeric counterparts executed inside experimental suites`
+`Rocq migration completes (statements ported from the Lean scaffold) → prove energy-decrease + control-Lyapunov statements → ψ-selection coverage proposition (scope refined by early Z3 observations) → numeric counterparts executed inside experimental suites`
 
 Hard-stops at the existing TODO3 policy boundary (no further formalization beyond scaffolded statements). Physics-proof credibility borrows the descent-property checks from here.
 
@@ -449,7 +469,7 @@ The wrapper has no research dependencies — only API stability — so it fills 
 
 ### CP-D — Physical Spine *(latency-gated, start earliest)*
 
-`hardware procurement (day one) → PR-3 measured-anchor workloads double as board bring-up → PR-8 export parity → Edge/Green AI artifact → co-design pilot`
+`hardware procurement (day one) → PR-3b measured-anchor workloads double as board bring-up → PR-8 export parity → Edge/Green AI artifact → co-design pilot`
 
 Everything except procurement is software-side and can begin immediately; the board arrives into a prepared pipeline rather than blocking one.
 
@@ -460,15 +480,48 @@ Everything except procurement is software-side and can begin immediately; the bo
 
 ---
 
+## Team Allocation
+
+The parallel spines are a function of headcount, not dependency structure. Planning assumption: **~1.5 FTE**. Allocation: **CP-A 70%**, **CP-C 15%**, **CP-B/D/E 15% shared, pull-based**. With fewer than three hands the "parallel" spines are not simultaneous workstreams — they are the E-8 waiting-period queue made concrete: CP-B/D/E advance while CP-A blocks on long runs or procurement, and it is exactly that blocking time that makes them real rather than aspirational.
+
+### Startup sequence (first two weeks)
+
+1. **Day 1:** PR-0 verification gate — full pytest suite + pyright strict + ruff green, TIER-0/digits campaign passing; place hardware orders (CP-D lead time is the constraint, not difficulty).
+2. **Days 2–3:** PR-1 optimizer-phase hygiene (rebuild Adam between meta-train and ψ-adaptation, verify no momentum carry-over); PR-2 θ-invariance harness as a reusable context manager, tested on a trivially frozen model.
+3. **Days 3–4:** PR-3a software instrumentation wired into suite runners (proxy FLOPs/memory/latency; no physical measurement yet — CP-A does not wait on a wattmeter).
+4. **Days 4–5:** PR-4 statistics kit checked in (bootstrap-CI utility, paired-comparison harness, threshold-registration template).
+5. **Week 2:** PR-7 shakedown in cost order — L3.5 two-task migration (ψ reset, temperature schedule, Δθ audit) → L1 reduced-dims (switching stream, adaptation half-life) → L2/L3 smokes (metrics populate); harvest known-good/bad configs to seed PR-5 calibration; day-10 checkpoint reviews all shakedown output so plumbing bugs get fixed at ~0.1% of full cost.
+6. **Waiting periods (any block):** draft PR-6 fairness contract (writing only, zero compute); PyTorch wrapper API sketch (interface design, no implementation); Rocq toolchain install and scaffold compile check.
+
+---
+
+## Publication Map
+
+Venue targets convert "done" from a feeling into a backward deadline: an aim at NeurIPS 2027 main track sets a ~May 2027 abstract deadline against which CP-A's tail is scheduled.
+
+| Artifact | Target venue | Dependency |
+|----------|--------------|------------|
+| Z3 flagship + ICL bridge | NeurIPS / ICLR main track | CP-A tail |
+| Local-rules benchmark (locked family-coverage set) | NeurIPS Datasets & Benchmarks | CP-A ∩ CP-C |
+| Failure manifesto + stability guard | Workshop (NeurIPS ML-for-Science, Efficient ML) | CP-A tail |
+| Physics-informed conservation proof | ICML / J. Comput. Phys. | CP-E |
+| Algorithm discovery | ICLR if novel rule found; negative-results workshop otherwise | CP-A fan-out |
+| Theory (ψ-coverage + contraction) | COLT / Neural Computation | CP-B |
+| Edge/Green AI + co-design pilot | MLSys / HotEdgeML | CP-D |
+| Biological twin | Nat. Comput. Sci. / eLife | CP-E |
+
+---
+
 ## Bottlenecks & Single Points of Failure
 
 | Bottleneck | Gates | Mitigation |
 |------------|-------|------------|
-| **PR-3 resource calibration** | Z3 energy figures, frontier quality, all edge claims | Calibrate against one measured workload before *any* campaign consumes proxies |
+| **PR-3a/3b resource calibration** | Z3 energy figures, frontier quality, all edge claims | PR-3a decouples proxy reporting from hardware availability; PR-3b supplies one measured anchor before *any* campaign consumes calibrated proxies |
 | **Z3 convergence** | Entire CP-A fan-out | Structural fallback to L1 seed (above); shakedown (PR-7) surfaces failure modes cheaply first |
 | **PR-5 guard false-positive rate** | Unattended campaigns, discovery throughput | ROC calibration on known-good/bad sets harvested free from PR-7 runs |
+| **PR-9 untested campaign stack** | Frontier campaign, discovery | Commissioning cycle (iterate → interrupt → resume) is small and cheap; run it immediately after guard calibration so failures surface while schedules still have slack |
 | **Hardware lead time** | Co-design pilot only | Procure day one; pilot is deliberately last-in-catalog so slippage costs nothing upstream |
-| **Lean/Mathlib friction** | Formal claims only | Hard-stop policy already in place; Hypothesis property tests carry rigor meanwhile |
+| **Proof-assistant migration (Lean → Rocq)** | Formal claims only | Hard-stop policy already in place; Hypothesis property tests carry rigor meanwhile; port statements before attempting new proofs |
 
 ---
 
@@ -491,4 +544,4 @@ Everything except procurement is software-side and can begin immediately; the bo
 | Hardware pilot | CP-D tail |
 | Biological twin | CP-E |
 
-All 15 items sit on some path. Only two require resources money can't shortcut (hardware, Lean toolchain) and both are latency-gated rather than effort-gated — hence procured/installed on day one and kept off the spine.
+All 15 items sit on some path. Only two require resources money can't shortcut (hardware, proof-assistant migration) and both are latency-gated rather than effort-gated — hence started on day one and kept off the spine.
