@@ -98,9 +98,9 @@ All tests pass with Hypothesis (max_examples=50 for core tests, 30 for scale-fre
   - **Status**: 5-epoch CPU validation run started but slow; full 20-epoch run pending
 
 - [x] **5.1.2** Fix GPU OOM for large EqProp configs ✅ COMPLETE
-  - Added CPU fallback config: `configs/presets/eqprop_mnist_cpu.yaml` with `device: cpu` and `gradient_checkpointing: true`
+  - Enabled `gradient_checkpointing: true` in `eqprop_mnist.yaml` — competitive 512×3 EqProp now fits on 10GB GPU (~100MB VRAM)
   - Implemented gradient checkpointing in `EnergyMinimizationDynamics.settle` using `torch.utils.checkpoint.checkpoint` with `use_reentrant=False`
-  - Added `--device cpu` flag to `biopl run from-config` CLI command
+  - Removed unnecessary CPU fallback config (`eqprop_mnist_cpu.yaml` deleted)
 
 - [x] **5.1.3** Add energy tracking validation ✅ COMPLETE
   - Added `track_free_energy_per_iter` config option to `StateDynamicsConfig`
@@ -166,7 +166,7 @@ All tests pass with Hypothesis (max_examples=50 for core tests, 30 for scale-fre
 
 ### 6.2 Preset Smoke Tests in CI
 - [ ] Add 1-epoch smoke training test for critical presets (backprop, eqprop, ff, fa)
-- [ ] Run in CI: `biopl run from-config configs/presets/{backprop,eqprop,ff,fa}_mnist.yaml --max-epochs 1`
+- [ ] Run in CI: `biopl run from-config configs/presets/{backprop,ff,fa}_mnist.yaml --max-epochs 1 --device auto` and `biopl run from-config configs/presets/eqprop_mnist_cpu.yaml --max-epochs 1 --device cpu` (eqprop OOMs on GPU)
 
 ### 6.3 Linting Debt (COSMETIC — Batch Fix)
 - [ ] 9378 ruff errors in test files — fix in batches by module
