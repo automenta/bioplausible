@@ -15,7 +15,7 @@ Computronium serves three roles simultaneously. The library is usable independen
 
 | Lens | What It Is | What You Get |
 |------|------------|--------------|
-| **📦 ML Library** | Composable systems, common training API, multiple learning rules, substrate models, benchmarks, stability/energy analysis, experiment sweeps, distributed execution | Build, train, and compare Backprop, Equilibrium Propagation, Feedback Alignment, Forward-Forward, PEPITA, Target Propagation, Predictive Coding, Hebbian/STDP, SNN, TileNet, and 6-D joint systems (RoutingPlasticity, FastWeightPlasticity) under one API |
+| **📦 ML Library** | Composable learning systems behind one training API | Train and compare every implemented rule — Backprop, EqProp, FA, FF, PEPITA, Target Prop, Predictive Coding, Hebbian/STDP, SNN, TileNet, 6-D joint — under a single interface (capability table below) |
 | **🔬 Research Framework** | 6-D parameterized algorithm space (Substrate × Geometry × StateDynamics × Plasticity × CreditAssignment × ParameterUpdate), AutoScientist campaigns, property-verified hypercube, stability-plasticity monitoring, Pareto frontier analysis | Systematic ablations across axes; controlled benchmark campaigns for adaptation efficiency, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weight adaptation |
 | **🧪 Scientific Program** | Hypotheses on locality, plasticity, stability, and physical constraints as first-class dimensions; stability-plasticity trade-off as controlled departure from contraction; resource-vector Pareto analysis (compute, memory, energy, latency, plastic-state capacity) | Ongoing empirical investigation—not validated claims. Large-scale campaigns and physical-hardware validation remain future work. |
 
@@ -195,41 +195,29 @@ All entry points installed with `uv sync --dev`. The CLI is consolidated under t
 comp <command> [args]
 ```
 
-### Primary Use Cases
+### CLI Reference
 
-| Goal | Command |
-|------|---------|
-| **Train a model** | `comp run from-config --config configs/presets/backprop_mnist.yaml` |
-| **Compare learning rules** | `comp lab benchmark --domain vision --quick` |
-| **Run benchmark suite** | `comp benchmark run --suite adaptation_efficiency` |
-| **Run sweep/campaign** | `comp campaign run --config <campaign.yaml>` |
-| **Analyze stability** | `comp stability --model eqprop_mlp --task mnist` |
-| **Compute Pareto frontier** | `comp frontier --study study_name` |
-| **Autonomous research** | `comp scientist --campaign <campaign.yaml>` |
-| **Interactive exploration** | `comp lab` |
-| **Validate joint coordinates** | `comp joint-validate --coordinate S=Memristive,G=TileMesh,...` |
-| **Start a P2P worker** | `uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --device cpu` |
-| **Export kernels for deployment** | `uv run python -m computronium.cli.export_kernel --algorithm backprop --target cpu` |
+All subcommands of the `comp` dispatcher:
 
-### Subcommand Reference
+| Command | Purpose | Example |
+|---------|---------|---------|
+| `comp run` | Campaign runner (validate/plan/run) | `comp run from-config --config configs/presets/backprop_mnist.yaml` |
+| `comp report` | Render experiment reports | — |
+| `comp parity` | Backprop parity benchmark | — |
+| `comp repro` | Reproducibility verification | — |
+| `comp hpo` | Hyperparameter optimization | — |
+| `comp audit` | Registry metadata audit | — |
+| `comp validate` | Run verification suite; optional knowledge-base recording | — |
+| `comp scientist` | AutoScientist: autonomous exploration of the 6-D space | `comp scientist --campaign <campaign.yaml>` |
+| `comp frontier` | Pareto frontier analysis | `comp frontier --study study_name` |
+| `comp rank` | Family ranking from HPO studies | — |
+| `comp lab` | Interactive experiments, training, benchmarks | `comp lab benchmark --domain vision --quick` |
+| `comp joint-validate` | Validate arbitrary 6-axis joint coordinates | `comp joint-validate --coordinate S=Memristive,G=TileMesh,...` |
+| `comp campaign` | Run/compare/resume joint campaigns | `comp campaign run --config <campaign.yaml>` |
+| `comp stability` | Stability-plasticity frontier reports | `comp stability --model eqprop_mlp --task mnist` |
+| `comp benchmark` | Joint benchmark suites (adaptation, Z3, etc.) | `comp benchmark run --suite adaptation_efficiency` |
 
-| Subcommand | Purpose | Pre-consolidation Name |
-|------------|---------|--------------|
-| `comp run` | Campaign runner (validate/plan/run) | `comp-run` |
-| `comp report` | Render experiment reports | `comp-report` |
-| `comp parity` | Backprop parity benchmark | `comp-parity` |
-| `comp repro` | Reproducibility verification | `comp-repro-check` |
-| `comp hpo` | Hyperparameter optimization | `comp-hpo` |
-| `comp audit` | Registry metadata audit | `comp-registry-audit` |
-| `comp frontier` | Pareto frontier analysis | `comp-frontier` |
-| `comp rank` | Family ranking from HPO studies | `comp-compare` |
-| `comp lab` | Interactive experiments & model inspection | — |
-| `comp joint-validate` | Validate arbitrary 6-axis joint coordinates | — |
-| `comp campaign` | Run/compare/resume joint campaigns | — |
-| `comp stability` | Stability-plasticity frontier reports | — |
-| `comp benchmark` | Run joint benchmark suites (adaptation, Z3, etc.) | — |
-
-All functionality is available through the `comp` dispatcher. P2P workers and kernel export run as modules rather than installed scripts:
+Module entry points (not installed as scripts):
 
 ```bash
 uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --device cpu   # P2P worker
@@ -316,16 +304,9 @@ from computronium import (
     create_ff_mlp, create_pepita_mlp, create_tp_mlp,
     create_pc_mlp, create_hebbian_mlp, create_snn_mlp,
     create_tile_mlp,
-    SystemTrainer, SystemTrainerConfig,
 )
-from computronium.domains.factory import create_task
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-task = create_task("mnist", device=device, quick_mode=True)
-task.setup()
-train_loader, val_loader = task.get_dataloader("train"), task.get_dataloader("val")
-
-# All factories share: input_dim, output_dim, hidden_dims (tuple), lr, device
+# All factories share the signature: input_dim, hidden_dims (tuple), output_dim, lr, device
 input_dim, output_dim = 784, 10
 
 # Backprop (baseline)
@@ -361,17 +342,9 @@ system = create_snn_mlp(input_dim, (256,), output_dim, lr=0.001, device=device)
 # TileNet (modular tiles)
 system = create_tile_mlp(input_dim, (256,), output_dim,
                          lr=0.001, neurons_per_tile=16, tiles_per_layer=2, device=device)
-
-# Train with SystemTrainer
-trainer = SystemTrainer(
-    system=system,
-    config=SystemTrainerConfig(max_epochs=3, batch_size=64, device=device, seed=42),
-    train_data=train_loader,
-    val_data=val_loader,
-)
-with trainer:
-    history = trainer.fit()
 ```
+
+Training wiring is identical for every factory — wrap in `SystemTrainer` as shown in the Composability Demo above.
 
 ### 6-D Joint Factories (Non-Null Plasticity)
 
@@ -389,41 +362,6 @@ system = create_fast_weight_mlp(
     input_dim, (256,), output_dim,
     lr=0.001, fast_weight_dim=128, device=device
 )
-
-# Same training API
-trainer = SystemTrainer(
-    system=system,
-    config=SystemTrainerConfig(max_epochs=3, batch_size=64, device=device, seed=42),
-    train_data=train_loader,
-    val_data=val_loader,
-)
-with trainer:
-    history = trainer.fit()
-```
-
-### YAML Preset Cross-Reference
-
-Run any preset directly:
-```bash
-# 5-D factories
-comp run from-config --config configs/presets/backprop_mnist.yaml
-comp run from-config --config configs/presets/eqprop_mnist.yaml
-comp run from-config --config configs/presets/fa_mnist.yaml
-comp run from-config --config configs/presets/ff_mnist.yaml
-comp run from-config --config configs/presets/pepita_mnist.yaml
-comp run from-config --config configs/presets/tp_mnist.yaml
-comp run from-config --config configs/presets/pc_mnist.yaml
-comp run from-config --config configs/presets/hebbian_mnist.yaml
-comp run from-config --config configs/presets/snn_mnist.yaml
-comp run from-config --config configs/presets/tile_mnist.yaml
-
-# 6-D joint factories
-comp run from-config --config configs/presets/routing_mnist.yaml
-comp run from-config --config configs/presets/fast_weight_mnist.yaml
-
-# 6-D joint with EqProp dynamics
-comp run from-config --config configs/presets/eqprop_routing_mnist.yaml
-comp run from-config --config configs/presets/eqprop_fast_weight_mnist.yaml
 ```
 
 ---
@@ -694,28 +632,9 @@ class FrontierRecord:
     resources: ResourceUsage
 ```
 
-### 5-Level Benchmark Hierarchy (Experimental Questions)
+### 5-Level Benchmark Hierarchy
 
-The benchmark hierarchy defines experimental questions, not established results.
-
-| Level | Question | Toy Task | Compare |
-|-------|----------|----------|---------|
-| **1: Adaptation Efficiency** | Does plasticity adapt faster than Null? | Switching distribution (Phase A: y=f_A(x), Phase B: y=f_B(x)) | Null vs FastWeight vs Routing |
-| **2: Compute Efficiency** | Does routing reduce effective ops? | Mixture-of-experts (one route needed per input) | Active units, gate entropy, effective matmul |
-| **3: Structural Robustness** | Can system recover after damage? | Zeroed weights, removed nodes, dead channels, noisy memristive | Null vs Routing vs SubstrateCoupled |
-| **3.5: Algorithm Migration** | Can ψ switch strategy without θ update? | Task A₀: cumulative sum → Task A₁: last symbol | time(A₀→A₁), energy, ‖θ_after - θ_before‖ == 0 |
-| **4: Z3 — Fixed Weights, Changing Algorithm** | Can frozen θ solve multiple tasks via ψ? | **Constraint**: θ frozen. Tasks: parity, last-symbol, threshold. **Operators**: Identity, Threshold, Accumulate, LastSymbol, Parity, SparseTopKRoute, SignFlip, Delay | Adaptation time, energy, operator diversity, parameter invariance |
-
-**Z3 Parameter invariance must be exact**: `||θ_after - θ_before|| == 0`
-
-Commands:
-```bash
-comp benchmark run --suite adaptation_efficiency
-comp benchmark run --suite compute_efficiency
-comp benchmark run --suite structural_robustness
-comp benchmark run --suite algorithm_migration
-comp benchmark run --suite z3_fixed_weights
-```
+The five experimental questions — adaptation efficiency, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weights — are specified once per experiment (question, toy task, comparison axes, file) in the *Experiment Suite* below, each with a runnable `comp benchmark run --suite …` command. They define experimental questions, not established results.
 
 ---
 
@@ -772,13 +691,24 @@ The 6-axis decomposition gives the **AutoScientist** a **structured search space
 
 ### 6-D Joint Experiments — In Development
 
-| Experiment | File | Purpose |
-|------------|------|---------|
-| Adaptation Efficiency | `computronium/experiments/joint/adaptation_efficiency.py` | Does plasticity adapt faster to non-stationary shifts than Null under matched compute? |
-| Compute Efficiency | `computronium/experiments/joint/compute_efficiency.py` | Does routing reduce effective operations (dynamic sparsity)? |
-| Structural Robustness | `computronium/experiments/joint/structural_robustness.py` | Can joint system recover after topology/device damage via autonomous rerouting? |
-| Algorithm Migration | `computronium/experiments/joint/algorithm_migration.py` | Can ψ switch strategy A₀→A₁ without changing θ? (Experiment 3.5) |
-| Z3: Fixed Weights, Changing Algorithm | `computronium/experiments/joint/z3_fixed_weights.py` | Frozen θ, multiple tasks via ψ-mediated rule selection (Experiment 4) |
+Canonical specification of the 5-level benchmark hierarchy (see *Stability-Plasticity Trade-off Hypothesis* above). All questions remain open.
+
+| Level | Experiment | File | Question | Toy Task / Constraint | Compare |
+|-------|------------|------|----------|----------------------|---------|
+| **1** | Adaptation Efficiency | `computronium/experiments/joint/adaptation_efficiency.py` | Does plasticity adapt faster than Null under matched compute? | Switching distribution (Phase A: y=f_A(x), Phase B: y=f_B(x)) | Null vs FastWeight vs Routing; adaptation time, energy |
+| **2** | Compute Efficiency | `computronium/experiments/joint/compute_efficiency.py` | Does routing reduce effective operations (dynamic sparsity)? | Mixture-of-experts (one route needed per input) | Active units, gate entropy, effective matmul |
+| **3** | Structural Robustness | `computronium/experiments/joint/structural_robustness.py` | Can the system recover after topology/device damage via autonomous rerouting? | Zeroed weights, removed nodes, dead channels, noisy memristive | Null vs Routing vs SubstrateCoupled; recovery |
+| **3.5** | Algorithm Migration | `computronium/experiments/joint/algorithm_migration.py` | Can ψ switch strategy A₀→A₁ without changing θ? | Task A₀: cumulative sum → Task A₁: last symbol | time(A₀→A₁), energy; parameter invariance: ‖θ_after − θ_before‖ = 0 |
+| **4** | Z3: Fixed Weights, Changing Algorithm | `computronium/experiments/joint/z3_fixed_weights.py` | Can frozen θ solve multiple tasks via ψ-mediated rule selection? | θ frozen. Tasks: parity, last-symbol, threshold. Operators: Identity, Threshold, Accumulate, LastSymbol, Parity, SparseTopKRoute, SignFlip, Delay | Adaptation time, energy, operator diversity; parameter invariance must be exact: ‖θ_after − θ_before‖ = 0 |
+
+Commands:
+```bash
+comp benchmark run --suite adaptation_efficiency
+comp benchmark run --suite compute_efficiency
+comp benchmark run --suite structural_robustness
+comp benchmark run --suite algorithm_migration
+comp benchmark run --suite z3_fixed_weights
+```
 
 ---
 
