@@ -1,59 +1,316 @@
+# RESEARCH3 — Research Items
 
-
-### The Z3 Experiment
-
-Once the baseline gate is closed, pivot entirely to producing **one flagship empirical result**. 
-
-**The Target: Level 4 — Z3 Fixed Weights**
-This is your most novel contribution. The question—*"Can frozen $\theta$ solve multiple tasks via $\psi$-mediated rule selection?"*—has no direct analogue in the literature. It directly tests the thesis that elevating the computational rule to a dynamical variable (the M-axis) yields a qualitatively different capability.
-
-**Concrete Protocol:**
-1.  **Setup:** Initialize a small MLP (e.g., 64→64→64). **Freeze $\theta$** entirely (requires exact parameter invariance: $\|\theta_{after} - \theta_{before}\| = 0$).
-2.  **Tasks:** Implement 3 distinct operators: `Identity`, `Threshold`, and `Parity`.
-3.  **Adaptation:** Train $\psi$ (`RuleStatePlasticity`) to switch between these tasks.
-4.  **Metrics:** Measure adaptation time, energy cost, and operator diversity.
-5.  **Baselines:** Compare strictly against (a) fine-tuning $\theta$ (the standard approach) and (b) random $\psi$ initialization.
-
-*Fallback:* If Z3 proves too difficult to converge, pivot to **Level 1 (Adaptation Efficiency)**—comparing Null vs. FastWeight vs. Routing on a switching distribution. This is more conventional but guarantees a clean figure (adaptation time vs. compute cost).
+> **Deliberately unordered.** Each entry is self-contained: question, falsifiable hypothesis, design, controls, targets, statistics/budget, deliverables, stretch goals, substrate, risks. Prioritization and sequencing are separate decisions made once every item is fully specified.
 
 ---
 
-### The AutoScientist Ablation Campaign
+## Z3 Fixed Weights (Level 4)
 
-With one manual experiment result in hand, give the **AutoScientist** a concrete target. Use it to run the *ablations* around your Z3 or Adaptation result.
+**Question:** *Can frozen $\theta$ solve multiple tasks via $\psi$-mediated rule selection?* No direct analogue exists in the literature (see the ICL-bridge item for the nearest competitor and why it differs). Tests the thesis that elevating the computational rule to a dynamical variable (the M-axis) yields a qualitatively different capability.
 
-*   **Targeted Campaign:** Run an M-axis ablation (Null vs. Routing vs. FastWeight) to build the **Resource-Vector Pareto Frontier** $\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \text{plastic-state capacity})$.
-*   **Runtime Verification:** Shift verification from "Proof" to "Monitoring." Elevate the `StabilityMonitor` ($\rho(J_F)$ spectral radius, local Lyapunov exponents) to a **runtime campaign guard**. If the AutoScientist generates a 6-D coordinate where $\rho(J_F) > 1.0$, the framework should automatically kill the run, log it to the `failure_manifesto`, and mutate the hyperparameters.
+**Framing:** the Zuse analogy (`Z3.md`) carries any introduction: fixed relays = $\theta$, punched tape = $\psi$. Switching must emerge from differentiable arithmetic masking,
+$$T_t = \sum_k g_k(\psi_t)\, T_k, \qquad g_k(\psi_t) = \mathrm{softmax}(\text{controller}(\psi_t, x_t)),$$
+never from weight edits.
+
+**Falsifiable hypothesis:** after meta-training, ψ-only adaptation reaches ≥95% accuracy on all three tasks within ≤20% of the gradient steps fine-tuning needs, at exactly $\Delta\theta = 0$, while fine-tuning loses ≥10 points on previously learned tasks.
+
+**Design (current defaults → upgrades):**
+1. Current implementation: `Z3Model` (8 operators, `operator_dim=input_dim=32`, `controller_hidden=128`), meta-train 50 epochs joint over all 3 tasks (Adam lr $10^{-3}$), freeze θ (`requires_grad_(False)`), reset ψ per task (zero controller state + logits), adapt ψ online 20 epochs on fresh batches, eval hard-selection over 20 batches. Upgrade path: sweep `seq_len ∈ {10, 25, 50}`, `input_dim ∈ {32, 64}`, meta-train epochs ∈ {50, 200}; report sensitivity.
+2. Tasks stay disjoint-structured: `Parity` (order-$n$ counting mod 2), `LastSymbol` (position-selective readout), `Threshold` (accumulation + comparison). No single operator solves all three; switching is mandatory.
+3. Library ablation axis: full 8 operators (`Identity, Threshold, Accumulate, LastSymbol, Parity, SparseTopKRoute, SignFlip, Delay`) vs. minimal 3-operator subset vs. shuffled-operator assignment. Library size vs. adaptation speed is itself a finding.
+4. Adaptation schedule study: Gumbel-Softmax temperature annealing (constant 1.0 today) vs. linear decay $1.0 \to 0.1$ vs. cyclic re-annealing per task switch.
+
+**Metrics:** steps-to-criterion (first 100-step window ≥98% accuracy); FLOPs + wall-clock of ψ-only adaptation vs. θ-updates; operator-diversity entropy $H(g_k)$ at convergence (collapse detection: $H < \log 2$ flags single-operator reliance); exact-zero $\Delta\theta$ check ($<10^{-6}$ tolerance, `theta_invariant` flag) — headline integrity claim, reported per seed.
+
+**Baselines:** (a) fine-tune θ, same step budget — measures the forgetting tax; (b) random-ψ init — isolates what meta-training bought; (c) frozen θ + frozen ψ — floor control proving the trunk alone can't solve tasks; (d) **new:** soft-mixture-at-eval (no hard argmax) — quantifies how much performance depends on discretization.
+
+**Statistics:** ≥5 seeds; mean ± bootstrap 95% CI; paired vs. baseline (a) on identical task orderings; thresholds pre-registered before any full run.
+
+**Deliverables:** Fig. 1 accuracy-vs-steps curves (Z3 vs. all baselines); Fig. 2 forgetting matrix (task × time under each method); Table 1 Δθ audit + diversity entropy per seed.
+
+**Stretch:** >3 tasks (add SignFlip-, Delay-, TopK-defined tasks); *compositional* switching (task = ordered pair of operators); Hebbian/local controller updates replacing backprop-through-ψ (fully local Z3 — closes the loop with the locality thesis); measured Joules via `computronium/core/profiling.py` instead of FLOP proxies.
+
+**Substrate:** `computronium/experiments/joint/z3_fixed_weights.py`, `computronium/core/plasticity/rule_state.py`; run via `comp benchmark run --suite z3_fixed_weights --seeds 5 --device cuda`.
+
+**Risks & mitigations:** soft-to-hard selection gap (mitigate with temperature annealing + straight-through estimators); controller collapse onto one operator (entropy monitoring + entropy bonus term as fallback); optimizer state staleness across phases (rebuild Adam between meta-train and ψ-adaptation — current code carries optimizer state over θ's momentum buffers).
 
 ---
 
+## Z3 ↔ In-Context Learning Bridge
 
-*   **The "Continual Learning" Proof (Solving Catastrophic Forgetting):**
-    *   **The Problem:** Standard backprop + SGD overwrites old knowledge when learning new tasks (catastrophic forgetting), requiring massive replay buffers.
-    *   **The Experiment:** Use `FastWeightPlasticity` (episode-local memory) or `ElasticConsolidationUpdate` (EWC) to train a system on a stream of non-stationary tasks (e.g., Split-MNIST or Continual RL). 
-    *   **The Claim:** "Computronium's M-axis natively solves catastrophic forgetting without replay buffers by decoupling fast plastic states ($\psi$) from slow consolidated weights ($\theta$)."
-*   **The "Physics-Informed" Proof (Strict Conservation Laws):**
-    *   **The Problem:** Standard neural networks struggle to strictly obey physical conservation laws (energy, mass, momentum) when solving PDEs, because backprop treats physics as just another soft loss term.
-    *   **The Experiment:** Lean heavily into your `Scientific` domain (Navier-Stokes, Heat/Wave equations). Use `EnergyMinimizationDynamics` (EqProp) where the network's Lyapunov function *is* the physical Hamiltonian/Lagrangian of the system.
-    *   **The Claim:** "Energy-based 6-D systems natively conserve physical invariants with zero penalty overhead, outperforming Physics-Informed Neural Networks (PINNs) on long-horizon simulations."
+**Question:** frozen-weights task switching looks superficially like transformer in-context learning, hypernetworks, and visual prompt tuning. Is ψ-mediated rule selection the same phenomenon, a strict generalization, or something else?
 
+**Why it matters:** the flagship Z3 claim ("no analogue in literature") is only credible if the nearest neighbours are named and differentiated experimentally, not rhetorically. This item converts a positioning weakness into a contribution.
 
-*   **Pivot to the "De Facto Non-Backprop Benchmark":**
-    *   **The Strategy:** Stop competing on general tasks. Position Computronium as the absolute standard for evaluating *alternatives to backpropagation* (Forward-Forward, Equilibrium Prop, Predictive Coding, Feedback Alignment).
-    *   **The Output:** Publish a massive benchmark paper: *"The Computronium Benchmark: A Fair, 6-D Evaluation of 20 Local Learning Rules."* Because you have the `SystemTrainer` API, you are the only ones who can evaluate these fairly on equal footing.
-*   **Pivot to "Algorithm Discovery" (AI for AI):**
-    *   **The Strategy:** Use the AutoScientist not just to tune hyperparameters, but to *invent new learning rules*. Frame the 6-D space as a search space for an evolutionary algorithm or LLM.
-    *   **The Output:** The AutoScientist discovers a novel, undocumented combination of (CreditAssignment + ParameterUpdate) that empirically beats Adam+Backprop on a specific toy task. You publish the *discovered algorithm*, not just the framework.
-*   **Pivot to Edge/Green AI:**
-    *   **The Strategy:** Focus entirely on the resource vector $\mathcal{C}$ (compute, memory, energy). Position Computronium as the ultimate framework for ultra-low-power edge computing, where global backward passes and infinite memory are physically impossible.
-    *   **The Output:** A suite of models specifically optimized for deployment on microcontrollers (via your ONNX/Ternary export pipelines), proving that local learning rules yield better accuracy-per-watt than quantized MobileNets.
+**Design:**
+1. Implement three comparator mechanisms on identical task suites (the Z3 triple + switching stream): (a) a small transformer conditioned on task demonstrations (ICL), (b) a hypernetwork generating layer weights from a task embedding, (c) prompt-conditioned frozen MLP (prompt tuning).
+2. Hold data, budget, and evaluation fixed; vary mechanism only.
+3. Measure: adaptation data efficiency (demonstrations needed vs. gradient steps needed), parameter-update requirement (all comparators except ICL require some training; ICL requires none but pays attention-compute per query), OOD task generalization (tasks outside the meta-training distribution).
 
+**Discriminating predictions:** Z3's ψ state persists across queries within a task without re-computation per token (unlike ICL); ψ capacity scales with operator-library size, not sequence length; switching latency is constant rather than growing with context.
 
-*   **The "Drop-in PyTorch Wrapper":**
-    *   **The Strategy:** The 6-D ontology and `SystemTrainer` are powerful but require users to rewrite their training loops. Build a `torch.nn.ComputroniumLinear` wrapper. 
-    *   **The Execution:** Allow PyTorch users to swap exactly *one line of code* in their existing scripts to replace `nn.Linear` and `Adam` with an EqProp or Forward-Forward coordinate. Let the wrapper handle the free/nudged phases under the hood.
+**Deliverable:** position table + one head-to-head figure (accuracy vs. adaptation cost, four mechanisms).
 
-*   **The "Biological Twin" Project:** Create a 1:1 mapped simulation of a specific, well-documented biological microcircuit (e.g., the *C. elegans* connectome or a specific cortical column) using the 6-D ontology. Use it to predict biological responses to stimuli or lesions, bridging computational neuroscience and ML.
+**Risks:** transformer comparator needs careful scale-matching or reviewers dismiss it; scope creep — cap at one architecture per comparator family.
 
+---
 
+## Adaptation Efficiency Comparison (Level 1)
 
+**Question:** *does plasticity adapt faster than Null?* The conventional workhorse: Null vs. Routing vs. FastWeight on a switching distribution.
+
+**Hypothesis:** FastWeight cuts post-switch re-adaptation steps by ≥30% vs. Null at equal accuracy; Routing wins when the switch is categorical (identity change) rather than parametric.
+
+**Design:**
+1. `create_switching_task` stream with swept switch period ∈ {500, 1000, 2000} steps and task-gap magnitude ∈ {small, large}; these hyperparameters otherwise silently dominate results.
+2. Coordinates spanning M ∈ {Null, Routing, FastWeight} at matched trainable-parameter counts (`PlasticityModulatedModel`, `CompositeState`).
+3. Epochs-per-phase 50, batch 64, ≥5 seeds (suite reports mean ± std into `adaptation_efficiency_results.json`).
+
+**Metrics:** adaptation half-life per switch (steps to recover 90% of pre-switch accuracy), final accuracy, plasticity primitive parsed from coordinate string, cumulative adaptation compute.
+
+**Deliverables:** Pareto plot (adaptation time vs. compute cost); switch-period sensitivity curve — robustness of the conclusion to the experimental knob nobody reports.
+
+**Stretch:** overlay RuleState as fourth arm once Z3 stabilizes; recast as *anytime adaptation* (accuracy as function of post-switch budget).
+
+**Substrate:** `computronium/experiments/joint/adaptation_efficiency.py`; `comp benchmark run --suite adaptation_efficiency`.
+
+**Risks:** confirmatory rather than novel — its value is as the guaranteed-clean fallback figure and as calibration for L3.5/L4 claims.
+
+---
+
+## Compute Efficiency (Level 2) & Structural Robustness (Level 3)
+
+Two implemented-but-unplanned suites complete the benchmark staircase below Z3; they anchor the resource-vector story empirically.
+
+**L2 — Question:** *does routing reduce effective ops?* Mixture-of-experts synthetic (8 experts, 1 active): dense baseline vs. sparse-routed model. Metrics: active units, gate entropy, effective matmul FLOPs (`compute_efficiency.py`). Hypothesis: routing achieves ≥5× effective-FLOP reduction at <2-point accuracy loss, with gate entropy confirming specialization (not load collapse).
+
+**L3 — Question:** *can the system recover after damage?* Lesion suite: zeroed weights, removed nodes, dead channels, noisy memristive states; compare Null vs. Routing vs. SubstrateCoupled (`structural_robustness.py`). Metrics: accuracy-retention-vs-lesion-fraction curves, recovery steps if plasticity is active during recovery. Hypothesis: SubstrateCoupled degrades most gracefully under memristive noise specifically (its native failure mode), validating the substrate-aware ontology claim.
+
+**Shared design:** matched parameter counts; ≥5 seeds; lesion/damage fractions swept {10, 25, 50, 75}%; identical backbone across arms.
+
+**Deliverables:** two figures slotting directly beneath the Z3 result in the benchmark paper; L2's effective-FLOPs metric feeds the $\mathcal{C}$ vector definition used everywhere else.
+
+**Risks:** both toy tasks have low ceilings; treat as instrumentation-validation layers for the resource vector, not headline results.
+
+---
+
+## Algorithm Migration (Level 3.5)
+
+**Question:** *can ψ switch strategy without θ update?* The direct precursor to Z3: migration between exactly two strategies, A0 (classify by cumulative sum) → A1 (classify by last symbol), measuring time(A0→A1), energy(A0→A1), and enforcing $\|\theta_{after} - \theta_{before}\| = 0$ (`algorithm_migration.py`).
+
+**Role:** Z3's minimal sibling. Runs first-in-catalog-order nowhere — it is simply the cheapest setting in which the ψ-switching machinery can be validated end-to-end, and its two-task version yields closed-form optimal switching policies that Z3's three-task setting does not.
+
+**Hypothesis:** ψ-mediated migration beats re-training-from-A0-init on time-to-A1 by an order of magnitude at zero θ drift.
+
+**Design:** sweep ψ-state dimensionality {32, 128, 512}; measure whether migration time scales with state size (it should, if ψ genuinely encodes strategy) or saturates immediately (suggesting it doesn't — diagnostic value either way).
+
+**Deliverables:** migration-time table; the $\Delta\theta = 0$ audit reused verbatim in the Z3 paper.
+
+---
+
+## AutoScientist M-Axis Ablation Campaign
+
+**Goal:** turn any single manual result into a frontier by sweeping the M-axis with the other five axes pinned.
+
+**Design:**
+1. Pin S/G/D/C/U at the flagship coordinate; sweep M ∈ {Null, Routing, FastWeight, RuleState}. One axis at a time — an ablation, not a search.
+2. `AutoScientistCampaign.run_iteration` + `CampaignDatabase` + `CampaignCheckpointer` manage iterations, checkpoint/resume; wall-clock capped via campaign config `max_wall_hours`.
+3. Per-coordinate `ResourceUsage` records aggregated post-hoc; dominance filtering never runs inline (avoids order-dependence).
+
+**Output:** the Resource-Vector Pareto Frontier over
+$$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \text{plastic-state capacity})$$
+(`frontier.py::ResourceUsage`). Deliverable figures: 2-D projections (accuracy-per-Joule, plastic-capacity-vs-forgetting) annotated with which M primitive owns each knee.
+
+**Gate:** the flagship result sits on/near the front across seeds.
+
+**Stretch:** two-axis sweeps (M × CreditAssignment) once single-axis frontier exists; the proposer's `ProposalObjective` non-accuracy ranking (bias-audited in `proposer.py`) can drive energy- or stability-first campaigns — a campaign whose objective is *not accuracy* is itself a demo no competing framework offers.
+
+**Risks:** proxy metrics may not discriminate primitives at small scale (validate proxies against one measured workload first); campaign DB schema churn mid-campaign (freeze before launch).
+
+---
+
+## Runtime Verification Guard & Failure Manifesto
+
+**Goal:** shift verification philosophy from offline "Proof" to online "Monitoring."
+
+**Design:**
+1. Elevate `StabilityMonitor` diagnostics — $\rho(J_F)$ via `SpectralRadiusEstimator`, Lyapunov exponents, settling behavior (`computronium/core/stability/`) — into guards inside `AutoScientistCampaign.run_iteration`.
+2. Policy: rollout exhibiting $\rho(J_F) > 1.0$ or non-decreasing free energy (EqProp coordinates) → kill pre-budget-burn, append structured record to the failure manifesto (`analysis/failure_manifesto.py`), mutate hyperparameters (contractive rescaling, temperature reset), retry same iteration.
+3. Calibration pass: run guard against held-out known-good and known-bad configs; choose thresholds on ROC, not intuition. `_fast_proxy` vs. full-Jacobian estimator disagreement rate reported explicitly.
+
+**Acceptance:** false-kill rate <5% on known-good set; unstable-coordinate kill rate >95%; guard overhead <10% of iteration wall-clock.
+
+**Deliverables:** working guard; manifesto-as-dataset — "where does the joint system go unstable?" is a standalone empirical contribution about the M-axis's stability cost.
+
+**Stretch:** manifest-derived *a priori* instability predictor (classify configs before running) feeding back into the proposer's acceptance sampling.
+
+---
+
+## Continual Learning Proof (Catastrophic Forgetting)
+
+**Problem:** backprop + SGD overwrites old knowledge; replay buffers are the dominant patch.
+
+**Hypothesis (falsifiable):** M-axis decoupling (ψ fast states vs. θ consolidation) matches-or-beats EWC on backward transfer without any replay buffer, on Split-MNIST.
+
+**Design:**
+1. Split-MNIST (5 binary tasks); arms: FastWeightPlasticity, ElasticConsolidationUpdate, backprop+SGD control, replay buffer baseline at matched memory. Task-free variant (no task boundaries signaled) as second protocol.
+2. Backward transfer matrix after each boundary; memory footprint tracked explicitly (replay pays storage; ψ pays state).
+3. Only escalate to Continual RL (context-bandwidth or MazeBase-class) if Split-MNIST separates arms cleanly.
+
+**Synergy:** baseline-(a) forgetting numbers from Z3/adaptation items seed the control arm — reuse, don't rerun.
+
+**Kill criterion:** replay matching ψ-decoupling at equal total memory demotes this to appendix.
+
+**Stretch:** permuted-MNIST stream (50 tasks) to test scaling of ψ retention with task count; interference-vs-capacity curve (at what plastic-state size does forgetting reappear? — this curve *is* the stability-plasticity trade-off made empirical).
+
+---
+
+## Physics-Informed Proof (Strict Conservation Laws)
+
+**Problem:** networks treat conservation laws as soft penalties; violations compound over long horizons.
+
+**Hypothesis:** EqProp coordinates whose Lyapunov function is the system's Hamiltonian conserve invariants to integrator-drift level (<1e-3 relative drift over 10⁴ steps) where PINNs violate at ≥10× that rate, at equal compute.
+
+**Design:**
+1. Systems ladder: Heat → Wave → Burgers → Navier-Stokes (2-D periodic). Each adds one conservation law; failures localize cleanly.
+2. `EnergyMinimizationDynamics` configured so descent energy ≡ physical Hamiltonian; verify discrete descent property numerically before claiming physics (the Lean-scaffolded statement `E(h_{t+1}) ≤ E(h_t)` becomes an executable check).
+3. Comparators at matched compute: PINN (soft penalty), Hamiltonian NN (structure-preserving but backprop-trained), vanilla integrator baseline.
+
+**Metrics:** relative invariant drift per horizon; long-horizon rollout divergence; penalty-overhead (zero by construction for EqProp — report PINN's for contrast).
+
+**Kill criterion:** drift exceeding PINN violation at equal compute demotes to appendix.
+
+**Risks:** constructing exactly-conservative discretizations is its own research subfield (symplectic structure vs. generic Lyapunov descent); PINN baselines are community-tuned — unfair comparisons get caught in review, so publish configs.
+
+---
+
+## Theory Program (Lean + Expressivity)
+
+**Goal:** convert scaffolded statements into checked artifacts, and add the missing Z3 expressivity piece.
+
+**Design:**
+1. Complete the existing Lean scaffold (`lean/ComputroniumFormal`): energy decrease for `EnergyMinimizationDynamics.settle` under step-size < 2/L; control-Lyapunov bound $dV/dt \le -kV$ for matched β in the nudged phase. CI integration pending Lean toolchain install (`TODO3` Phase 4.3.4 — the last planned formalization task).
+2. **New statement — ψ-selection coverage:** for a finite operator library $\{T_k\}$ and softmax gating, the function class realized by $T_t = \sum_k g_k(\psi_t) T_k$ contains every deterministic selection when $g$ concentrates; prove the approximation-rate statement for Lipschitz controllers. This is the formal kernel of the Z3 claim: fixed hardware, tape-programmable behaviour.
+3. Stability-plasticity frontier: state and prove the contraction-vs-plasticity trade-off for composite transition operator $z_{t+1} = F_\theta(z_t; G, S)$ — even a restricted version (RoutingPlasticity preserves spectral radius bounds; FastWeightPlasticity perturbs them by a bounded factor) gives the paper a theorem.
+
+**Deliverables:** machine-checked Lean file in CI; one proposition per item above with Hypothesis property-test counterparts (95%-rigor-at-5%-cost policy from TODO3 stands).
+
+**Risks:** Lean/Mathlib friction is high — hard-stop after the scaffolded statements per existing policy; expressivity statement may reduce to known mixture-of-experts results (check literature before writing; if so, cite and narrow the delta).
+
+---
+
+## De Facto Non-Backprop Benchmark
+
+**Strategy:** own the evaluation of alternatives-to-backpropagation. Fairness-on-equal-footing is the product; `SystemTrainer` is the moat no single-rule codebase has.
+
+**Design:**
+1. Freeze evaluation contract *first*: per-rule tuning budget (equal GPU-hours, not equal epochs), early-stopping policy, seeds, data protocols — pre-registered, published before results exist.
+2. Inventory: zoo currently ships backprop, eqprop, FA, forward-only (FF), hebbian, predictive coding, target prop, spiking, tile variants, MEP, o1memory — the "20 rules" target is reachable via propagators/optimizers/transitions combinations; register the canonical 20 and lock.
+3. Report: capability matrix, accuracy-per-resource overlays, stability audits per rule, failure modes from the manifesto.
+
+**Deliverables:** benchmark paper (*"A Fair, 6-D Evaluation of 20 Local Learning Rules"*), public leaderboard, machine-readable results release.
+
+**Stretch:** external submission pipeline (containerized rule API) converting the benchmark from static paper to living infrastructure — this is what makes it "de facto standard" rather than "one more table".
+
+**Risks:** house-rule bias perception — mitigate via pre-registration + external submissions; maintenance burden of 20 rules under one contract — gate new registrations on CI-green property locks.
+
+---
+
+## Algorithm Discovery (AI for AI)
+
+**Question:** can the AutoScientist invent a (CreditAssignment × ParameterUpdate) combination that beats Adam+backprop on a declared task suite — and transfer beyond it?
+
+**Design:**
+1. Search substrate: compatible coordinate pairs under ontology constraints; `ExperimentProposer` generates systematic exploration proposals; `HypothesisReasoner` + `LLMHypothesisGenerator` supply hypothesis chains (`reasoner.py` scaffolding exists).
+2. Novelty gate: discovered coordinate must differ structurally (not just hyperparameterially) from registry entries; automated diff against known-rule signatures.
+3. Replication gate: winner replicates across ≥5 seeds and ≥2 task families beyond the discovery task; counterfactual analysis (`counterfactual.py`) attributes the win to specific axis changes, not noise.
+
+**Pre-registration:** declare the task suite and baselines *before* discovery runs; otherwise the result is unfalsifiable selection.
+
+**Kill criterion:** wins confined to the discovery task = negative result about search-space design; document, stop.
+
+**Deliverables:** the discovered rule as a standalone artifact (spec + minimal implementation + repro script), plus the search methodology paper.
+
+**Risks:** compute-hungry; LLM proposers anchor on known literature (novelty gate addresses symptom, prompt-diversity addresses cause); reviewer suspicion of overfitting-by-search — replication gates are the defense.
+
+---
+
+## Edge / Green AI Deployment
+
+**Strategy:** own accuracy-per-watt under hard physical ceilings (microcontroller-class memory/compute) where global backward passes cannot exist.
+
+**Design:**
+1. Targets from `docs/hardware_targets.md`; export via ONNX/TorchScript/INT8/ternary pipelines (`docs/tutorials/export_*`).
+2. Comparison set: quantized MobileNet-class baselines vs. local-rule models exported through the same pipeline (same quantizer, same calibrations — pipeline fairness mirrors training fairness).
+3. Energy methodology: measured Joules on at least one physical board if available; otherwise proxy estimates labeled as such, with one measured anchor point for calibration ratio.
+
+**Hypothesis:** local-learning-rule models beat quantized MobileNets by ≥1.3× on accuracy-per-watt at ≤256 KB RAM budgets.
+
+**Deliverables:** deployment artifact suite (flashing-ready builds), accuracy-per-watt frontier chart, honest proxy-vs-measured error bars.
+
+**Stretch:** Loihi 2 / FPGA pilot (see hardware co-design item); sleep-wake duty-cycled inference exploiting EqProp settling as cheap convergence.
+
+**Risks:** physical measurement slow/noisy; without hardware access the claim rests on calibrated proxies — still publishable as methodology, weaker as headline.
+
+---
+
+## Hardware Co-Design Pilot
+
+**Question:** does substrate-aware co-design (choosing the Substrate axis deliberately) beat port-after-training on a real neuromorphic/FPGA target?
+
+**Design:**
+1. One coordinate trained *with* memristive/neuromorphic substrate constraints active (IR-drop, spike sparsity) vs. the same architecture trained clean then exported.
+2. Deploy both to a single concrete target (Loihi 2 preferred; FPGA via existing tutorial path); measure task accuracy, latency, energy on-device.
+3. Report the co-design delta — the number that justifies (or refutes) the entire substrate-aware ontology pitch.
+
+**Gate:** requires one physical target available; pure-simulation versions exist but weaken the point to "expected delta".
+
+**Deliverables:** on-device benchmark table; co-design delta figure; reusable deployment recipe doc.
+
+**Risks:** hardware availability and toolchain friction dominate schedule; scope strictly to one target, one task.
+
+---
+
+## Drop-in PyTorch Wrapper
+
+**Strategy:** remove adoption friction — users swap one line, not their training loop.
+
+**Design:**
+1. `torch.nn.ComputroniumLinear` (+ conv/embedding as needed): replaces `nn.Linear` + optimizer with an EqProp or Forward-Forward coordinate; free/nudged phases, settling loops, ψ bookkeeping handled internally; `NullPlasticity`+backprov coordinate falls back to native behavior bit-for-bit.
+2. Compatibility targets: DDP wrapping, LR schedulers, `torch.compile` smoke test, torchvision-style model zoo integration example.
+3. Acceptance test: training script written by someone unfamiliar with Computronium internals runs unmodified except the swapped line; gradients/accuracy match hand-written loop within noise.
+
+**Deliverables:** pip-installable module, smoke-test suite, one-line-swap README GIF.
+
+**Stretch:** autograd-compatible hybrid mode (some layers Computronium, some native) unlocking incremental adoption in existing codebases.
+
+**Risks:** optimizer/scheduler impedance mismatch; performance parity with hand-written loops must hold or adoption stalls (profile early, not last).
+
+---
+
+## Biological Twin
+
+**Strategy:** 1:1 simulation of a documented microcircuit in the 6-D ontology; predict responses to held-out stimuli/lesions.
+
+**Candidates:** *C. elegans* anterior touch circuit or full somatic nervous system connectome (302 neurons, wiring measured, laser-ablation literature abundant) vs. a named cortical column (higher data quality per neuron, heavier fitting burden).
+
+**Design:**
+1. Connectome → Geometry; measured cell physiology (type-specific time constants, thresholds) → StateDynamics/Substrate parameters.
+2. Fit remaining free parameters to a *training* split of stimulus-response data; freeze; predict held-out stimulus conditions and ablation effects.
+3. Comparators: published circuit-specific models (e.g., NeuroPAL-era dynamical models for *C. elegans*) and a generic RNN fitted to the same data.
+
+**Claim under test:** ontology-native modeling (explicit substrate/state-dynamics separation) predicts lesion responses better than black-box RNNs fit to the same activity data.
+
+**Deliverables:** prediction-vs-measurement tables for held-out perturbations; mapped ontology file released alongside.
+
+**Risks:** highest-risk item — parameter identifiability, data-quality ceilings, domain-expert review barriers; payoff is interdisciplinary credibility, not ML impact. Scope discipline: one circuit, one dataset release, no "whole brain" rhetoric.
+
+---
+
+## Cross-Cutting Dependencies (observation, not ordering)
+
+- **Shared substrate:** `SystemTrainer`/benchmark suites serve nearly every item; wrapper and benchmark items raise the ceiling of everything else.
+- **Resource instrumentation:** `ResourceUsage` + `core/profiling.py` feed Z3, ablation campaign, L2, and Edge/Green AI simultaneously — build once, consume everywhere.
+- **Manifesto ↔ proposer loop:** failure-manifesto output doubles as prior information for algorithm-discovery proposals (regions to avoid).
+- **Theory ↔ experiments:** every Lean/property-test statement should correspond to an executed numeric check in at least one experimental item (descent property ↔ EqProp runs; invariance ↔ Z3 audits).
+- **Fairness protocols are one artifact:** the pre-registered evaluation contract written for the 20-rules benchmark is reused verbatim by discovery replication gates and edge comparisons.
