@@ -1,6 +1,6 @@
 # RESEARCH3 — Research Items
 
-> **Deliberately unordered.** Each entry is self-contained: question, falsifiable hypothesis, design, controls, targets, statistics/budget, deliverables, stretch goals, substrate, risks. Prioritization and sequencing are separate decisions made once every item is fully specified.
+> **Deliberately unordered catalog, ordered plan.** Each entry is self-contained: question, falsifiable hypothesis, design, controls, targets, statistics/budget, deliverables, stretch goals, substrate, risks. Prioritization lives in the planning sections below (prerequisites, dependency graph, critical paths), and every plan executes under the shared **Execution Protocol**.
 
 ---
 
@@ -322,6 +322,58 @@ Shared infrastructure extracted from the item catalog. Each is built once; consu
 | **PR-6** | **Evaluation fairness contract** | One pre-registered document: per-rule tuning budgets (GPU-hours, not epochs), early-stopping policy, seeds, data splits — written once, consumed by three different items | Benchmark paper, discovery pre-registration, edge comparisons |
 | **PR-7** | **Switching-machinery shakedown** | L3.5 two-task migration + L1 adaptation run as *instrumentation tests* before Z3: validates ψ reset, temperature schedule, diversity entropy, Δθ audit end-to-end on the cheapest settings | Z3 (its minimal sibling de-risks it directly) |
 | **PR-8** | **Export pipeline parity** | ONNX/ternary export verified round-trip (accuracy delta ≤ noise) on one representative model | Edge/Green AI, Hardware pilot |
+
+---
+
+## Execution Protocol
+
+One protocol governs every item — efficiency comes from never re-deciding these rules per experiment; thoroughness from never skipping them.
+
+### E-1 Three-Rung Scaling Ladder
+Every experiment runs at three scales with fixed promotion criteria between rungs:
+1. **Smoke** (≤5 min, single seed, tiny dims): does the pipeline run end-to-end and emit every metric? Catches schema/wiring bugs at ~0.1% of full cost.
+2. **Pilot** (≤2 h, 2 seeds, reduced dims/steps): is the effect direction visible? Are variances sane? Promotion to full requires: no NaNs, all metrics populated, effect sign matches hypothesis or shows an interpretable pattern.
+3. **Full** (registered budget): only ever launched on a promoted pilot.
+Rung failures loop back one level — never debug at full scale.
+
+### E-2 Timeboxed Tuning Rounds
+A *round* = one bounded sweep over ≤8 configurations chosen using evidence from prior rounds (not a grid). Maximum 3 rounds per experiment; then the item's fallback/kill criterion triggers automatically. Infra-failures (OOM, toolchain breaks) don't consume rounds — distinguish "hypothesis failed" from "we failed to run it" in the log.
+
+### E-3 Reproducibility Contract
+Any promoted figure must regenerate from stored artifacts alone: pinned config hash + seed manifest + environment lock + versioned results schema, checked in next to the plot script. If a figure can't be regenerated without rerunning training, it doesn't exist yet.
+
+### E-4 Baseline Protection Rules
+Baselines receive equal GPU-hour tuning budgets, identical data pipelines, and identical early-stopping treatment — set before seeing any comparison. No post-hoc baseline adjustments. When multiple comparisons are reported, either apply a correction or show all of them unfiltered.
+
+### E-5 Pre-Promotion Confound Checklist
+Run before every pilot→full promotion:
+- [ ] Adaptation/eval data disjoint across the switching stream (no leakage through shared batches)
+- [ ] Task order randomized across seeds where order could matter
+- [ ] ψ/state resets verified *mid-run*, not assumed from code reading
+- [ ] Frozen-parameter audit sampled at checkpoints, not just endpoints (PR-2 harness does this)
+- [ ] Matched parameter counts re-verified after any architecture change
+
+### E-6 Stopping Rules
+- **Plateau:** windowed relative improvement below threshold over a fixed window → stop that arm.
+- **Precision:** stop when the CI width drops below the smallest effect size the pre-registered claim needs — running longer past that point buys nothing.
+
+### E-7 Outcome Triage
+Every full run lands in exactly one pre-registered class: **win / partial / null / infra-failure**. Nulls are results (1-page memo into the failure manifesto); infra-failures restart the round counter. This keeps kill criteria honest under schedule pressure.
+
+### E-8 Waiting-Period Queue
+Whenever CP-A blocks (long runs, procurement, review), pull work from CP-C (wrapper) or CP-B (proofs) — never idle, never start an unplanned experiment. Blocking time converts directly into positioning artifacts.
+
+### E-9 Compute Envelopes (orders of magnitude, hardware-agnostic)
+| Class | Items | Budget posture |
+|-------|-------|----------------|
+| Toy suites | L1–L3.5 shakedown | Hours; spend freely, they're cheap de-risking |
+| Flagship | Z3 (+ ICL bridge comparators) | Tens of GPU-hours; E-1/E-2 discipline strictly enforced |
+| Campaigns | AutoScientist frontier | Hundreds; wall-clock cap configured before launch |
+| Discovery | Algorithm search | Largest consumer; hard budget ceiling, replication gated on remaining budget |
+| Physical | Edge/pilot | Dominated by engineering time, not compute |
+
+### E-10 Minimum-Viable Control Set
+No comparative claim ships without all four: matched-capacity control, matched-budget baseline, floor control (the claim disabled), ≥5 seeds with paired structure (PR-4). Items may add controls; none may ship fewer.
 
 ---
 
