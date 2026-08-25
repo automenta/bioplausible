@@ -973,25 +973,6 @@ comp run --config campaigns/distributed_tile.yaml
 
 ---
 
-## 🗺️ Roadmap
-
-### Software Track
-- API stabilization & documentation
-- Package/release maturity (PyPI, versioning)
-- Backend expansion (additional substrates, kernels)
-- CI/CD hardening, dependency updates
-
-### Research Track
-- Controlled benchmark campaigns (adaptation, compute, robustness, Z3)
-- Systematic ablations across 6-D axes
-- Scaling studies (depth, width, dataset size)
-- Substrate comparisons (memristive IR-drop, optical phase, quantum)
-- Physical-hardware calibration & validation
-
-This separation prevents "implemented" and "scientifically demonstrated" from being conflated.
-
----
-
 ## 📜 License
 
 MIT
