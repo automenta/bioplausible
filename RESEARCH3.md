@@ -307,10 +307,136 @@ $$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \
 
 ---
 
-## Cross-Cutting Dependencies (observation, not ordering)
+## Factored Prerequisites
 
-- **Shared substrate:** `SystemTrainer`/benchmark suites serve nearly every item; wrapper and benchmark items raise the ceiling of everything else.
-- **Resource instrumentation:** `ResourceUsage` + `core/profiling.py` feed Z3, ablation campaign, L2, and Edge/Green AI simultaneously — build once, consume everywhere.
-- **Manifesto ↔ proposer loop:** failure-manifesto output doubles as prior information for algorithm-discovery proposals (regions to avoid).
-- **Theory ↔ experiments:** every Lean/property-test statement should correspond to an executed numeric check in at least one experimental item (descent property ↔ EqProp runs; invariance ↔ Z3 audits).
-- **Fairness protocols are one artifact:** the pre-registered evaluation contract written for the 20-rules benchmark is reused verbatim by discovery replication gates and edge comparisons.
+Shared infrastructure extracted from the item catalog. Each is built once; consumers listed per row.
+
+| ID | Prerequisite | Contents | Unblocks |
+|----|--------------|----------|----------|
+| **PR-0** | **Verification gate** | `docs/baseline.md` gates at-or-better (pytest/pyright strict/ruff) + TIER 0/digits campaign green | Every empirical item — no result trusted otherwise |
+| **PR-1** | **Optimizer-phase hygiene** | Rebuild optimizer between meta-train and ψ-adaptation phases; `evaluate_z3` currently carries Adam momentum buffers over frozen θ into adaptation — contaminates the exact-zero Δθ claim | Z3, Algorithm Migration |
+| **PR-2** | **θ-invariance audit harness** | Snapshot → freeze → run → re-snapshot → exact-diff, emitted as a reusable context manager with per-seed reports | Z3, Algorithm Migration, continual-learning claims |
+| **PR-3** | **Calibrated resource instrumentation** | `ResourceUsage` + `core/profiling.py` wired into every suite runner; ≥1 *measured* Joule/FLOP anchor workload to calibrate proxies; proxy error bars reported thereafter | Z3 energy metrics, L2 effective-FLOPs, AutoScientist frontier, Edge/Green AI, Hardware pilot |
+| **PR-4** | **Pre-registration & statistics kit** | Seed count (≥5), bootstrap-CI utility, paired-comparison harness, threshold-registration template checked into repo | Z3, L1–L3.5, benchmark contract, discovery replication gates |
+| **PR-5** | **Calibrated stability guard** | ROC-calibrated kill thresholds (<5% false-kill on known-good set, >95% kill rate, <10% overhead); `_fast_proxy` vs. full-Jacobian disagreement rate quantified | Unattended AutoScientist campaigns, discovery |
+| **PR-6** | **Evaluation fairness contract** | One pre-registered document: per-rule tuning budgets (GPU-hours, not epochs), early-stopping policy, seeds, data splits — written once, consumed by three different items | Benchmark paper, discovery pre-registration, edge comparisons |
+| **PR-7** | **Switching-machinery shakedown** | L3.5 two-task migration + L1 adaptation run as *instrumentation tests* before Z3: validates ψ reset, temperature schedule, diversity entropy, Δθ audit end-to-end on the cheapest settings | Z3 (its minimal sibling de-risks it directly) |
+| **PR-8** | **Export pipeline parity** | ONNX/ternary export verified round-trip (accuracy delta ≤ noise) on one representative model | Edge/Green AI, Hardware pilot |
+
+---
+
+## Dependency Graph
+
+```mermaid
+flowchart TD
+    PR0[PR-0 Verification gate] --> CHEAP[PR-7 Shakedown: L3.5 + L1 + L2 + L3]
+    PR0 --> PHYS[Physics proof]
+    PR0 --> TWIN[Biological twin]
+
+    PR1[PR-1 Optimizer hygiene] --> PR2[PR-2 θ-audit harness] --> CHEAP
+    PR1 --> Z3[Z3 Flagship]
+    PR3[PR-3 Resource calibration] --> Z3
+    PR3 --> FRONTIER[Pareto frontier campaign]
+    PR3 --> EDGE[Edge/Green AI]
+
+    PR4[PR-4 Stats kit] --> CHEAP & Z3
+
+    CHEAP -->|machinery validated| Z3
+    CHEAP -->|known-good/bad configs| PR5[PR-5 Guard calibration]
+    Z3 -->|flagship result| FRONTIER[AutoScientist M-axis campaign]
+    PR5 --> FRONTIER
+    FRONTIER --> MANIFESTO[Failure-manifesto dataset]
+    MANIFESTO --> DISCOVERY[Algorithm discovery]
+    PR6[PR-6 Fairness contract] --> BENCH[20-rules benchmark]
+    PR6 --> DISCOVERY
+    FRONTIER --> BENCH
+
+    TLEAN[Lean toolchain install] --> PROOFS[Scaffolded proofs + ψ-coverage prop]
+    PROOFS -.->|numeric counterparts| PHYS
+    Z3 -.->|inform statement scope| PROOFS
+
+    WRAPPER[PyTorch wrapper] -.->|adoption multiplier| BENCH
+
+    PR8[PR-8 Export parity] --> EDGE
+    EDGE --> HW[Hardware co-design pilot]
+    PROCURE[Hardware procurement ⏳ lead time] --> HW
+
+    CONT[Continual learning]
+    CHEAP -->|forgetting baselines reused| CONT
+    Z3 -->|baseline-a forgetting| CONT
+```
+
+Reading notes: solid arrows are hard dependencies; dashed are informational/informal. `PROCURE` starts immediately regardless of everything else — its lead time, not its difficulty, makes it critical.
+
+---
+
+## Critical Paths
+
+### CP-A — Empirical Spine *(carries most of the catalog)*
+
+`PR-0 → PR-1 → PR-2 → PR-4 → PR-7 (shakedown) → Z3 flagship → PR-5 (guard, overlapping) → AutoScientist frontier campaign → manifesto dataset`
+
+Then fan-out, all gated only on CP-A's tail:
+- **Benchmark paper** (needs frontier + PR-6 contract + locked rule registry)
+- **Algorithm discovery** (needs campaign infra + manifesto priors + PR-6)
+- **Continual learning proof** (needs forgetting baselines from shakedown/Z3 — largely free by then)
+
+This is the longest chain and the one that gates the two highest-leverage strategic outputs. Its single biggest schedule risk is **Z3 non-convergence**; the built-in fallback is structural: if Z3 falsifies, L1's clean adaptation figure substitutes as the campaign seed, CP-A continues degraded-but-intact, and the negative result becomes an M-axis boundary-condition publication.
+
+### CP-B — Verification Spine *(parallel to CP-A)*
+
+`Lean toolchain install → complete scaffolded proofs → ψ-selection coverage proposition (scope refined by early Z3 observations) → numeric counterparts executed inside experimental suites`
+
+Hard-stops at the existing TODO3 policy boundary (no further formalization beyond scaffolded statements). Physics-proof credibility borrows the descent-property checks from here.
+
+### CP-C — Positioning Spine *(parallel, cheap)*
+
+`PR-6 fairness contract draft → PyTorch wrapper v1 → wrapper acceptance test → released alongside first flagship artifact`
+
+The wrapper has no research dependencies — only API stability — so it fills any waiting period on CP-A. Shipping it with the flagship multiplies the flagship's audience.
+
+### CP-D — Physical Spine *(latency-gated, start earliest)*
+
+`hardware procurement (day one) → PR-3 measured-anchor workloads double as board bring-up → PR-8 export parity → Edge/Green AI artifact → co-design pilot`
+
+Everything except procurement is software-side and can begin immediately; the board arrives into a prepared pipeline rather than blocking one.
+
+### CP-E — Independent Tracks
+
+- **Physics proof:** depends only on PR-0 + scientific-domain dynamics; zero coupling to the M-axis storyline.
+- **Biological twin:** depends only on ontology + public connectome data; zero coupling to everything above. Pure parallel capacity when CP-A is blocked.
+
+---
+
+## Bottlenecks & Single Points of Failure
+
+| Bottleneck | Gates | Mitigation |
+|------------|-------|------------|
+| **PR-3 resource calibration** | Z3 energy figures, frontier quality, all edge claims | Calibrate against one measured workload before *any* campaign consumes proxies |
+| **Z3 convergence** | Entire CP-A fan-out | Structural fallback to L1 seed (above); shakedown (PR-7) surfaces failure modes cheaply first |
+| **PR-5 guard false-positive rate** | Unattended campaigns, discovery throughput | ROC calibration on known-good/bad sets harvested free from PR-7 runs |
+| **Hardware lead time** | Co-design pilot only | Procure day one; pilot is deliberately last-in-catalog so slippage costs nothing upstream |
+| **Lean/Mathlib friction** | Formal claims only | Hard-stop policy already in place; Hypothesis property tests carry rigor meanwhile |
+
+---
+
+## Coverage Check: does CP-A + satellites reach "most possibilities"?
+
+| Item | Reached via |
+|------|-------------|
+| Z3 flagship | CP-A core |
+| ICL bridge | CP-A core (uses Z3 task suites + comparators) |
+| L1, L2, L3, L3.5 | CP-A shakedown stage |
+| AutoScientist frontier | CP-A core |
+| Runtime guard + manifesto | CP-A core (overlapped) |
+| Continual learning | CP-A fan-out (baselines reused) |
+| Benchmark paper | CP-A ∩ CP-C |
+| Algorithm discovery | CP-A fan-out |
+| Theory program | CP-B |
+| Physics proof | CP-E (borrows CP-B checks) |
+| Wrapper | CP-C |
+| Edge/Green AI | CP-D |
+| Hardware pilot | CP-D tail |
+| Biological twin | CP-E |
+
+All 15 items sit on some path. Only two require resources money can't shortcut (hardware, Lean toolchain) and both are latency-gated rather than effort-gated — hence procured/installed on day one and kept off the spine.
