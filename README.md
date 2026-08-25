@@ -3,11 +3,11 @@
 > **Computronium is a composable machine-learning library and research framework for building, training, analyzing, and comparing learning systems across architectures, learning rules, dynamics, and substrate models.**
 > Its research program investigates locality, plasticity, stability, and physical constraints as first-class dimensions of computation.
 
-**Computronium** (from [Wikipedia](https://en.wikipedia.org/wiki/Computronium): the theoretical limit of physical computation) provides a rigorous, composable ontology for building learning systems from local, physical dynamics—bridging abstract algorithms and the thermodynamic reality of optical, memristive, neuromorphic, biological, quantum, and other substrates.
+**Computronium** (from [Wikipedia](https://en.wikipedia.org/wiki/Computronium): the theoretical limit of physical computation) provides a rigorous, composable ontology for building learning systems from local dynamics—bridging abstract algorithms and the physical constraints and substrate dynamics of optical, memristive, neuromorphic, biological, quantum, and other substrate models.
 
 Modern deep learning has achieved remarkable results in mathematical abstraction. But abstraction hides physical cost. Natural intelligence operates without global clocks, infinite memory for backward passes, or perfect precision—emerging from local interactions, energy minimization, and physical constraints.
 
-The **search for computronium** investigates learning algorithms native to the physical universe: systems that learn asynchronously, self-heal from noise, and operate at thermodynamic limits of efficiency. This requires decoupling machine learning from the rigid, non-physical requirements of digital abstraction and embracing local, energy-based dynamics where networks relax toward equilibrium.
+The **search for computronium** investigates learning systems that are native to physical constraints: asynchronous operation, local interactions, adaptation, noise tolerance, and energy/resource efficiency. The goal is to determine empirically which combinations of dynamics, learning rules, and substrates offer useful performance under those constraints. This requires decoupling machine learning from the rigid, non-physical requirements of digital abstraction and embracing local, energy-based dynamics where networks relax toward equilibrium.
 
 ### 🎯 Choose Your Lens: Three Perspectives
 
@@ -23,18 +23,20 @@ Computronium serves three roles simultaneously. The library is usable independen
 
 | Audience | Entry Point |
 |----------|-------------|
-| 🧠 **Natural Scientists & Physicists** | Thermodynamic playground: local Hebbian/contrastive learning with Lyapunov stability, passivity, energy invariants |
-| 📊 **Data Scientists & ML Researchers** | 6-D composable search space: O(1) memory credit assignment, arbitrary depth without memory wall, systematic comparison |
-| 🛠️ **Hardware & Silicon Architects** | Algorithm-hardware co-design: memristive IR-drop, optical phase, quantum unitary substrate models; stability verification before tape-out |
+| 🧠 **Natural Scientists & Physicists** | Energy-based local learning demo: Hebbian/contrastive rules with Lyapunov stability analysis, passivity checks, energy tracking |
+| 📊 **Data Scientists & ML Researchers** | Composable learning rules, local credit assignment, depth/compute scaling, systematic comparison across algorithms |
+| 🔬 **Algorithm / Hardware Researchers** | Substrate models, hardware-aware constraints, stability analysis, algorithm–substrate co-design |
 | 💻 **Systems Engineers & Developers** | Correctness by construction: type-safe (PEP 695 generics), property-locked (Hypothesis), Triton-accelerated, AutoScientist automation |
+
+> **Status:** Active development. The core library, ontology, verification infrastructure, and experiment tooling are implemented; large-scale empirical studies and physical-hardware validation are ongoing.
 
 ### 🧬 Coupled Dynamical Systems
 
 Historically, ML frameworks treat models as static computational graphs. Computronium treats them as **coupled dynamical systems**.
 
-By elevating the computational rule to a dynamical variable, we introduce a **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ unifying fast neural activity, slow synaptic consolidation, and substrate physics. Standard digital backpropagation is recovered as a restricted, null-plasticity slice of this larger, physically grounded space.
+By elevating the computational rule to a dynamical variable, we introduce a **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ unifying fast neural activity, slow synaptic consolidation, and substrate physics. Existing 5-D learning systems are represented as the `M = NullPlasticity` slice of this joint 6-D formulation. The representation is substrate-aware; that does not by itself make any particular algorithm a physical process.
 
-Computronium provides the ontology, infrastructure, and automated scientific engine to investigate **limits imposed by stability, locality, and resource constraints**.
+Computronium provides the ontology, infrastructure, and automation tooling used to investigate **limits imposed by stability, locality, and resource constraints**.
 
 ---
 
@@ -46,7 +48,9 @@ Computronium provides the ontology, infrastructure, and automated scientific eng
 System = Substrate × Geometry × StateDynamics × Plasticity × CreditAssignment × ParameterUpdate
 ```
 
-This decomposition is the framework's organizing abstraction for comparing learning systems—any valid combination of primitives yields a coherent learning system, and the space of all combinations is the search space for the **AutoScientist**. The ontology is a design abstraction, not an established law of computation.
+A **System is a 6-axis coordinate; 5-D systems are the `M = NullPlasticity` subspace.**
+
+This decomposition is the framework's organizing abstraction for comparing learning systems. It defines compatibility constraints over combinations of primitives; compatible combinations form the search space explored by the **AutoScientist**. The ontology is a design abstraction, not an established law of computation.
 
 | Axis | Symbol | Role | Primitives |
 |------|:------:|------|------------|
@@ -61,7 +65,7 @@ This decomposition is the framework's organizing abstraction for comparing learn
 
 | Capability | Description |
 |------------|-------------|
-| **Composable systems** | Construct any valid 5-D/6-D coordinate via `System` generic or factory functions |
+| **Composable systems** | Construct any 6-axis system coordinate via the `System` generic or factory functions (5-D systems are the `M = NullPlasticity` slice) |
 | **Common training API** | `SystemTrainer` / `JointSystemTrainer` — single interface for all learning rules |
 | **Multiple learning rules** | Backprop, EqProp, FA, DFA, Forward-Forward, PEPITA, Target Prop, Predictive Coding, Hebbian/STDP, SNN, TileNet, 6-D joint (Routing, FastWeight) |
 | **Substrate models** | Digital, Memristive (IR-drop), Neuromorphic (spikes), Photonic (phase), Quantum (unitary) |
@@ -107,7 +111,7 @@ from computronium.core.ontology import (
 from computronium.core.joint import PlasticityConfig
 ```
 
-**5-D compatible (M = NullPlasticity)** — standard backprop MLP, Equilibrium Propagation, TileNet:
+**5-D slice (`M = NullPlasticity`)** — standard backprop MLP, Equilibrium Propagation, TileNet:
 ```python
 system = System(
     substrate=DigitalSubstrate(),
@@ -138,11 +142,11 @@ joint_fast_weight = System(
 memristive_plastic = System(..., plasticity=PlasticityConfig.substrate_coupled())
 ```
 
-Formerly many hardcoded models (`optical_looped_mlp`, `quantized_looped_mlp`, `crossbar_looped_mlp`, `eqprop_transformer`, `neural_cube`, `sparse_equilibrium`, `momentum_equilibrium`, TileNet variants) are now **emergent coordinates** in this 6-D space. The 5-D coordinates (Sprints 9.0–9.7) are recovered as the `M = NullPlasticity` slice.
+Formerly hardcoded model families (`optical_looped_mlp`, `quantized_looped_mlp`, `crossbar_looped_mlp`, `eqprop_transformer`, `neural_cube`, `sparse_equilibrium`, `momentum_equilibrium`, TileNet variants) are now **expressed as coordinates/compositions** in this 6-axis space. These 5-D systems are recovered as the `M = NullPlasticity` slice.
 
-### Research Direction Models (Native Ontology Implementations)
+### Research Direction Models (Experimental Variants)
 
-The framework includes native implementations of novel research directions as first-class ontology coordinates:
+These are native implementations of research directions and experimental variants expressed as first-class ontology coordinates. Several may overlap prior literature:
 
 | Model | Coordinate | Description |
 |-------|------------|-------------|
@@ -169,17 +173,17 @@ from computronium.models.native import (
 
 ---
 
-## ⚡ Thermodynamic Invariant: Energy as First-Class Object
+## ⚡ Energy, Stability, and Dynamical Invariants
 
-Energy binds Geometry and StateDynamics. The framework elevates the energy function `E(x)` to a first-class object, enabling mathematical stability proofs *before* implementation:
+Energy binds Geometry and StateDynamics. The framework elevates the energy function `E(x)` to a first-class object, enabling mathematical stability analysis *before* implementation:
 
-- **Symmetric topology + EnergyMinimization** → guaranteed fixed-point convergence (Hopfield/EqProp) via LaSalle's invariance principle
+- **Symmetric topology + EnergyMinimization** → under the stated energy/boundedness assumptions, fixed-point convergence follows via LaSalle's invariance principle (Hopfield/EqProp)
 - **Directed topology** → requires Control-Lyapunov formulation for stability (formally verified for PredictiveSettlingDynamics)
 - **Free energy tracking** → per-iteration Lyapunov certificates (`track_free_energy_per_iter`) for predictive coding and directed FA
 
 **Joint Architecture Extension**: The mathematical center is now the **joint transition operator** $z_{t+1} = F_\theta(z_t; G, S)$ acting on composite state $z_t = (x_t, \psi_t, \sigma_t)$. The `StateRegistry` assigns lifecycle metadata to every variable (persistent θ, fast plastic ψ, substrate-owned σ, consolidatable), resolving ontological overlaps where a single physical variable (e.g., memristive conductance) serves multiple roles. Slow learning operates on persistent θ at episode boundaries: $\theta_{e+1} = U(\theta_e, C(\tau_e))$. **The 5-D energy-based dynamics are the restriction `F_θ^Null = D_θ` where `M=Null`, `ψ=∅`, `σ=σ₀`.**
 
-This enables the **AutoScientist** to reason about *physical realizability* and the **stability-plasticity trade-off** as constraints, not afterthoughts.
+Campaign tooling treats the **stability-plasticity trade-off** and resource constraints as explicit search constraints rather than afterthoughts; the **AutoScientist** searches the declared ontology space and records experiment results.
 
 ---
 
@@ -220,7 +224,7 @@ comp <command> [args]
 | `comp frontier` | Pareto frontier analysis | `comp-frontier` |
 | `comp rank` | Family ranking from HPO studies | `comp-compare` |
 | `comp lab` | Interactive experiments & model inspection | — |
-| `comp joint-validate` | Validate arbitrary 6-D joint coordinates | — |
+| `comp joint-validate` | Validate arbitrary 6-axis joint coordinates | — |
 | `comp campaign` | Run/compare/resume joint campaigns | — |
 | `comp stability` | Stability-plasticity frontier reports | — |
 | `comp benchmark` | Run joint benchmark suites (adaptation, Z3, etc.) | — |
@@ -249,15 +253,7 @@ uv sync --dev
 uv run scripts/quickstart.py
 ```
 
-Expected output:
-```
-Backprop:        95% accuracy (3 epochs)
-Forward-Forward: 90%+ accuracy (3 epochs)
-
-Both biologically plausible and standard learning work!
-```
-
-**Why Forward-Forward?** FF converges in 3 epochs (like Backprop) vs EqProp's 20+. It uses local layer-wise objectives—no backward pass through the network, no weight transport—making it the most biologically plausible algorithm that's competitive with backprop on MNIST. The `scripts/quickstart.py` is the canonical entry point.
+**Why Forward-Forward?** FF uses layer-local objectives and avoids conventional backward propagation through the network (no weight transport). The quickstart is a small reproducibility smoke test comparing FF with Backprop on MNIST—not a benchmark result. `scripts/quickstart.py` is the canonical entry point.
 
 ### Quickstart: Composability Demo
 
@@ -293,9 +289,9 @@ comp run from-config --config configs/presets/eqprop_routing_mnist.yaml
 
 ---
 
-## 🏭 13 Native Factories — One-Line API
+## 🏭 13 Model Factories — One-Line API
 
-All factories are available via `from computronium import ...` and compose 5-D/6-D ontology systems in one call. Each has a matching YAML preset in `configs/presets/`.
+All factories are available via `from computronium import ...` and compose 6-axis ontology systems in one call (5-D systems are the `M = NullPlasticity` slice). Each has a matching YAML preset in `configs/presets/`.
 
 **Implemented algorithms are generally literature-derived baselines or variants; the framework contribution is their common compositional representation and systematic comparison.**
 
@@ -310,10 +306,10 @@ All factories are available via `from computronium import ...` and compose 5-D/6
 | `create_pc_mlp` | Digital × Feedforward × PredictiveSettling × Null × ThermodynamicContrast × Euclidean | `pc_mnist.yaml` | Predictive Coding: hierarchical prediction error minimization, convergent dynamics | Rao & Ballard (1999); Whittington & Bogacz (2017) |
 | `create_hebbian_mlp` | Digital × Feedforward × Instantaneous × Null × TemporalTrace × Euclidean | `hebbian_mnist.yaml` | Hebbian/STDP: local correlation-based plasticity | Hebb (1949); Bi & Poo (1998) |
 | `create_snn_mlp` | Digital × Feedforward × SpikeIntegration × Null × TemporalTrace × Euclidean | `snn_mnist.yaml` | Spiking Neural Network: LIF neurons, spike-timing-dependent plasticity | Maass (1997); Gerstner et al. (2014) |
-| `create_tile_mlp` | Digital × TileMesh × Instantaneous × Null × (varies) × Euclidean | `tile_mnist.yaml` | TileNet: modular tiled architecture, supports all credit assignments | Native (this framework) |
-| `create_routing_mlp` | Digital × Recurrent × Instantaneous × RoutingPlasticity × Backprop × Euclidean | `routing_mnist.yaml` | **6-D Joint**: state-dependent gating, sparse pathway routing, dynamic compute | Native (this framework) |
-| `create_fast_weight_mlp` | Digital × Recurrent × Instantaneous × FastWeightPlasticity × Backprop × Euclidean | `fast_weight_mnist.yaml` | **6-D Joint**: episode-local associative memory via fast-weight matrices | Ba et al. (2016); Native impl. |
-| `create_memristive_mlp` | Memristive × Feedforward × Instantaneous × Null × Backprop × Euclidean | `memristive_mnist.yaml` | **Substrate-aware**: IR-drop, conductance bounds, noise | Native (this framework) |
+| `create_tile_mlp` | Digital × TileMesh × Instantaneous × Null × (varies) × Euclidean | `tile_mnist.yaml` | TileNet: modular tiled architecture, supports all credit assignments | Framework implementation |
+| `create_routing_mlp` | Digital × Recurrent × Instantaneous × RoutingPlasticity × Backprop × Euclidean | `routing_mnist.yaml` | **6-D Joint**: state-dependent gating, sparse pathway routing, dynamic compute | Framework implementation |
+| `create_fast_weight_mlp` | Digital × Recurrent × Instantaneous × FastWeightPlasticity × Backprop × Euclidean | `fast_weight_mnist.yaml` | **6-D Joint**: episode-local associative memory via fast-weight matrices | Ba et al. (2016); framework impl. |
+| `create_memristive_mlp` | Memristive × Feedforward × Instantaneous × Null × Backprop × Euclidean | `memristive_mnist.yaml` | **Substrate-aware**: IR-drop, conductance bounds, noise | Framework implementation |
 
 ### 5-D Factory Usage Examples
 
@@ -578,9 +574,11 @@ A passing invariant or numerical-equivalence test demonstrates **implementation 
 | **J6** | Cross-adapters preserve joint transition shape & registry semantics | Adapter output is valid CompositeState projection |
 | **J7** | Trajectory records contain full z = (x, ψ, σ) | JointTrajectory has activity, plastic, substrate at each step |
 
-### 🧬 Biology Axiom Property Tests (Hypothesis-based)
+### 🧬 Biologically Motivated Property Tests (Hypothesis-based)
 
-| Axiom | Test | Method | Threshold |
+These are biologically motivated constraints/hypotheses encoded as property tests—not established biological axioms.
+
+| Motivated Constraint | Test | Method | Threshold |
 |-------|------|--------|-----------|
 | **EP Gradient Equivalence** | EqProp gradient aligns with BPTT | Cosine similarity | ≥ 0.5 |
 | **Lyapunov Energy Descent** | Free energy monotonically non-increasing along relaxation | Hypothesis | Slack 1e-3; final < initial |
@@ -590,6 +588,8 @@ A passing invariant or numerical-equivalence test demonstrates **implementation 
 | **Adaptive-FA Alignment** | Feedback matrices align with forward weights over training | cos(B, W^T) improvement > 0.05 | biologically slow B regime |
 
 ### ✅ Integration Verification Gates (All Passing)
+
+**Scope: current CI / repository verification status — not evidence of scientific or benchmark superiority.**
 
 | Gate | Result |
 |------|--------|
@@ -752,9 +752,16 @@ The 6-axis decomposition gives the **AutoScientist** a **structured search space
 
 ---
 
-## 🧪 Flagship Experiments (Implemented)
+## 🧪 Experiment Suite
 
-### 5-D Experiments (Completed)
+| Status | Meaning |
+|--------|---------|
+| **Implemented** | Experiment code exists |
+| **Run** | At least one reproducible execution exists |
+| **Analyzed** | Results have been systematically analyzed |
+| **Published** | Results reported externally |
+
+### 5-D Experiment Implementations
 
 | Experiment | File | Purpose |
 |------------|------|---------|
@@ -766,7 +773,7 @@ The 6-axis decomposition gives the **AutoScientist** a **structured search space
 | Cross-Domain Transfer | `experiments/cross_domain_transfer.py` | Vision→LM/RL/graph transfer, local vs global learning |
 | Tile Algorithm Comparison | `experiments/tile_algorithm_comparison.py` | Fair comparison of PC/EP/FA/TP/Hebbian/SNN/Backprop on same substrate |
 
-### 6-D Joint Architecture Experiments (In Progress)
+### 6-D Joint Experiments — In Development
 
 | Experiment | File | Purpose |
 |------------|------|---------|
@@ -780,19 +787,19 @@ The 6-axis decomposition gives the **AutoScientist** a **structured search space
 
 ## 🌐 Evaluation Domains
 
-The framework supports **7 evaluation domains** with 60+ tasks/datasets, unified through a common task interface (`DomainTask` protocol). Each domain has dedicated data loaders, metrics, and task-specific configurations.
+The framework defines **7 evaluation domains**, unified through a common task interface (`DomainTask` protocol), each with dedicated data loaders and metrics. **~25 tasks/datasets are currently implemented**; additional tasks are planned extensions (marked below). Planned entries do not count toward implemented totals.
 
 ### 📊 Domain Overview
 
 | Domain | Tasks | Example Datasets | Models | Key Metrics |
 |--------|-------|------------------|--------|-------------|
 | **Vision** | 11 | MNIST, CIFAR-10/100, SVHN, Digits, synthetic (XOR, spirals) | 25+ | Accuracy, Loss, Energy, FLOPs |
-| **Language (LM)** | 4 | Tiny Shakespeare, WikiText-2, Penn Treebank, char n-gram | 12+ | Perplexity, BPC, Accuracy |
-| **Reinforcement Learning (RL)** | 5 | CartPole, Pendulum, Acrobot, MountainCar, LunarLander | 8+ | Episode Return, Success Rate |
+| **Language (LM)** | 4 | Tiny Shakespeare, char n-gram, WikiText-2, Penn Treebank | 12+ | Perplexity, BPC, Accuracy |
+| **Reinforcement Learning (RL)** | 3 (+2 planned) | CartPole, Pendulum, Acrobot; MountainCar, LunarLander (planned) | 8+ | Episode Return, Success Rate |
 | **Graph** | 3 | Cora, CiteSeer, PubMed | 6+ | Node Classification Acc, F1 |
-| **Tabular** | 5 | Breast Cancer, Iris, Wine, Diabetes, California Housing | 10+ | Accuracy, R², AUC |
-| **Time Series** | 2 | Synthetic Forecast, ETT (planned) | 6+ | MSE, MAE |
-| **Scientific** | 2 | Heat/Wave/Burgers PDE, Navier-Stokes (planned) | 5+ | Relative L2, Conservation |
+| **Tabular** | 3 (+2 planned) | Breast Cancer, Iris, Wine; Diabetes, California Housing (planned) | 10+ | Accuracy, R², AUC |
+| **Time Series** | 1 (+1 planned) | Synthetic Forecast; ETT (planned) | 6+ | MSE, MAE |
+| **Scientific** | 2 (+PDE suite planned) | Pendulum/Lorenz ODE simulation; Heat/Wave/Burgers, Navier-Stokes (planned) | 5+ | Relative L2, Conservation |
 
 ---
 
@@ -818,7 +825,7 @@ python experiments/cross_domain_transfer.py --source vision --target lm
 
 ### 📝 Language Modeling Domain
 
-**Tasks**: `tiny_shakespeare` (char), `char_ngram`, `wikitext2`, `penn_treebank` (word-level)
+**Tasks**: `tiny_shakespeare` (char), `char_ngram`; `wikitext2`, `penn_treebank` (planned)
 
 **Key Experiments**
 
@@ -837,7 +844,7 @@ comp scientist --campaign campaigns/lm_hypercube.yaml
 
 ### 🎮 Reinforcement Learning Domain
 
-**Tasks**: `cartpole`, `pendulum`, `acrobot`, `mountain_car`, `lunar_lander` (Gymnasium classic control + Box2D)
+**Tasks**: `cartpole`, `pendulum`, `acrobot` (implemented); `mountain_car`, `lunar_lander` (planned) — Gymnasium classic control + Box2D
 
 **Key Experiments**
 
@@ -862,7 +869,7 @@ python experiments/fa_rl_comparison.py --env pendulum --seeds 10
 
 ### 📋 Tabular Domain
 
-**Tasks**: `breast_cancer`, `iris`, `wine` (classification), `diabetes`, `california_housing` (regression) — sklearn/UCI
+**Tasks**: `breast_cancer`, `iris`, `wine` (classification, sklearn); `diabetes`, `california_housing` (regression, planned)
 
 **Models**: All MLP-based families (backprop, eqprop, fa, pepita, hebbian, tile) support tabular tasks.
 
@@ -870,7 +877,7 @@ python experiments/fa_rl_comparison.py --env pendulum --seeds 10
 
 ### 📈 Time Series Domain
 
-**Tasks**: `synthetic_forecast` (sin, AR, chaos), `ett_h1` (planned)
+**Tasks**: `synthetic_forecast` (sine-wave forecasting); `ett_h1` (planned)
 
 **Models**: RNN/LSTM/Transformer families across all credit assignments.
 
@@ -878,7 +885,7 @@ python experiments/fa_rl_comparison.py --env pendulum --seeds 10
 
 ### 🔬 Scientific Domain
 
-**Tasks**: `synthetic_physics` (Heat, Wave, Burgers PDEs), `navier_stokes` (planned)
+**Tasks**: `pendulum`, `lorenz` (ODE simulation); PDE suites (Heat/Wave/Burgers, Navier-Stokes) planned
 
 **Models**: Physics-informed variants (PINO, DeepONet, FNO) adapted to computronium credit assignments.
 
@@ -887,7 +894,7 @@ python experiments/fa_rl_comparison.py --env pendulum --seeds 10
 ## 🌐 Distributed Training & P2P
 
 ### Multi-GPU Training
-PyTorch Lightning with DDP, FSDP, DeepSpeed. `TileShardedBackend` with NCCL `all_reduce_gradients`/`broadcast_params` scales TileNet beyond 1B parameters.
+PyTorch Lightning with DDP, FSDP, DeepSpeed. `TileShardedBackend` with NCCL `all_reduce_gradients`/`broadcast_params` supports distributed TileNet sharding for large models.
 
 ### P2P Coordinator System (gRPC + Kademlia)
 Decentralized coordination at `computronium/p2p/`:
@@ -919,7 +926,7 @@ comp run --config campaigns/distributed_tile.yaml
 - 🔬 **HLS/Verilog/NxSDK/SPICE**: FPGA/neuromorphic export via `acceleration/export.py`
 
 ### Inference Engine
-`InferenceServer` — production-ready async inference:
+`InferenceServer` — async inference service:
 - 📦 Dynamic batching (configurable max batch size/timeout)
 - ⚡ TensorRT optimization (fp16/int8, dynamic shapes)
 - 🌐 FastAPI endpoints: `/predict` (async batched), `/predict/sync`, `/health`, `/metrics`
@@ -959,7 +966,7 @@ comp run --config campaigns/distributed_tile.yaml
 | `tile_kernels.py` | Complete TileNet suite: 6 algorithms activity/weight update, routing (top-k/random/learned), multi-GPU NCCL sharding |
 | `mep_kernels.py` | Muon orthogonalization, Dion SVD, Fisher whitening, EP settle |
 | `backprop_kernels.py` | Fused BPTT baseline |
-| `contrastive_kernels.py` | O(1) memory contrastive primitives (10 algorithm families) |
+| `contrastive_kernels.py` | Memory-efficient contrastive primitives (no stored activations; 10 algorithm families) |
 | `backends.py` | Auto-dispatch (TRITON > CUDA > CuPy > CPU > NumPy), `AutoDispatcher`, `KernelProfiler` |
 | `compile.py` | `torch.compile` integration: custom `EqPropFunction`/`EqPropTritonFunction` autograd, dynamic shapes, compile presets |
 | `kernel_backend.py` | `KernelRegistry` with shape-specific auto-tuning cache |
@@ -968,7 +975,7 @@ comp run --config campaigns/distributed_tile.yaml
 - ⚡ Triton kernels for all tile algorithms + MEP + FA + PC + Hebbian + SNN + FF + TP
 - 🔄 Auto-dispatch with profile-guided backend selection
 - 🚀 Custom EqProp autograd Function enabling `torch.compile` on settle loops (2–3× speedup)
-- 🌐 Multi-GPU tile sharding for >1B parameter models
+- 🌐 Multi-GPU tile sharding support for large TileNet models
 - ✅ Gradient equivalence CI gate (Triton vs CuPy vs PyTorch on every commit)
 
 ---
