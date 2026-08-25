@@ -202,18 +202,18 @@ comp <command> [args]
 | **Train a model** | `comp run from-config --config configs/presets/backprop_mnist.yaml` |
 | **Compare learning rules** | `comp lab benchmark --domain vision --quick` |
 | **Run benchmark suite** | `comp benchmark run --suite adaptation_efficiency` |
-| **Run sweep/campaign** | `comp campaign run --config campaigns/...` |
+| **Run sweep/campaign** | `comp campaign run --config <campaign.yaml>` |
 | **Analyze stability** | `comp stability --model eqprop_mlp --task mnist` |
 | **Compute Pareto frontier** | `comp frontier --study study_name` |
-| **Autonomous research** | `comp scientist --campaign campaigns/...` |
+| **Autonomous research** | `comp scientist --campaign <campaign.yaml>` |
 | **Interactive exploration** | `comp lab` |
 | **Validate joint coordinates** | `comp joint-validate --coordinate S=Memristive,G=TileMesh,...` |
-| **Distributed training** | `comp-p2p-worker --bootstrap-ip ...` |
-| **Export for deployment** | `comp-export-trained-kernel --model ...` |
+| **Start a P2P worker** | `uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --device cpu` |
+| **Export kernels for deployment** | `uv run python -m computronium.cli.export_kernel --algorithm backprop --target cpu` |
 
 ### Subcommand Reference
 
-| Subcommand | Purpose | Legacy Alias |
+| Subcommand | Purpose | Pre-consolidation Name |
 |------------|---------|--------------|
 | `comp run` | Campaign runner (validate/plan/run) | `comp-run` |
 | `comp report` | Render experiment reports | `comp-report` |
@@ -229,15 +229,12 @@ comp <command> [args]
 | `comp stability` | Stability-plasticity frontier reports | — |
 | `comp benchmark` | Run joint benchmark suites (adaptation, Z3, etc.) | — |
 
-### Standalone Commands (for scripting/CI)
+All functionality is available through the `comp` dispatcher. P2P workers and kernel export run as modules rather than installed scripts:
 
-| Command | Purpose |
-|---------|---------|
-| `comp-scientist` | Autonomous experiment loop (AutoScientist hypercube campaigns) |
-| `comp-failure-manifesto` | Structured negative result documentation |
-| `comp-export-kernel` | Export kernel backend (untrained) |
-| `comp-export-trained-kernel` | Train + export kernel backend with weights |
-| `comp-p2p-worker` | P2P worker for distributed training |
+```bash
+uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --device cpu   # P2P worker
+uv run python -m computronium.cli.export_kernel --algorithm eqprop --target fpga  # kernel export
+```
 
 ---
 
@@ -765,23 +762,23 @@ The 6-axis decomposition gives the **AutoScientist** a **structured search space
 
 | Experiment | File | Purpose |
 |------------|------|---------|
-| TileNet Scaling Sweep | `experiments/tile_scaling.py` | Depth/width scaling on MNIST/CIFAR-10 across tile algorithms + backprop |
-| EqProp Vision Parity | `experiments/eqprop_vision_parity.py` | EqProp variants on MNIST/Fashion-MNIST/CIFAR-10/SVHN |
-| MEP Preset Tournament | `experiments/mep_tournament.py` | Factorized ablation: gradient×update×constraint×feedback with ANOVA + Sobol |
-| FA Depth Scaling | `experiments/fa_depth_scaling.py` | Extreme depth, MNIST + synthetic parity |
-| MoT Ablation | `experiments/mot_ablation.py` | Dense vs sparse tile routing (top-k, random, learned) |
-| Cross-Domain Transfer | `experiments/cross_domain_transfer.py` | Vision→LM/RL/graph transfer, local vs global learning |
-| Tile Algorithm Comparison | `experiments/tile_algorithm_comparison.py` | Fair comparison of PC/EP/FA/TP/Hebbian/SNN/Backprop on same substrate |
+| TileNet Scaling Sweep | `computronium/experiments/tile_scaling.py` | Depth/width scaling on MNIST/CIFAR-10 across tile algorithms + backprop |
+| EqProp Vision Parity | `computronium/experiments/eqprop_vision_parity.py` | EqProp variants on MNIST/Fashion-MNIST/CIFAR-10/SVHN |
+| MEP Preset Tournament | `computronium/experiments/mep_tournament.py` | Factorized ablation: gradient×update×constraint×feedback with ANOVA + Sobol |
+| FA Depth Scaling | `computronium/experiments/fa_depth_scaling.py` | Extreme depth, MNIST + synthetic parity |
+| MoT Ablation | `computronium/experiments/mot_ablation.py` | Dense vs sparse tile routing (top-k, random, learned) |
+| Cross-Domain Transfer | `computronium/experiments/cross_domain_transfer.py` | Vision→LM/RL/graph transfer, local vs global learning |
+| Tile Algorithm Comparison | `computronium/experiments/tile_algorithm_comparison.py` | Fair comparison of PC/EP/FA/TP/Hebbian/SNN/Backprop on same substrate |
 
 ### 6-D Joint Experiments — In Development
 
 | Experiment | File | Purpose |
 |------------|------|---------|
-| Adaptation Efficiency | `experiments/joint/adaptation_efficiency.py` | Does plasticity adapt faster to non-stationary shifts than Null under matched compute? |
-| Compute Efficiency | `experiments/joint/compute_efficiency.py` | Does routing reduce effective operations (dynamic sparsity)? |
-| Structural Robustness | `experiments/joint/structural_robustness.py` | Can joint system recover after topology/device damage via autonomous rerouting? |
-| Algorithm Migration | `experiments/joint/algorithm_migration.py` | Can ψ switch strategy A₀→A₁ without changing θ? (Experiment 3.5) |
-| Z3: Fixed Weights, Changing Algorithm | `experiments/joint/z3.py` | Frozen θ, multiple tasks via ψ-mediated rule selection (Experiment 4) |
+| Adaptation Efficiency | `computronium/experiments/joint/adaptation_efficiency.py` | Does plasticity adapt faster to non-stationary shifts than Null under matched compute? |
+| Compute Efficiency | `computronium/experiments/joint/compute_efficiency.py` | Does routing reduce effective operations (dynamic sparsity)? |
+| Structural Robustness | `computronium/experiments/joint/structural_robustness.py` | Can joint system recover after topology/device damage via autonomous rerouting? |
+| Algorithm Migration | `computronium/experiments/joint/algorithm_migration.py` | Can ψ switch strategy A₀→A₁ without changing θ? (Experiment 3.5) |
+| Z3: Fixed Weights, Changing Algorithm | `computronium/experiments/joint/z3_fixed_weights.py` | Frozen θ, multiple tasks via ψ-mediated rule selection (Experiment 4) |
 
 ---
 
@@ -818,7 +815,7 @@ comp lab benchmark --domain vision --quick
 comp lab core-train --model eqprop_mlp --task mnist --epochs 10
 
 # Cross-domain transfer: vision → LM
-python experiments/cross_domain_transfer.py --source vision --target lm
+uv run python -m computronium.experiments.cross_domain_transfer --source vision --target lm
 ```
 
 ---
@@ -830,14 +827,8 @@ python experiments/cross_domain_transfer.py --source vision --target lm
 **Key Experiments**
 
 ```bash
-# EqProp vs Backprop on language modeling
-python experiments/language_modeling_comparison.py --epochs 50
-
 # Run LM benchmark
-comp lab benchmark --domain lm --models backprop_transformer,eqprop_causal_transformer
-
-# AutoScientist campaign on LM
-comp scientist --campaign campaigns/lm_hypercube.yaml
+comp lab benchmark --domain lm --quick
 ```
 
 ---
@@ -851,12 +842,6 @@ comp scientist --campaign campaigns/lm_hypercube.yaml
 ```bash
 # RL benchmark across algorithms
 comp lab benchmark --domain rl --quick
-
-# EqProp on CartPole (energy-based policy)
-comp lab core-train --model eqprop_ppo --task cartpole --epochs 100
-
-# FA vs Backprop on continuous control
-python experiments/fa_rl_comparison.py --env pendulum --seeds 10
 ```
 
 ---
@@ -904,14 +889,11 @@ Decentralized coordination at `computronium/p2p/`:
 - 🔀 **DistributedSystemTrainer**: In-process multi-worker coordination; shards along TileGeometry, federates at ParameterUpdate
 - 🛡️ **Fault Tolerance**: `DistributedTrainingError` captures lost workers, step, partial metrics on gRPC failure
 
-CLI: `comp-p2p-worker` starts a worker node (renamed from `eqprop-p2p-worker` — the P2P layer is algorithm-agnostic).
+P2P workers run as modules (`computronium/p2p/grpc_worker.py`, `p2p_worker.py` — the P2P layer is algorithm-agnostic):
 
 ```bash
-# Start a P2P worker
-comp-p2p-worker --bootstrap-ip 192.168.1.100 --task mnist --mode deep
-
-# Run distributed TileNet training
-comp run --config campaigns/distributed_tile.yaml
+# Start a gRPC TileMesh worker
+uv run python -m computronium.p2p.grpc_worker --node-id worker_0 --port 50051 --device cpu
 ```
 
 ---
