@@ -47,6 +47,7 @@ update:
   spectral_norm: 1.0
   fisher_damping: 1e-3
   ewc_lambda: 1000.0
+  grad_clip: 1.0
 
 training:
   max_epochs: 20

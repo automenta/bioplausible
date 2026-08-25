@@ -997,6 +997,7 @@ def _build_system_from_flat_config(
                 spectral_norm=update_cfg.get("spectral_norm", 1.0),
                 fisher_damping=update_cfg.get("fisher_damping", 1e-3),
                 ewc_lambda=update_cfg.get("ewc_lambda", 1000.0),
+                grad_clip=update_cfg.get("grad_clip", 1.0),
             )
         )
     else:
@@ -1008,6 +1009,7 @@ def _build_system_from_flat_config(
                 spectral_norm=update_cfg.get("spectral_norm", 1.0),
                 fisher_damping=update_cfg.get("fisher_damping", 1e-3),
                 ewc_lambda=update_cfg.get("ewc_lambda", 1000.0),
+                grad_clip=update_cfg.get("grad_clip", 1.0),
             )
         )
 

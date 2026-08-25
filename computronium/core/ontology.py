@@ -667,6 +667,7 @@ class ParameterUpdateConfig:
         spectral_norm: Target spectral norm (for spectral_constrained)
         fisher_damping: Damping for natural gradient
         ewc_lambda: EWC regularization strength
+        grad_clip: Gradient clipping norm (for euclidean)
     """
 
     update_type: str
@@ -676,6 +677,7 @@ class ParameterUpdateConfig:
     spectral_norm: float
     fisher_damping: float
     ewc_lambda: float
+    grad_clip: float = 1.0
 
     @classmethod
     def euclidean(
@@ -687,6 +689,7 @@ class ParameterUpdateConfig:
         spectral_norm: float = 1.0,
         fisher_damping: float = 1e-3,
         ewc_lambda: float = 1000.0,
+        grad_clip: float = 1.0,
     ) -> ParameterUpdateConfig:
         return cls(
             update_type="euclidean",
@@ -696,6 +699,7 @@ class ParameterUpdateConfig:
             spectral_norm=spectral_norm,
             fisher_damping=fisher_damping,
             ewc_lambda=ewc_lambda,
+            grad_clip=grad_clip,
         )
 
     @classmethod
@@ -2692,6 +2696,12 @@ class EuclideanUpdate:
                 grad = pseudo_grads[grad_idx]
                 # Only apply gradient if shapes match
                 if grad.shape == param.shape:
+                    # Apply gradient clipping to the pseudo-gradient
+                    if self.config.grad_clip is not None and self.config.grad_clip > 0:
+                        grad_norm = grad.norm()
+                        if grad_norm > self.config.grad_clip:
+                            grad = grad * (self.config.grad_clip / (grad_norm + 1e-8))
+                    
                     if self.config.momentum > 0:
                         buf = self._momentum_buffers.get(name, torch.zeros_like(param))
                         buf.mul_(self.config.momentum).add_(grad)
