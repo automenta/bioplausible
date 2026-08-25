@@ -43,6 +43,9 @@ from .ternary import TernaryEqProp, TernaryLinear, TernaryQuantize
 from .ternary_native import native_ternary_eqprop
 from .transformer_eqprop import EqPropAttention, TransformerEqProp
 
+# Alias for backward compatibility with validation tracks
+LoopedMLP = LoopedMLPForLM
+
 __all__: list[str] = sorted(
     name
     for name, obj in vars().items()

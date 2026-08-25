@@ -2045,8 +2045,11 @@ class RecurrentGeometry(nn.Module):
         if recurrent_weight is not None:
             self._recurrent_weight = nn.Parameter(recurrent_weight)
         elif hidden_dim is not None and self._recurrent_weight is None:
+            # For EqProp, initialize recurrent weight to small random values
+            # so the nudge can propagate backwards through the network
+            # (zero init prevents gradient flow to hidden layers)
             self._recurrent_weight = nn.Parameter(
-                torch.randn(hidden_dim, hidden_dim) * config.init_scale
+                torch.randn(hidden_dim, hidden_dim) * config.init_scale * 0.1
             )
 
     def _build_layers(self) -> None:
@@ -2070,8 +2073,9 @@ class RecurrentGeometry(nn.Module):
                     torch.tensor(self.config.recurrent_weight)
                 )
             else:
+                # Small random initialization for EqProp
                 self._recurrent_weight = nn.Parameter(
-                    torch.randn(hidden_dim, hidden_dim) * self.config.init_scale
+                    torch.randn(hidden_dim, hidden_dim) * self.config.init_scale * 0.1
                 )
         self._set_param_names()
 
@@ -3920,13 +3924,14 @@ class NoisySubstrate(DigitalSubstrate):
 class EnergyMinimizationDynamics:
     """Energy-based settling (EqProp, Hopfield, CHL).
 
-    Supports heavy-ball momentum for accelerated convergence:
-    h_{t+1} = h_t + step_size * (geometry.route(h_t) - h_t) + momentum * (h_t - h_{t-1})
+    Supports heavy-ball momentum for accelerated convergence.
+    Implements the contrastive nudged phase: output layer receives
+    beta * (target - output) during the nudged phase.
     """
 
     def __init__(self, config: StateDynamicsConfig | None = None):
         self.config = config or StateDynamicsConfig.energy_minimization()
-        self._velocity: Tensor | None = None
+        self._velocity: list[Tensor] | None = None
 
     def settle(
         self,
@@ -3935,55 +3940,94 @@ class EnergyMinimizationDynamics:
         substrate: Substrate,
         target: Tensor | None = None,
     ) -> SystemState:
-        # Run settling iterations with optional momentum
-        h = state.activations
-        if h is None:
+        # Run settling iterations for full multi-layer EqProp dynamics
+        # Implements the same dynamics as legacy EquilibriumMLP.forward_dynamics
+        
+        if state.x is None:
             return state
-        if isinstance(h, list):
-            h = h[-1]  # Use last layer for single-tensor routing
-
-        # Initialize velocity for momentum
-        if self.config.momentum > 0:
-            self._velocity = torch.zeros_like(h)
-
+            
         # Get initial activations with intermediates for credit assignment
-        if state.x is not None:
-            all_acts = geometry.forward_with_intermediates(state.x, substrate)
-        else:
-            all_acts = [h]
+        all_acts = geometry.forward_with_intermediates(state.x, substrate)
+        if not all_acts:
+            return state
+            
+        # Number of hidden layers (excluding input and output)
+        # all_acts = [input, hidden1, hidden2, ..., output]
+        num_hidden = len(all_acts) - 2
+        
+        # Initialize velocity for momentum (per hidden layer)
+        if self.config.momentum > 0:
+            batch_size = all_acts[0].size(0)
+            self._velocity = [
+                torch.zeros_like(all_acts[i + 1]) for i in range(num_hidden)
+            ]
 
+        beta = self.config.beta if target is not None else 0.0
+        
         for step in range(self.config.max_steps):
-            h_new = geometry.route(h)
-            h_new = substrate.inject_state_noise(h_new)
+            new_acts = [all_acts[0]]  # Input layer is fixed
+            
+            # Update each hidden layer
+            for i in range(num_hidden):
+                layer = geometry._layers[i * 2]  # Linear layer at even indices
+                pre = layer(all_acts[i])  # Bottom-up from previous layer
+                
+                # Recurrent term (for RecurrentGeometry, last hidden layer only)
+                if hasattr(geometry, '_recurrent_weight') and geometry._recurrent_weight is not None:
+                    if i == num_hidden - 1:  # Last hidden layer has recurrent connection
+                        pre = pre + all_acts[i + 1] @ geometry._recurrent_weight.T
+                
+                # Top-down drive from layer above
+                next_layer = geometry._layers[(i + 1) * 2]  # Next Linear layer
+                top_down = all_acts[i + 2] @ next_layer.weight
+                
+                total = pre + top_down
+                
+                # Apply momentum (heavy-ball)
+                if self.config.momentum > 0 and self._velocity is not None:
+                    total = self.config.momentum * self._velocity[i] + total
+                    self._velocity[i] = total.detach().clone()
+                
+                # Apply activation (ReLU)
+                if i < len(geometry._layers) - 2 and isinstance(geometry._layers[i * 2 + 1], nn.Module):
+                    act_fn = geometry._layers[i * 2 + 1]
+                    h_new = act_fn(total)
+                else:
+                    h_new = total
+                    
+                new_acts.append(h_new)
+            
+            # Output layer
+            out_layer = geometry._layers[-1] if isinstance(geometry._layers[-1], nn.Linear) else None
+            if out_layer is not None:
+                out = out_layer(new_acts[-1])
+                # Apply nudging to output layer during nudged phase
+                if beta > 0 and target is not None:
+                    # Convert target to one-hot if needed
+                    if target.dim() == 1:
+                        target_oh = torch.zeros_like(out)
+                        target_oh.scatter_(1, target.unsqueeze(1), 1.0)
+                    else:
+                        target_oh = target
+                    out = out + beta * (target_oh - out)
 
-            # Apply momentum (heavy-ball)
-            if self.config.momentum > 0 and self._velocity is not None:
-                self._velocity.mul_(self.config.momentum).add_(
-                    h_new - h, alpha=self.config.step_size
-                )
-                h_new = h + self._velocity
+                new_acts.append(out)
             else:
-                # Standard gradient-like step
-                h_new = h + self.config.step_size * (h_new - h)
-
+                new_acts.append(all_acts[-1])
+            
+            # Check convergence
             if step >= self.config.convergence_start:
-                delta = torch.dist(h_new, h, p=float("inf")).item()
+                delta = torch.dist(new_acts[-1], all_acts[-1], p=float("inf")).item()
                 if delta < self.config.convergence_threshold:
-                    h = h_new
+                    all_acts = new_acts
                     break
-            h = h_new
-
-        # Get final activations with intermediates
-        if state.x is not None:
-            final_acts = geometry.forward_with_intermediates(state.x, substrate)
-        else:
-            final_acts = [h]
+            all_acts = new_acts
 
         if target is None:
-            state.free_state = final_acts
+            state.free_state = all_acts
         else:
-            state.nudged_state = final_acts
-        state.activations = final_acts
+            state.nudged_state = all_acts
+        state.activations = all_acts
         return state
 
     def compute_energy(self, state: SystemState, geometry: Geometry) -> Tensor:  # ruff: ignore[no-self-use, unused-method-argument]

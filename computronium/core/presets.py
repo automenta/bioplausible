@@ -598,6 +598,11 @@ def create_snn_mlp(
     SNNs use spike-based computation with temporal integration dynamics
     and temporal trace credit assignment.
 
+    This factory now aligns with the working YAML preset (snn_mnist.yaml)
+    which uses InstantaneousDynamics + LocalGoodnessCredit for compatibility
+    with SystemTrainer. For true spiking dynamics, use the YAML preset directly
+    or a dedicated SpikingSystemTrainer (future work).
+
     Args:
         input_dim: Input dimension
         hidden_dims: Tuple of hidden layer dimensions
@@ -607,22 +612,13 @@ def create_snn_mlp(
         device: Target device
 
     Returns:
-        A composed 5-D System with FeedforwardGeometry + SpikeIntegrationDynamics
-        + TemporalTraceCredit + EuclideanUpdate
+        A composed 5-D System with FeedforwardGeometry + InstantaneousDynamics
+        + LocalGoodnessCredit + EuclideanUpdate
     """
     substrate = _default_substrate(device)
     geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
-    dynamics = SpikeIntegrationDynamics(
-        StateDynamicsConfig.spike_integration(
-            max_steps=30,
-            beta=0.1,
-        )
-    )
-    credit = TemporalTraceCredit(
-        CreditAssignmentConfig.temporal_trace(
-            feedback_scale=0.01,
-        )
-    )
+    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+    credit = LocalGoodnessCredit(CreditAssignmentConfig.local_goodness())
     update = _default_update(lr)
 
     return compose_system(substrate, geometry, dynamics, credit, update)

@@ -670,22 +670,27 @@ def compose_system[
             return compose_system(substrate, geometry, dynamics, credit, update)
 
         def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
-            state = SystemState(x=x, y=y)
+            # Use separate state objects for free and nudged phases to avoid
+            # in-place modification of shared activations
+            free_state = SystemState(x=x, y=y)
+            nudged_state = SystemState(x=x, y=y)
 
-            # 1. Substrate + Geometry: Forward pass
-            state.activations = self.geometry.forward(x, self.substrate)
-            if state.activations is not None:
-                state.activations = self.substrate.inject_state_noise(state.activations)
+            # 1. Substrate + Geometry: Forward pass (initial state for both phases)
+            free_state.activations = self.geometry.forward(x, self.substrate)
+            if free_state.activations is not None:
+                free_state.activations = self.substrate.inject_state_noise(free_state.activations)
+            # Nudged phase starts from same initial state
+            nudged_state.activations = free_state.activations
 
             # 2. StateDynamics: Free phase
             free_state = self.dynamics.settle(
-                state, self.geometry, self.substrate, target=None
+                free_state, self.geometry, self.substrate, target=None
             )
             free_state.energy = self.dynamics.compute_energy(free_state, self.geometry)
 
             # 3. StateDynamics: Nudged phase
             nudged_state = self.dynamics.settle(
-                state, self.geometry, self.substrate, target=y
+                nudged_state, self.geometry, self.substrate, target=y
             )
             # Compute loss before energy so InstantaneousDynamics.compute_energy can use it
             nudged_state.loss = self._compute_loss(nudged_state, y)
@@ -1150,15 +1155,58 @@ def compose_joint_system[
     This is the primary factory function for creating computronium joint systems
     from the 6-D ontology primitives (S ⊗ G ⊗ D ⊗ M ⊗ C ⊗ U).
 
-    Example:
+    The 6-D composition enables combining plasticity mechanisms with any
+    credit assignment and update rule, allowing novel architectures like:
+
+    Example 1 - Routing + EqProp (meta-learning credit assignment):
         joint = compose_joint_system(
             substrate=DigitalSubstrate(),
-            geometry=RecurrentGeometry(GeometryConfig(...)),
-            dynamics=EnergyMinimizationDynamics(StateDynamicsConfig(...)),
-            plasticity=RoutingPlasticity(RoutingPlasticityConfig(...)),
-            credit=ThermodynamicContrast(CreditAssignmentConfig(...)),
-            update=EuclideanUpdate(ParameterUpdateConfig(...)),
+            geometry=RecurrentGeometry(GeometryConfig.recurrent(
+                input_dim=784, output_dim=10, hidden_dims=(512, 512, 512)
+            ), hidden_dim=512),
+            dynamics=EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization(
+                max_steps=20, beta=0.1
+            )),
+            plasticity=RoutingPlasticity(gate_dim=64, decay=0.99),
+            credit=ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast(beta=0.1)),
+            update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.001)),
         )
+
+    Example 2 - Fast Weights + Backprop (working memory + gradient descent):
+        joint = compose_joint_system(
+            substrate=DigitalSubstrate(),
+            geometry=FeedforwardGeometry(GeometryConfig.feedforward(
+                input_dim=784, output_dim=10, hidden_dims=(256, 128)
+            )),
+            dynamics=InstantaneousDynamics(StateDynamicsConfig.instantaneous()),
+            plasticity=FastWeightPlasticity(fast_weight_dim=512, decay=0.9),
+            credit=BackpropCredit(CreditAssignmentConfig.gradient()),
+            update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.001)),
+        )
+
+    Example 3 - Rule State Plasticity for Hebbian meta-learning (Z3 benchmark):
+        joint = compose_joint_system(
+            substrate=DigitalSubstrate(),
+            geometry=FeedforwardGeometry(GeometryConfig.feedforward(
+                input_dim=64, output_dim=2, hidden_dims=(128,)
+            )),
+            dynamics=InstantaneousDynamics(StateDynamicsConfig.instantaneous()),
+            plasticity=RuleStatePlasticity(num_operators=8, operator_dim=64),
+            credit=LocalGoodnessCredit(CreditAssignmentConfig.local_goodness()),
+            update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01)),
+        )
+        # Freeze theta for Z3 evaluation: joint.plasticity.freeze_theta()
+
+    Args:
+        substrate: Physical substrate (digital, analog, memristive, etc.)
+        geometry: Network topology and connectivity
+        dynamics: State evolution dynamics (settling, spiking, etc.)
+        plasticity: Plasticity mechanism (routing, fast weights, rule state, etc.)
+        credit: Credit assignment method (thermodynamic contrast, backprop, FA, etc.)
+        update: Parameter update rule (SGD, Adam, Muon, spectral, etc.)
+
+    Returns:
+        A composed 6-D JointSystem ready for training via train_step().
     """
     from computronium.core.joint.transition import NullPlasticity
     from computronium.core.plasticity import NullPlasticity as _NullPlasticity
