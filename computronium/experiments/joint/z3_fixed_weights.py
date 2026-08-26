@@ -15,7 +15,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import random
+import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import torch
@@ -386,6 +389,227 @@ def _is_theta_param(name: str, _p: torch.nn.Parameter) -> bool:
     return name == "operator_embeddings"
 
 
+_CRITERION_ACCURACY = 0.98
+
+
+@dataclass(frozen=True, slots=True)
+class TaskShape:
+    """Batch geometry shared by every task-protocol helper."""
+
+    batch_size: int
+    seq_len: int
+    input_dim: int
+    device: torch.device
+
+    def sample(self, task_fn) -> tuple[Tensor, Tensor]:
+        return task_fn(self.batch_size, self.seq_len, self.input_dim, self.device)
+
+
+def _eval_task_accuracy(
+    model: Z3Model,
+    shape: TaskShape,
+    task_fn,
+    *,
+    batches: int = 20,
+    soft: bool = False,
+) -> float:
+    """Accuracy over fresh batches; ``soft=True`` keeps the differentiable mixture."""
+    model.eval()
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for _ in range(batches):
+            x, y = shape.sample(task_fn)
+            logits = model(x, is_training=soft)
+            correct += (logits.argmax(dim=-1) == y).sum().item()
+            total += y.shape[0]
+    return correct / total
+
+
+def _run_adaptation(  # noqa: PLR0913 - protocol tuple stays flat
+    model: Z3Model,
+    optimizer: torch.optim.Optimizer,
+    criterion,
+    shape: TaskShape,
+    task_fn,
+    *,
+    epochs: int,
+) -> tuple[list[float], int | None]:
+    """Adam steps over whatever ``requires_grad`` currently selects.
+
+    Returns per-epoch losses plus the 1-indexed step where batch accuracy
+    first met the criterion (None if never) — the smoke-scale batch-window
+    proxy for the registered 100-step definition.
+    """
+    model.train()
+    losses: list[float] = []
+    steps_to_criterion: int | None = None
+    for epoch in range(epochs):
+        x, y = shape.sample(task_fn)
+        optimizer.zero_grad()
+        logits = model(x, is_training=True)
+        loss = criterion(logits, y)
+        loss.backward()
+        optimizer.step()
+        losses.append(loss.item())
+        if steps_to_criterion is None:
+            acc = _eval_task_accuracy(model, shape, task_fn, batches=1)
+            if acc >= _CRITERION_ACCURACY:
+                steps_to_criterion = epoch + 1
+    return losses, steps_to_criterion
+
+
+def _meta_train(  # noqa: PLR0913 - protocol tuple stays flat
+    model: Z3Model,
+    optimizer: torch.optim.Optimizer,
+    tasks,
+    criterion,
+    shape: TaskShape,
+    *,
+    epochs: int,
+) -> None:
+    """Joint meta-training over all tasks; θ and the controller learn together."""
+    model.unfreeze_theta()
+    model.train()
+    for epoch in range(epochs):
+        epoch_loss = 0
+        for _task_name, task_fn in tasks:
+            x, y = shape.sample(task_fn)
+            optimizer.zero_grad()
+            logits = model(x, is_training=True)
+            loss = criterion(logits, y)
+            loss.backward()
+            optimizer.step()
+            epoch_loss += loss.item()
+        if epoch % 10 == 0:
+            print(f"    Epoch {epoch}: loss={epoch_loss / len(tasks):.4f}")
+
+
+def _snapshot(model: Z3Model) -> dict[str, Tensor]:
+    return {k: v.detach().clone() for k, v in model.state_dict().items()}
+
+
+def _reinit_psi(model: Z3Model) -> None:
+    """Reset the controller to a fresh random init and zero plastic buffers."""
+    for module in model.controller.modules():
+        if isinstance(module, torch.nn.Linear):
+            module.reset_parameters()
+    model.psi_controller_state.zero_()
+    model.psi_operator_logits.zero_()
+
+
+def _adapt_all_tasks(
+    model: Z3Model,
+    tasks,
+    criterion,
+    shape: TaskShape,
+    *,
+    epochs: int,
+) -> tuple[dict[str, dict], float]:
+    """ψ-only adaptation protocol over the switching stream (θ stays frozen).
+
+    One Adam over the trainable set spans all tasks, preserving PR-1
+    semantics. Returns per-task result rows and elapsed wall-clock.
+    """
+    optimizer = torch.optim.Adam(
+        [p for p in model.parameters() if p.requires_grad], lr=0.001
+    )
+    started = time.perf_counter()
+    rows: dict[str, dict] = {}
+    for task_name, task_fn in tasks:
+        model.psi_controller_state.zero_()
+        model.psi_operator_logits.zero_()
+        losses, steps = _run_adaptation(
+            model, optimizer, criterion, shape, task_fn, epochs=epochs
+        )
+        rows[task_name] = {
+            "accuracy": _eval_task_accuracy(model, shape, task_fn),
+            "soft_eval_accuracy": _eval_task_accuracy(model, shape, task_fn, soft=True),
+            "adaptation_losses": losses,
+            "steps_to_criterion": steps,
+        }
+    return rows, time.perf_counter() - started
+
+
+def _finetune_forgetting_baseline(
+    model: Z3Model,
+    tasks,
+    criterion,
+    shape: TaskShape,
+    *,
+    epochs: int,
+) -> dict:
+    """Baseline (a): sequential θ fine-tuning at the same per-task step budget.
+
+    Produces the stage×task accuracy matrix whose diagonal-vs-last-column
+    gap is the forgetting tax Z3 claims to avoid.
+    """
+    model.unfreeze_theta()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    matrix: dict[str, dict[str, float]] = {}
+    started = time.perf_counter()
+    for stage_name, stage_fn in tasks:
+        _run_adaptation(model, optimizer, criterion, shape, stage_fn, epochs=epochs)
+        matrix[stage_name] = {
+            name: _eval_task_accuracy(model, shape, fn) for name, fn in tasks
+        }
+    elapsed = time.perf_counter() - started
+
+    final_row = matrix[tasks[-1][0]]
+    forgetting = {
+        name: matrix[name][name] - final_row[name] for name, _fn in tasks[:-1]
+    }
+    return {
+        "accuracy_matrix": matrix,
+        "forgetting": forgetting,
+        "final_accuracy": final_row,
+        "wall_clock_s": elapsed,
+    }
+
+
+def _run_baselines(  # noqa: PLR0913 - protocol tuple stays flat
+    model: Z3Model,
+    meta_state: dict[str, Tensor],
+    tasks,
+    criterion,
+    shape: TaskShape,
+    *,
+    epochs: int,
+) -> dict:
+    """E-10 control set; arms restore the meta-trained state first.
+
+    Order matters because the fine-tune arm unfreezes θ and must run last.
+    """
+    # (c) floor control: meta-trained trunk, no ψ adaptation at all
+    model.load_state_dict(meta_state)
+    model.freeze_theta()
+    floor_tasks = {
+        name: {"accuracy": _eval_task_accuracy(model, shape, fn)} for name, fn in tasks
+    }
+
+    # (b) random-ψ init: isolates what meta-training bought the controller
+    model.load_state_dict(meta_state)
+    model.freeze_theta()
+    _reinit_psi(model)
+    random_psi_rows, _ = _adapt_all_tasks(model, tasks, criterion, shape, epochs=epochs)
+
+    # (a) fine-tune θ, same step budget — the forgetting tax
+    model.load_state_dict(meta_state)
+    finetune = _finetune_forgetting_baseline(
+        model, tasks, criterion, shape, epochs=epochs
+    )
+
+    return {
+        "frozen_floor": {"tasks": floor_tasks},
+        "random_psi": {
+            "tasks": {
+                n: {"accuracy": r["accuracy"]} for n, r in random_psi_rows.items()
+            }
+        },
+        "finetune_forgetting": finetune,
+    }
+
+
 def evaluate_z3(
     coordinate: str,
     meta_train_epochs: int = 50,
@@ -430,76 +654,29 @@ def evaluate_z3(
     ]
 
     results = {"coordinate": coordinate, "tasks": {}}
+    shape = TaskShape(
+        batch_size=batch_size, seq_len=seq_len, input_dim=input_dim, device=device
+    )
 
     # ===== META-TRAINING PHASE (θ learns operator embeddings) =====
     print("  Meta-training phase...")
-    model.unfreeze_theta()
-    model.train()
+    _meta_train(model, optimizer, tasks, criterion, shape, epochs=meta_train_epochs)
 
-    for epoch in range(meta_train_epochs):
-        epoch_loss = 0
-        for task_name, task_fn in tasks:
-            x, y = task_fn(batch_size, seq_len, input_dim, device)
-            optimizer.zero_grad()
-            logits = model(x, is_training=True)
-            loss = criterion(logits, y)
-            loss.backward()
-            optimizer.step()
-            epoch_loss += loss.item()
-
-        if epoch % 10 == 0:
-            print(f"    Epoch {epoch}: loss={epoch_loss / len(tasks):.4f}")
+    meta_state = _snapshot(model)
 
     # ===== EVALUATION PHASE (θ FROZEN, ψ adapts) =====
     print("  Evaluation phase (θ frozen)...")
     model.freeze_theta()
     assert model.verify_theta_frozen(), "θ not frozen!"
 
-    # PR-1 optimizer hygiene: rebuild Adam for the ψ-only phase so no
-    # meta-training momentum state survives into adaptation.
-    trainable = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.Adam(trainable, lr=0.001)
-
-    # PR-2 audit: exact-diff θ across the whole switching/adaptation phase
+    # PR-2 audit: exact-diff θ across the whole switching/adaptation phase.
+    # PR-1 hygiene: _adapt_all_tasks rebuilds Adam over the trainable set so
+    # no meta-training momentum survives into ψ adaptation.
     with ThetaInvarianceAudit(model, selector=_is_theta_param) as audit:
-        # For each task, reset ψ and evaluate adaptation
-        for task_name, task_fn in tasks:
-            print(f"    Task: {task_name}")
-
-            # Reset plastic state (ψ) for new task
-            model.psi_controller_state.zero_()
-            model.psi_operator_logits.zero_()
-
-            # Quick adaptation on this task (only ψ updates)
-            model.train()
-            adaptation_losses = []
-            for epoch in range(eval_epochs_per_task):
-                x, y = task_fn(batch_size, seq_len, input_dim, device)
-                optimizer.zero_grad()
-                logits = model(x, is_training=True)
-                loss = criterion(logits, y)
-                loss.backward()
-                optimizer.step()
-                adaptation_losses.append(loss.item())
-
-            # Evaluate on this task (θ frozen, ψ adapted)
-            model.eval()
-            correct = 0
-            total = 0
-            with torch.no_grad():
-                for _ in range(20):
-                    x, y = task_fn(batch_size, seq_len, input_dim, device)
-                    logits = model(x, is_training=False)
-                    pred = logits.argmax(dim=-1)
-                    correct += (pred == y).sum().item()
-                    total += y.shape[0]
-
-            accuracy = correct / total
-            results["tasks"][task_name] = {
-                "accuracy": accuracy,
-                "adaptation_losses": adaptation_losses,
-            }
-            print(f"      Accuracy: {accuracy:.4f}")
+        results["tasks"], psi_wall = _adapt_all_tasks(
+            model, tasks, criterion, shape, epochs=eval_epochs_per_task
+        )
+    results["wall_clock_s"] = {"psi_adaptation": psi_wall}
 
     report = audit.report
     assert report is not None, "θ audit produced no report"
@@ -510,12 +687,17 @@ def evaluate_z3(
         f"  θ change: {report.max_abs_change:.8f} "
         f"(invariant: {results['theta_invariant']})"
     )
+    for task_name, row in results["tasks"].items():
+        print(
+            f"    {task_name}: acc={row['accuracy']:.4f} "
+            f"criterion@{row['steps_to_criterion']}"
+        )
 
     # Compute operator diversity (entropy of operator usage)
     model.eval()
     with torch.no_grad():
         all_logits = []
-        for task_name, task_fn in tasks:
+        for _task_name, task_fn in tasks:
             x, _ = task_fn(batch_size, seq_len, input_dim, device)
             model.psi_controller_state.zero_()
             model.psi_operator_logits.zero_()
@@ -528,7 +710,14 @@ def evaluate_z3(
         avg_logits = torch.stack(all_logits).mean(dim=0)
         probs = torch.softmax(avg_logits, dim=-1)
         entropy = -(probs * torch.log(probs + 1e-8)).sum(dim=-1).mean().item()
-        results["operator_diversity"] = entropy
+    results["operator_diversity"] = entropy
+    results["diversity_collapsed"] = bool(entropy < math.log(2))
+
+    # ===== BASELINES (E-10 control set) =====
+    print("  Baselines: frozen floor / random-ψ / θ fine-tune...")
+    results["baselines"] = _run_baselines(
+        model, meta_state, tasks, criterion, shape, epochs=eval_epochs_per_task
+    )
 
     return results
 

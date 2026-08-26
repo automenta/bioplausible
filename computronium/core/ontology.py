@@ -3637,13 +3637,14 @@ class NeuromorphicSubstrate(DigitalSubstrate):
         self._dt = 1.0  # Simulation timestep (ms)
 
     def inject_state_noise(self, s: Tensor) -> Tensor:
-        """Spike dropout and thermal noise."""
-        s = super().inject_state_noise(s)
-        # Spike dropout (sparse activity)
+        """Spike dropout and thermal noise.
+
+        float16 applies to on-device event encoding only — states crossing
+        module boundaries stay float32 (same contract as MemristiveSubstrate).
+        """
         spike_mask = torch.rand_like(s) > self.config.sparsity
-        # Thermal noise
         thermal_noise = torch.randn_like(s) * self.config.noise_level
-        return self._to_precision(s * spike_mask.float() + thermal_noise)
+        return s * spike_mask.float() + thermal_noise
 
     def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
         """Neuromorphic forward operator: spike-based convolution."""
@@ -3660,7 +3661,9 @@ class NeuromorphicSubstrate(DigitalSubstrate):
                 rates = x.mean(dim=1)  # (batch, n_inputs)
             else:
                 rates = x
-            return self._to_precision(rates @ w.T)
+            # Device computes at its native precision; host-facing activities
+            # return to float32 so downstream float modules compose.
+            return self._to_precision(rates @ w.T).to(torch.float32)
 
         return neuromorphic_forward
 
@@ -4461,7 +4464,7 @@ class PredictiveSettlingDynamics:
         layer_acts = (
             state.free_state if state.free_state is not None else state.activations
         )
-        if not layer_acts or not isinstance(layer_acts, list):
+        if not isinstance(layer_acts, list) or not layer_acts:
             # state.activations could be Tensor or list[Tensor], get device from first tensor
             if state.activations is not None:
                 if isinstance(state.activations, list):

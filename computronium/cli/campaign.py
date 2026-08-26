@@ -232,7 +232,7 @@ def _redo_unrecorded_episodes(
     task_name: str,
 ) -> None:
     """Replay episodes lost to a crash between the latest checkpoint and now."""
-    from computronium.core.campaign.evaluation import evaluate_episode
+    from computronium.core.campaign.evaluation import GuardKillError, evaluate_episode
 
     ckpt_path = mgr.get_latest_checkpoint(campaign_id)
     if ckpt_path is None:
@@ -249,13 +249,17 @@ def _redo_unrecorded_episodes(
     for episode in range(checkpoint.episode_index, last_complete + 1):
         if episode in recorded:
             continue
-        record, metrics = evaluate_episode(
-            joint,
-            coordinate=checkpoint.coordinate,
-            task_name=task_name,
-            campaign_id=campaign_id,
-            episode=episode,
-        )
+        try:
+            record, metrics = evaluate_episode(
+                joint,
+                coordinate=checkpoint.coordinate,
+                task_name=task_name,
+                campaign_id=campaign_id,
+                episode=episode,
+            )
+        except GuardKillError as exc:
+            print(f"  Episode {episode} redone but guard-killed: {exc}")
+            continue
         episode_id = store.add_episode(
             campaign_id=campaign_id,
             branch_name=checkpoint.branch_name,
@@ -323,6 +327,7 @@ def _run_campaign(args) -> int:  # noqa: PLR0914 - campaign orchestration state
     from computronium.core.campaign.evaluation import (
         DEFAULT_INPUT_DIM,
         DEFAULT_NUM_CLASSES,
+        GuardKillError,
         UnsupportedCoordinateError,
         build_coordinate_system,
         evaluate_episode,
@@ -411,13 +416,17 @@ def _run_campaign(args) -> int:  # noqa: PLR0914 - campaign orchestration state
                     joint=joint,
                 )
 
-            record, _metrics = evaluate_episode(
-                joint,
-                coordinate=coordinate,
-                task_name=task_name,
-                campaign_id=campaign_id,
-                episode=iteration,
-            )
+            try:
+                record, _metrics = evaluate_episode(
+                    joint,
+                    coordinate=coordinate,
+                    task_name=task_name,
+                    campaign_id=campaign_id,
+                    episode=iteration,
+                )
+            except GuardKillError as exc:
+                print(f"    skipped: {exc}")
+                continue
 
             episode_id = store.add_episode(
                 campaign_id=campaign_id,

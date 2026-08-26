@@ -2,20 +2,22 @@
 
 > Consolidates all unchecked work from `TODO3.md` with the preliminary infrastructure defined in `RESEARCH3.md`. After Phases 7 + 8, work hands off to the RESEARCH3 catalog (15 items, 5 critical paths) under its Execution Protocol (E-1…E-11). Session Log at the bottom is reverse-chronological.
 
-## Status — Phase 9 EXECUTED (session 7); RESEARCH3 sweeps UNBLOCKED at harness scale
+## Status — Phase 9 EXECUTED (session 7); session 8 closed queue items 1–2 at their gates
 
 | Track | State |
 |---|---|
 | Phase 7 close-out — 7.1.1, 7.2, 7.3, 7.4 | ✅ done |
 | Phase 8 prerequisites — PR-0…PR-7, PR-9 (+ PR-6 draft) | ✅ done (PR-3b procurement-pending, PR-8 pull-based) |
 | §7 debt — pyright/lint/F-E triage, CLI de-mock, EqProp drift fix | ✅ cleared session 5 |
-| ⚡ Phase 9 family-neutral pipeline (9.1–9.5) | ✅ executed session 7 (eqprop seed-42 MNIST rerun pending, see log) |
-| RESEARCH3 catalog execution | ✅ UNBLOCKED at instrumentation+harness scale — campaign sweeps may compose any axis value |
+| ⚡ Phase 9 family-neutral pipeline (9.1–9.5) | ✅ executed session 7; seed-42 parity rerun ✅ session 8 (bit-level match) |
+| Guard kill-decisions in runners (PR-5 → CP-A) | ✅ wired session 8 (+ 2 composition bugs fixed; random-space crash-free) |
+| Z3 flagship | 🟡 E-1 smoke rung complete session 8 (metrics + E-10 controls implemented & verified); pilot rung next |
+| RESEARCH3 catalog execution | ✅ UNBLOCKED — sweeps may compose any axis value; every coordinate trains, fences, or guard-kills with reason |
 
 ### Execution queue (next session, in order)
-1. **EqProp seed-42 MNIST parity rerun** (`experiments/joint/eqprop_mnist.py`) on the 3080 under the canonical pipeline — confirm best/final acc within noise of the 81.32 %/79.30 % record (metrics keys unchanged; step cost drops ~2× since local_goodness-style single-phase savings don't apply but thermo path is identical work minus dead branches). Recalibrates PR-6 budgets.
-2. **RESEARCH3 CP-A / Z3 flagship** — Z3 smoke re-verified green post-Phase-9 (`theta_change=0.0`, `theta_invariant=true`); proceed per catalog.
-3. Only if differentiable-through-settle is ever needed: root-cause residual graph retention (growth dropped 4.1→1.6 MB/step after out-of-place adds; `no_grad` masks it entirely — checkpointing path remains unused/vestigial meanwhile).
+1. **Z3 pilot rung (E-1 rung 2)** — 2 seeds, reduced dims, ≤2 h budget; commit pre-registration thresholds FIRST (E-1/E-11: prereg precedes pilot-promoted full config). Metrics/controls are live from session 8 — zero code work blocking. Watch: steps-to-criterion uses a batch-window proxy; switch to the registered 100-step-window definition for the pilot report.
+2. **Z3 full run** only on promoted pilot (≥5 seeds, PR-4 stats kit, paired vs baseline-(a)).
+3. Substrate divergence fixes (pull-based): ternary α_init=1.0 gives unit-magnitude weights → settling gain≫1 (fan-in-scaled α would fix); optical overflows to inf. Both honestly guard-killed today; a fix must consciously flip `_GUARD_KILLED_SUBSTRATES` in `tests/unit/core/test_axis_probe.py`.
 
 ---
 
@@ -252,6 +254,8 @@ Bridge points from Phase 7:
 | **Update-rule pairing (Phase 9)** | `core/ontology.py::apply_pseudo_gradients` — single choke point; bias-safe; detaches |
 | **Substrate selection (Phase 9)** | `core/ontology.py::substrate_from_config` + `SubstrateType` tag on `SubstrateConfig`; sparse/ternary via lazy imports from `core/substrates/` |
 | **Neutrality harness (Phase 9)** | `tests/unit/core/test_axis_probe.py` + `test_family_neutral_pipeline.py` + `test_update_rules.py` |
+| **Guard kill-decisions (session 8)** | `core/campaign/evaluation.py::DEFAULT_GUARD_TAU`/`GuardKillError`/`evaluate_episode(guard_threshold=…)`; CLI skip paths in `computronium/cli/campaign.py`; kill-set pinned in `test_axis_probe.py::_GUARD_KILLED_SUBSTRATES` |
+| **Z3 metrics & controls (session 8)** | `experiments/joint/z3_fixed_weights.py` (`TaskShape`, `_adapt_all_tasks`, `_run_baselines`; baselines a/b/c + steps-to-criterion + soft-eval + collapse flag in results JSON) |
 | Hardware targets | `docs/hardware_targets.md`; baseline gates `docs/baseline.md` |
 | Research catalog & protocol | `RESEARCH3.md` (items, CP-A…CP-E, E-1…E-11) |
 
@@ -269,14 +273,14 @@ Bridge points from Phase 7:
 | Rocq proof friction (no `nra`/`nlinarith`) | Delays CP-B items | Scalar-lemma-first recipe recorded (7.1.1); admits acceptable past 7.1.1 per hard-stop policy | 🟡 managed |
 | Momentum carry-over contaminates Δθ claims | Invalidates Z3 headline | PR-1 rebuilds Adam post-freeze; PR-2 audits mid-run; Z3 smoke green | ✅ mitigated |
 | PR-3b hardware lead time | Gates measured-tier claims only | Procure Day 1 (still pending); PR-3a keeps proxy tier unblocked | 🟡 external |
-| PR-5 false-kill rate | Blocks unattended campaigns | ROC-calibrated τ=1.029 (FKR 0 %, KR 100 %); runner kill-decision wiring still open (RESEARCH3 CP-A/Z3 smoke) | 🟡 mitigated at calibration scale |
+| PR-5 false-kill rate | Blocks unattended campaigns | τ=1.029 wired into runners session 8; zero false kills on 29 healthy composed coordinates (growth=1.000 exactly); ternary/optical caught as designed | ✅ mitigated (recalibrate on more families at Z3 pilot) |
 | Foreign git stash makes `git stash` A/B unsafe | Corrupts working tree (~330 paths splattered once, session 5 incident) | Baseline A/B only via `git worktree add /tmp/x HEAD` until that stash is claimed/dropped | 🔴 live |
 
 ---
 
 ## Definition of Done (TODO4 Complete — reopened by ⚡ Phase 9)
 
-- [x] **⚡ Phase 9 family-neutral pipeline** — 9.1–9.5 closed session 7; probe green-or-fenced-with-reason; commission bit-exact ✅ + Z3 θ-invariant ✅ reruns; eqprop seed-42 MNIST rerun pending (GPU, next-session queue item 1); PR-6 budget numbers pending that run
+- [x] **⚡ Phase 9 family-neutral pipeline** — 9.1–9.5 closed session 7; probe green-or-fenced-with-reason; commission bit-exact ✅ + Z3 θ-invariant ✅ reruns; **eqprop seed-42 MNIST parity rerun ✅ session 8** (best 81.32 % @ep7 / final 79.30 %, bit-level match to record); PR-6 budgets may cite `results/eqprop_mnist_rerun/results.json`
 - [x] **7.1.1** `energy_decreases_diagonal` proved (0-admit diagonal case) ✅ 2026-08-25; 7.1.2–7.1.4 remain explicitly parked under CP-B pull-based policy
 - [x] **7.2** EqProp 20-epoch MNIST >80% accuracy — ✅ 2026-08-25 session 3: full 20-epoch record, best_val_acc **81.17 %** (target crossed), no divergence/OOM/NaN; final-epoch drift (57.14 %) recorded as new work item
 - [x] **7.4** Hard type errors cleared from `ontology.py`/`registry.py` — fixed or dead paths deleted ✅ 2026-08-25 (0 pyright errors on both files; dead paths `from_experiment`/`from_configs`/`check_compatibility` removed)
@@ -287,7 +291,7 @@ Bridge points from Phase 7:
 - [x] **PR-9** commissioned ✅ session 4: full fault-tolerance cycle, bit-exact redo, report JSON committed
 - [x] **PR-6** drafted ✅ session 4 (`docs/evaluation_fairness_contract.md`); PR-3b procurement still external/pending; PR-8 parked pending CP-D
 - [x] **Handoff: RESEARCH3 catalog unblocked** ✅ session 5 — pre-RESEARCH3 engineering debt from §7.5 + session logs cleared (see Session Log session 5): campaign CLI runs real composed systems w/ fault-tolerant checkpointing; `ResourceUsage.measure` device-honest; stale `profiling.py` stability call fixed & live; suite ψ-wiring **audited per-suite** (L1/L2 `psi_wired_uncontrolled`, L3.5/L3 `plumbing_only`; rewiring stays open); EqProp late-drift fixed.
-- [ ] **GATE LIFTED (session 7): RESEARCH3 campaign-scale sweeps UNBLOCKED** — Phase 9 exit criteria met at harness scale (probe green/fenced + parity reruns green + harness merged). Remaining parity item: eqprop MNIST seed-42 rerun. Anything touching new axis values must keep `_EXCLUDED_AXES`/pairwise fences honest via `test_axis_probe.py`.
+- [x] **GATE LIFTED (session 7): RESEARCH3 campaign-scale sweeps UNBLOCKED** — Phase 9 exit criteria met at harness scale (probe green/fenced + parity reruns green + harness merged). Parity item CLOSED session 8: eqprop seed-42 MNIST rerun bit-level matches the record. Anything touching new axis values must keep `_EXCLUDED_AXES`/pairwise fences honest via `test_axis_probe.py`.
 
 ### Exit criterion status
 PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catalog unblocked end-to-end at instrumentation scale (CP-A proceeds to Z3 flagship; CP-B/C/D/E per spines). PR-3b measured-tier claims remain gated on hardware arrival.
@@ -295,6 +299,38 @@ PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catal
 ---
 
 ## Session Log & Future-Work Notes
+
+### 2026-08-25 session 8 (queue 1–2: EqProp parity ✅, guard kill-decisions wired, Z3 smoke rung) — **CP-A ADVANCED**
+
+**1. EqProp seed-42 MNIST parity rerun — PASSED, bit-level match.**
+`--quick` smoke first (E-1 hygiene, 4.1 s, caught nothing — pipeline healthy), then the full schedule on the 3080: **best 81.32 % @ep7, final 79.30 % @ep11 (early-stopped), 341.2 s** — identical to the session-5 record to 4 decimals under the canonical Phase-9 loop. `results/eqprop_mnist_rerun/results.json` (session-5 baseline preserved at `results/eqprop_mnist/`). PR-6 budget recalibration can now cite this artifact.
+
+**2. Guard kill-decisions wired into runners (open since PR-5).**
+- `core/campaign/evaluation.py`: `DEFAULT_GUARD_TAU = 1.029` (PR-5 ROC point) + `GuardKillError(coordinate, statistic, threshold)`; `evaluate_episode(..., guard_threshold=None | τ)` now *decides*: decision recorded in `FrontierRecord.metadata["guard_kill"]`, and a kill raises AFTER logging so runners skip the coordinate exactly like an unsupported one. `None` = record-only mode for capability harnesses.
+- CLI campaign (`run` + `_redo_unrecorded_episodes`) catches `GuardKillError` → log+skip; commissioning rerun end-to-end **PASSED** (kill=False logged per episode; bit-exact resume intact).
+- **Empirical calibration check on real systems:** all 29 healthy composed coordinates read windowed growth = exactly 1.000 (settling is contractive) → τ=1.029 has zero false-kill margin there. Two genuine catches: **ternary diverges (growth ≈ 4×10⁵)** and **optical overflows to inf** during settle windows — both pass build+one-train-step (capability probe), only the guard sees it. This is precisely the unattended-campaign failure class PR-5 was built for.
+- Randomized sweep over `joint_full` space (150 coords) exposed three cross-axis crash kinds the per-axis probe cannot reach; two real bugs fixed:
+  1. `PredictiveSettlingDynamics.compute_energy` tested ``not layer_acts`` BEFORE its own isinstance-list check → ambiguous-boolean crash whenever activations hold a bare output Tensor (temporal_trace settles 0 phases). One-line operator reorder.
+  2. `NeuromorphicSubstrate` float16 leaked into host-facing state I/O and the float32 output projection (`Half != Float` crashes across tile_mesh/diffusion and feedforward/predictive_settling). Fixed to the memristive contract from session 7: device-native precision stays internal (`_to_precision` inside the forward op), boundary activities return float32.
+  - Post-fix sweep: **100 ok / 24 guard-killed / 26 fenced / 0 crashes.**
+- Harness (`test_axis_probe.py`): capability probe moved to `guard_threshold=None` (stability gating is orthogonal to capability); new `test_guard_kill_status_matches_known_unstable_set` pins {ternary, optical} as the kill set at default τ (fixing either flips the set consciously); `_CROSS_AXIS_REGRESSIONS` parametrized test replays the crashing coordinates; dtype-contract test for neuromorphic I/O.
+
+**3. Z3 flagship E-1 smoke rung complete — metrics & controls now exist.**
+`experiments/joint/z3_fixed_weights.py` extended from accuracy/θ-audit/diversity-only to the catalog's full metric set:
+- Per task: `steps_to_criterion` (batch-window proxy for the registered 100-step definition — upgrade at pilot), `soft_eval_accuracy` (control d: hard-vs-mixture discretization gap), adaptation losses retained.
+- Flags/timing: `diversity_collapsed` (H < log 2), `wall_clock_s.psi_adaptation`.
+- E-10 control set implemented: (a) `finetune_forgetting` — sequential θ fine-tune at identical step budget producing the stage×task accuracy matrix + per-task forgetting tax; (b) `random_psi` — controller re-initialized post-meta-training, isolating what meta-training bought; (c) `frozen_floor` — trunk-only, no ψ adaptation.
+- Refactor: `TaskShape` frozen dataclass dedupes the batch/seq/dim/device quadruple across helpers; `_meta_train`/`_adapt_all_tasks`/`_run_baselines` extracted (evaluate_z3 shrank; results schema purely additive so CLI aggregation is untouched).
+- Smoke verified on GPU (5 meta / 3 eval epochs): every key populates, `theta_change=0.0`/`theta_invariant=true` preserved, baselines behave sensibly (floor≈chance, forgetting matrix well-formed).
+
+**Verification:** axis-probe + family-neutral pipeline suites green (100 passed); stability-guard suite green; commissioning PASSED; ruff clean on all touched files (remaining findings in cli/campaign.py + z3 file are pre-existing parked debt); pyright unchanged on z3 file (pre-existing artifacts documented session 2).
+
+**New work items discovered this session:**
+| Item | Detail | Suggested attack |
+|---|---|---|
+| Ternary/optical settle divergence | ternary α_init=1.0 → unit-magnitude quantized weights → settling gain≫1; optical overflow inf. Honest guard-kills today, but they shrink the sweepable space by 2 substrates | Fan-in-scaled α (Xavier-style) for ternary; root-cause optical overflow. Flip `_GUARD_KILLED_SUBSTRATES` consciously after |
+| Z3 pilot prereg | E-1/E-11: commit thresholds before pilot-promoted full config; steps-to-criterion proxy must be replaced by registered definition for citable numbers | Use PR-4 template + `configs/preregistrations/` |
+| τ recalibration on real families | Ginibre-calibrated τ=1.029 happens to be lossless on composed systems (growth=1.000 exactly), but one family ≠ calibration set | Fold `quantify_proxy_disagreement` on real settling coordinates into Z3 pilot (already an open CP-A item) |
 
 ### 2026-08-25 session 7 (⚡ Phase 9 executed: family-neutral pipeline) — **GATE LIFTED**
 

@@ -18,6 +18,8 @@ import torch
 
 from computronium.core.campaign.evaluation import (
     _EXCLUDED_AXES,
+    DEFAULT_GUARD_TAU,
+    GuardKillError,
     UnsupportedCoordinateError,
     build_coordinate_system,
     evaluate_episode,
@@ -86,15 +88,10 @@ def _is_fenced(coordinate: str) -> bool:
     return (geometry, dynamics) in _INCOMPATIBLE_PAIRS
 
 
-@pytest.fixture
-def small_batch() -> tuple[torch.Tensor, torch.Tensor]:
-    return torch.randn(4, INPUT_DIM), torch.randint(0, OUTPUT_DIM, (4,))
-
-
 @pytest.mark.parametrize("slot", sorted(AXIS_VALUES))
 @pytest.mark.parametrize("value_idx", range(max(len(v) for v in AXIS_VALUES.values())))
 def test_accepted_axis_combinations_train_one_real_step(
-    slot: int, value_idx: int, small_batch
+    slot: int, value_idx: int
 ) -> None:
     values = AXIS_VALUES[slot]
     if value_idx >= len(values):
@@ -111,6 +108,7 @@ def test_accepted_axis_combinations_train_one_real_step(
         task_name="probe",
         campaign_id="harness",
         episode=0,
+        guard_threshold=None,
     )
     assert {"loss", "energy", "accuracy"} <= set(metrics)
     assert all(isinstance(v, float) for k, v in metrics.items() if k in metrics)
@@ -137,6 +135,96 @@ def test_fenced_pairs_raise(geometry: str, dynamics: str) -> None:
     coordinate = "/".join(segments)
     with pytest.raises(UnsupportedCoordinateError, match="layered"):
         build_coordinate_system(coordinate, input_dim=INPUT_DIM, output_dim=OUTPUT_DIM)
+
+
+# --- Guard kill-decisions at the calibrated PR-5 threshold -------------------
+
+# Coordinates whose settling transitions diverge (windowed growth >> tau):
+# ternary quantizes every edge to |w| = alpha_init = 1.0 (gain >> 1 under
+# settling); optical overflows to inf. The capability probe above passes both
+# — they train one step fine; only the settle window blows up. Fixing either
+# flips this set consciously.
+_GUARD_KILLED_SUBSTRATES: Final[frozenset[str]] = frozenset({"ternary", "optical"})
+
+
+@pytest.mark.parametrize("slot", sorted(AXIS_VALUES))
+@pytest.mark.parametrize("value_idx", range(max(len(v) for v in AXIS_VALUES.values())))
+def test_guard_kill_status_matches_known_unstable_set(
+    slot: int, value_idx: int
+) -> None:
+    values = AXIS_VALUES[slot]
+    if value_idx >= len(values):
+        pytest.skip("exhausted axis values")
+    coordinate = _coordinate(slot, values[value_idx])
+    if _is_fenced(coordinate):
+        pytest.skip("pairwise-fenced; covered by test_fenced_pairs_raise")
+    joint = build_coordinate_system(
+        coordinate, input_dim=INPUT_DIM, output_dim=OUTPUT_DIM
+    )
+    killed = values[value_idx] in _GUARD_KILLED_SUBSTRATES
+    if killed:
+        with pytest.raises(GuardKillError):
+            evaluate_episode(
+                joint,
+                coordinate=coordinate,
+                task_name="probe",
+                campaign_id="harness",
+                episode=0,
+            )
+    else:
+        record, _ = evaluate_episode(
+            joint,
+            coordinate=coordinate,
+            task_name="probe",
+            campaign_id="harness",
+            episode=0,
+        )
+        assert record.rho_jacobian <= DEFAULT_GUARD_TAU
+        assert not record.metadata["guard_kill"]
+
+
+# --- Cross-axis regressions (found by randomized campaign sweeps) -----------
+
+# Per-axis probing cannot cover pairwise interactions; these coordinates each
+# crashed a real CLI campaign before their fixes:
+# - neuromorphic: float16 was leaking into host-facing states/output projection
+#   (fixed to the MemristiveSubstrate contract: device-native precision stays
+#   internal, boundary I/O returns float32)
+# - predictive_settling x temporal_trace: compute_energy tested
+#   ``not layer_acts`` before its isinstance-list check, crashing on the bare
+#   output tensor temporal_trace leaves behind (it settles zero phases)
+_CROSS_AXIS_REGRESSIONS: Final[tuple[str, ...]] = (
+    "neuromorphic/tile_mesh/diffusion/null/temporal_trace/spectral_constrained",
+    "neuromorphic/feedforward/predictive_settling/substrate_coupled/"
+    "thermodynamic_contrast/elastic_consolidation",
+    "analog/feedforward/predictive_settling/null/temporal_trace/euclidean",
+)
+
+
+@pytest.mark.parametrize("coordinate", _CROSS_AXIS_REGRESSIONS)
+def test_cross_axis_regressions_train_one_real_step(coordinate: str) -> None:
+    joint = build_coordinate_system(
+        coordinate, input_dim=INPUT_DIM, output_dim=OUTPUT_DIM
+    )
+    _, metrics = evaluate_episode(
+        joint,
+        coordinate=coordinate,
+        task_name="probe",
+        campaign_id="harness",
+        episode=0,
+        guard_threshold=None,
+    )
+    assert {"loss", "energy", "accuracy"} <= set(metrics)
+
+
+def test_neuromorphic_state_io_stays_float32() -> None:
+    substrate = build_coordinate_system(
+        _coordinate(0, "neuromorphic"), input_dim=INPUT_DIM, output_dim=OUTPUT_DIM
+    ).substrate
+    s = torch.randn(4, INPUT_DIM)
+    assert substrate.inject_state_noise(s).dtype == torch.float32
+    forward = substrate.get_forward_operator()
+    assert forward(s, torch.randn(8, INPUT_DIM)).dtype == torch.float32
 
 
 # --- Substrate-type fidelity (9.4) -----------------------------------------

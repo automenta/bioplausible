@@ -17,8 +17,10 @@ from computronium.core.campaign.checkpoint import (
 )
 from computronium.core.campaign.evaluation import (
     DEFAULT_BATCH_SIZE,
+    DEFAULT_GUARD_TAU,
     DEFAULT_INPUT_DIM,
     DEFAULT_NUM_CLASSES,
+    GuardKillError,
     UnsupportedCoordinateError,
     activity_transition,
     build_coordinate_system,
@@ -36,6 +38,7 @@ from computronium.core.profiling import ResourceUsage
 
 __all__ = [
     "DEFAULT_BATCH_SIZE",
+    "DEFAULT_GUARD_TAU",
     "DEFAULT_INPUT_DIM",
     "DEFAULT_NUM_CLASSES",
     "CampaignState",
@@ -43,6 +46,7 @@ __all__ = [
     "CheckpointManager",
     "EpisodeRecord",
     "FrontierRecord",
+    "GuardKillError",
     "JointCheckpoint",
     "JointKernelCache",
     "ParetoFrontier",

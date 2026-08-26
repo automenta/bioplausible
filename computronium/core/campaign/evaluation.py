@@ -48,6 +48,12 @@ DEFAULT_INPUT_DIM = 8
 DEFAULT_NUM_CLASSES = 8
 COORDINATE_AXES = 6
 
+# PR-5 calibration: windowed_growth ROC operating point (FKR=0%, KR=100%) on
+# the Ginibre gain sweep. Real composed systems read exactly 1.000 when stable,
+# so the margin holds there too; divergent substrates (ternary unit-alpha init,
+# optical overflow) exceed it by orders of magnitude.
+DEFAULT_GUARD_TAU = 1.029
+
 
 class UnsupportedCoordinateError(ValueError):
     """Coordinate names an axis value with no configured implementation."""
@@ -55,6 +61,22 @@ class UnsupportedCoordinateError(ValueError):
     def __init__(self, axis: str, value: str) -> None:
         super().__init__(f"{axis}={value!r}")
         self.axis = axis
+
+
+class GuardKillError(RuntimeError):
+    """Guard statistic exceeded the calibrated threshold mid-episode.
+
+    Raised after the episode's train_step completes so partial metrics are
+    logged; runners catch this to skip the coordinate like an unsupported one.
+    """
+
+    def __init__(self, coordinate: str, statistic: float, threshold: float) -> None:
+        super().__init__(
+            f"guard kill on {coordinate}: growth={statistic:.3g} > τ={threshold:.3f}"
+        )
+        self.coordinate = coordinate
+        self.statistic = statistic
+        self.threshold = threshold
 
 
 def episode_batch(
@@ -249,11 +271,14 @@ def evaluate_episode(  # noqa: PLR0913 - shape triple always defaults
     batch_size: int = DEFAULT_BATCH_SIZE,
     input_dim: int = DEFAULT_INPUT_DIM,
     num_classes: int = DEFAULT_NUM_CLASSES,
+    guard_threshold: float | None = DEFAULT_GUARD_TAU,
 ) -> tuple[FrontierRecord, dict[str, float]]:
     """Run one real training episode and record its frontier metrics.
 
     The shape triple travels together and always defaults; explicit keywords
-    beat inventing a container type for two call sites.
+    beat inventing a container type for two call sites. ``guard_threshold``
+    gates kill decisions on the windowed-growth probe (``None`` records the
+    statistic without deciding — harness/capability-probe mode).
     """
     x, y = episode_batch(
         episode, batch_size=batch_size, input_dim=input_dim, num_classes=num_classes
@@ -263,8 +288,12 @@ def evaluate_episode(  # noqa: PLR0913 - shape triple always defaults
     latency = time.perf_counter() - started
 
     z = CompositeState(activity={"x": x}, plastic={}, substrate={})
-    guard = StabilityGuard(threshold=float("inf"), statistic="windowed_growth")
+    guard = StabilityGuard(
+        threshold=guard_threshold if guard_threshold is not None else float("inf"),
+        statistic="windowed_growth",
+    )
     growth = guard.probe(activity_transition(joint), z, joint.context)
+    decision = guard.decide(growth)
 
     record = FrontierRecord(
         coordinate=coordinate,
@@ -280,15 +309,19 @@ def evaluate_episode(  # noqa: PLR0913 - shape triple always defaults
         plasticity_primitive=coordinate.split("/")[3],
         registry_signature=compute_registry_signature(joint.context.registry),
         composite_state_shape=compute_composite_state_shape(joint.context),
+        metadata={"guard_kill": float(decision.kill)},
         campaign_id=campaign_id,
         episode_index=episode,
     )
     logger.info(
-        "episode %d [%s]: loss=%.4f acc=%.4f growth=%.3f",
+        "episode %d [%s]: loss=%.4f acc=%.4f growth=%.3f kill=%s",
         episode,
         coordinate,
         metrics["loss"],
         metrics["accuracy"],
         growth,
+        decision.kill,
     )
+    if decision.kill:
+        raise GuardKillError(coordinate, growth, decision.threshold)
     return record, metrics
