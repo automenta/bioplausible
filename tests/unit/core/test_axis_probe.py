@@ -139,12 +139,12 @@ def test_fenced_pairs_raise(geometry: str, dynamics: str) -> None:
 
 # --- Guard kill-decisions at the calibrated PR-5 threshold -------------------
 
-# Coordinates whose settling transitions diverge (windowed growth >> tau):
-# ternary quantizes every edge to |w| = alpha_init = 1.0 (gain >> 1 under
-# settling); optical overflows to inf. The capability probe above passes both
-# — they train one step fine; only the settle window blows up. Fixing either
-# flips this set consciously.
-_GUARD_KILLED_SUBSTRATES: Final[frozenset[str]] = frozenset({"ternary", "optical"})
+# Empty since 2026-08-26: ternary α now initializes from latent-weight
+# magnitude (fan-in-scaled, was fixed 1.0 → settling gain ρ ~ 1e8) and the
+# optical forward takes the quadrature term sin(φ/2) (was cos, which maps
+# w=0 to full-strength coupling → overflow to inf). Both settle contractively
+# (ρ = 1.0) on composed systems; a future divergent substrate belongs here.
+_GUARD_KILLED_SUBSTRATES: Final[frozenset[str]] = frozenset()
 
 
 @pytest.mark.parametrize("slot", sorted(AXIS_VALUES))

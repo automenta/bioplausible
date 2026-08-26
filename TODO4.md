@@ -2,7 +2,7 @@
 
 > Consolidates all unchecked work from `TODO3.md` with the preliminary infrastructure defined in `RESEARCH3.md`. After Phases 7 + 8, work hands off to the RESEARCH3 catalog (15 items, 5 critical paths) under its Execution Protocol (E-1…E-11). Session Log at the bottom is reverse-chronological.
 
-## Status — Phase 9 EXECUTED (session 7); session 8 closed queue items 1–2 at their gates; session 9 ran Z3 pilot (null); session 10 REPAIRED Z3 meta-training → pilot rerun POSITIVE
+## Status — Phases 7–9 EXECUTED; session 11 closed queue items 1 & 3 (differential rounds R4/R5 → capability full run; substrate fixes) — CP-A capability DEMONSTRATED at registered scale
 
 | Track | State |
 |---|---|
@@ -10,14 +10,15 @@
 | Phase 8 prerequisites — PR-0…PR-7, PR-9 (+ PR-6 draft) | ✅ done (PR-3b procurement-pending, PR-8 pull-based) |
 | §7 debt — pyright/lint/F-E triage, CLI de-mock, EqProp drift fix | ✅ cleared session 5 |
 | ⚡ Phase 9 family-neutral pipeline (9.1–9.5) | ✅ executed session 7; seed-42 parity rerun ✅ session 8 (bit-level match) |
-| Guard kill-decisions in runners (PR-5 → CP-A) | ✅ wired session 8 (+ 2 composition bugs fixed; random-space crash-free) |
-| Z3 flagship | 🟢 session 10: meta-training REPAIRED (E-2 rounds 1–3) → pilot rerun POSITIVE vs session-9 null (ψ-only criterion on parity+lastsym @~110–130 steps, threshold 0.84 censored; Δθ exact; diversity 1.42). Scope caveat: random-ψ control adapts equally well → meta-training differential not yet demonstrated (autopsy in DECISIONS.md) |
-| RESEARCH3 catalog execution | 🟡 sweeps unblocked for composed-system coordinates; Z3 full run gated on closing the meta-vs-random differential + ≥5 seeds |
+| Guard kill-decisions in runners (PR-5 → CP-A) | ✅ wired session 8; **kill set now EMPTY (session 11)** — ternary/optical root-caused & fixed |
+| Z3 flagship | 🟢🟢 session 11: **capability gates 3/3 green on 5 seeds** (Δθ exact, criterion on ALL tasks every seed, worst-task acc ≥0.9789). Speed-vs-finetune: honest NULL (descriptive). Differential-vs-random: large effect (dz=1.08), endpoint INCONCLUSIVE at n=5 — control is bimodal (~40% luck rate); owner options recorded in DECISIONS.md |
+| RESEARCH3 catalog execution | 🟡 Z3 capability result citable; statistical confirmation of the differential awaits owner decision on endpoint redesign (proportion/Fisher vs mean-difference) |
 
 ### Execution queue (next session, in order)
-1. **Close the meta-vs-random-ψ differential (CP-A)** — pilot rerun's E-10 controls show random-ψ ≈ meta-ψ: adaptation succeeds via feedback-driven bandit exploration over the warmed-up θ trunk, so meta-training doesn't yet buy faster adaptation. Ranked attacks: (a) verify pre-adaptation routing converges with a much longer controller phase (meta 200–400, controller share up) — if pre-routing lands near-correct, ψ-adaptation starts near-solved and criterion drops sharply; (b) curriculum the entropy bonus (high→low within controller phase) so routing locks instead of merely exploring; (c) train the controller against FROZEN feedback trajectories (replay-style) to sharpen the policy mapping ψ-history → op without Gumbel noise. Each round ≤8 configs, stop at 3.
-2. **Z3 full run** once worst-task ψ-only reaches registered criterion materially faster than baseline-(a): ≥5 seeds, PR-4 paired stats vs baseline-(a) under `configs/preregistrations/z3_psi_vs_finetune_steps.json`. Note the registration's censoring policy binds: threshold must actually reach 0.98-window inside budget for a citable endpoint, else re-register (E-1 deviation protocol) with a threshold-feasible budget first.
-3. Substrate divergence fixes (pull-based, unchanged): ternary α_init=1.0 gives unit-magnitude weights → settling gain≫1 (fan-in-scaled α would fix); optical overflows to inf. Both honestly guard-killed today; a fix must consciously flip `_GUARD_KILLED_SUBSTRATES` in `tests/unit/core/test_axis_probe.py`.
+1. **Decide the Z3 differential endpoint (owner-visible)** — the 5-seed run's autopsy shows the random control is bimodal ({~0.55 fail, ~0.99 pass} on lastsym, ~40% pass rate): a mean-difference test against margin 0.25 was mis-specified. Options (DECISIONS.md 2026-08-26 full-run entry): (a) accept descriptive reliability claim (meta lifts worst-task success 60%→100% of seeds); (b) NEW E-1 deviation re-registering as proportion endpoint (Fisher exact on "control fails ≥1 task"); (c) more seeds — insufficient alone (mean ≈ margin). Then fold the citable Z3 result into RESEARCH3 L4/ICL-bridge framing.
+2. **Task-order sensitivity** (carried from session 10): adaptation always runs parity→lastsym→threshold; rerun wu60_hot with randomized per-seed task order, report order-broken stats (curves/steps already recorded per arm — cheap).
+3. **τ recalibration on real families** (carried): fold `quantify_proxy_disagreement` into a settling-family sweep; note the guard kill set is now empty, so recalibration is purely confirmatory.
+4. PR-3b hardware anchor / PR-8 export parity — unchanged, external/pull-based (CP-D).
 
 ---
 
@@ -258,6 +259,8 @@ Bridge points from Phase 7:
 | **Z3 metrics & controls (session 8)** | `experiments/joint/z3_fixed_weights.py` (`TaskShape`, `_adapt_all_tasks`, `_run_baselines`; baselines a/b/c + steps-to-criterion + soft-eval + collapse flag in results JSON) |
 | **Z3 registered metric & prereg (session 9)** | `_windowed_criterion_step` (100-step window) + `_fixed_probe`/`_probe_accuracy` in `z3_fixed_weights.py`; registration `configs/preregistrations/z3_psi_vs_finetune_steps.json`; decision log `DECISIONS.md`; null-run artifacts `benchmark_results/z3_pilot/` (+ `manifest.json`) |
 | **Z3 meta-training repair (session 10)** | `z3_fixed_weights.py`: `MetaRecipe`, `step_plasticity`/pure `forward`, episode-structured `_meta_train`, `TASK_OPERATOR_MAP`, two-phase orchestration in `evaluate_z3`; round driver `scripts/z3_meta_repair.py`; artifacts `benchmark_results/z3_meta_repair/round{2,3}.json` + repaired pilot `benchmark_results/z3_pilot_rerun/` (+ manifest) |
+| **Z3 differential rounds & capability run (session 11)** | `z3_fixed_weights.py` (`entropy_end` curriculum, `replay_steps` distillation + `_replay_pass`, pre-adapt probe accuracies, all-arm curves); driver rounds R4/R5 in `scripts/z3_meta_repair.py`; window re-analysis `scripts/z3_window_analysis.py`; full-run driver `scripts/z3_full_run.py`; v2 registration `configs/preregistrations/z3_psi_capability_vs_random.json`; artifacts `benchmark_results/z3_full/` (+ manifest), `benchmark_results/z3_r4_probe/round4.json` |
+| **Substrate fixes (session 11)** | `core/substrates/ternary_substrate.py::_get_or_create_params` (α from `mean(|w|)·alpha_init`); `core/ontology.py::OpticalSubstrate.get_forward_operator` (quadrature `sin_half`); kill set `_GUARD_KILLED_SUBSTRATES = frozenset()` in `tests/unit/core/test_axis_probe.py` |
 | **E-11 decision log** | `DECISIONS.md` (append-only; prereg timestamps, kill/death decisions, deviations) |
 | Hardware targets | `docs/hardware_targets.md`; baseline gates `docs/baseline.md` |
 | Research catalog & protocol | `RESEARCH3.md` (items, CP-A…CP-E, E-1…E-11) |
@@ -278,7 +281,7 @@ Bridge points from Phase 7:
 | PR-3b hardware lead time | Gates measured-tier claims only | Procure Day 1 (still pending); PR-3a keeps proxy tier unblocked | 🟡 external |
 | PR-5 false-kill rate | Blocks unattended campaigns | τ=1.029 wired into runners session 8; zero false kills on 29 healthy composed coordinates (growth=1.000 exactly); ternary/optical caught as designed | ✅ mitigated (recalibrate on more families at Z3 pilot) |
 | Foreign git stash makes `git stash` A/B unsafe | Corrupts working tree (~330 paths splattered once, session 5 incident) | Baseline A/B only via `git worktree add /tmp/x HEAD` until that stash is claimed/dropped | 🔴 live |
-| Z3 non-convergence (RESEARCH3 named risk) | Gates CP-A fan-out (ICL bridge, frontier M-axis seed) | Session 9 pilot confirmed live (null); **session 10 repair flips absolute performance to positive** (criterion on 2/3 tasks, third materially above chance) — remaining risk is narrower: meta-training differential vs random-ψ not yet demonstrated, and threshold criterion censoring | 🟡 downgraded (was 🔴) |
+| Z3 non-convergence (RESEARCH3 named risk) | Gates CP-A fan-out (ICL bridge, frontier M-axis seed) | Sessions 9–11 walked it: null → repaired → pilot positive → **capability demonstrated at registered scale** (5 seeds, all gates green). Residual risk is statistical only: differential-vs-random endpoint inconclusive at n=5 due to control bimodality — decision options recorded in DECISIONS.md. Speed-vs-finetune hypothesis honestly falsified (descriptive null, ±0.17 log-ratio) | 🟡 narrowed to endpoint statistics |
 
 ---
 
@@ -298,13 +301,43 @@ Bridge points from Phase 7:
 - [x] **GATE LIFTED (session 7): RESEARCH3 campaign-scale sweeps UNBLOCKED** — Phase 9 exit criteria met at harness scale (probe green/fenced + parity reruns green + harness merged). Parity item CLOSED session 8: eqprop seed-42 MNIST rerun bit-level matches the record. Anything touching new axis values must keep `_EXCLUDED_AXES`/pairwise fences honest via `test_axis_probe.py`.
 - [x] **Z3 pilot rung (session 9): executed honestly to an E-7 null** — prereg committed pre-run (`z3_psi_vs_finetune_steps.json`, unevaluated by design until a promoted full run); registered 100-step-window metric + probe curves + E-3 manifests live; two plumbing defects fixed (ψ integrator, soft/hard mismatch); promotion DENIED with autopsy. Z3 remains the open CP-A blocker; everything else in this file stays closed.
 - [x] **Z3 meta-training repair (session 10): E-2 rounds executed → promoted recipe found; pilot rerun POSITIVE vs null** — solver-map correction (threshold→Identity, probe-verified), feedback ψ channel with episode structure, temp anneal + entropy bonus, two-phase forced warm-up; ψ-only criterion on parity+lastsym @~107–130 steps, threshold 0.84 (censored), Δθ exact, diversity 1.42. Scope caveat recorded: random-ψ control ≈ meta-ψ → closing the meta-training differential is the next CP-A gate before the full run.
+- [x] **Z3 differential rounds + capability full run (session 11): capability gates 3/3 green on 5 seeds** — Δθ exact, registered criterion reached on ALL THREE tasks in every seed, worst-task acc ≥0.9789. Speed-vs-finetune: honest NULL (descriptive, ±0.17 log-ratio). Differential-vs-random: dz=1.08 but endpoint INCONCLUSIVE at n=5 (bimodal control) — owner decision queued. v1 speed registration retired via E-1 deviation; v2 capability registration committed pre-run.
+- [x] **Substrate divergence fixes (session 11): guard kill set EMPTY** — ternary fan-in-scaled α and optical quadrature forward both settle at ρ=1.000; `_GUARD_KILLED_SUBSTRATES` flipped consciously with harness green.
 
 ### Exit criterion status
-PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catalog unblocked end-to-end at instrumentation scale (CP-A proceeds to Z3 flagship; CP-B/C/D/E per spines). PR-3b measured-tier claims remain gated on hardware arrival.
+PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catalog unblocked end-to-end at instrumentation scale (CP-A proceeds to Z3 flagship; CP-B/C/D/E per spines). PR-3b measured-tier claims remain gated on hardware arrival. **CP-A update (session 11): Z3 capability demonstrated at full scale; remaining CP-A work is statistical (endpoint decision) rather than algorithmic.**
 
 ---
 
 ## Session Log & Future-Work Notes
+
+### 2026-08-26 session 11 (queue items 1–3: differential rounds R4/R5 → capability full run; substrate divergence fixes) — **CP-A CAPABILITY CLOSED; SPEED NULL RECORDED; KILL SET EMPTY**
+
+**Executed (E-2 → E-1/E-11 order held):**
+
+1. **Differential machinery** (`z3_fixed_weights.py`): `MetaRecipe` gained `entropy_end` (curriculum: linear β anneal high→low within the controller phase — attack b) and `replay_steps` (attack c: per-epoch supervised distillation of episode-best operators from a FIFO trajectory buffer — `(ψ snapshot, batch-mean input) → argmin-mean-loss op`, plain CE, no Gumbel noise). `_meta_train` decomposed into `_forced_episode`/`_controller_episode`/`_episode_best_op`/`_replay_pass`. Diagnostics added to every arm: per-task **pre-adaptation probe accuracy** (routing quality at ψ=0 before any step), and accuracy **curves persisted for all three arms** (driver `_seed_curves`). Recipe echo extended (`entropy_end/replay_steps/adapt_temp`); CLI flags added.
+2. **R4 + probe autopsy (attacks a/b falsified as-is):** with `adapt_temp` unset, adaptation inherits end-of-anneal T≈0.5 ("cold"): cold PRESERVES priors (threshold reached criterion where the hot pilot had censored) but starves discovery (parity died at chance). Pre-adaptation accuracies at meta-300/wu40/curriculum = 0.49/0.60/0.64 — attack (a)'s premise is structurally impossible: at ψ=0 every task presents identical inputs, so ONE shared default routing can match AT MOST one task's solver.
+3. **Parity trilemma (load-bearing structural finding):** the parity operator emits the label itself as a feature (verified: forced-op parity scores 1.000 even with an UNTRAINED trunk). Any broad sampler — including a fresh random controller — therefore sits at the steps-to-criterion metric floor (~window size) on parity. Worst-task SPEED margins vs the random control are unwinnable at ANY window size; worst-task margins vs fine-tune are dominated by window-floor ties on parity/lastsym.
+4. **R5 (replay × temperature, ≤8-config discipline):** replay distillation fixed meta's parity anti-learning (replay_hot parity 1.000); temperature swept {0.75/1.25/2.0}: cold/mid solve lastsym+threshold but drop parity; hot solves all three. **Promoted `wu60_hot`** (= R3 winner + adapt_temp=2.0 at meta-300): 1.000/0.996/0.992, criterion ALL tasks both seeds, simplest recipe (replay unnecessary).
+5. **E-1 re-registration BEFORE the full run** (`configs/preregistrations/z3_psi_capability_vs_random.json`; DECISIONS.md entry first): v1 speed endpoint retired UNEVALUATED with a three-part instrument-redesign rationale (window floors adaptation-time; parity floor asymmetry makes worst-task-vs-random unwinnable; v1 aggregation text self-contradictory). New primary endpoint: per-seed worst-task final hard-selection accuracy, z3 − random control, margin +0.25, PR-4 paired harness, ≥5 seeds; gates = Δθ exact + all-task criterion coverage + ≥0.95 floor.
+6. **Confirmatory full run** (`scripts/z3_full_run.py`, seeds {0..4}, GPU ~95 s/seed, artifacts `benchmark_results/z3_full/` + manifest w/ registration sha256):
+   - **Gates 3/3 green on every seed** — Δθ exact; criterion on ALL tasks in all 5 seeds; worst-task acc ≥0.9789. The Z3 capability claim is demonstrated at registered scale.
+   - **Primary endpoint INCONCLUSIVE (recorded, not fished):** mean gap 0.2577 > margin but CI [0.076, 0.439] straddles it (p=0.13, dz=1.08). Autopsy: the random control is BIMODAL — solved everything in 2/5 seeds (~0.99), failed lastsym in 3/5 (0.52–0.60). Pilot n=2 couldn't see the ~40% luck rate; expected gap ≈0.26 sits AT the margin. Owner options recorded in DECISIONS.md (descriptive acceptance / proportion-endpoint re-registration / more seeds).
+   - **Speed vs baseline-(a): NULL confirmed descriptively** — log step ratios within ±0.17 at windows {20,50,100} across 5 seeds.
+7. **Substrate divergence fixes (queue item 3, both root-caused & verified):**
+   - *Ternary*: α initialized from latent-weight magnitude (`mean(|w|)·alpha_init`, fan-in-scaled) instead of fixed 1.0 — unit-magnitude quantized weights gave settling gain ρ≈2×10⁸; now ρ=1.000 exactly with healthy loss/accuracy.
+   - *Optical*: forward used the MZI bar term `cos(φ/2)` which maps w=0 to FULL-strength coupling (cos 0=1) → settle overflow to inf; switched to quadrature term `sin(φ/2)` (vanishes at zero phase). ρ: inf → 1.000.
+   - `_GUARD_KILLED_SUBSTRATES` flipped to EMPTY in `test_axis_probe.py` with rationale comment; axis-probe suite re-run green (79 passed).
+
+**Verification:** targeted suites green — test_axis_probe 79 passed / stability_guard 33 / family-neutral pipeline / update_rules / z3_criterion_window 7/7; benchmark integration failures proven pre-existing via `/tmp/bio-head` worktree A/B (identical 3 CLI-subprocess fails at HEAD). ruff histograms byte-equal vs HEAD on touched core files (ontology 295=295); pyright 0 new errors (ternary's 3 FunctionCtx artifacts pre-exist at HEAD). Full pytest suite NOT rerun (touched surface: one experiment module, two scripts, ternary α-init, 2-line ontology operator swap, harness kill-set flip — per instruction to minimize redundant executions).
+
+**New work items discovered this session:**
+| Item | Detail | Suggested attack |
+|---|---|---|
+| Z3 differential endpoint decision | Random control bimodal (~40% solves-all); mean-diff instrument mis-specified; gates all green so capability claim citable NOW | Owner picks (a) descriptive / (b) Fisher-exact re-registration / (c) more seeds (insufficient alone) |
+| Optical stochastic crosstalk | `photonic_forward` draws crosstalk noise per call without a seeded generator — transitions are nondeterministic across identical replays | Route through the substrate's precision/noise config or a torch.Generator; verify bit-reproducibility of episodes |
+| Parity task design ceiling | Self-revealing operator makes parity free for any sampler; caps Z3's discriminative power for routing studies | Design change: make the parity feature require trained decoding (register first!) or drop parity from differential-style claims |
+| Replay attack under-tuned | Single setting (replay_steps=4) tested; helped parity but wasn't needed by promoted recipe | If endpoint redesign revives speed claims, sweep replay around curriculum+hot |
 
 ### 2026-08-26 session 10 (queue item 1: Z3 meta-training repair E-2 rounds 1–3 + queue item 2: pilot rerun) — **CP-A REPAIRED; PILOT POSITIVE**
 
@@ -383,7 +416,7 @@ PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catal
 **New work items discovered this session:**
 | Item | Detail | Suggested attack |
 |---|---|---|
-| Ternary/optical settle divergence | ternary α_init=1.0 → unit-magnitude quantized weights → settling gain≫1; optical overflow inf. Honest guard-kills today, but they shrink the sweepable space by 2 substrates | Fan-in-scaled α (Xavier-style) for ternary; root-cause optical overflow. Flip `_GUARD_KILLED_SUBSTRATES` consciously after |
+| Ternary/optical settle divergence | ternary α_init=1.0 → unit-magnitude quantized weights → settling gain≫1; optical overflow inf. Honest guard-kills today, but they shrink the sweepable space by 2 substrates | Fan-in-scaled α (Xavier-style) for ternary; root-cause optical overflow. Flip `_GUARD_KILLED_SUBSTRATES` consciously after. **→ DONE session 11** (α from `mean(|w|)·alpha_init`; optical quadrature `sin(φ/2)` — cos mapped w=0 to full coupling; ρ=1.000 both; kill set empty) |
 | Z3 pilot prereg | E-1/E-11: commit thresholds before pilot-promoted full config; steps-to-criterion proxy must be replaced by registered definition for citable numbers | Use PR-4 template + `configs/preregistrations/` |
 | τ recalibration on real families | Ginibre-calibrated τ=1.029 happens to be lossless on composed systems (growth=1.000 exactly), but one family ≠ calibration set | Fold `quantify_proxy_disagreement` on real settling coordinates into Z3 pilot (already an open CP-A item) |
 

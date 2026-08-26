@@ -3745,9 +3745,11 @@ class OpticalSubstrate(DigitalSubstrate):
                 cos_half += crosstalk
                 sin_half += crosstalk
 
-            # Build effective weight matrix
-            # For simplicity, use cos(φ) as effective real weight
-            effective_w = cos_half
+            # Build effective weight matrix from the quadrature (cross)
+            # term: sin vanishes at zero phase so untrained/zero weights
+            # carry NO coupling — the bar term cos maps w=0 to full-strength
+            # all-to-all connection and settles to overflow.
+            effective_w = sin_half
 
             return self._to_precision(x @ effective_w.T)
 

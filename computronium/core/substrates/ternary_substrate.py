@@ -120,17 +120,17 @@ class TernarySubstrate(DigitalSubstrate):
         device = weight.device
 
         if name not in self._alpha:
+            # α initialized from latent-weight magnitude, not a fixed 1.0:
+            # unit-magnitude quantized weights give wide layers a settling
+            # gain that explodes (ρ ~ 1e8 on composed systems), while
+            # mean(|w|) scales with fan-in like the init distribution.
+            with torch.no_grad():
+                scale = max(weight.abs().mean().item() * self.alpha_init, 1e-8)
             if self.ternary_type == "delta":
-                self._alpha[name] = nn.Parameter(
-                    torch.tensor(self.alpha_init, device=device)
-                )
-                self._alpha_neg[name] = nn.Parameter(
-                    torch.tensor(self.alpha_init, device=device)
-                )
+                self._alpha[name] = nn.Parameter(torch.tensor(scale, device=device))
+                self._alpha_neg[name] = nn.Parameter(torch.tensor(scale, device=device))
             else:
-                self._alpha[name] = nn.Parameter(
-                    torch.tensor(self.alpha_init, device=device)
-                )
+                self._alpha[name] = nn.Parameter(torch.tensor(scale, device=device))
 
             if self.learn_threshold:
                 self._threshold[name] = nn.Parameter(

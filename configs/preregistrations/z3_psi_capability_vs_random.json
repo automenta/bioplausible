@@ -1,0 +1,23 @@
+{
+  "claim": "With θ exactly frozen (Δθ < 1e-6), the meta-trained Z3 system reaches the registered 100-step-window 98% criterion on ALL THREE tasks within a 240-step-per-task ψ-only budget, and its worst-task final hard-selection accuracy exceeds the random-initialized controller control (same trunk, same budget, same adaptation temperature) by at least 0.25.",
+  "metric": "worst_task_final_accuracy_z3_minus_random",
+  "threshold": 0.25,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-08-26",
+  "supersedes_endpoint_of": "configs/preregistrations/z3_psi_vs_finetune_steps.json",
+  "deviation_rationale": "RESEARCH3 E-1 instrument redesign after R4/R5 pilot-scale evidence (DECISIONS.md 2026-08-26): (i) the registered 100-step window floors every arm while adaptation converges in ~30-80 steps, so speed ratios cannot express the v1 margin at windows {20,50,100}; (ii) parity's solver operator emits the label as a feature, placing the random control at the metric floor by construction and making worst-task SPEED comparisons structurally unwinnable; (iii) meta-training's demonstrated benefit is task coverage (random control fails last_symbol in every pilot seed, tail accuracy ~0.56 vs >=0.99), not step-count. Committed before the confirmatory run.",
+  "metric_definition": {
+    "primary": "Per seed: min over tasks of final hard-selection accuracy (20 fresh batches x 64) for the Z3 psi-only arm minus the same statistic for the random-controller control (controller + feedback projection re-initialized post-meta-training, identical trunk, budgets, and adaptation temperature). Paired across seeds via validation.preregistration.paired_comparison.",
+    "gates": "(1) theta_invariant == true for every seed (max abs dTheta < 1e-6); (2) Z3 arm steps_to_criterion (first step whose trailing 100-step window mean probe accuracy >= 0.98; censored at the per-task 240-step budget) is non-None on ALL THREE tasks in every seed; (3) Z3 arm final hard-selection accuracy >= 0.95 on all tasks in every seed."
+  },
+  "decision_rule_full_run": "Confirm iff ALL of: paired_comparison(treatment=z3 worst-task acc, control=random worst-task acc).passes(this registration); gates (1)-(3) hold for every seed. The adaptation-speed question vs baseline-(a) is reported descriptively (observed null) and is NOT part of this registration.",
+  "secondary_endpoints_descriptive": [
+    "Per-task log step-ratio z3 vs theta-fine-tune at windows {20, 50, 100} (speed null report)",
+    "Fine-tuning forgetting tax under baseline (a)",
+    "Operator diversity entropy H(g_k) per seed",
+    "Soft-vs-hard eval gap per task"
+  ],
+  "pilot_role": "R4 probe (1 seed) + R5 (2 seeds x 6 configs) fixed the promoted recipe wu60_hot (entropy_beta=0.2, episode_len=16, warmup_fraction=0.6, meta-300 epochs, adapt_temp=2.0) with observed worst-task gap ~0.43 concordant across seeds; this registration is evaluated statistically only on the promoted 5-seed run.",
+  "budget_gpu_hours_registered": 4
+}

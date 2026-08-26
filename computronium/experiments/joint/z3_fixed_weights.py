@@ -28,6 +28,7 @@ import json
 import math
 import random
 import time
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -488,9 +489,14 @@ class MetaRecipe:
     (a) ``feedback`` + ``episode_len``: ψ evolves from selection consequences
     (gates + loss) over consecutive same-task episodes — the only task signal
     that exists when all tasks share identical input distributions.
-    (b) ``temp_start``→``temp_end`` linear anneal + gate-entropy bonus.
+    (b) ``temp_start``→``temp_end`` linear anneal + gate-entropy bonus,
+    optionally curriculumed ``entropy_beta``→``entropy_end`` so routing
+    locks instead of merely exploring.
     (c) ``warmup_fraction`` of epochs under forced correct-operator
     selection trains θ first; the controller phase then runs θ-frozen.
+    ``replay_steps`` adds per-epoch supervised distillation passes over a
+    FIFO buffer of episode trajectories (ψ, input summary → episode-best
+    operator), sharpening the policy without Gumbel-noise gradients.
     """
 
     episode_len: int = 8
@@ -501,6 +507,8 @@ class MetaRecipe:
     warmup_fraction: float = 0.4
     warmup_lr: float = 3e-3
     adapt_temp: float | None = None
+    entropy_end: float | None = None
+    replay_steps: int = 0
 
 
 def _eval_task_accuracy(
@@ -591,6 +599,116 @@ def _run_adaptation(  # noqa: PLR0913 - protocol tuple stays flat
     return losses, curve, _windowed_criterion_step(curve)
 
 
+_REPLAY_BUFFER_CAP = 1024
+
+
+def _replay_pass(
+    model: Z3Model,
+    optimizer: torch.optim.Optimizer,
+    buffer: deque[tuple[Tensor, Tensor, int]],
+    *,
+    steps: int,
+    batch_size: int = 64,
+) -> None:
+    """Distill episode-best operator labels into the controller (attack c).
+
+    Supervised CE over frozen trajectories — no Gumbel noise — sharpens the
+    ψ-history → operator mapping that straight-through sampling only ever
+    estimates noisily. No-op on an empty buffer.
+    """
+    if not buffer or steps <= 0:
+        return
+    ce = torch.nn.CrossEntropyLoss()
+    rows = list(buffer)
+    for _ in range(steps):
+        sample = random.sample(rows, min(batch_size, len(rows)))
+        psi = torch.stack([r[0] for r in sample])
+        x_feat = torch.stack([r[1] for r in sample])
+        labels = torch.tensor([r[2] for r in sample], device=psi.device)
+        optimizer.zero_grad()
+        ce(model.controller(psi, x_feat), labels).backward()
+        optimizer.step()
+
+
+def _forced_episode(  # noqa: PLR0913 - protocol tuple stays flat
+    model: Z3Model,
+    optimizer: torch.optim.Optimizer,
+    criterion,
+    shape: TaskShape,
+    task_fn,
+    *,
+    recipe: MetaRecipe,
+) -> float:
+    """One forced-selection warm-up episode (θ receives all gradients)."""
+    model.reset_psi()
+    episode_loss = 0.0
+    for _step in range(recipe.episode_len):
+        x, y = shape.sample(task_fn)
+        optimizer.zero_grad()
+        task_loss = criterion(model(x, is_training=True), y)
+        task_loss.backward()
+        optimizer.step()
+        episode_loss += task_loss.item()
+    return episode_loss / recipe.episode_len
+
+
+def _controller_episode(  # noqa: PLR0913 - protocol tuple stays flat
+    model: Z3Model,
+    optimizer: torch.optim.Optimizer,
+    criterion,
+    shape: TaskShape,
+    task_fn,
+    *,
+    recipe: MetaRecipe,
+    beta: float,
+) -> tuple[float, list[tuple[Tensor, Tensor, int, float]]]:
+    """One straight-through selection episode.
+
+    Returns the mean objective loss plus per-step replay transitions
+    (ψ snapshot, batch-mean input feature, majority hard operator, loss).
+    """
+    model.reset_psi()
+    transitions: list[tuple[Tensor, Tensor, int, float]] = []
+    episode_loss = 0.0
+    for _step in range(recipe.episode_len):
+        x, y = shape.sample(task_fn)
+        psi_before = model.psi_state.detach()[0]
+        optimizer.zero_grad()
+        logits = model(x, is_training=True)
+        task_loss = criterion(logits, y)
+        gates = model.last_gates
+        objective = task_loss
+        if gates is not None and beta > 0:
+            entropy = -(gates * (gates + 1e-8).log()).sum(-1).mean()
+            objective = task_loss - beta * entropy
+        objective.backward()
+        optimizer.step()
+        episode_loss += objective.item()
+        if gates is not None:
+            hard_op = int(gates.argmax(dim=-1).mode().values.item())
+            transitions.append((
+                psi_before,
+                x.mean(dim=(0, 1)).detach(),
+                hard_op,
+                task_loss.item(),
+            ))
+            if recipe.feedback:
+                model.step_plasticity(task_loss)
+    return episode_loss / recipe.episode_len, transitions
+
+
+def _episode_best_op(
+    transitions: list[tuple[Tensor, Tensor, int, float]],
+) -> int | None:
+    """Operator with the lowest mean observed loss within one episode."""
+    per_op: dict[int, list[float]] = {}
+    for _psi, _x_feat, op, loss in transitions:
+        per_op.setdefault(op, []).append(loss)
+    if not per_op:
+        return None
+    return min(per_op, key=lambda op: sum(per_op[op]) / len(per_op[op]))
+
+
 def _meta_train(  # noqa: PLR0913 - protocol tuple stays flat
     model: Z3Model,
     optimizer: torch.optim.Optimizer,
@@ -611,44 +729,57 @@ def _meta_train(  # noqa: PLR0913 - protocol tuple stays flat
     operator (θ warm-up phase; controller receives no gradient). Otherwise
     straight-through Gumbel selection trains whatever ``requires_grad``
     currently selects under the recipe's temperature anneal and entropy
-    bonus. ψ evolves only when ``recipe.feedback`` is on AND selections are
-    not forced.
+    bonus (linearly annealed ``entropy_beta``→``entropy_end`` when a
+    curriculum is set). ψ evolves only when ``recipe.feedback`` is on AND
+    selections are not forced. With ``replay_steps`` > 0 each epoch ends by
+    distilling episode-best-operator labels from a FIFO trajectory buffer
+    into the controller.
 
     Returns per-epoch mean episode loss per task.
     """
     model.train()
     total_episodes = max(epochs * len(tasks), 1)
     losses_by_task: dict[str, list[float]] = {name: [] for name, _fn in tasks}
+    replay_buffer: deque[tuple[Tensor, Tensor, int]] = deque(maxlen=_REPLAY_BUFFER_CAP)
     episode = 0
     for epoch in range(epochs):
         progress = episode / total_episodes
         model.temperature = recipe.temp_end + (recipe.temp_start - recipe.temp_end) * (
             1 - progress
         )
+        beta = recipe.entropy_beta
+        if recipe.entropy_end is not None:
+            beta += (recipe.entropy_end - recipe.entropy_beta) * progress
         for task_name, task_fn in tasks:
-            model.reset_psi()
-            model.force_operator(forced_ops[task_name] if forced_ops else None)
-            episode_loss = 0.0
-            for _step in range(recipe.episode_len):
-                x, y = shape.sample(task_fn)
-                optimizer.zero_grad()
-                logits = model(x, is_training=True)
-                task_loss = criterion(logits, y)
-                gates = model.last_gates
-                objective = task_loss
-                if gates is not None and forced_ops is None and recipe.entropy_beta > 0:
-                    entropy = -(gates * (gates + 1e-8).log()).sum(-1).mean()
-                    objective = task_loss - recipe.entropy_beta * entropy
-                objective.backward()
-                optimizer.step()
-                if recipe.feedback and forced_ops is None:
-                    model.step_plasticity(task_loss)
-                episode_loss += objective.item()
-            losses_by_task[task_name].append(episode_loss / recipe.episode_len)
+            if forced_ops is not None:
+                model.force_operator(forced_ops[task_name])
+                mean_loss = _forced_episode(
+                    model, optimizer, criterion, shape, task_fn, recipe=recipe
+                )
+            else:
+                model.force_operator(None)
+                mean_loss, transitions = _controller_episode(
+                    model,
+                    optimizer,
+                    criterion,
+                    shape,
+                    task_fn,
+                    recipe=recipe,
+                    beta=beta,
+                )
+                best_op = _episode_best_op(transitions)
+                if best_op is not None:
+                    replay_buffer.extend(
+                        (psi, x_feat, best_op)
+                        for psi, x_feat, _op, _loss in transitions
+                    )
+            losses_by_task[task_name].append(mean_loss)
             episode += 1
+        if forced_ops is None:
+            _replay_pass(model, optimizer, replay_buffer, steps=recipe.replay_steps)
         if epoch % 10 == 0:
-            mean_loss = sum(v[-1] for v in losses_by_task.values()) / len(tasks)
-            print(f"    Epoch {epoch}: loss={mean_loss:.4f} T={model.temperature:.2f}")
+            mean_total = sum(v[-1] for v in losses_by_task.values()) / len(tasks)
+            print(f"    Epoch {epoch}: loss={mean_total:.4f} T={model.temperature:.2f}")
     model.force_operator(None)
     return losses_by_task
 
@@ -689,6 +820,7 @@ def _adapt_all_tasks(  # noqa: PLR0913 - protocol tuple stays flat
     for task_name, task_fn in tasks:
         model.reset_psi()
         probe = _fixed_probe(shape, task_fn, batches=probe_batches)
+        pre_adapt = _probe_accuracy(model, probe)
         losses, curve, steps = _run_adaptation(
             model,
             optimizer,
@@ -702,6 +834,7 @@ def _adapt_all_tasks(  # noqa: PLR0913 - protocol tuple stays flat
         rows[task_name] = {
             "accuracy": _eval_task_accuracy(model, shape, task_fn),
             "soft_eval_accuracy": _eval_task_accuracy(model, shape, task_fn, soft=True),
+            "pre_adapt_accuracy": pre_adapt,
             "adaptation_losses": losses,
             "accuracy_curve": curve,
             "steps_to_criterion": steps,
@@ -729,11 +862,15 @@ def _finetune_forgetting_baseline(  # noqa: PLR0913 - protocol tuple stays flat
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     matrix: dict[str, dict[str, float]] = {}
     steps_by_stage: dict[str, int | None] = {}
+    pre_adapt_by_stage: dict[str, float] = {}
+    curves_by_stage: dict[str, list[float]] = {}
     started = time.perf_counter()
     for stage_name, stage_fn in tasks:
         model.reset_psi()
         probe = _fixed_probe(shape, stage_fn, batches=probe_batches)
-        _losses, _curve, steps = _run_adaptation(
+        pre_adapt = _probe_accuracy(model, probe)
+        pre_adapt_by_stage[stage_name] = pre_adapt
+        _losses, curve, steps = _run_adaptation(
             model,
             optimizer,
             criterion,
@@ -744,6 +881,7 @@ def _finetune_forgetting_baseline(  # noqa: PLR0913 - protocol tuple stays flat
             feedback=feedback,
         )
         steps_by_stage[stage_name] = steps
+        curves_by_stage[stage_name] = curve
         matrix[stage_name] = {
             name: _eval_task_accuracy(model, shape, fn) for name, fn in tasks
         }
@@ -758,6 +896,8 @@ def _finetune_forgetting_baseline(  # noqa: PLR0913 - protocol tuple stays flat
         "forgetting": forgetting,
         "final_accuracy": final_row,
         "steps_to_criterion": steps_by_stage,
+        "pre_adapt_accuracy": pre_adapt_by_stage,
+        "accuracy_curves": curves_by_stage,
         "wall_clock_s": elapsed,
     }
 
@@ -814,7 +954,13 @@ def _run_baselines(  # noqa: PLR0913 - protocol tuple stays flat
         "frozen_floor": {"tasks": floor_tasks},
         "random_psi": {
             "tasks": {
-                n: {"accuracy": r["accuracy"]} for n, r in random_psi_rows.items()
+                n: {
+                    "accuracy": r["accuracy"],
+                    "steps_to_criterion": r["steps_to_criterion"],
+                    "pre_adapt_accuracy": r["pre_adapt_accuracy"],
+                    "accuracy_curve": r["accuracy_curve"],
+                }
+                for n, r in random_psi_rows.items()
             }
         },
         "finetune_forgetting": finetune,
@@ -916,6 +1062,9 @@ def evaluate_z3(
                 "temp_end",
                 "warmup_fraction",
                 "warmup_lr",
+                "entropy_end",
+                "replay_steps",
+                "adapt_temp",
             )
         },
     }
@@ -1223,6 +1372,24 @@ def main():
         help="Share of meta epochs spent in forced-operator θ warm-up",
     )
     parser.add_argument(
+        "--entropy-end",
+        type=float,
+        default=None,
+        help="Entropy-bonus curriculum target (anneals beta→end; None = constant)",
+    )
+    parser.add_argument(
+        "--replay-steps",
+        type=int,
+        default=0,
+        help="Supervised replay distillation passes per meta epoch (attack c)",
+    )
+    parser.add_argument(
+        "--adapt-temp",
+        type=float,
+        default=None,
+        help="Gating temperature during ψ adaptation (None = end-of-anneal temp)",
+    )
+    parser.add_argument(
         "--quick", action="store_true", help="Quick mode (10 meta, 5 eval, 1 seed)"
     )
     args = parser.parse_args()
@@ -1254,6 +1421,9 @@ def main():
             temp_start=args.temp_start,
             temp_end=args.temp_end,
             warmup_fraction=args.warmup_fraction,
+            entropy_end=args.entropy_end,
+            replay_steps=args.replay_steps,
+            adapt_temp=args.adapt_temp,
         ),
     )
 
