@@ -4,6 +4,27 @@ Captured for Sprint −1.3 (2026-08-02) at `v0.1-pre-sprint0`.
 Every number here maps 1:1 to a gate in Sprint 5.5. Style-only metrics are
 deliberately excluded (deferred); only correctness gates are snapshot.
 
+## Refresh — TODO4 close-out (2026-08-25)
+
+Full-suite run (`uv run pytest -q`, configured addopts incl. `--cov-fail-under=15`),
+excluding two known-hang modules (`tests/property/test_ontology_parity.py`,
+`tests/integration/test_grpc_seam_subprocess.py`):
+
+| Metric | Value | Note |
+|--------|-------|------|
+| Passed | 1043 | +9 PR-4 preregistration tests |
+| Failed / Errors | 59 / 18 | **all pre-existing** — stash A/B vs HEAD shows identical 77-line failure set |
+| Skipped / xfailed / xpassed | 66 / 11 / 3 | |
+| Coverage | **47.13%** | floor 15% met |
+| Pyright (configured profile) | 3837 errors | was 3853 pre-PR-4 fix; touched files 0 errors |
+| `ruff format --check .` | green | generated `*_pb2*.py` excluded |
+| Ruff correctness set (E,F,W,C90) | 1244 | parked debt; burn-down deferred to post-settlement purge |
+
+Proto repair this session: regenerated `computronium/p2p/proto/tile_mesh_pb2*.py`
+(stale descriptor mixed `bioplausible.p2p` package with `computronium.p2p.*`
+refs → collection crash); unblocks dht/grpc_seam/p2p_constraints modules.
+Remaining hang: grpc **subprocess** worker deadlock (pre-existing, work item).
+
 ## Fast CPU Gate (`tests/unit/ tests/property/`)
 
 Command: `uv run pytest tests/unit/ tests/property/ -q --no-cov`

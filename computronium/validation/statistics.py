@@ -23,6 +23,7 @@ __all__ = [
     "bootstrap_percentile_ci",
     "cliffs_delta",
     "cohens_d",
+    "cohens_dz",
     "permutation_test_p",
     "power_for_two_sample",
 ]
@@ -208,6 +209,33 @@ def cohens_d(group_a: Sequence[float], group_b: Sequence[float]) -> float:
         )
     mean_diff = float(np.mean(a) - np.mean(b))
     return mean_diff / float(np.sqrt(pooled))
+
+
+def cohens_dz(diffs: Sequence[float]) -> float:
+    """One-sample Cohen's dz for paired differences.
+
+    ``dz = mean(diffs) / std(diffs, ddof=1)`` — the effect size matched to
+    paired/sign-flip tests, unlike the pooled two-sample :func:`cohens_d`.
+
+    Args:
+        diffs: Per-pair differences (treatment minus control).
+
+    Returns:
+        Cohen's dz effect size.
+
+    Raises:
+        ValueError: When fewer than 2 differences are given or all are
+            identical (dz undefined).
+    """
+    d = np.asarray(diffs, dtype=float)
+    if d.size < 2:  # ruff: ignore[magic-value-comparison]  (t-test needs >=2 obs/sample)
+        raise ValueError(  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
+            "Cohen's dz requires at least 2 differences"
+        )
+    sd = np.std(d, ddof=1)
+    if sd == 0:
+        raise ValueError("Cohen's dz undefined: differences have zero variance")
+    return float(np.mean(d)) / float(sd)
 
 
 def cliffs_delta(group_a: Sequence[float], group_b: Sequence[float]) -> float:

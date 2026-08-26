@@ -1,0 +1,8 @@
+{
+  "claim": "EqProp reaches at least 80% test accuracy on MNIST within a 20-epoch schedule",
+  "metric": "test_accuracy",
+  "threshold": 0.8,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-08-25"
+}

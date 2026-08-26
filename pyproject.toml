@@ -170,7 +170,7 @@ omit = [
 target-version = "py314"
 line-length = 88
 preview = true
-exclude = ["*.md"]
+exclude = ["*.md", "*_pb2.py", "*_pb2_grpc.py"]
 
 [tool.ruff.lint]
 select = [

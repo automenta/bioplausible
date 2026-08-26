@@ -20,12 +20,13 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from computronium.validation.statistics import (
     bootstrap_percentile_ci,
-    cohens_d,
+    cohens_dz,
     permutation_test_p,
 )
 
@@ -37,6 +38,9 @@ __all__ = [
     "paired_comparison",
     "require_min_seeds",
 ]
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 MIN_SEEDS = 5
 DEFAULT_ALPHA = 0.05
@@ -76,7 +80,7 @@ class ThresholdRegistration:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict[str, object]) -> ThresholdRegistration:
+    def from_dict(cls, data: Mapping[str, object]) -> ThresholdRegistration:
         """Deserialize from a registration file."""
         return cls(
             claim=str(data["claim"]),
@@ -145,7 +149,9 @@ def paired_comparison(
         [0.0] * diffs.size,
         n_perm=n_permutations,
     )
-    dz = cohens_d(diffs.tolist(), [0.0])
+    # Degenerate identical-arm case has zero-variance diffs (dz undefined);
+    # report 0.0 so the harness degrades to "no effect" instead of crashing.
+    dz = cohens_dz(diffs.tolist()) if np.std(diffs, ddof=1) > 0 else 0.0
 
     return PairedComparison(
         n=diffs.size,
