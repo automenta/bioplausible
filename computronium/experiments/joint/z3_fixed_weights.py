@@ -927,6 +927,7 @@ def _adapt_all_tasks(  # noqa: PLR0913 - protocol tuple stays flat
     probe_batches: int = 16,
     feedback: bool = True,
     adapt_entropy_beta: float = 0.0,
+    adapt_temp_end: float | None = None,
 ) -> tuple[dict[str, dict], float]:
     """ψ-only adaptation protocol over the switching stream (θ stays frozen).
 
@@ -936,6 +937,9 @@ def _adapt_all_tasks(  # noqa: PLR0913 - protocol tuple stays flat
     coverage failures (PR-1 hygiene applied at every phase boundary).
     ψ resets at each task boundary too. Returns per-task result rows
     (incl. per-step gate histories) and elapsed wall-clock.
+
+    When ``adapt_temp_end`` is set, the gating temperature anneals linearly
+    from its phase-entry value to that target across the phase.
     """
     started = time.perf_counter()
     rows: dict[str, dict] = {}
@@ -956,6 +960,7 @@ def _adapt_all_tasks(  # noqa: PLR0913 - protocol tuple stays flat
             probe=probe,
             feedback=feedback,
             adapt_entropy_beta=adapt_entropy_beta,
+            adapt_temp_end=adapt_temp_end,
         )
         rows[task_name] = {
             "accuracy": _eval_task_accuracy(model, shape, task_fn),
@@ -1010,6 +1015,7 @@ def _finetune_forgetting_baseline(  # noqa: PLR0913 - protocol tuple stays flat
             probe=probe,
             feedback=feedback,
             adapt_entropy_beta=adapt_entropy_beta,
+            adapt_temp_end=adapt_temp_end,
         )
         steps_by_stage[stage_name] = steps
         curves_by_stage[stage_name] = curve
@@ -1046,6 +1052,7 @@ def _run_baselines(  # noqa: PLR0913 - protocol tuple stays flat
     probe_batches: int = 16,
     feedback: bool = True,
     adapt_entropy_beta: float = 0.0,
+    adapt_temp_end: float | None = None,
 ) -> dict:
     """E-10 control set; arms restore the meta-trained state first.
 
@@ -1071,6 +1078,7 @@ def _run_baselines(  # noqa: PLR0913 - protocol tuple stays flat
         probe_batches=probe_batches,
         feedback=feedback,
         adapt_entropy_beta=adapt_entropy_beta,
+        adapt_temp_end=adapt_temp_end,
     )
 
     # (a) fine-tune θ, same step budget — the forgetting tax
@@ -1084,6 +1092,7 @@ def _run_baselines(  # noqa: PLR0913 - protocol tuple stays flat
         probe_batches=probe_batches,
         feedback=feedback,
         adapt_entropy_beta=adapt_entropy_beta,
+        adapt_temp_end=adapt_temp_end,
     )
 
     return {
@@ -1307,6 +1316,7 @@ def evaluate_z3(  # noqa: PLR0913 - protocol tuple stays flat
             probe_batches=probe_batches,
             feedback=recipe.feedback,
             adapt_entropy_beta=recipe.adapt_entropy_beta,
+            adapt_temp_end=recipe.adapt_temp_end,
         )
     results["wall_clock_s"] = {"psi_adaptation": psi_wall}
 
@@ -1346,6 +1356,7 @@ def evaluate_z3(  # noqa: PLR0913 - protocol tuple stays flat
         probe_batches=probe_batches,
         feedback=recipe.feedback,
         adapt_entropy_beta=recipe.adapt_entropy_beta,
+        adapt_temp_end=recipe.adapt_temp_end,
     )
 
     return results

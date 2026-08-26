@@ -2,7 +2,7 @@
 
 > Consolidates all unchecked work from `TODO3.md` with the preliminary infrastructure defined in `RESEARCH3.md`. After Phases 7 + 8, work hands off to the RESEARCH3 catalog (15 items, 5 critical paths) under its Execution Protocol (E-1…E-11). Session Log at the bottom is reverse-chronological.
 
-## Status — Phases 7–9 EXECUTED; session 12 closed queue items 1–3; session 13 executed Z3 order-robustness redesign → CP-A blocker moved from parity redesign to per-phase anneal (registered) — both attempt 1 (400-step budget) and attempt 2 (anneal + 400) triaged, residual stochastic tail remains
+## Status — Phases 7–9 EXECUTED; session 12 closed queue items 1–3; session 13 executed Z3 order-robustness redesign → CP-A blocker moved from parity redesign to per-phase anneal (registered) — both attempt 1 (400-step budget) and attempt 2 (anneal + 400) triaged, residual stochastic tail remains; **session 14: wired `adapt_temp_end` through `_adapt_all_tasks` + baselines + `z3_full_run.py` driver (E-1 pre-registration required before confirmatory run)**
 
 | Track | State |
 |---|---|
@@ -659,7 +659,27 @@ Note: `benchmark_results/` had been deleted by the user before this session; all
 
 ---
 
-### 2026-08-25 session 1 (7.1.1 + 7.4 + partial 7.3)
+### 2026-08-26 session 14 (queue item 1 continued): **Wired `adapt_temp_end` through full call chain for per-phase temperature anneal**
+
+**Executed:**
+
+1. **Extended `adapt_temp_end` parameter through `_adapt_all_tasks` → `_run_adaptation`** in `z3_fixed_weights.py` — the parameter existed in `MetaRecipe` and `_run_adaptation` signature but was not threaded through the call sites.
+
+2. **Applied to all baselines** — `_finetune_forgetting_baseline` and `_run_baselines` now accept and pass `adapt_temp_end`, ensuring identical anneal protocol across treatment and control arms (E-10 parity).
+
+3. **Updated driver** `scripts/z3_full_run.py` `PROMOTED_RECIPE` with `adapt_temp_end=0.5` (matching registration `z3_capability_order_robust.json`).
+
+4. **Smoke verified** — CPU run with `adapt_temp=2.0`, `adapt_temp_end=0.5` completes θ-invariant; parity still at chance under short budget (expected), last_symbol/threshold reach >0.95.
+
+**Next confirmatory run** (requires fresh E-1 pre-registration per protocol):
+- Budget: eval_epochs=400 (or 600 per open decision)
+- Anneal: linear 2.0→0.5 across phase (already registered)
+- Decision space: (a) anneal further (2.0→0.25), (b) extend budget 600, (c) redefine criterion to trailing-window-from-discovery — all require fresh registration before data.
+- Gate-history artifacts from attempts 1 & 2 available for offline census to inform decision.
+
+**Verification:** ruff format clean; pyright 0 errors on touched files; targeted Z3 smoke green (θ-invariant).
+
+---
 - **Rocq**: `per_index_descent` lemma added; `energy_decreases_diagonal` closed with zero admits (stdlib classical axioms only). The scalar-lemma-first pattern is the reusable recipe for 7.1.2.
 - **Dead code deleted**: `SystemConfig.from_experiment`, `SystemTrainer.from_configs` (~170 lines), `Registry.check_compatibility`. If a config-driven trainer factory is needed again, rebuild it against the *current* `ExperimentConfig.system: SystemConfig` field rather than resurrecting these.
 - **Settle-path dedup**: non-checkpointed settling now calls `_settle_step` directly; future dynamics changes have exactly one place to edit. Gradient-checkpointing semantics unchanged (`use_reentrant=False` path untouched).
