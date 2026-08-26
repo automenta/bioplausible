@@ -11,7 +11,7 @@
 | Track | State |
 |---|---|
 | Phase 1 — Z3 close-out + `computronium-stability` release | ✅ **COMPLETE** |
-| Phase 2 — Continual learning flagship | ⬜ not started |
+| Phase 2 — Continual learning flagship | 🔄 **IN PROGRESS** (infrastructure complete; E-1 ladder pending) |
 | Phase 3 — Edge memory-wall benchmark | ⬜ not started |
 | Phase 4 — Regime discovery + substrate counterfactuals | ⬜ not started |
 | Phase 5 — Re-axed family-coverage benchmark | ⬜ not started |
@@ -76,21 +76,21 @@ TODO4 walked Z3 to its honest endpoint across sessions 9–14: the capability is
 *The scientific centerpiece: ψ/θ decoupling prevents catastrophic forgetting without a replay buffer.*
 
 ### 2.1 Experiment Implementation
-- [ ] Create `computronium/experiments/joint/continual_learning.py` on the Phase 9 canonical loop (`core/pipeline.py`).
-- [ ] Implement Split-MNIST (5 binary tasks) via the `DomainTask` interface.
-- [ ] Wire arms through `compose_joint_system_from_configs`: `FastWeightPlasticity`, `ElasticConsolidationUpdate`, backprop+SGD control, matched-total-memory replay buffer.
-- [ ] Add **LwF** and **Synaptic Intelligence** baselines (EWC alone is too weak a comparator).
-- [ ] Two protocols: task-incremental (boundaries signaled) + task-free (no boundaries).
+- [x] Create `computronium/experiments/joint/continual_learning.py` on the Phase 9 canonical loop (`core/pipeline.py`).
+- [x] Implement Split-MNIST (5 binary tasks) via the `DomainTask` interface (added to `computronium/domains/vision.py`).
+- [x] Wire arms through `compose_joint_system_from_configs`: `FastWeightPlasticity`, `ElasticConsolidationUpdate`, backprop+SGD control, matched-total-memory replay buffer.
+- [x] Add **LwF** and **Synaptic Intelligence** baselines (EWC alone is too weak a comparator).
+- [x] Two protocols: task-incremental (boundaries signaled) + task-free (no boundaries).
 
 ### 2.2 Metrics & Memory Accounting
-- [ ] Backward transfer matrix after each task boundary.
-- [ ] Forgetting measure per boundary.
-- [ ] Explicit memory footprint: replay pays storage, ψ pays state — report both in the same units.
+- [x] Backward transfer matrix after each task boundary.
+- [x] Forgetting measure per boundary.
+- [x] Explicit memory footprint: replay pays storage, ψ pays state — report both in the same units.
 - [ ] Reuse Z3 baseline-(a) forgetting numbers (`benchmark_results/z3_full/`) for the control arm via E-3 manifests — do not rerun.
 
 ### 2.3 Stability Rider
-- [ ] Attach `computronium-stability` (Phase 1) to measure ρ(J_F) and windowed growth **during** ψ-adaptation at each boundary.
-- [ ] Test: does ψ-decoupled consolidation preserve settling contraction where replay does not? Record per-boundary `StabilityVerdict`.
+- [x] Attach `computronium-stability` (Phase 1) to measure ρ(J_F) and windowed growth **during** ψ-adaptation at each boundary.
+- [x] Test: does ψ-decoupled consolidation preserve settling contraction where replay does not? Record per-boundary `StabilityVerdict` (as `GuardDecision`).
 
 ### 2.4 Pre-Registration & Full Run
 - [ ] E-1 ladder: smoke (1 seed, tiny) → pilot (2 seeds, effect direction) → full.
@@ -139,7 +139,7 @@ TODO4 walked Z3 to its honest endpoint across sessions 9–14: the capability is
 ## Phase 3 (continued) - The **Datacenter Leviathan Benchmark**
 
 #### 3.5 The VRAM Ceiling Test (Single-Node Scale)
-- [ ] **The Envelope:** Lock the VRAM ceiling at **80GB** (a single H100/A100). 
+- [ ] **The Envelope:** Lock the VRAM ceiling. 
 - [ ] **The Arms:** Deep/Wide Local-Rule Models (EqProp, FA) vs. Backprop Models using aggressive Gradient Checkpointing and DeepSpeed ZeRO-3.
 - [ ] **The Metric:** Maximum trainable depth (number of layers) and maximum context length before OOM. 
 - [ ] **The Win Condition:** Local rules train a model 3x deeper or with a 5x larger context window on the exact same hardware, purely because they don't cache the backward graph.
@@ -363,6 +363,21 @@ Writing begins only after the system is complete and tested. Candidate artifacts
 
 *(reverse-chronological; append session 15+ below)*
 
+### Session 16 — COMPLETED (2026-08-26)
+**Phase 2 started:** Continual Learning Flagship infrastructure implemented.
+- ✅ Split-MNIST (5 binary tasks: 0/1, 2/3, 4/5, 6/7, 8/9) implemented as `DomainTask` in `computronium/domains/vision.py`.
+- ✅ `computronium/experiments/joint/continual_learning.py` created with 6 arms:
+  - FastWeightPlasticity (ψ/θ decoupling via fast weights)
+  - ElasticConsolidationUpdate (EWC - θ regularization)
+  - Backprop+SGD (baseline control)
+  - Replay buffer (matched total memory)
+  - LwF (Learning without Forgetting)
+  - Synaptic Intelligence (SI)
+- ✅ Two protocols: task-incremental (boundaries signaled) + task-free (no boundaries).
+- ✅ Metrics: backward transfer matrix, forgetting per boundary, memory footprint (replay storage vs ψ state).
+- ✅ Stability rider using `computronium.core.stability.StabilityGuard` (τ=1.029, windowed_growth statistic).
+- ✅ All arms wired through `compose_joint_system` / `compose_joint_system_from_configs`.
+
 ### Session 15 — COMPLETED (2026-08-26)
 **Phase 1 complete:** All 5 execution queue items finished.
 - ✅ 6 strategic decisions logged in `DECISIONS.md` (Z3 close-out, ICL deferred, benchmark re-axed, discovery restricted, substrate simulation-tier, stability scoped).
@@ -370,7 +385,4 @@ Writing begins only after the system is complete and tested. Candidate artifacts
 - ✅ `computronium-stability` v0.1 packaged at `libraries/computronium_stability/` — pip-installable, 23 tests passing, 20-line README example.
 - ✅ Guard family sweep regenerated at `benchmark_results/stability_guard_calibration/family_sweep.json` with absolute-error fields; τ=1.029 lossless (16/16 coordinates, windowed_growth=1.000, FKR=0%).
 - ✅ PR-8 export parity verified: ONNX round-trip max diff 5.96e-08 (≤ noise), ternary round-trip max diff 0.474 (expected for ternary quantization).
-
-### Session 15 — pending
-Queue: §Execution Queue items 1–5 (decision log → Z3 boundary memo → `computronium-stability` v0.1 → family sweep regen → PR-8 pull-forward).
 

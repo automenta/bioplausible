@@ -22,6 +22,7 @@ from computronium.domains.base import (
 
 __all__ = [
     "VisionTask",
+    "SplitMNIST",
 ]
 
 
@@ -237,3 +238,167 @@ class VisionTask(DomainTask):
                 model.train()
 
         return Metrics(loss=avg_loss, accuracy=accuracy)
+
+
+class SplitMNIST(DomainTask):
+    """Split-MNIST continual learning benchmark.
+
+    Splits MNIST 10-class classification into 5 binary tasks:
+    - Task 0: 0 vs 1
+    - Task 1: 2 vs 3
+    - Task 2: 4 vs 5
+    - Task 3: 6 vs 7
+    - Task 4: 8 vs 9
+
+    Each task is a binary classification problem. The continual learning
+    challenge is to learn all 5 tasks sequentially without catastrophic forgetting.
+    """
+
+    def __init__(
+        self,
+        name: str = "split_mnist",
+        data_dir: str = "./data",
+        download: bool = True,
+        num_workers: int = 2,
+        task_id: int | None = None,
+        **kwargs,
+    ):
+        super().__init__(name, **kwargs)
+        self.data_dir = data_dir
+        self.download = download
+        self.num_workers = num_workers
+        self.task_id = task_id
+        self._full_train_ds = None
+        self._full_test_ds = None
+        self._class_pairs = [(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)]
+
+    @property
+    def domain_type(self) -> DomainType:
+        return DomainType.VISION
+
+    @property
+    def spec(self) -> DomainSpec:
+        return DomainSpec(
+            name=self.name,
+            domain_type=DomainType.VISION,
+            description=f"Split-MNIST continual learning (5 binary tasks)",
+            default_metrics=["accuracy", "loss", "backward_transfer", "forgetting"],
+            supported_tasks=["continual_learning", "classification"],
+            default_batch_size=64,
+            default_lr=1e-3,
+            requires_spatial=True,
+            tags=["vision", "continual", "mnist"],
+        )
+
+    def _get_task_classes(self, task_id: int) -> tuple[int, int]:
+        """Get the two classes for a given task ID."""
+        if task_id < 0 or task_id >= len(self._class_pairs):
+            raise ValueError(f"task_id must be in [0, 4], got {task_id}")
+        return self._class_pairs[task_id]
+
+    def _filter_dataset(self, dataset, class_a: int, class_b: int):
+        """Filter dataset to only include the two target classes."""
+        targets = dataset.targets
+        if isinstance(targets, list):
+            targets = torch.tensor(targets)
+        mask = (targets == class_a) | (targets == class_b)
+        indices = torch.where(mask)[0]
+        filtered_data = dataset.data[indices]
+        filtered_targets = targets[indices]
+        # Remap targets to 0 and 1
+        filtered_targets = (filtered_targets == class_b).long()
+        return torch.utils.data.TensorDataset(
+            filtered_data.unsqueeze(1).float() / 255.0, filtered_targets
+        )
+
+    def setup(self) -> None:
+        """Load full MNIST and create task-specific splits."""
+        import torchvision.datasets as datasets
+
+        # Load full MNIST datasets
+        self._full_train_ds = datasets.MNIST(
+            self.data_dir,
+            train=True,
+            download=self.download,
+            transform=None,
+        )
+        self._full_test_ds = datasets.MNIST(
+            self.data_dir,
+            train=False,
+            download=self.download,
+            transform=None,
+        )
+
+        # If task_id is specified, set up only that task
+        # Otherwise, we'll set up on demand in get_dataloader
+        self._input_dim = (1, 28, 28)
+        self._output_dim = 2  # Binary classification
+        self._setup_done = True
+
+    def get_dataloader(self, split: TaskSplit) -> DataLoader:
+        if not self._setup_done:
+            self.setup()
+
+        if self.task_id is None:
+            raise ValueError(
+                "SplitMNIST requires a task_id to be set. "
+                "Use set_task(task_id) or pass task_id at construction."
+            )
+
+        class_a, class_b = self._get_task_classes(self.task_id)
+
+        if split == TaskSplit.TRAIN:
+            ds = self._filter_dataset(self._full_train_ds, class_a, class_b)
+            return DataLoader(
+                ds,
+                batch_size=self.batch_size,
+                shuffle=True,
+                num_workers=self.num_workers,
+            )
+        else:
+            ds = self._filter_dataset(self._full_test_ds, class_a, class_b)
+            return DataLoader(
+                ds,
+                batch_size=self.batch_size,
+                shuffle=False,
+                num_workers=self.num_workers,
+            )
+
+    def set_task(self, task_id: int) -> None:
+        """Set the active task for this SplitMNIST instance."""
+        if task_id < 0 or task_id >= len(self._class_pairs):
+            raise ValueError(f"task_id must be in [0, 4], got {task_id}")
+        self.task_id = task_id
+        # Reset loaders to force recreation with new task
+        self._train_loader = None
+        self._val_loader = None
+        self._test_loader = None
+
+    def get_all_task_loaders(self, split: TaskSplit = TaskSplit.TEST) -> list[DataLoader]:
+        """Get dataloaders for all 5 tasks (useful for evaluation)."""
+        loaders = []
+        for task_id in range(5):
+            self.set_task(task_id)
+            loaders.append(self.get_dataloader(split))
+        return loaders
+
+    def evaluate(
+        self,
+        model: nn.Module,
+        split: TaskSplit = TaskSplit.VAL,
+        max_batches: int | None = None,
+    ) -> Metrics:
+        """Evaluate on the current task."""
+        if self.task_id is None:
+            raise ValueError("task_id must be set before evaluation")
+        return super().evaluate(model, split, max_batches)
+
+    def evaluate_all_tasks(
+        self, model: nn.Module, split: TaskSplit = TaskSplit.TEST
+    ) -> list[Metrics]:
+        """Evaluate model on all 5 tasks."""
+        results = []
+        for task_id in range(5):
+            self.set_task(task_id)
+            results.append(self.evaluate(model, split))
+        return results
