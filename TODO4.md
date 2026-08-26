@@ -2,7 +2,7 @@
 
 > Consolidates all unchecked work from `TODO3.md` with the preliminary infrastructure defined in `RESEARCH3.md`. After Phases 7 + 8, work hands off to the RESEARCH3 catalog (15 items, 5 critical paths) under its Execution Protocol (E-1…E-11). Session Log at the bottom is reverse-chronological.
 
-## Status — Phases 7–9 EXECUTED; session 11 closed queue items 1 & 3 (differential rounds R4/R5 → capability full run; substrate fixes) — CP-A capability DEMONSTRATED at registered scale
+## Status — Phases 7–9 EXECUTED; session 12 closed queue items 1–3; session 13 executed Z3 order-robustness redesign → CP-A blocker moved from parity redesign to per-phase anneal (registered) — both attempt 1 (400-step budget) and attempt 2 (anneal + 400) triaged, residual stochastic tail remains
 
 | Track | State |
 |---|---|
@@ -10,14 +10,14 @@
 | Phase 8 prerequisites — PR-0…PR-7, PR-9 (+ PR-6 draft) | ✅ done (PR-3b procurement-pending, PR-8 pull-based) |
 | §7 debt — pyright/lint/F-E triage, CLI de-mock, EqProp drift fix | ✅ cleared session 5 |
 | ⚡ Phase 9 family-neutral pipeline (9.1–9.5) | ✅ executed session 7; seed-42 parity rerun ✅ session 8 (bit-level match) |
-| Guard kill-decisions in runners (PR-5 → CP-A) | ✅ wired session 8; **kill set now EMPTY (session 11)** — ternary/optical root-caused & fixed |
-| Z3 flagship | 🟢🟢 session 11: **capability gates 3/3 green on 5 seeds** (Δθ exact, criterion on ALL tasks every seed, worst-task acc ≥0.9789). Speed-vs-finetune: honest NULL (descriptive). Differential-vs-random: large effect (dz=1.08), endpoint INCONCLUSIVE at n=5 — control is bimodal (~40% luck rate); owner options recorded in DECISIONS.md |
-| RESEARCH3 catalog execution | 🟡 Z3 capability result citable; statistical confirmation of the differential awaits owner decision on endpoint redesign (proportion/Fisher vs mean-difference) |
-
+| Guard kill-decisions in runners (PR-5 → CP-A) | ✅ wired session 8; kill set EMPTY (session 11); **τ=1.029 confirmed lossless on all 16 real settling coordinates (session 12 sweep)** |
+| Z3 flagship | 🟡 capability claim CITABLE but ORDER-SCOPED: v2 (canonical order, 5/5 seeds, gates green) stands for its design; v3 randomized-order proportion endpoint NOT confirmed; v4 redesign (per-task Adam rebuild + entropy floor + gate-history instrumentation + budget 400 + anneal) triaged across two confirmatory attempts — residual stochastic discovery tail at parity-last & criterion window truncation; meta-training variance dominates remaining failures. Speed-vs-finetune: honest NULL. |
+| RESEARCH3 catalog execution | 🟡 Z3 v2 result citable with explicit design scope; v4 redesign artifacts + mechanistic instrumentation live; CP-A blocker narrowed to within-phase temperature anneal tuning (registered design change #3). |
 ### Execution queue (next session, in order)
-1. **Decide the Z3 differential endpoint (owner-visible)** — the 5-seed run's autopsy shows the random control is bimodal ({~0.55 fail, ~0.99 pass} on lastsym, ~40% pass rate): a mean-difference test against margin 0.25 was mis-specified. Options (DECISIONS.md 2026-08-26 full-run entry): (a) accept descriptive reliability claim (meta lifts worst-task success 60%→100% of seeds); (b) NEW E-1 deviation re-registering as proportion endpoint (Fisher exact on "control fails ≥1 task"); (c) more seeds — insufficient alone (mean ≈ margin). Then fold the citable Z3 result into RESEARCH3 L4/ICL-bridge framing.
-2. **Task-order sensitivity** (carried from session 10): adaptation always runs parity→lastsym→threshold; rerun wu60_hot with randomized per-seed task order, report order-broken stats (curves/steps already recorded per arm — cheap).
-3. **τ recalibration on real families** (carried): fold `quantify_proxy_disagreement` into a settling-family sweep; note the guard kill set is now empty, so recalibration is purely confirmatory.
+
+1. **Per-phase temperature anneal tuning (CP-A blocker, registered design change #3)** — attempt 1 (budget 240→400) solved parity-last accuracy but criterion windows truncated (discovery @335/369); attempt 2 (anneal + 400) narrowed but residual stochastic tail remains (seed 9 threshold never discovered in either arm — meta-training variance; two seeds censored by window). Registered: `adapt_temp_end=0.5` linear anneal; need to decide whether to (a) anneal further to sharpen locking, (b) extend budget to 600, or (c) redefine criterion to trailing-window-from-discovery. All changes E-1 pre-registration required.
+2. **Mechanistic read of controller drift across phases** — session 12 proved offline data insufficient (no gate histories persisted). Session 13 **wired gate-history instrumentation into `_run_adaptation`** — both confirmatory attempts now carry full per-step operator distributions. Offline replay of `benchmark_results/z3_order_robust/` artifacts available immediately for the anneal decision.
+3. **τ recalibration follow-ups (optional):** optical/quantum fast-proxy relative errors are denominator-dominated (~1800–4400×) — `median_absolute_error` + `mean_absolute_error` + `median_reference_norm` fields added to `DisagreementReport` and `scripts/guard_family_sweep.py` (session 13). Artifact regeneration needed for complete sweep record.
 4. PR-3b hardware anchor / PR-8 export parity — unchanged, external/pull-based (CP-D).
 
 ---
@@ -260,6 +260,8 @@ Bridge points from Phase 7:
 | **Z3 registered metric & prereg (session 9)** | `_windowed_criterion_step` (100-step window) + `_fixed_probe`/`_probe_accuracy` in `z3_fixed_weights.py`; registration `configs/preregistrations/z3_psi_vs_finetune_steps.json`; decision log `DECISIONS.md`; null-run artifacts `benchmark_results/z3_pilot/` (+ `manifest.json`) |
 | **Z3 meta-training repair (session 10)** | `z3_fixed_weights.py`: `MetaRecipe`, `step_plasticity`/pure `forward`, episode-structured `_meta_train`, `TASK_OPERATOR_MAP`, two-phase orchestration in `evaluate_z3`; round driver `scripts/z3_meta_repair.py`; artifacts `benchmark_results/z3_meta_repair/round{2,3}.json` + repaired pilot `benchmark_results/z3_pilot_rerun/` (+ manifest) |
 | **Z3 differential rounds & capability run (session 11)** | `z3_fixed_weights.py` (`entropy_end` curriculum, `replay_steps` distillation + `_replay_pass`, pre-adapt probe accuracies, all-arm curves); driver rounds R4/R5 in `scripts/z3_meta_repair.py`; window re-analysis `scripts/z3_window_analysis.py`; full-run driver `scripts/z3_full_run.py`; v2 registration `configs/preregistrations/z3_psi_capability_vs_random.json`; artifacts `benchmark_results/z3_full/` (+ manifest), `benchmark_results/z3_r4_probe/round4.json` |
+| **Z3 v3 proportion endpoint & randomized order (session 12)** | v3 registration `configs/preregistrations/z3_capability_proportion_vs_random.json`; `evaluate_z3(task_order=…)` + `_apply_task_order` in `z3_fixed_weights.py` (realized order echoed as `results["task_order"]`; both arms share the per-seed order); exact `fisher_exact_p_one_sided` in `validation/statistics.py` (pure stdlib, no scipy); driver `scripts/z3_full_run.py` (per-seed `_seed_task_order`, proportion analysis + descriptive paired gap + `_order_broken_stats`, default out `benchmark_results/z3_proportion/`) |
+| **Guard family sweep (session 12)** | `scripts/guard_family_sweep.py` → `benchmark_results/stability_guard_calibration/family_sweep.json` (8 substrates × 2 settling dynamics; windowed growth, proxy-vs-Jacobian disagreement, overhead per coordinate) |
 | **Substrate fixes (session 11)** | `core/substrates/ternary_substrate.py::_get_or_create_params` (α from `mean(|w|)·alpha_init`); `core/ontology.py::OpticalSubstrate.get_forward_operator` (quadrature `sin_half`); kill set `_GUARD_KILLED_SUBSTRATES = frozenset()` in `tests/unit/core/test_axis_probe.py` |
 | **E-11 decision log** | `DECISIONS.md` (append-only; prereg timestamps, kill/death decisions, deviations) |
 | Hardware targets | `docs/hardware_targets.md`; baseline gates `docs/baseline.md` |
@@ -281,7 +283,7 @@ Bridge points from Phase 7:
 | PR-3b hardware lead time | Gates measured-tier claims only | Procure Day 1 (still pending); PR-3a keeps proxy tier unblocked | 🟡 external |
 | PR-5 false-kill rate | Blocks unattended campaigns | τ=1.029 wired into runners session 8; zero false kills on 29 healthy composed coordinates (growth=1.000 exactly); ternary/optical caught as designed | ✅ mitigated (recalibrate on more families at Z3 pilot) |
 | Foreign git stash makes `git stash` A/B unsafe | Corrupts working tree (~330 paths splattered once, session 5 incident) | Baseline A/B only via `git worktree add /tmp/x HEAD` until that stash is claimed/dropped | 🔴 live |
-| Z3 non-convergence (RESEARCH3 named risk) | Gates CP-A fan-out (ICL bridge, frontier M-axis seed) | Sessions 9–11 walked it: null → repaired → pilot positive → **capability demonstrated at registered scale** (5 seeds, all gates green). Residual risk is statistical only: differential-vs-random endpoint inconclusive at n=5 due to control bimodality — decision options recorded in DECISIONS.md. Speed-vs-finetune hypothesis honestly falsified (descriptive null, ±0.17 log-ratio) | 🟡 narrowed to endpoint statistics |
+| Z3 non-convergence (RESEARCH3 named risk) | Gates CP-A fan-out (ICL bridge, frontier M-axis seed) | Sessions 9–12 walked it: null → repaired → pilot positive → capability gates green at fixed canonical order (v2, 5/5 seeds) → **v3 randomized-order proportion run NOT confirmed: differential does not generalize; all 7 failures across both arms are parity-only and order-governed**. Residual risk is a TASK-DESIGN problem (parity self-revelation), not algorithmic — redesign must be pre-registered before any rerun | 🟡 narrowed to parity task design |
 
 ---
 
@@ -303,13 +305,41 @@ Bridge points from Phase 7:
 - [x] **Z3 meta-training repair (session 10): E-2 rounds executed → promoted recipe found; pilot rerun POSITIVE vs null** — solver-map correction (threshold→Identity, probe-verified), feedback ψ channel with episode structure, temp anneal + entropy bonus, two-phase forced warm-up; ψ-only criterion on parity+lastsym @~107–130 steps, threshold 0.84 (censored), Δθ exact, diversity 1.42. Scope caveat recorded: random-ψ control ≈ meta-ψ → closing the meta-training differential is the next CP-A gate before the full run.
 - [x] **Z3 differential rounds + capability full run (session 11): capability gates 3/3 green on 5 seeds** — Δθ exact, registered criterion reached on ALL THREE tasks in every seed, worst-task acc ≥0.9789. Speed-vs-finetune: honest NULL (descriptive, ±0.17 log-ratio). Differential-vs-random: dz=1.08 but endpoint INCONCLUSIVE at n=5 (bimodal control) — owner decision queued. v1 speed registration retired via E-1 deviation; v2 capability registration committed pre-run.
 - [x] **Substrate divergence fixes (session 11): guard kill set EMPTY** — ternary fan-in-scaled α and optical quadrature forward both settle at ρ=1.000; `_GUARD_KILLED_SUBSTRATES` flipped consciously with harness green.
+- [x] **Z3 endpoint decision + order sensitivity + τ recalibration (session 12): queue items 1–3 closed** — option (b) executed as v3 proportion registration (Fisher exact, 10 seeds/arm, randomized per-seed order folded into the design, committed pre-run); outcome E-7 NOT CONFIRMED with decisive autopsy (all failures parity-only, order-governed; v2 claim scoped to its design); `fisher_exact_p_one_sided` added to the PR-4 kit; guard family sweep confirms τ lossless on 16/16 real settling coordinates.
 
 ### Exit criterion status
-PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catalog unblocked end-to-end at instrumentation scale (CP-A proceeds to Z3 flagship; CP-B/C/D/E per spines). PR-3b measured-tier claims remain gated on hardware arrival. **CP-A update (session 11): Z3 capability demonstrated at full scale; remaining CP-A work is statistical (endpoint decision) rather than algorithmic.**
+PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catalog unblocked end-to-end at instrumentation scale (CP-A proceeds to Z3 flagship; CP-B/C/D/E per spines). PR-3b measured-tier claims remain gated on hardware arrival. **CP-A update (session 12): Z3's citable capability claim is ORDER-SCOPED (v2 design); the open blocker is parity task redesign with a fresh E-1 registration — statistical instruments are no longer the bottleneck.**
 
 ---
 
 ## Session Log & Future-Work Notes
+
+### 2026-08-26 session 12 (queue items 1–3: v3 proportion endpoint + randomized order; τ family sweep) — **E-7 NULL WITH DECISIVE AUTOPSY: ALL FAILURES ARE PARITY-ONLY AND ORDER-GOVERNED**
+
+**Executed (E-1/E-11 order held — registration + DECISIONS entry committed before any data):**
+
+1. **Endpoint decision executed as option (b), hardened:** new registration `configs/preregistrations/z3_capability_proportion_vs_random.json` supersedes v2's endpoint. Event = arm fails a seed iff worst-task final accuracy < 0.95; primary = exact one-sided **Fisher** test on failure counts across **10 seeds/arm**; α=0.05; rejection region given 0 treatment failures = ≥4/10 control failures (power ≈95% at observed rates, ≈62% if the true rate were 0.4 — registered up front). Rationale: v2 showed the control is Bernoulli-mixture, so a mean-difference test against margin 0.25 tested the wrong null family; more seeds alone can't fix a mean pinned AT the margin.
+2. **Task-order sensitivity folded into the same design** (carried session-10 item, zero extra compute): `evaluate_z3(task_order=…)` reorders the whole switching stream via `_apply_task_order` (adaptation, baselines, diversity all follow; both arms share the per-seed order; realized order echoed in results). Driver derives orders from `random.Random(seed)` and reports `_order_broken_stats`. All 10 seeds are fresh draws under this design — the v2 fixed-order run is not reused for the new endpoint (no double-dipping).
+3. **`fisher_exact_p_one_sided` added to `validation/statistics.py`** (exact rational hypergeometric tail via `math.comb`/`Fraction`; no scipy dependency) + unit tests (known values: p(0 vs 6/10)=1001/184756; rejection boundary at 4/10; input validation).
+4. **Confirmatory run** (`scripts/z3_full_run.py`, seeds {0..9}, GPU ~41 s/seed, artifacts `benchmark_results/z3_proportion/` + manifest w/ registration sha256):
+   - **NOT CONFIRMED.** Fisher p=0.5 — z3 fails 3/10 seeds {1,2,3}, random fails 4/10 {4,6,7,8}. Gates correctly fail on the same seeds. Descriptive paired gap collapses +0.258→**+0.046** [−0.203,+0.295], dz 1.08→**0.11**: the v2 differential does NOT survive order randomization.
+   - **The load-bearing structural finding:** every seed-level task failure in the run — **7/7 across both arms — is on PARITY alone**; last_symbol and threshold are solved by BOTH arms under EVERY order (60/60 arm-task solves). Coverage structure:
+     - parity FIRST ⇒ both arms solve everything (seeds 0,5,9);
+     - z3 fails iff order = (lastsym → threshold → parity) — deterministically 3/3 seeds (parity ≈0.48–0.51 after two preceding controller-training phases);
+     - random control fails parity in 4/6 non-parity-first cells (threshold-first prefixes plus last→parity→threshold) and SOLVES parity exactly where z3 fails ((l,t,p)×3).
+   - Pre-adapt routing priors: parity ≈0.49–0.51 everywhere (nothing installed); threshold 0.61–0.97 yet never fails — prior erosion is recovered by adaptation for threshold but parity has no prior to erode; its bandit lock-in is fragile to whatever routing basin earlier phases leave in the shared controller.
+   - Speed-vs-finetune null unchanged (descriptive log ratios at windows {20,50,100} persisted per seed).
+5. **τ recalibration sweep (queue item 3, confirmatory as predicted):** new driver `scripts/guard_family_sweep.py` → `benchmark_results/stability_guard_calibration/family_sweep.json`; 16 coordinates = 8 substrates × {energy_minimization, predictive_settling} at rule_state/thermo/euclidean. **windowed_growth = 1.0000 exactly on all 16 ⇒ τ=1.029 lossless (FKR 0%)** on real families across the full substrate grid. fast_proxy disagreement per family: memristive 0.00, analog/sparse/ternary/digital 0.40–0.62, neuromorphic 0.86–1.13 median rel-err, Pearson ≈0 — PR-5's "fast_proxy cannot gate non-normal settling" confirmed on real systems; optical/quantum relative errors are denominator-dominated (~1800–4400×) and need an absolute-error field before quoting.
+
+**Verification:** ruff histograms byte-equal-or-better vs HEAD worktree A/B on all touched files (`z3_fixed_weights.py`, `statistics.py`, driver, sweep script, tests) + format clean; pyright **0 errors** on touched files (warnings pre-existing untyped-dict patterns); targeted suites green — preregistration 11 passed (incl. 2 new Fisher tests), z3_criterion_window + stability_guard 19 passed, integration Z3 smoke 1 passed (canonical no-order path exercised at runtime); CPU determinism smoke of `task_order` (same seed+order ⇒ identical results; invalid order raises; θ-invariant). Full pytest suite NOT rerun (touched surface: one experiment module param, statistics addition, two scripts, tests — per instruction to minimize redundant executions).
+
+**New work items discovered this session:**
+| Item | Detail | Suggested attack |
+|---|---|---|
+| Parity task redesign (**CP-A blocker**) | All Z3 order-robustness failures are parity-only; self-revealing operator makes its coverage fragile to controller drift from preceding phases | Make the label require a TRAINED decoding head (kills self-revelation), or swap the third task, or scope all claims to canonical order explicitly. E-1 register BEFORE any run |
+| Controller-drift mechanistic read | Why does the bandit fail to lock parity only under specific prefixes? Curves already saved per arm/seed | Offline replay of `z3_proportion_results.json` curves + operator histograms during the parity phase (z3-fail cells vs random-solve cells at (l,t,p)); no rerun needed |
+| Order-broken criterion censoring | Seed 5/7 pass the 0.95 floor but miss windowed criterion on some task — floor and criterion disagree at the margin | Report both consistently in future registrations (already dual-recorded here); consider registering on the stricter of the two |
+| Optical/quantum proxy disagreement metric | Relative error explodes when the full-Jacobian reference ≈ 0 | Add absolute-error field / floored reference norm in `quantify_proxy_disagreement` reporting |
 
 ### 2026-08-26 session 11 (queue items 1–3: differential rounds R4/R5 → capability full run; substrate divergence fixes) — **CP-A CAPABILITY CLOSED; SPEED NULL RECORDED; KILL SET EMPTY**
 
@@ -334,9 +364,9 @@ PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catal
 **New work items discovered this session:**
 | Item | Detail | Suggested attack |
 |---|---|---|
-| Z3 differential endpoint decision | Random control bimodal (~40% solves-all); mean-diff instrument mis-specified; gates all green so capability claim citable NOW | Owner picks (a) descriptive / (b) Fisher-exact re-registration / (c) more seeds (insufficient alone) |
+| Z3 differential endpoint decision | Random control bimodal (~40% solves-all); mean-diff instrument mis-specified; gates all green so capability claim citable NOW | Owner picks (a) descriptive / (b) Fisher-exact re-registration / (c) more seeds (insufficient alone). **→ EXECUTED session 12**: option (b) as v3 proportion registration + randomized order; outcome E-7 null with parity/order autopsy |
 | Optical stochastic crosstalk | `photonic_forward` draws crosstalk noise per call without a seeded generator — transitions are nondeterministic across identical replays | Route through the substrate's precision/noise config or a torch.Generator; verify bit-reproducibility of episodes |
-| Parity task design ceiling | Self-revealing operator makes parity free for any sampler; caps Z3's discriminative power for routing studies | Design change: make the parity feature require trained decoding (register first!) or drop parity from differential-style claims |
+| Parity task design ceiling | Self-revealing operator makes parity free for any sampler; caps Z3's discriminative power for routing studies | Design change: make the parity feature require trained decoding (register first!) or drop parity from differential-style claims. **→ UPGRADED TO CP-A BLOCKER session 12** (all order-randomized failures are parity-only) |
 | Replay attack under-tuned | Single setting (replay_steps=4) tested; helped parity but wasn't needed by promoted recipe | If endpoint redesign revives speed claims, sweep replay around curriculum+hot |
 
 ### 2026-08-26 session 10 (queue item 1: Z3 meta-training repair E-2 rounds 1–3 + queue item 2: pilot rerun) — **CP-A REPAIRED; PILOT POSITIVE**
@@ -362,7 +392,7 @@ PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catal
 |---|---|---|
 | Meta-vs-random differential ≈ 0 | Random-ψ adapts as fast as meta-trained controller; Z3 headline ("meta-training buys speed") undemonstrated even though absolute performance is strong | Queue item 1: longer controller phase / entropy curriculum / replay-style policy sharpening; verify pre-adaptation routing converges |
 | Threshold criterion censoring | Threshold plateaus ~0.84 at 240-step budget (identity found late; floor erosion from earlier task phases) | Either longer per-task budget (re-register first) or per-phase Adam reset to stop cross-task drift; check whether routing prior survives when task order varies |
-| Task-order sensitivity unquantified | Adaptation always runs parity→lastsym→threshold; shared-controller drift makes order matter (floor erosion evidence) | Randomize task order per seed in next run; report order-broken stats |
+| Task-order sensitivity unquantified | Adaptation always runs parity→lastsym→threshold; shared-controller drift makes order matter (floor erosion evidence) | Randomize task order per seed in next run; report order-broken stats. **→ DONE session 12** (folded into v3 design; answer: order is THE governing variable — see session 12 log) |
 | Round-1 artifact loss | R1 JSON write crashed (Path not serializable) AFTER compute — only stdout logs survive | Driver fixed; keep artifacts for any rerun |
 
 ### 2026-08-26 session 9 (queue item 1: Z3 pilot rung — prereg committed first; E-7 null with autopsy) — **CP-A RUNG FAILED, LOOPED BACK**
@@ -579,6 +609,55 @@ Note: `benchmark_results/` had been deleted by the user before this session; all
 - Divide-by-zero in `ResourceUsage.__truediv__` now raises (old frontier class returned zeros); `test_stability_metrics.py` 33/33 green with new semantics.
 - `eqprop_vision_parity.py` repaired (dead `CoreTrainer` import removed; routes through ontology factories; only `eqprop` + `backprop_mlp` supported, others logged+skipped; latent `n_permutations=` kwarg bug fixed). Its pandas/numpy pyright findings (~25) pre-date this work — part of 7.5 debt.
 - Pre-existing errors left untouched (7.5 scope): `profiling.py` F821 `SystemConfig`:608, pynvml imports; `z3_fixed_weights.py` "Tensor not callable" stub artifacts; eqprop_vision_parity aggregation block.
+
+---
+
+### 2026-08-26 session 13 (TODO4 queue items 1–3): Z3 order-robustness redesign → per-task Adam rebuild + entropy floor + gate-history instrumentation + budget 400 + per-phase anneal; two confirmatory attempts triaged; CP-A blocker narrowed to anneal tuning
+
+**Executed (E-1/E-11 discipline — registration + DECISIONS before every data collection):**
+
+1. **Offline mechanistic read (queue item 2, corrected):** wrote `scripts/z3_drift_analysis.py` mining `benchmark_results/z3_proportion/`. **Found:** v2/v3 artifacts persist final accuracies/pre-adapt priors/speed windows only — NO raw curves or gate histograms (TODO4's claim was optimistic; R4/R5 repair rounds have curves but at canonical order). Gate-history instrumentation now wired into `_run_adaptation` for all future runs. Findings: pre-adapt prior carries ZERO parity outcome signal (0.496 solved vs 0.492 failed); R4 cold config shows flat-at-chance exploration-failure signature; R5 hot solves parity (1.0). Artifact: `benchmark_results/z3_drift_analysis/findings.json`.
+
+2. **Parity redesign E-2 triage matrix (queue item 1, revised scope):** tested three design families on stress cells (seed 0 order p,t,l; seed 1 order l,t,p):
+   - v3 raw emission: (p,t,l) all solve; (l,t,p) parity FAILS 0.48 (deterministic 3/3 v3).
+   - coded quadrature + entropy floor β=0.1: (p,t,l) l/t FAIL; (l,t,p) all solve.
+   - coded antipodal + floor: same pattern — coding moves failure to post-parity phases.
+   - raw + floor (no coding): (l,t,p) parity FAILS 0.48 (floor inert).
+   - **raw + floor + per-task Adam rebuild**: (l,t,p) all solve (parity 1.0 @229; l/t ≥0.993 @100/102). **Mechanism:** stale Adam second moments carried across task boundaries starved later phases — PR-1 hygiene extended to every phase boundary fixed the v3-killer order.
+   - Coded-emission variants REVOKED pre-data: they deepened the exclusive-op4 basin, making post-parity phases starve WORSE; scale-invariance of linear decoder ruled out margin fixes analytically. See `DECISIONS.md` for the three-way triage record.
+
+3. **Registered design v4 (amended pre-data):**
+   - per-task Adam rebuild in `_adapt_all_tasks` + fine-tune baseline (identical protocol both arms)
+   - adaptation entropy floor β=0.1 (`adapt_entropy_beta`)
+   - gate-history rider (mean gates / hard-op histogram / entropy per step, all arms)
+   - budget 240→400 (first amendment, after discovery-latency census: max observed 239 + 100-step window > 240)
+   - per-phase temperature anneal `adapt_temp_end=0.5` (second amendment, after attempt 1 censoring)
+   - registration: `configs/preregistrations/z3_capability_order_robust.json`
+
+4. **Confirmatory attempt 1 (10 seeds/arm, 400 steps): NOT CONFIRMED.** Accuracy floor passed 9/10 (seed 9 z3=0.82); seeds 2,3 solved parity @335/369 but criterion censored; random arm 10/10. Mechanism: per-task rebuild shifted failure from deterministic (l,t,p) to stochastic tail — discovery latencies span 1–369 steps, two races lost within 400, two windows truncated by budget.
+
+5. **Confirmatory attempt 2 (10 seeds/arm, 400 steps, anneal): NOT CONFIRMED.** Accuracy floor failed 1/10 (seed 9 threshold 0.82 in BOTH arms — meta-training variance); seeds 2,3 criterion censored (discovery 335/369); anneal reduced mid-phase entropy but late-lock tail persists. Mechanism: constant β=0.1 entropy floor + flat temp 2.0 means "explore forever, sharpen never" — anneal to 0.5 narrows but doesn't eliminate the tail; None-discovery cases (seed 9 threshold in both arms) unaffected.
+
+6. **Guard τ follow-up (queue item 3):** added `mean_absolute_error`, `median_absolute_error`, `median_reference_norm` to `DisagreementReport` (`core/stability/guard.py`) and `scripts/guard_family_sweep.py`. Family sweep regeneration needed for complete artifact.
+
+**Verification:** ruff format clean; ruff errors 26 in `z3_fixed_weights.py` (pre-existing class, better than HEAD 29); 0 in all other touched files; pyright 0 errors on touched files; targeted tests 36 passed; integration Z3 smoke passed.
+
+**Artifacts produced:**
+- `scripts/z3_drift_analysis.py` + `benchmark_results/z3_drift_analysis/findings.json`
+- `configs/preregistrations/z3_capability_order_robust.json` (twice amended)
+- `benchmark_results/z3_order_robust_attempt1/` (first confirmatory, 240→400)
+- `benchmark_results/z3_order_robust/` (second confirmatory, anneal + 400)
+- `DECISIONS.md` entries for both amendments
+- `tests/unit/validation/test_z3_redesign.py` (12 tests: entropy floor, gate history, evaluate_z3 persistence)
+
+**New work items discovered:**
+| Item | Detail | Suggested attack |
+|---|---|---|
+| Anneal tuning / budget extension (CP-A blocker) | Residual stochastic discovery tail at parity-last (latency P99 ~369, one None-discovery case); criterion window truncation on late discoveries | Decide: (a) anneal further (e.g., 2.0→0.25, or cosine), (b) extend budget to 600, (c) redefine criterion to trailing-window-from-discovery. Register BEFORE run. Gate-history artifacts from both attempts available for offline census. |
+| Guard family sweep regeneration | Absolute-error fields added to `DisagreementReport`; `family_sweep.json` lacks them | Re-run `scripts/guard_family_sweep.py` → `benchmark_results/stability_guard_calibration/family_sweep.json` (confirmatory, ~2 min GPU). |
+| Meta-training variance diagnosis | Seed 9 failed threshold in BOTH arms — controller quality varies per seed; 10/10 control arm suggests protocol is fine, meta-training is the variance source | Add meta-training quality gate (pre-adapt accuracy threshold) to registration; or increase seed count for statistical averaging. |
+
+---
 
 ### 2026-08-25 session 1 (7.1.1 + 7.4 + partial 7.3)
 - **Rocq**: `per_index_descent` lemma added; `energy_decreases_diagonal` closed with zero admits (stdlib classical axioms only). The scalar-lemma-first pattern is the reusable recipe for 7.1.2.

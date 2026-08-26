@@ -185,13 +185,22 @@ def calibrate_threshold(
 
 @dataclass(frozen=True, slots=True)
 class DisagreementReport:
-    """Fast-proxy vs full-Jacobian accuracy and cost accounting."""
+    """Fast-proxy vs full-Jacobian accuracy and cost accounting.
+
+    Relative errors are denominator-dominated wherever the reference
+    spectral radius sits near zero (optical/quantum families quote
+    ~1800-4400x ratios there); the absolute-error fields are the honest
+    companion statistic for those regimes.
+    """
 
     n_probes: int
     mean_relative_error: float
     median_relative_error: float
     p95_relative_error: float
     pearson_correlation: float
+    mean_absolute_error: float
+    median_absolute_error: float
+    median_reference_norm: float
     proxy_seconds: float
     full_jacobian_seconds: float
 
@@ -268,7 +277,8 @@ def quantify_proxy_disagreement(
 
     proxy = np.asarray(proxy_vals)
     full = np.asarray(full_vals)
-    relative = np.abs(proxy - full) / (np.abs(full) + 1e-12)
+    absolute = np.abs(proxy - full)
+    relative = absolute / (np.abs(full) + 1e-12)
     variance_present = proxy.std() > 0 and full.std() > 0
     correlation = float(np.corrcoef(proxy, full)[0, 1]) if variance_present else 0.0
 
@@ -278,6 +288,9 @@ def quantify_proxy_disagreement(
         median_relative_error=float(np.median(relative)),
         p95_relative_error=float(np.percentile(relative, 95)),
         pearson_correlation=correlation,
+        mean_absolute_error=float(absolute.mean()),
+        median_absolute_error=float(np.median(absolute)),
+        median_reference_norm=float(np.median(np.abs(full))),
         proxy_seconds=proxy_seconds,
         full_jacobian_seconds=full_seconds,
     )

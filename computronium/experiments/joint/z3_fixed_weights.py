@@ -17,6 +17,34 @@ consequences via ``step_plasticity`` (gates + loss), (b) anneals gating
 temperature with an entropy bonus, and (c) warms θ up under forced correct
 operator selections before controller-only straight-through training over
 per-task episodes.
+
+Order-robustness redesign (2026-08-26, v4 registration): the v3 proportion
+run proved every seed-level failure is parity-only and order-governed —
+coverage was decided by whatever routing basin earlier adaptation phases
+left behind, not by the frozen trunk. The registered changes:
+
+1. Per-task optimizer rebuild: ``_adapt_all_tasks`` (and the fine-tune
+   baseline) start a FRESH Adam at every task boundary. Carried
+   second-moment estimates from the previous task's loss landscape were the
+   starvation driver — with them, later phases cannot re-acquire their
+   solver operator however much they sample (measured: the deterministic
+   v3 failure order last_symbol→threshold→parity went from parity@0.48 to
+   parity@1.0 with rebuild alone). Same PR-1 hygiene principle the
+   meta-train→adaptation boundary already used, extended to every boundary;
+   identical for both arms.
+2. Adaptation entropy floor ``adapt_entropy_beta``: a small gate-entropy
+   bonus during every ψ-adaptation step keeps sampling diversity alive.
+   Identical for both arms.
+
+A coded-parity variant (T_4 emitting fixed class codes instead of the label,
+requiring a trained decoder) was triaged first and REVOKED pre-data: it
+fixed parity-last but made every post-parity phase starve worse — the deep
+exclusive-op4 basin its mixtures create erodes later tasks' acquisition.
+See DECISIONS.md for the three-way triage record.
+
+Every adaptation step also records a gate history (mean gate distribution,
+hard-selection histogram, entropy) so bandit dynamics during each phase are
+recoverable from artifacts without rerunning.
 """
 
 from __future__ import annotations
@@ -31,9 +59,13 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 from torch import Tensor
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 from computronium.core.plasticity.theta_audit import ThetaInvarianceAudit
 
@@ -469,6 +501,24 @@ def _windowed_criterion_step(
     return None
 
 
+def _apply_task_order(tasks: list, task_order: Sequence[str] | None) -> None:
+    """Reorder the (name, task_fn) switching stream in place to ``task_order``.
+
+    Identity when ``task_order`` is None. All consumers downstream of the
+    call site (adaptation, baselines, diversity) follow the realized order,
+    so both treatment and control arms see the identical stream per seed.
+    """
+    if task_order is None:
+        return
+    known = [name for name, _ in tasks]
+    if sorted(task_order) != sorted(known):
+        raise ValueError(  # noqa: TRY003 - coordinate-level guard
+            f"task_order must be a permutation of {known}"
+        )
+    rank = {name: i for i, name in enumerate(task_order)}
+    tasks.sort(key=lambda pair: rank[pair[0]])
+
+
 @dataclass(frozen=True, slots=True)
 class TaskShape:
     """Batch geometry shared by every task-protocol helper."""
@@ -497,6 +547,15 @@ class MetaRecipe:
     ``replay_steps`` adds per-epoch supervised distillation passes over a
     FIFO buffer of episode trajectories (ψ, input summary → episode-best
     operator), sharpening the policy without Gumbel-noise gradients.
+    ``adapt_entropy_beta`` is NOT a meta-training knob: it sets the
+    gate-entropy bonus applied during every ψ-adaptation step at eval time
+    (order-robustness redesign — keeps entrenched routing reachable to
+    unsampled operators; identical for both arms). ``adapt_temp_end``
+    linearly anneals the gating temperature from its phase-entry value down
+    to this target ACROSS each adaptation phase (None = flat): discovery
+    happens hot, locking happens cold — without it, open-ended races at
+    constant hot temperature both delay solver discovery past any fixed
+    budget and leave the criterion window unfilled after late discoveries.
     """
 
     episode_len: int = 8
@@ -507,8 +566,10 @@ class MetaRecipe:
     warmup_fraction: float = 0.4
     warmup_lr: float = 3e-3
     adapt_temp: float | None = None
+    adapt_temp_end: float | None = None
     entropy_end: float | None = None
     replay_steps: int = 0
+    adapt_entropy_beta: float = 0.0
 
 
 def _eval_task_accuracy(
@@ -564,6 +625,53 @@ def _probe_accuracy(
     return correct / x.shape[0]
 
 
+def _gate_record(model: Z3Model) -> dict[str, list[float]]:
+    """Bandit-state snapshot of the most recent forward pass.
+
+    Mean soft-gate distribution, hard-selection histogram, and gate entropy —
+    the per-step record that makes operator-routing dynamics during each
+    adaptation phase recoverable from artifacts.
+    """
+    gates = model.last_gates
+    if gates is None:
+        return {"mean_gates": [], "hard_op_fraction": [], "entropy": []}
+    with torch.no_grad():
+        probs = gates.detach().mean(dim=0)
+        hard = gates.detach().argmax(dim=-1)
+        fraction = (
+            torch.bincount(hard, minlength=model.num_operators).float() / hard.shape[0]
+        )
+        entropy = float(-(probs * (probs + 1e-8).log()).sum())
+    return {
+        "mean_gates": [float(v) for v in probs],
+        "hard_op_fraction": [float(v) for v in fraction],
+        "entropy": [entropy],
+    }
+
+
+def _new_gate_history() -> dict[str, list[list[float]]]:
+    return {"mean_gates": [], "hard_op_fraction": [], "entropy": []}
+
+
+def _record_gate_step(history: dict[str, list[list[float]]], model: Z3Model) -> None:
+    record = _gate_record(model)
+    for key, values in record.items():
+        history[key].append(values)
+
+
+def _adaptation_objective(
+    loss: Tensor, model: Z3Model, adapt_entropy_beta: float
+) -> Tensor:
+    """CE plus the registered gate-entropy exploration floor (β·H term)."""
+    if adapt_entropy_beta <= 0:
+        return loss
+    gates = model.last_gates
+    if gates is None:
+        return loss
+    entropy = -(gates * (gates + 1e-8).log()).sum(-1).mean()
+    return loss - adapt_entropy_beta * entropy
+
+
 def _run_adaptation(  # noqa: PLR0913 - protocol tuple stays flat
     model: Z3Model,
     optimizer: torch.optim.Optimizer,
@@ -574,29 +682,42 @@ def _run_adaptation(  # noqa: PLR0913 - protocol tuple stays flat
     epochs: int,
     probe: tuple[Tensor, Tensor],
     feedback: bool = True,
-) -> tuple[list[float], list[float], int | None]:
+    adapt_entropy_beta: float = 0.0,
+    adapt_temp_end: float | None = None,
+) -> tuple[list[float], list[float], int | None, dict[str, list[list[float]]]]:
     """Adam steps over whatever ``requires_grad`` currently selects.
 
     One epoch = one fresh-batch gradient step; with ``feedback`` each step
-    also evolves ψ from its selection consequences. Returns per-step losses,
-    the per-step hard-selection probe-accuracy curve, and the registered
-    100-step-window criterion step (None when censored at the budget).
+    also evolves ψ from its selection consequences. The objective is CE minus
+    ``adapt_entropy_beta``·H(gates) — the registered exploration floor that
+    keeps entrenched routing reachable to unsampled operators. When
+    ``adapt_temp_end`` is set, the gating temperature anneals linearly from
+    its phase-entry value to that target across the phase. Returns per-step
+    losses, the per-step hard-selection probe-accuracy curve, the registered
+    100-step-window criterion step (None when censored at the budget), and
+    the per-step gate history.
     """
     losses: list[float] = []
     curve: list[float] = []
+    gate_history = _new_gate_history()
+    start_temp = model.temperature
     for _epoch in range(epochs):
+        if adapt_temp_end is not None:
+            progress = len(losses) / max(1, epochs - 1)
+            model.temperature = start_temp + (adapt_temp_end - start_temp) * progress
         model.train()
         x, y = shape.sample(task_fn)
         optimizer.zero_grad()
         logits = model(x, is_training=True)
         loss = criterion(logits, y)
-        loss.backward()
+        _adaptation_objective(loss, model, adapt_entropy_beta).backward()
         optimizer.step()
         if feedback:
             model.step_plasticity(loss)
         losses.append(loss.item())
         curve.append(_probe_accuracy(model, probe))
-    return losses, curve, _windowed_criterion_step(curve)
+        _record_gate_step(gate_history, model)
+    return losses, curve, _windowed_criterion_step(curve), gate_history
 
 
 _REPLAY_BUFFER_CAP = 1024
@@ -805,23 +926,27 @@ def _adapt_all_tasks(  # noqa: PLR0913 - protocol tuple stays flat
     epochs: int,
     probe_batches: int = 16,
     feedback: bool = True,
+    adapt_entropy_beta: float = 0.0,
 ) -> tuple[dict[str, dict], float]:
     """ψ-only adaptation protocol over the switching stream (θ stays frozen).
 
-    One Adam over the trainable set spans all tasks, preserving PR-1
-    semantics. ψ resets at each task boundary. Returns per-task result rows
-    and elapsed wall-clock.
+    A FRESH Adam is built at every task boundary: second-moment estimates
+    carried from the previous task's loss landscape starve later phases of
+    effective steps, which is the mechanism behind the v3 order-governed
+    coverage failures (PR-1 hygiene applied at every phase boundary).
+    ψ resets at each task boundary too. Returns per-task result rows
+    (incl. per-step gate histories) and elapsed wall-clock.
     """
-    optimizer = torch.optim.Adam(
-        [p for p in model.parameters() if p.requires_grad], lr=0.001
-    )
     started = time.perf_counter()
     rows: dict[str, dict] = {}
     for task_name, task_fn in tasks:
+        optimizer = torch.optim.Adam(
+            [p for p in model.parameters() if p.requires_grad], lr=0.001
+        )
         model.reset_psi()
         probe = _fixed_probe(shape, task_fn, batches=probe_batches)
         pre_adapt = _probe_accuracy(model, probe)
-        losses, curve, steps = _run_adaptation(
+        losses, curve, steps, gate_history = _run_adaptation(
             model,
             optimizer,
             criterion,
@@ -830,6 +955,7 @@ def _adapt_all_tasks(  # noqa: PLR0913 - protocol tuple stays flat
             epochs=epochs,
             probe=probe,
             feedback=feedback,
+            adapt_entropy_beta=adapt_entropy_beta,
         )
         rows[task_name] = {
             "accuracy": _eval_task_accuracy(model, shape, task_fn),
@@ -838,6 +964,7 @@ def _adapt_all_tasks(  # noqa: PLR0913 - protocol tuple stays flat
             "adaptation_losses": losses,
             "accuracy_curve": curve,
             "steps_to_criterion": steps,
+            "gate_history": gate_history,
         }
     return rows, time.perf_counter() - started
 
@@ -851,26 +978,29 @@ def _finetune_forgetting_baseline(  # noqa: PLR0913 - protocol tuple stays flat
     epochs: int,
     probe_batches: int = 16,
     feedback: bool = True,
+    adapt_entropy_beta: float = 0.0,
 ) -> dict:
     """Baseline (a): sequential θ fine-tuning at the same per-task step budget.
 
     Produces the stage×task accuracy matrix whose diagonal-vs-last-column
     gap is the forgetting tax Z3 claims to avoid. Stages are scored by the
-    same registered window definition as the ψ-only arm.
+    same registered window definition as the ψ-only arm, and each stage
+    starts a fresh Adam exactly like the treatment arm (identical protocol).
     """
     model.unfreeze_theta()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     matrix: dict[str, dict[str, float]] = {}
     steps_by_stage: dict[str, int | None] = {}
     pre_adapt_by_stage: dict[str, float] = {}
     curves_by_stage: dict[str, list[float]] = {}
+    gate_histories_by_stage: dict[str, dict[str, list[list[float]]]] = {}
     started = time.perf_counter()
     for stage_name, stage_fn in tasks:
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
         model.reset_psi()
         probe = _fixed_probe(shape, stage_fn, batches=probe_batches)
         pre_adapt = _probe_accuracy(model, probe)
         pre_adapt_by_stage[stage_name] = pre_adapt
-        _losses, curve, steps = _run_adaptation(
+        _losses, curve, steps, gate_history = _run_adaptation(
             model,
             optimizer,
             criterion,
@@ -879,9 +1009,11 @@ def _finetune_forgetting_baseline(  # noqa: PLR0913 - protocol tuple stays flat
             epochs=epochs,
             probe=probe,
             feedback=feedback,
+            adapt_entropy_beta=adapt_entropy_beta,
         )
         steps_by_stage[stage_name] = steps
         curves_by_stage[stage_name] = curve
+        gate_histories_by_stage[stage_name] = gate_history
         matrix[stage_name] = {
             name: _eval_task_accuracy(model, shape, fn) for name, fn in tasks
         }
@@ -898,6 +1030,7 @@ def _finetune_forgetting_baseline(  # noqa: PLR0913 - protocol tuple stays flat
         "steps_to_criterion": steps_by_stage,
         "pre_adapt_accuracy": pre_adapt_by_stage,
         "accuracy_curves": curves_by_stage,
+        "gate_histories": gate_histories_by_stage,
         "wall_clock_s": elapsed,
     }
 
@@ -912,6 +1045,7 @@ def _run_baselines(  # noqa: PLR0913 - protocol tuple stays flat
     epochs: int,
     probe_batches: int = 16,
     feedback: bool = True,
+    adapt_entropy_beta: float = 0.0,
 ) -> dict:
     """E-10 control set; arms restore the meta-trained state first.
 
@@ -936,6 +1070,7 @@ def _run_baselines(  # noqa: PLR0913 - protocol tuple stays flat
         epochs=epochs,
         probe_batches=probe_batches,
         feedback=feedback,
+        adapt_entropy_beta=adapt_entropy_beta,
     )
 
     # (a) fine-tune θ, same step budget — the forgetting tax
@@ -948,6 +1083,7 @@ def _run_baselines(  # noqa: PLR0913 - protocol tuple stays flat
         epochs=epochs,
         probe_batches=probe_batches,
         feedback=feedback,
+        adapt_entropy_beta=adapt_entropy_beta,
     )
 
     return {
@@ -959,6 +1095,7 @@ def _run_baselines(  # noqa: PLR0913 - protocol tuple stays flat
                     "steps_to_criterion": r["steps_to_criterion"],
                     "pre_adapt_accuracy": r["pre_adapt_accuracy"],
                     "accuracy_curve": r["accuracy_curve"],
+                    "gate_history": r["gate_history"],
                 }
                 for n, r in random_psi_rows.items()
             }
@@ -997,82 +1134,16 @@ def _operator_diversity(
     return sum(entropies) / len(entropies)
 
 
-def evaluate_z3(
-    coordinate: str,
-    meta_train_epochs: int = 50,
-    eval_epochs_per_task: int = 20,
-    batch_size: int = 64,
-    seq_len: int = 10,
-    input_dim: int = 32,
-    probe_batches: int = 16,
-    device: torch.device | str = "cpu",
-    seed: int = 42,
+def _meta_train_phases(
+    model: Z3Model,
+    tasks,
+    criterion,
+    shape: TaskShape,
     *,
-    recipe: MetaRecipe = MetaRecipe(),
-    with_baselines: bool = True,
-) -> dict:
-    """Evaluate Z3: meta-train then freeze θ and evaluate task switching.
-
-    Meta-training runs ``recipe``: optional forced-operator θ warm-up
-    phase, then a straight-through controller phase over per-task episodes.
-    ``with_baselines=False`` skips the E-10 control arms (triage rounds).
-    """
-    from torch import nn
-
-    torch.manual_seed(seed)
-    random.seed(seed)
-    device = torch.device(device)
-
-    parts = coordinate.split("/")
-    if len(parts) != 6:
-        raise ValueError(f"Invalid coordinate: {coordinate}")
-
-    plasticity_type = parts[3]
-    if plasticity_type != "rule_state":
-        # Z3 requires rule_state plasticity
-        raise ValueError(f"Z3 requires rule_state plasticity, got {plasticity_type}")
-
-    # Build Z3 model
-    model = Z3Model(
-        num_operators=8,
-        operator_dim=input_dim,
-        controller_hidden=128,
-        temperature=recipe.temp_start,
-    ).to(device)
-
-    criterion = nn.CrossEntropyLoss()
-
-    tasks = [
-        ("parity", create_parity_task),
-        ("last_symbol", create_last_symbol_task),
-        ("threshold", create_threshold_task),
-    ]
-
-    results: dict = {
-        "coordinate": coordinate,
-        "tasks": {},
-        "meta_recipe": {"epochs": meta_train_epochs}
-        | {
-            f: getattr(recipe, f)
-            for f in (
-                "episode_len",
-                "feedback",
-                "entropy_beta",
-                "temp_start",
-                "temp_end",
-                "warmup_fraction",
-                "warmup_lr",
-                "entropy_end",
-                "replay_steps",
-                "adapt_temp",
-            )
-        },
-    }
-    shape = TaskShape(
-        batch_size=batch_size, seq_len=seq_len, input_dim=input_dim, device=device
-    )
-
-    # ===== META-TRAINING PHASE =====
+    recipe: MetaRecipe,
+    meta_train_epochs: int,
+) -> None:
+    """Two-phase meta-training: forced-operator θ warm-up, then selection."""
     print("  Meta-training phase...")
     warmup_epochs = round(meta_train_epochs * recipe.warmup_fraction)
     if warmup_epochs:
@@ -1118,6 +1189,99 @@ def evaluate_z3(
             recipe=recipe,
         )
 
+
+def evaluate_z3(  # noqa: PLR0913 - protocol tuple stays flat
+    coordinate: str,
+    meta_train_epochs: int = 50,
+    eval_epochs_per_task: int = 20,
+    batch_size: int = 64,
+    seq_len: int = 10,
+    input_dim: int = 32,
+    probe_batches: int = 16,
+    device: torch.device | str = "cpu",
+    seed: int = 42,
+    *,
+    recipe: MetaRecipe = MetaRecipe(),
+    with_baselines: bool = True,
+    task_order: Sequence[str] | None = None,
+) -> dict:
+    """Evaluate Z3: meta-train then freeze θ and evaluate task switching.
+
+    Meta-training runs ``recipe``: optional forced-operator θ warm-up
+    phase, then a straight-through controller phase over per-task episodes.
+    ``with_baselines=False`` skips the E-10 control arms (triage rounds).
+    ``task_order`` permutes the adaptation/baseline switching stream (all
+    arms see the identical order); the realized order is echoed in results
+    under ``"task_order"``.
+    """
+    from torch import nn
+
+    torch.manual_seed(seed)
+    random.seed(seed)
+    device = torch.device(device)
+
+    parts = coordinate.split("/")
+    if len(parts) != 6:
+        raise ValueError(f"Invalid coordinate: {coordinate}")
+
+    plasticity_type = parts[3]
+    if plasticity_type != "rule_state":
+        # Z3 requires rule_state plasticity
+        raise ValueError(f"Z3 requires rule_state plasticity, got {plasticity_type}")
+
+    # Build Z3 model
+    model = Z3Model(
+        num_operators=8,
+        operator_dim=input_dim,
+        controller_hidden=128,
+        temperature=recipe.temp_start,
+    ).to(device)
+
+    criterion = nn.CrossEntropyLoss()
+
+    tasks = [
+        ("parity", create_parity_task),
+        ("last_symbol", create_last_symbol_task),
+        ("threshold", create_threshold_task),
+    ]
+    _apply_task_order(tasks, task_order)
+
+    results: dict = {
+        "coordinate": coordinate,
+        "task_order": [name for name, _ in tasks],
+        "tasks": {},
+        "meta_recipe": {"epochs": meta_train_epochs}
+        | {
+            f: getattr(recipe, f)
+            for f in (
+                "episode_len",
+                "feedback",
+                "entropy_beta",
+                "temp_start",
+                "temp_end",
+                "warmup_fraction",
+                "warmup_lr",
+                "entropy_end",
+                "replay_steps",
+                "adapt_temp",
+                "adapt_entropy_beta",
+            )
+        },
+    }
+    shape = TaskShape(
+        batch_size=batch_size, seq_len=seq_len, input_dim=input_dim, device=device
+    )
+
+    # ===== META-TRAINING PHASE =====
+    _meta_train_phases(
+        model,
+        tasks,
+        criterion,
+        shape,
+        recipe=recipe,
+        meta_train_epochs=meta_train_epochs,
+    )
+
     meta_state = _snapshot(model)
 
     # ===== EVALUATION PHASE (θ FROZEN, ψ adapts) =====
@@ -1142,6 +1306,7 @@ def evaluate_z3(
             epochs=eval_epochs_per_task,
             probe_batches=probe_batches,
             feedback=recipe.feedback,
+            adapt_entropy_beta=recipe.adapt_entropy_beta,
         )
     results["wall_clock_s"] = {"psi_adaptation": psi_wall}
 
@@ -1168,7 +1333,6 @@ def evaluate_z3(
     results["diversity_collapsed"] = bool(entropy < math.log(2))
 
     # ===== BASELINES (E-10 control set) =====
-    # ===== BASELINES (E-10 control set) =====
     if not with_baselines:
         return results
     print("  Baselines: frozen floor / random-ψ / θ fine-tune...")
@@ -1181,6 +1345,7 @@ def evaluate_z3(
         epochs=eval_epochs_per_task,
         probe_batches=probe_batches,
         feedback=recipe.feedback,
+        adapt_entropy_beta=recipe.adapt_entropy_beta,
     )
 
     return results
@@ -1390,6 +1555,12 @@ def main():
         help="Gating temperature during ψ adaptation (None = end-of-anneal temp)",
     )
     parser.add_argument(
+        "--adapt-entropy-beta",
+        type=float,
+        default=0.0,
+        help="Gate-entropy bonus during ψ adaptation (exploration floor)",
+    )
+    parser.add_argument(
         "--quick", action="store_true", help="Quick mode (10 meta, 5 eval, 1 seed)"
     )
     args = parser.parse_args()
@@ -1424,6 +1595,7 @@ def main():
             entropy_end=args.entropy_end,
             replay_steps=args.replay_steps,
             adapt_temp=args.adapt_temp,
+            adapt_entropy_beta=args.adapt_entropy_beta,
         ),
     )
 

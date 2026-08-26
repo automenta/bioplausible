@@ -12,7 +12,9 @@ property tests and golden values live in ``tests/unit/validation/``.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Sequence
+from fractions import Fraction
 
 import numpy as np
 
@@ -24,6 +26,7 @@ __all__ = [
     "cliffs_delta",
     "cohens_d",
     "cohens_dz",
+    "fisher_exact_p_one_sided",
     "permutation_test_p",
     "power_for_two_sample",
 ]
@@ -383,3 +386,39 @@ def permutation_test_p(
     # over-claim certainty): the lowest credible p under ``n_perm`` draws is
     # ``1 / (n_perm + 1)``.
     return (ge + 1) / (max(n_perm, 1) + 1)
+
+
+def fisher_exact_p_one_sided(
+    failures_treatment: int, failures_control: int, arm_size: int
+) -> float:
+    """Exact one-sided Fisher p-value that the control fails more often.
+
+    Conditional on the observed total failure count, the control's failure
+    count follows a hypergeometric distribution; the p-value is the
+    probability of drawing at least ``failures_control`` failures into the
+    control arm. Exact rational arithmetic (no scipy dependency).
+
+    Args:
+        failures_treatment: Seeds in the treatment arm failing the event.
+        failures_control: Seeds in the control arm failing the event.
+        arm_size: Per-arm seed count.
+
+    Returns:
+        P(control failures >= observed | margins), in [0, 1].
+    """
+    if not 0 <= failures_treatment <= arm_size or not 0 <= failures_control <= arm_size:
+        raise ValueError(  # noqa: TRY003 - caller passes seed counts directly
+            "failure counts must lie within [0, arm_size]"
+        )
+    total_failures = failures_treatment + failures_control
+    total = 2 * arm_size
+    p = Fraction(0)
+    for k in range(failures_control, min(total_failures, arm_size) + 1):
+        if total_failures - k > arm_size:
+            continue
+        p += Fraction(
+            math.comb(total_failures, k)
+            * math.comb(total - total_failures, arm_size - k),
+            math.comb(total, arm_size),
+        )
+    return float(p)

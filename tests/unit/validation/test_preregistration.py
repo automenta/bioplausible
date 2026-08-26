@@ -19,6 +19,8 @@ from computronium.validation.preregistration import (
 )
 from computronium.validation.statistics import cohens_dz
 
+_ALPHA = 0.05
+
 _REG = ThresholdRegistration(
     claim="treatment beats control by >=0.2",
     metric="acc",
@@ -134,3 +136,27 @@ def test_paired_comparison_synthetic_properties(
     assert result.ci_lower <= result.mean_diff <= result.ci_upper
     assert 0.0 <= result.p_value <= 1.0
     assert math.isfinite(result.cohens_dz)
+
+
+def test_fisher_exact_known_values() -> None:
+    from computronium.validation.statistics import fisher_exact_p_one_sided
+
+    # 0 treatment vs 6/10 control failures (v2 full-run autopsy rates):
+    # all 6 failures land in the control arm.
+    p = fisher_exact_p_one_sided(0, 6, 10)
+    assert p == pytest.approx(1001 / 184756)
+    # Rejection region at alpha=0.05 given 0 treatment failures is >=4.
+    assert fisher_exact_p_one_sided(0, 4, 10) < _ALPHA
+    assert fisher_exact_p_one_sided(0, 3, 10) > _ALPHA
+    # Monotone in the observed effect; a symmetric split cannot reject.
+    assert fisher_exact_p_one_sided(0, 10, 10) <= fisher_exact_p_one_sided(0, 5, 10)
+    assert fisher_exact_p_one_sided(5, 5, 10) > _ALPHA
+
+
+def test_fisher_exact_validates_inputs() -> None:
+    from computronium.validation.statistics import fisher_exact_p_one_sided
+
+    with pytest.raises(ValueError):
+        fisher_exact_p_one_sided(-1, 3, 10)
+    with pytest.raises(ValueError):
+        fisher_exact_p_one_sided(0, 11, 10)

@@ -1,0 +1,27 @@
+{
+  "claim": "With θ exactly frozen (Δθ < 1e-6), the meta-trained Z3 system solves ALL THREE tasks (final hard-selection accuracy ≥ 0.95 on each) in every seed of a 10-seed-per-arm confirmatory run under randomized per-seed adaptation order, while the random-initialized controller control fails at least one task substantially more often; the failure-proportion difference is confirmed by an exact one-sided Fisher test.",
+  "metric": "seed_task_coverage_failure_proportion_z3_vs_random",
+  "threshold": 0.0,
+  "alpha": 0.05,
+  "min_seeds": 10,
+  "created": "2026-08-26",
+  "supersedes_endpoint_of": "configs/preregistrations/z3_psi_capability_vs_random.json",
+  "deviation_rationale": "Second E-1 instrument redesign after the v2 full-run autopsy (DECISIONS.md 2026-08-26): the random control's per-seed worst-task accuracy is BIMODAL (~40% solve-all at ~0.99, ~60% fail last_symbol at 0.52-0.60), so the null distribution of the paired mean difference is a Bernoulli mixture and a mean-difference test against margin 0.25 was mis-specified for it (observed mean gap sat AT the margin; CI straddled it). The registered endpoint now targets the mixture structure directly: per-seed Bernoulli failure indicators compared across arms with an exact Fisher test. This replaces the instrument, not post-hoc goalpost-moving: it is committed BEFORE any data under this design exists, and is evaluated ONLY on the fresh randomized-order run below - the v2 5-seed fixed-order run remains citable solely for its own registered endpoints and descriptive findings.",
+  "event_definition": "Per seed and arm: the arm FAILS the seed iff min over tasks of final hard-selection accuracy (20 fresh batches x 64) < 0.95. Treatment = meta-trained Z3 psi-only arm; control = random-initialized controller (controller + feedback projection re-initialized post-meta-training; identical trunk, budgets, adaptation temperature).",
+  "design": {
+    "coordinate": "digital/recurrent/energy_minimization/rule_state/thermodynamic_contrast/euclidean",
+    "recipe": "wu60_hot (entropy_beta=0.2, episode_len=16, warmup_fraction=0.6, meta-300 epochs, adapt_temp=2.0)",
+    "task_order": "Per-seed randomized: random.Random(seed).shuffle over the canonical (parity, last_symbol, threshold) order; BOTH arms see the identical per-seed order; realized order recorded per seed in results. Registered as a design element to simultaneously answer the carried task-order-sensitivity question (TODO4 session-10 item): order-broken descriptive statistics are reported per adaptation position.",
+    "seeds": "10 per arm, indices {0..9}, shared trunk per index"
+  },
+  "decision_rule_full_run": "Confirm iff ALL of: (1) exact one-sided Fisher p(fisher_exact_p_one_sided(failures_z3, failures_random, 10)) < alpha; (2) theta_invariant == true for every seed (max abs dTheta < 1e-6); (3) Z3 arm steps_to_criterion (registered 100-step-window definition) non-None on ALL THREE tasks in every seed; (4) Z3 arm final hard-selection accuracy >= 0.95 on all tasks in every seed.",
+  "power_statement": "Under the rates observed at v2 (control failure ~0.6, treatment ~0), the rejection region given 0 treatment failures is control failures >= 4/10 (p = 8008/184756 ~= 0.043); exact power ~= 95%. If the true control failure rate were 0.4, power drops to ~62% - reported as such if not confirmed.",
+  "secondary_endpoints_descriptive": [
+    "Paired worst-task final-accuracy gap z3 minus random with bootstrap CI (v2 endpoint continuity)",
+    "Order-broken stats: final accuracy per adaptation position (1st/2nd/3rd) per arm",
+    "Per-task log step-ratio z3 vs theta-fine-tune at windows {20, 50, 100} (speed null continuity)",
+    "Operator diversity entropy H(g_k) per seed",
+    "Pre-adaptation probe accuracies per task"
+  ],
+  "budget_gpu_hours_registered": 2
+}
