@@ -43,14 +43,26 @@
 
 *Structural bias markers:* `core/credit/adapters.py` star topology (`LocalGoodnessToThermodynamicAdapter`, `TemporalTraceToThermodynamicAdapter`, `BackpropToThermodynamicAdapter`, …) routes all cross-family interop THROUGH the EqProp credit. `_train_step_spiking` shows per-dynamics dispatch precedent exists but was never generalized. The 6-D `train_step` self-documents as a 5-D port ("For now, use the 5-D system train_step as the base"). `SystemTrainer` itself is innocent (pure delegation + epoch bookkeeping).
 
+### Code anchors (stable paths only — re-resolve at edit time)
+
+| Concern | Location |
+|---|---|
+| Composed `train_step`, trainer-side generation | `_ComposedSystem` built inside `SystemTrainer` (`core/system_trainer.py`) — incl. `_train_step_spiking` dispatch precedent |
+| Composed `train_step`, adapted-system generation | `_AdaptedSystem.train_step` (`core/ontology.py`) |
+| Raw-loop training pattern | `TrainingMixin.train_step` (`core/training_mixin.py`) — candidate canonical for the 9.5 consolidation decision |
+| Credit protocol + native family classes | `CreditAssignment` protocol + `ThermodynamicContrast` et al. in `core/ontology.py` (`compute_pseudo_gradient` per class) |
+| Cross-family adapter star | `core/credit/adapters.py` |
+| Composition entry + substrate selection | `compose_joint_system_from_configs` (`core/system_trainer.py`); `SubstrateConfig` in `core/ontology.py` (+ its `from_spec` selector) |
+| Axis fences | `_EXCLUDED_AXES` in `core/campaign/evaluation.py` |
+
 *Axis probe (session 5):* 16/21 probed combos (build + one `train_step`) green; the 5 failures fall under the fences below. `_EXCLUDED_AXES` records a reason per fenced axis value — 11 total: substrates ×5 (`analog`, `memristive`, `neuromorphic`, `sparse`, `ternary`), gradient-credit spellings ×2 (`gradient`, `backprop`), non-euclidean updates ×4 (`riemannian_orthogonal`, `spectral_constrained`, `natural_gradient`, `elastic_consolidation`).
 
 ### 9.1 Capability-declared phase negotiation *(removes the double-settle tax)*
-- [ ] Credits declare required phases (e.g., `phases: ClassVar[tuple[Phase, ...]]`; contrastive = `("free", "nudged")`, one-shot = `("state",)` or similar)
-- [ ] Composed `train_step` (both generations) settles only declared phases; pass states as a phase-keyed mapping so signatures stay uniform
+- [ ] Credits declare required phases: `phases: ClassVar[tuple[Phase, ...]]` with `Phase` a Literal/StrEnum over `{"free", "nudged"}` (extensible). Declarations derived from the usage evidence above — thermodynamic_contrast / homeostatic / random_projections / target_inversion = `("free", "nudged")`; local_goodness = `("free",)`; backprop = `("nudged",)` **plus the `requires_autograd` flag (9.2)**; temporal_trace = `()` (settles nothing; reads whatever states it needs via the mapping below)
+- [ ] Both composed `train_step` generations (`_ComposedSystem` in `system_trainer.py`, `_AdaptedSystem` in `ontology.py` — see Code anchors) settle only declared phases; pass states to credits as a phase-keyed mapping so signatures stay uniform regardless of each credit's declaration
 - [ ] Generalize `_train_step_spiking`'s dispatch precedent instead of special-casing
 - [ ] Regression tests: settle-call count == declared phases per family; step-time smoke showing one-phase families no longer pay 2×
-- [ ] Deprecate/reduce the `*ToThermodynamicAdapter` star — each family gets a direct path (adapters remain only for deliberate hybrid-composition experiments)
+- [ ] Enumerate live `*ToThermodynamicAdapter` call sites (campaigns/zoo/experiments) to scope the deprecation; each family gets a direct path (adapters remain only for deliberate hybrid-composition experiments)
 
 ### 9.2 Autograd-capable path for gradient credit *(un-fences `credit=gradient/backprop`)*
 - [ ] `requires_autograd` capability flag; enable grad through settle ONLY when flagged — the 7.2.1 leak fixes (detach pseudo-grads, `no_grad` train_step, out-of-place adds) stay default-on for everyone else
@@ -71,7 +83,7 @@
 ### 9.5 Neutrality verification harness *(keeps us honest)*
 - [ ] Promote the session-5 axis probe into a permanent parametrized test: every accepted combo builds + trains one real step; every excluded combo raises with its reason
 - [ ] Metrics schema parity across families (same keys, same semantics — no family-specific shortcuts in shared bookkeeping)
-- [ ] Decide trainer consolidation: one canonical family-neutral training loop for `JointSystem`, or formally document raw-loop pattern as canonical and retire `SystemTrainer` duplication
+- [ ] Decide trainer consolidation: one canonical family-neutral training loop for `JointSystem`, or formally document raw-loop pattern as canonical and retire `SystemTrainer` duplication — either documented outcome closes the item; sweep gating rides on harness parity, not on which option wins
 
 ### Constraints (hard)
 - Preserve 7.2.1 stability/memory semantics everywhere except explicitly-flagged autograd paths
