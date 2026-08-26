@@ -21,6 +21,8 @@ from pathlib import Path
 import torch
 from torch import Tensor
 
+from computronium.core.plasticity.theta_audit import ThetaInvarianceAudit
+
 # ============================================================
 # Z3 Task Generators
 # ============================================================
@@ -379,6 +381,11 @@ class Z3Model(torch.nn.Module):
 # ============================================================
 
 
+def _is_theta_param(name: str, _p: torch.nn.Parameter) -> bool:
+    """Select θ (operator embeddings) — the parameters that must never move."""
+    return name == "operator_embeddings"
+
+
 def evaluate_z3(
     coordinate: str,
     meta_train_epochs: int = 50,
@@ -443,61 +450,66 @@ def evaluate_z3(
         if epoch % 10 == 0:
             print(f"    Epoch {epoch}: loss={epoch_loss / len(tasks):.4f}")
 
-    # Snapshot θ after meta-training
-    theta_before = model.get_theta_snapshot()
-
     # ===== EVALUATION PHASE (θ FROZEN, ψ adapts) =====
     print("  Evaluation phase (θ frozen)...")
     model.freeze_theta()
     assert model.verify_theta_frozen(), "θ not frozen!"
 
-    # For each task, reset ψ and evaluate adaptation
-    for task_name, task_fn in tasks:
-        print(f"    Task: {task_name}")
+    # PR-1 optimizer hygiene: rebuild Adam for the ψ-only phase so no
+    # meta-training momentum state survives into adaptation.
+    trainable = [p for p in model.parameters() if p.requires_grad]
+    optimizer = torch.optim.Adam(trainable, lr=0.001)
 
-        # Reset plastic state (ψ) for new task
-        model.psi_controller_state.zero_()
-        model.psi_operator_logits.zero_()
+    # PR-2 audit: exact-diff θ across the whole switching/adaptation phase
+    with ThetaInvarianceAudit(model, selector=_is_theta_param) as audit:
+        # For each task, reset ψ and evaluate adaptation
+        for task_name, task_fn in tasks:
+            print(f"    Task: {task_name}")
 
-        # Quick adaptation on this task (only ψ updates)
-        model.train()
-        adaptation_losses = []
-        for epoch in range(eval_epochs_per_task):
-            x, y = task_fn(batch_size, seq_len, input_dim, device)
-            optimizer.zero_grad()
-            logits = model(x, is_training=True)
-            loss = criterion(logits, y)
-            loss.backward()
-            optimizer.step()
-            adaptation_losses.append(loss.item())
+            # Reset plastic state (ψ) for new task
+            model.psi_controller_state.zero_()
+            model.psi_operator_logits.zero_()
 
-        # Evaluate on this task (θ frozen, ψ adapted)
-        model.eval()
-        correct = 0
-        total = 0
-        with torch.no_grad():
-            for _ in range(20):
+            # Quick adaptation on this task (only ψ updates)
+            model.train()
+            adaptation_losses = []
+            for epoch in range(eval_epochs_per_task):
                 x, y = task_fn(batch_size, seq_len, input_dim, device)
-                logits = model(x, is_training=False)
-                pred = logits.argmax(dim=-1)
-                correct += (pred == y).sum().item()
-                total += y.shape[0]
+                optimizer.zero_grad()
+                logits = model(x, is_training=True)
+                loss = criterion(logits, y)
+                loss.backward()
+                optimizer.step()
+                adaptation_losses.append(loss.item())
 
-        accuracy = correct / total
-        results["tasks"][task_name] = {
-            "accuracy": accuracy,
-            "adaptation_losses": adaptation_losses,
-        }
-        print(f"      Accuracy: {accuracy:.4f}")
+            # Evaluate on this task (θ frozen, ψ adapted)
+            model.eval()
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for _ in range(20):
+                    x, y = task_fn(batch_size, seq_len, input_dim, device)
+                    logits = model(x, is_training=False)
+                    pred = logits.argmax(dim=-1)
+                    correct += (pred == y).sum().item()
+                    total += y.shape[0]
 
-    # Snapshot θ after evaluation (should be identical)
-    theta_after = model.get_theta_snapshot()
-    theta_change = model.compute_theta_change(theta_before, theta_after)
+            accuracy = correct / total
+            results["tasks"][task_name] = {
+                "accuracy": accuracy,
+                "adaptation_losses": adaptation_losses,
+            }
+            print(f"      Accuracy: {accuracy:.4f}")
 
-    results["theta_change"] = theta_change
-    results["theta_invariant"] = theta_change < 1e-6
+    report = audit.report
+    assert report is not None, "θ audit produced no report"
+    results["theta_change"] = report.max_abs_change
+    results["theta_invariant"] = report.is_within(1e-6)
 
-    print(f"  θ change: {theta_change:.8f} (invariant: {results['theta_invariant']})")
+    print(
+        f"  θ change: {report.max_abs_change:.8f} "
+        f"(invariant: {results['theta_invariant']})"
+    )
 
     # Compute operator diversity (entropy of operator usage)
     model.eval()

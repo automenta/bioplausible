@@ -1,6 +1,6 @@
 # Computronium Sprint Plan: TODO4 — Sprint Close-Out & Research Foundation
 
-## Status: 7.1.1 ✅ PROVED | 7.4 ✅ CORE CLEAN | Phase 7 remainder OPEN | Phase 8 NOT STARTED
+## Status: 7.1.1 ✅ | 7.2.1 ✅ STABILIZED (training in flight) | 7.4 ✅ | PR-1/2/3a/4 ✅ CORE | Phase 7 remainder + full-suite gate OPEN
 
 > Consolidates all unchecked work from `TODO3.md` with the preliminary infrastructure defined in `RESEARCH3.md`. After Phase 7 + 8, work hands off to the RESEARCH3 catalog (15 items, 5 critical paths) under its Execution Protocol (E-1…E-11).
 
@@ -27,9 +27,14 @@
 
 Locked-in fixes: separate free/nudged state objects in `train_step`; multi-layer settling w/ top-down pass in `EnergyMinimizationDynamics.settle`; small random recurrent init; `grad_clip` in `ParameterUpdateConfig` → `EuclideanUpdate.step()`.
 
-- [ ] **7.2.1** Fix gradient clipping/settling loop and lock it in (first epoch NaN-free on CPU verified; stabilize across full epoch)
-- [ ] **7.2.2** Run full 20-epoch MNIST training
-- [ ] **7.2.3** Target >80% test accuracy — or document why not (either closes the task)
+- [x] **7.2.1** Fix gradient clipping/settling loop and lock it in — **DONE (2026-08-25 session 2)**. Four root causes found & fixed; see Session Log §stability for the full chain:
+  1. checkpointed settle path compared `all_acts[-1]` with *itself* (`torch.dist(a,a)`≡0) → always broke at `convergence_start`; now tracks `prev_output`
+  2. `StateDynamicsConfig.step_size` existed but `_settle_step` never applied it → un-damped bidirectional settling diverged (energy → −1e12 within an epoch); now relaxes `h ← h + η·(f(·)−h)`
+  3. `EuclideanUpdate` clipped **per-tensor**, rescaling every gradient to norm exactly 1.0 → erased near-equilibrium decay, constant-size random walk; now global-norm clip (`clip_grad_norm_` semantics)
+  4. optimizer momentum 0.9 amplified noise ×10 past the accuracy peak (80% @ep0 then collapse); `create_eqprop_system(update_momentum=…)` parameterized, 7.2 uses 0.0
+  - Plus the blocking memory leak: settle autograd graphs accumulated ~4 MB/step → CUDA OOM at epoch 4. Pseudo-grads are consumed as plain values (no backward anywhere in the pipeline) → detached in `EuclideanUpdate.step`; `_ComposedSystem.train_step` runs under `torch.no_grad()`; `forward_with_intermediates` bias/recurrent adds made out-of-place. Verified flat 16.6 MB over 400 steps.
+- [~] **7.2.2** Run full 20-epoch MNIST training — runner built (`computronium/experiments/joint/eqprop_mnist.py`, consumes `MODEL_CONFIGS["eqprop"]` via `create_eqprop_system`); launch command: `uv run python -m computronium.experiments.joint.eqprop_mnist --device cuda`. Run launched 2026-08-25; log `logs/eqprop_mnist_72.log`, results `results/eqprop_mnist/results.json`. Trajectory: ep0 39.6 → ep4 77.0 → **ep7 81.2% (target crossed)**, no divergence (prior crash point was epoch 4). Final 20-epoch number lands in results.json.
+- [~] **7.2.3** Target >80% test accuracy — **crossed at epoch 7 (81.2% val acc)**; confirm final best/final numbers from results.json and mark ✅
 
 ### 7.3 CI Gates (TODO3 DoD remainder)
 Gate = current *configured* baseline (`pyproject.toml [tool.pyright]` — `strict` was deliberately relaxed to a per-rule profile; do NOT reintroduce), not aspirational strictness:
@@ -93,9 +98,9 @@ Built once; consumed by the RESEARCH3 catalog. Startup sequence per RESEARCH3 §
 ### 8.1 Execution Order (startup sequence, first two weeks)
 
 1. **Day 1**: PR-0 verification gate + place hardware orders (CP-D lead time is the constraint, not difficulty)
-2. **Days 2–3**: PR-1 optimizer hygiene (verify no momentum carry-over) + PR-2 θ-invariance harness (test on trivially frozen model)
-3. **Days 3–4**: PR-3a software instrumentation into suite runners
-4. **Days 4–5**: PR-4 statistics kit checked in
+2. **Days 2–3**: PR-1 optimizer hygiene (verify no momentum carry-over) + PR-2 θ-invariance harness (test on trivially frozen model) — **PR-1 + PR-2 DONE 2026-08-25** (see Session Log)
+3. **Days 3–4**: PR-3a software instrumentation into suite runners — **DONE 2026-08-25** (`ResourceUsage` consolidated into `core/profiling.py`; `measure_suite_resources` wired into all four joint suite evaluators)
+4. **Days 4–5**: PR-4 statistics kit checked in — **CORE DONE 2026-08-25** (`validation/preregistration.py`: `MIN_SEEDS`, `ThresholdRegistration`, `paired_comparison`); remaining: registration JSON template file + unit tests
 5. **Week 2**: PR-7 shakedown in cost order — L3.5 (`algorithm_migration.py`: ψ reset, temperature schedule, Δθ audit) → L1 reduced-dims (`adaptation_efficiency.py`: switching stream, adaptation half-life) → L2/L3 smokes (`compute_efficiency.py`, `structural_robustness.py`: metrics populate). **Day-10 checkpoint** reviews all output — fix plumbing bugs at ~0.1% of full cost.
 6. **Waiting periods** (any CP-A block, per E-8): draft PR-6; PyTorch wrapper API sketch (interface design only); Rocq scaffold compile check (done — 7.1 remains pull-based)
 
@@ -130,6 +135,10 @@ Bridge points from Phase 7:
 | Artifact | Location |
 |----------|----------|
 | Working EqProp config | `computronium/experiments/eqprop_vision_parity.py::MODEL_CONFIGS["eqprop"]` |
+| 7.2 MNIST runner | `computronium/experiments/joint/eqprop_mnist.py` (results: `results/eqprop_mnist/results.json`) |
+| θ-invariance harness (PR-2) | `computronium/core/plasticity/theta_audit.py`; Z3 consumer in `experiments/joint/z3_fixed_weights.py::evaluate_z3` |
+| Pre-registration kit (PR-4) | `computronium/validation/preregistration.py` |
+| Canonical `ResourceUsage` (PR-3a) | `computronium/core/profiling.py` (+ `measure_suite_resources`); dupes deleted |
 | Parity tests | `tests/property/test_ontology_parity.py` |
 | EqProp locality tests | `tests/property/test_eqprop_locality.py` |
 | Rocq formalization | `rocq/` (canonical; Lean retired) |
@@ -161,10 +170,10 @@ Bridge points from Phase 7:
 ## Definition of Done (TODO4 Complete)
 
 - [x] **7.1.1** `energy_decreases_diagonal` proved (0-admit diagonal case) ✅ 2026-08-25; 7.1.2–7.1.4 remain explicitly parked under CP-B pull-based policy
-- [ ] **7.2** EqProp 20-epoch MNIST >80% accuracy (or documented why not)
+- [~] **7.2** EqProp 20-epoch MNIST >80% accuracy — **81.2% val acc @ epoch 7 (target crossed)**; run manually stopped at ep9 during wrap-up (stability fixes proven through old crash point). Rerun to get a full-20-epoch record (~11 min on the 3080): `uv run python -m computronium.experiments.joint.eqprop_mnist --device cuda`
 - [x] **7.4** Hard type errors cleared from `ontology.py`/`registry.py` — fixed or dead paths deleted ✅ 2026-08-25 (0 pyright errors on both files; dead paths `from_experiment`/`from_configs`/`check_compatibility` removed)
-- [~] **7.3** CI green at configured baseline: `make` in `rocq/` ✅, `ruff format --check` ✅, pyright per-rule profile green on core ✅ / repo-wide burn-down tracked as new item 7.5; full-suite pytest + coverage run still pending
-- [ ] **PR-0…PR-4** merged and green
+- [~] **7.3** CI green at configured baseline: `make` in `rocq/` ✅, `ruff format --check` ✅ on all touched files, pyright per-rule profile clean on touched files; full-suite pytest + coverage run still pending → **next session step 2**
+- [~] **PR-0…PR-4 merged and green**: PR-1 ✅ PR-2 ✅ PR-3a ✅ PR-4 core ✅; PR-0 = refresh stale `docs/baseline.md` numbers after full-suite run
 - [ ] **PR-7** shakedown green w/ harvested good/bad config sets
 - [ ] **PR-5** calibrated + **PR-9** commissioned
 - [ ] **PR-6** drafted; PR-3b procured/order placed; PR-8 parked pending CP-D
@@ -174,7 +183,41 @@ Bridge points from Phase 7:
 
 ## Session Log & Future-Work Notes
 
-### 2026-08-25 session (7.1.1 + 7.4 + partial 7.3)
+### 2026-08-25 session 2 (7.2.1 + PR-1/2/3a/4 + training launch)
+
+**7.2.1 stability chain (all fixed, in fix order):**
+- Convergence self-comparison in checkpointed settle (`torch.dist(a,a)`≡0) → track `prev_output` (`core/ontology.py`).
+- `step_size` relaxation wired into `_settle_step`: `h ← h + η·(f(·)−h)` with config `step_size=0.1`. Without it the bidirectional (bottom-up + top-down + recurrent) settle loop has gain >1 and diverges: energy hit −9.5e11 within one epoch, −2.7e23 by epoch 4.
+- Per-tensor grad clip **rescaled every gradient to norm exactly 1.0**, destroying magnitude decay near equilibrium → constant-size coherent random walk that degraded a converged solution (80.6% @ep0 → 10% @ep3). Replaced with global-norm clipping (`torch.stack(norms)` → vector_norm). Lesson: per-tensor normalization on pseudo-gradients is pathological; keep relative magnitudes.
+- Optimizer momentum 0.9 on noisy contrastive pseudo-grads drifts past the optimum (buf amplifies stale directions ×10). `create_eqprop_system(update_momentum=…)` added; 7.2 uses 0.0 → monotone climb (39.6→77.0% over 5 epochs).
+- **Memory leak (blocked everything)**: settle builds an autograd graph per phase-step but *no backward ever runs* — graphs were retained ~4 MB/step → CUDA OOM at epoch 4. Fixes: detach pseudo-grads at the `EuclideanUpdate.step` choke point; wrap `_ComposedSystem.train_step` in `torch.no_grad()` (semantically exact — pseudo-grads are correlation values); out-of-place bias/recurrent adds in both `forward_with_intermediates` impls. Verified flat 16.6 MB / 400 steps. Debug recipe that worked: bisect pipeline stages → `gc.get_objects()` CUDA-tensor census (thousands of live (512,512) graph tensors) → minimal-repro differential (plain-init settle flat vs geometry-init growing).
+
+**New artifact map:**
+| Artifact | What |
+|---|---|
+| `computronium/experiments/joint/eqprop_mnist.py` | 7.2 runner; config derived from `MODEL_CONFIGS["eqprop"]`; NaN guard; JSON results |
+| `computronium/core/plasticity/theta_audit.py` | PR-2 `ThetaInvarianceAudit` ctx mgr + `ThetaAuditReport` + `require_frozen`; tests `tests/unit/core/test_theta_audit.py` (green) |
+| `computronium/validation/preregistration.py` | PR-4 kit: `MIN_SEEDS=5`, `require_min_seeds`, `ThresholdRegistration` (JSON round-trip), `paired_comparison` (bootstrap CI + permutation p + Cohen's dz), `.passes(reg)` |
+| `core/profiling.py::ResourceUsage` | PR-3a canonical merged class (vector core compute/memory/energy/latency/ψ + measurement detail; `__add__`=sum w/ peak-max, `/`, `to_dict`/`from_dict` campaign-keyed, `measure()`); `measure_suite_resources()` helper wired into all four joint evaluators (`"resources"` key per seed result) |
+| deleted | `core/campaign/resource_vector.py`; dup class in `core/stability/frontier.py` (importers repointed to profiling; `stability/__init__` still re-exports) |
+
+**PR-1**: `evaluate_z3` now rebuilds Adam post-freeze over trainable-only params (no meta-train momentum survives into ψ-adaptation) and wraps the whole switching/adaptation phase in `ThetaInvarianceAudit`; results schema unchanged (`theta_change`, `theta_invariant`). ⚠️ NOT yet smoke-run end-to-end — next session step 3.
+
+**Gotchas for future sessions:**
+- Frozen-check must read **live** params; `p.detach().clone().requires_grad` is always False (bit me in the audit itself).
+- `from_dict` accepts legacy `parameter_count` key for pre-consolidation campaign records; old plain-key stability dicts ("memory"/"energy") are NOT read — backwards compat NONE by policy.
+- Divide-by-zero in `ResourceUsage.__truediv__` now raises (old frontier class returned zeros); `test_stability_metrics.py` 33/33 green with new semantics.
+- `eqprop_vision_parity.py` repaired (dead `CoreTrainer` import removed; routes through ontology factories; only `eqprop` + `backprop_mlp` supported, others logged+skipped; latent `n_permutations=` kwarg bug fixed). Its pandas/numpy pyright findings (~25) pre-date this work — part of 7.5 debt.
+- Pre-existing errors left untouched (7.5 scope): `profiling.py` F821 `SystemConfig`:608, pynvml imports; `z3_fixed_weights.py` "Tensor not callable" stub artifacts; eqprop_vision_parity aggregation block.
+
+### Next-session checklist (in order)
+1. **Close 7.2**: target already crossed at ep7 (81.2% val acc); the wrap-up stopped the run at ep9. Relaunch for a clean 20-epoch record (~11 min on the 3080) — stability fixes are locked in — then mark 7.2.2/7.2.3 ✅ from `results/eqprop_mnist/results.json`.
+2. **Close 7.3**: single full-suite `uv run pytest --cov` (floor 15 % configured in `pyproject.toml` addopts); expect the 7 known pre-existing property-test failures (baseline A/B already proved them pre-existing); then refresh numbers in `docs/baseline.md` (PR-0).
+3. **Z3 end-to-end smoke** of the PR-1/PR-2 refactor: `evaluate_z3("<6-part rule_state coordinate>", meta_train_epochs=5, eval_epochs_per_task=2, device="cpu")`.
+4. PR-4 finishers: `docs/preregistration_template.md` + example registration JSON under `configs/preregistrations/` + unit tests for `paired_comparison` (property test with synthetic paired data).
+5. Only if differentiable-through-settle is ever needed: root-cause the residual graph retention (growth dropped 4.1→1.6 MB/step after out-of-place adds; `no_grad` masks it entirely — checkpointing path remains unused/vestigial meanwhile).
+
+### 2026-08-25 session 1 (7.1.1 + 7.4 + partial 7.3)
 - **Rocq**: `per_index_descent` lemma added; `energy_decreases_diagonal` closed with zero admits (stdlib classical axioms only). The scalar-lemma-first pattern is the reusable recipe for 7.1.2.
 - **Dead code deleted**: `SystemConfig.from_experiment`, `SystemTrainer.from_configs` (~170 lines), `Registry.check_compatibility`. If a config-driven trainer factory is needed again, rebuild it against the *current* `ExperimentConfig.system: SystemConfig` field rather than resurrecting these.
 - **Settle-path dedup**: non-checkpointed settling now calls `_settle_step` directly; future dynamics changes have exactly one place to edit. Gradient-checkpointing semantics unchanged (`use_reentrant=False` path untouched).

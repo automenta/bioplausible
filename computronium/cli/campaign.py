@@ -203,7 +203,7 @@ def _run_campaign(args) -> int:
         CheckpointManager,
     )
     from computronium.core.campaign.frontier_record import FrontierRecord
-    from computronium.core.campaign.resource_vector import ResourceUsage
+    from computronium.core.profiling import ResourceUsage
 
     space = _get_search_space(args.space)
     campaign_id = args.campaign_id or f"camp_{uuid.uuid4().hex[:8]}"

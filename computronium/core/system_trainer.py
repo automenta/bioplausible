@@ -105,7 +105,6 @@ class SystemTrainerConfig:
 class _DataProvider(Protocol):
     """Protocol for data providers (DataLoader, Task, etc.)."""
 
-    def get_batch(self) -> tuple[Tensor, Tensor]: ...
     def __iter__(self) -> Iterator[tuple[Tensor, Tensor]]: ...
     def __len__(self) -> int: ...
 
@@ -506,6 +505,13 @@ def compose_system[
             return compose_system(substrate, geometry, dynamics, credit, update)
 
         def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
+            # The contrastive pipeline consumes pseudo-gradients as plain
+            # values (no backward pass exists end-to-end); disabling autograd
+            # here keeps settling graphs from accumulating on GPU.
+            with torch.no_grad():
+                return self._train_step_inner(x, y)
+
+        def _train_step_inner(self, x: Tensor, y: Tensor) -> dict[str, float]:
             # Use separate state objects for free and nudged phases to avoid
             # in-place modification of shared activations
             free_state = SystemState(x=x, y=y)
@@ -679,6 +685,7 @@ def create_eqprop_system(
     beta: float = 0.5,
     settle_steps: int = 30,
     lr: float = 0.01,
+    update_momentum: float = 0.9,
 ) -> System:
     """Create an Equilibrium Propagation system (classic EqProp coordinate)."""
     from computronium.core.ontology import (
@@ -742,7 +749,7 @@ def create_eqprop_system(
         ParameterUpdateConfig(
             update_type="euclidean",
             step_size=lr,
-            momentum=0.9,
+            momentum=update_momentum,
             ortho_steps=5,
             spectral_norm=1.0,
             fisher_damping=1e-3,

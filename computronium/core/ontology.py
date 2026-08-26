@@ -1859,7 +1859,9 @@ class FeedforwardGeometry(nn.Module):
             if isinstance(layer, nn.Linear):
                 h = op(h, layer.weight)
                 if layer.bias is not None:
-                    h += layer.bias
+                    # Out-of-place add: in-place adds on grad-tracking tensors
+                    # pin the whole downstream settle graph (CUDA leak)
+                    h = h + layer.bias
             else:
                 h = layer(h)
                 # Add after activation functions (ReLU, etc.)
@@ -2044,14 +2046,15 @@ class RecurrentGeometry(nn.Module):
             if isinstance(layer, nn.Linear):
                 h = op(h, layer.weight)
                 if layer.bias is not None:
-                    h += layer.bias
+                    h = h + layer.bias
             else:
                 h = layer(h)
                 # Add after activation functions
                 acts.append(h)
             # Apply recurrent connection after each hidden layer (except output)
+            # Out-of-place: in-place adds pin the downstream settle graph
             if self._recurrent_weight is not None and i < len(self._layers) - 2:
-                h += op(h, self._recurrent_weight)
+                h = h + op(h, self._recurrent_weight)
         # Add final output if last layer was Linear (no trailing activation)
         if isinstance(self._layers[-1], nn.Linear):
             acts.append(h)
@@ -2560,19 +2563,32 @@ class EuclideanUpdate:
         geometry: Geometry,  # ruff: ignore[unused-method-argument]
     ) -> dict[str, Tensor]:
         updated = {}
+        # Pseudo-gradients are consumed as plain values (no backward pass exists
+        # in this pipeline); detaching prevents settle-graph chains from being
+        # retained by momentum buffers across training steps.
+        detached_grads = [g.detach() for g in pseudo_grads]
+
+        # Global-norm clipping (clip_grad_norm_ semantics): keeps relative
+        # per-parameter magnitudes intact so updates shrink naturally near
+        # equilibrium. Per-tensor rescaling would erase that signal and turn
+        # every step into a fixed-norm jump.
+        if self.config.grad_clip is not None and self.config.grad_clip > 0:
+            stacked_norms = (
+                torch.stack([g.norm() for g in detached_grads])
+                if detached_grads
+                else torch.zeros(1)
+            )
+            total_norm = torch.linalg.vector_norm(stacked_norms)
+            if total_norm > self.config.grad_clip:
+                scale = self.config.grad_clip / (total_norm + 1e-8)
+                detached_grads = [g * scale for g in detached_grads]
 
         grad_idx = 0
         for name, param in params.items():
-            if grad_idx < len(pseudo_grads):
-                grad = pseudo_grads[grad_idx]
+            if grad_idx < len(detached_grads):
+                grad = detached_grads[grad_idx]
                 # Only apply gradient if shapes match
                 if grad.shape == param.shape:
-                    # Apply gradient clipping to the pseudo-gradient
-                    if self.config.grad_clip is not None and self.config.grad_clip > 0:
-                        grad_norm = grad.norm()
-                        if grad_norm > self.config.grad_clip:
-                            grad = grad * (self.config.grad_clip / (grad_norm + 1e-8))
-
                     if self.config.momentum > 0:
                         buf = self._momentum_buffers.get(name, torch.zeros_like(param))
                         buf.mul_(self.config.momentum).add_(grad)
@@ -3948,6 +3964,7 @@ class EnergyMinimizationDynamics:
         activations = [m for m in layers if not isinstance(m, nn.Linear)]
 
         # Update each hidden layer
+        step_size = self.config.step_size
         for i in range(num_hidden):
             pre = linears[i](all_acts[i])  # Bottom-up from previous layer
 
@@ -3965,8 +3982,11 @@ class EnergyMinimizationDynamics:
                 total = momentum * velocity[i] + total
                 new_velocity.append(total.detach().clone())
 
-            # Apply activation (ReLU)
-            h_new = activations[i](total) if i < len(activations) else total
+            # Apply activation (ReLU), then relax toward the target state
+            # (h_{t+1} = (1-η)·h_t + η·f(...) keeps the bidirectional settle
+            # loop contractive for gain ≈ 1 topologies)
+            target_h = activations[i](total) if i < len(activations) else total
+            h_new = all_acts[i + 1] + step_size * (target_h - all_acts[i + 1])
 
             new_acts.append(h_new)
 
@@ -4072,6 +4092,7 @@ class EnergyMinimizationDynamics:
             import torch.utils.checkpoint as checkpoint
 
             for step in range(self.config.max_steps):
+                prev_output = all_acts[-1].detach()
                 # Checkpoint the step function
                 all_acts, self._velocity = checkpoint.checkpoint(
                     self._settle_step,
@@ -4092,9 +4113,7 @@ class EnergyMinimizationDynamics:
 
                 # Check convergence (can't checkpoint this as it's not differentiable)
                 if step >= self.config.convergence_start:
-                    delta = torch.dist(
-                        all_acts[-1], all_acts[-1], p=float("inf")
-                    ).item()
+                    delta = torch.dist(all_acts[-1], prev_output, p=float("inf")).item()
                     if delta < self.config.convergence_threshold:
                         break
         else:

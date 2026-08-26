@@ -19,11 +19,17 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
+from torch.utils.data import DataLoader
 
 from computronium.analysis.dynamics import DynamicsAnalyzer
 from computronium.cli.run import _BASELINE_MODELS
-from computronium.core.registry import ComponentCategory, Registry
-from computronium.core.trainer import CoreTrainer, TrainerConfig
+from computronium.core.system_trainer import (
+    SystemTrainer,
+    SystemTrainerConfig,
+    create_backprop_system,
+    create_eqprop_system,
+)
+from computronium.data.vision import get_vision_dataset
 from computronium.utils import seed_everything
 from computronium.validation.statistics import (
     bootstrap_ci,
@@ -34,6 +40,8 @@ from computronium.validation.statistics import (
 
 if TYPE_CHECKING:
     import pandas as pd
+
+    from computronium.core.ontology import System
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +76,6 @@ class EqPropParityConfig:
     learning_rate: float = 1e-3
     output_dir: str = "results/eqprop_vision_parity"
     device: str = "auto"
-    quick_mode: bool = False
 
 
 # Model-specific configurations
@@ -156,27 +163,41 @@ def _get_input_dims(task: str) -> tuple[int, int]:
     return dims.get(task, (784, 10))
 
 
-def _create_trainer_config(
-    model_name: str,
-    task: str,
-    seed: int,
-    config: EqPropParityConfig,
-) -> TrainerConfig:
-    """Create trainer configuration."""
-    input_dim, output_dim = _get_input_dims(task)
-    model_kwargs = MODEL_CONFIGS.get(model_name, {}).copy()
-    model_kwargs.setdefault("input_dim", input_dim)
-    model_kwargs.setdefault("output_dim", output_dim)
+_SYSTEM_FACTORIES = {
+    "eqprop": create_eqprop_system,
+    "backprop_mlp": create_backprop_system,
+}
 
-    return TrainerConfig(
-        model=model_name,
-        task=task,
-        epochs=config.epochs,
-        batch_size=config.batch_size,
-        optimizer_kwargs={"lr": config.learning_rate},
-        model_kwargs=model_kwargs,
-        device=config.device,
-        quick_mode=config.quick_mode,
+
+def _build_system(model_name: str, task: str, config: EqPropParityConfig) -> System:
+    """Build the 5-axis system for a supported model/task pair."""
+    input_dim, output_dim = _get_input_dims(task)
+    kwargs = MODEL_CONFIGS.get(model_name, {})
+    common = {
+        "input_dim": input_dim,
+        "output_dim": output_dim,
+        "hidden_dim": kwargs.get("hidden_dim", 512),
+        "num_layers": kwargs.get("num_layers", 3),
+        "lr": config.learning_rate,
+    }
+    match model_name:
+        case "eqprop":
+            return create_eqprop_system(
+                beta=kwargs.get("beta", 0.1),
+                settle_steps=kwargs.get("inference_steps", 20),
+                **common,
+            )
+        case _:
+            return create_backprop_system(**common)
+
+
+def _task_loaders(task: str, batch_size: int) -> tuple[DataLoader, DataLoader]:
+    """Flat train/test loaders for a vision task."""
+    train_ds = get_vision_dataset(task, flatten=True, train=True)
+    test_ds = get_vision_dataset(task, flatten=True, train=False)
+    return (
+        DataLoader(train_ds, batch_size=batch_size, shuffle=True),
+        DataLoader(test_ds, batch_size=batch_size),
     )
 
 
@@ -186,38 +207,37 @@ def _run_single_experiment(
     seed: int,
     config: EqPropParityConfig,
 ) -> dict:
-    """Run a single training experiment."""
+    """Run a single training experiment through the ontology SystemTrainer."""
     seed_everything(seed)
 
-    trainer_config = _create_trainer_config(model_name, task, seed, config)
-    trainer = CoreTrainer(trainer_config)
+    system = _build_system(model_name, task, config)
+    train_loader, val_loader = _task_loaders(task, config.batch_size)
 
     start_time = time.time()
+    trainer = SystemTrainer(
+        system=system,
+        config=SystemTrainerConfig(
+            max_epochs=config.epochs,
+            batch_size=config.batch_size,
+            device=_resolve_device(config.device),
+        ),
+        train_data=train_loader,
+        val_data=val_loader,
+    )
     history = trainer.fit()
+    trainer.close()
     elapsed = time.time() - start_time
 
-    if not history:
-        return {
-            "model": model_name,
-            "task": task,
-            "seed": seed,
-            "accuracy": 0.0,
-            "loss": float("inf"),
-            "time": elapsed,
-            "params": 0,
-            "success": False,
-        }
-
-    final = history[-1]
+    final = history[-1] if history else {}
     return {
         "model": model_name,
         "task": task,
         "seed": seed,
-        "accuracy": final.val_acc if hasattr(final, "val_acc") else final.accuracy,
-        "loss": final.val_loss if hasattr(final, "val_loss") else final.loss,
+        "accuracy": final.get("val_acc", 0.0),
+        "loss": final.get("val_loss", float("inf")),
         "time": elapsed,
-        "params": final.param_count if hasattr(final, "param_count") else 0,
-        "success": True,
+        "params": sum(p.numel() for p in system.geometry.params.values()),
+        "success": bool(history),
     }
 
 
@@ -229,7 +249,10 @@ def run_eqprop_parity(config: EqPropParityConfig) -> list[dict]:
 
     # Filter out baseline models that fail learns-gate
     eqprop_models = [m for m in config.eqprop_models if m not in _BASELINE_MODELS]
-    all_models = eqprop_models + config.baseline_models
+    candidates = eqprop_models + config.baseline_models
+    all_models = [m for m in candidates if m in _SYSTEM_FACTORIES]
+    for model_name in set(candidates) - set(all_models):
+        logger.warning("Model %s has no ontology system factory, skipping", model_name)
 
     total = len(config.tasks) * len(all_models) * config.seeds
     logger.info("EqProp Vision Parity: %d total experiments", total)
@@ -240,13 +263,6 @@ def run_eqprop_parity(config: EqPropParityConfig) -> list[dict]:
     exp_count = 0
     for task in config.tasks:
         for model_name in all_models:
-            # Verify model is registered
-            try:
-                Registry.get_metadata(ComponentCategory.MODEL, model_name)
-            except KeyError:
-                logger.warning("Model %s not registered, skipping", model_name)
-                continue
-
             for seed in range(config.seeds):
                 exp_count += 1
                 logger.info(
@@ -358,7 +374,7 @@ def _statistical_comparison(
             delta = cliffs_delta(model_accs, baseline_accs)
 
             # Permutation test
-            p_val = permutation_test_p(model_accs, baseline_accs, n_permutations=1000)
+            p_val = permutation_test_p(model_accs, baseline_accs, n_perm=1000)
 
             # Mean difference
             mean_diff = np.mean(model_accs) - np.mean(baseline_accs)
@@ -518,7 +534,6 @@ def main():
         learning_rate=args.lr,
         output_dir=args.output_dir,
         device=args.device,
-        quick_mode=args.quick,
     )
 
     logger.info("Starting EqProp Vision Parity Experiment")

@@ -4,69 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from computronium.core.profiling import ResourceUsage
 
-@dataclass(frozen=True, slots=True)
-class ResourceUsage:
-    """Resource consumption vector for a joint system coordinate.
-
-    Attributes:
-        compute: FLOPs or compute cycles (proxy).
-        memory: Peak memory usage in MB.
-        energy: Energy consumption in Joules (proxy).
-        latency: Wall-clock latency in seconds.
-        plastic_state_capacity: Number of plastic state parameters (ψ).
-    """
-
-    compute: float = 0.0
-    memory: float = 0.0
-    energy: float = 0.0
-    latency: float = 0.0
-    plastic_state_capacity: float = 0.0
-
-    def __add__(self, other: ResourceUsage) -> ResourceUsage:
-        """Add two resource usage vectors."""
-        return ResourceUsage(
-            compute=self.compute + other.compute,
-            memory=max(self.memory, other.memory),
-            energy=self.energy + other.energy,
-            latency=self.latency + other.latency,
-            plastic_state_capacity=max(
-                self.plastic_state_capacity, other.plastic_state_capacity
-            ),
-        )
-
-    def __truediv__(self, scalar: float) -> ResourceUsage:
-        """Divide by scalar for averaging."""
-        if scalar == 0:
-            return ResourceUsage()
-        return ResourceUsage(
-            compute=self.compute / scalar,
-            memory=self.memory / scalar,
-            energy=self.energy / scalar,
-            latency=self.latency / scalar,
-            plastic_state_capacity=self.plastic_state_capacity / scalar,
-        )
-
-    def to_dict(self) -> dict[str, float]:
-        """Convert to dictionary for serialization."""
-        return {
-            "compute": self.compute,
-            "memory": self.memory,
-            "energy": self.energy,
-            "latency": self.latency,
-            "plastic_state_capacity": self.plastic_state_capacity,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, float]) -> ResourceUsage:
-        """Create from dictionary."""
-        return cls(
-            compute=data.get("compute", 0.0),
-            memory=data.get("memory", 0.0),
-            energy=data.get("energy", 0.0),
-            latency=data.get("latency", 0.0),
-            plastic_state_capacity=data.get("plastic_state_capacity", 0.0),
-        )
+__all__ = ["FrontierAggregator", "FrontierRecord", "ResourceUsage"]
 
 
 @dataclass(frozen=True, slots=True)

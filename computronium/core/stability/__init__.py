@@ -4,6 +4,7 @@ Provides stability monitors, resource accounting, and frontier record
 aggregation for the joint architecture.
 """
 
+from computronium.core.profiling import ResourceUsage
 from computronium.core.stability.basin import (
     BasinStabilityEstimator,
     estimate_basin_stability,
@@ -12,7 +13,6 @@ from computronium.core.stability.basin import (
 from computronium.core.stability.frontier import (
     FrontierAggregator,
     FrontierRecord,
-    ResourceUsage,
 )
 from computronium.core.stability.lyapunov import (
     LyapunovEstimator,

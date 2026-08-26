@@ -14,10 +14,13 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import time
 from pathlib import Path
 
 import torch
 from torch import Tensor
+
+from computronium.core.profiling import measure_suite_resources
 
 
 def create_task_a0(
@@ -65,6 +68,7 @@ def evaluate_migration(
     torch.manual_seed(seed)
     random.seed(seed)
     device = torch.device(device)
+    start_time = time.perf_counter()
 
     parts = coordinate.split("/")
     if len(parts) != 6:
@@ -247,6 +251,13 @@ def evaluate_migration(
         else 0,
         "a0_losses": a0_losses,
         "a1_losses": a1_losses,
+        "resources": measure_suite_resources(
+            model=model,
+            coordinate=coordinate,
+            device=str(device),
+            batch_size=batch_size,
+            elapsed_s=time.perf_counter() - start_time,
+        ).to_dict(),
     }
 
 
