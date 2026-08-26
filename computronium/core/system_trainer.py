@@ -57,6 +57,8 @@ class JointSystem[
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]: ...
     def forward(self, x: Tensor) -> Tensor: ...
+    @property
+    def context(self) -> SystemContext: ...
     def to_spec(self) -> dict[str, object]: ...
     @classmethod
     def from_spec(cls, spec: dict) -> JointSystem: ...
@@ -1295,6 +1297,11 @@ def compose_joint_system[
                 registry=registry,
             )
 
+        @property
+        def context(self) -> SystemContext:
+            """SystemContext bound to the current θ and component configs."""
+            return self._make_context()
+
         def to_spec(self) -> dict[str, object]:
             """Serialize the JointSystem to a specification dictionary."""
             geometry_dict = dataclasses.asdict(self.geometry.config)
@@ -1370,6 +1377,11 @@ def compose_joint_system[
 
             def forward(self, x: Tensor) -> Tensor:
                 return self._system.forward(x)
+
+            @property
+            def context(self) -> SystemContext:
+                """SystemContext bound to the current θ and component configs."""
+                return self._make_context()
 
             def _make_context(self) -> SystemContext:
                 from computronium.core.joint.context import SystemContext

@@ -10,6 +10,15 @@ from computronium.core.stability.basin import (
     estimate_basin_stability,
     estimate_basin_stability_multistart,
 )
+from computronium.core.stability.guard import (
+    CalibrationReport,
+    DisagreementReport,
+    GuardDecision,
+    StabilityGuard,
+    calibrate_threshold,
+    measure_guard_overhead,
+    quantify_proxy_disagreement,
+)
 from computronium.core.stability.frontier import (
     FrontierAggregator,
     FrontierRecord,
@@ -39,6 +48,14 @@ __all__ = [
     "estimate_spectral_radius",
     "SpectralRadiusEstimator",
     "estimate_spectral_radius_full_jacobian",
+    # Guard (PR-5)
+    "StabilityGuard",
+    "GuardDecision",
+    "CalibrationReport",
+    "DisagreementReport",
+    "calibrate_threshold",
+    "quantify_proxy_disagreement",
+    "measure_guard_overhead",
     # Lyapunov
     "estimate_lyapunov_exponent",
     "LyapunovEstimator",

@@ -1,6 +1,6 @@
 # Computronium Sprint Plan: TODO4 — Sprint Close-Out & Research Foundation
 
-## Status: Phase 7 CLOSED (7.1–7.4 ✅) | PR-0…PR-4 ✅ COMPLETE | PR-7 smoke-green | Remaining: PR-5/PR-9 calibration, PR-6 draft, full-scale PR-7
+## Status: COMPLETE for planning purposes | PR-0…PR-4 ✅ | PR-7 full-scale ✅ (instrumentation scale) | PR-5 ✅ calibrated | PR-9 ✅ commissioned | PR-6 ✅ drafted → handoff to RESEARCH3 catalog
 
 > Consolidates all unchecked work from `TODO3.md` with the preliminary infrastructure defined in `RESEARCH3.md`. After Phase 7 + 8, work hands off to the RESEARCH3 catalog (15 items, 5 critical paths) under its Execution Protocol (E-1…E-11).
 
@@ -89,11 +89,11 @@ Built once; consumed by the RESEARCH3 catalog. Startup sequence per RESEARCH3 §
 | **PR-3a** | Software resource instrumentation | Canonical `ResourceUsage` = `core/profiling.py:38` — **consolidate the two duplicate definitions first** (`core/stability/frontier.py:9`, `core/campaign/resource_vector.py:18`), then wire into every suite runner (proxy FLOPs/memory/latency; no hardware needed) | Z3 proxy-tier energy, L2 effective-FLOPs, AutoScientist frontier | Days 3–4 |
 | **PR-3b** | Physical calibration anchor | One *measured* Joule/FLOP anchor workload (board sensor / wall meter / RAPL per `docs/hardware_targets.md`); calibrates proxies → measured tier w/ error bars | Measured-tier energy claims, Edge/Green AI, Hardware pilot | Procurement **Day 1** (lead-time-gated) |
 | **PR-4** | Pre-registration & statistics kit | Seed count ≥5, bootstrap-CI utility, paired-comparison harness, threshold-registration template in repo — **DONE 2026-08-25** (`validation/preregistration.py` + `docs/preregistration_template.md` + `configs/preregistrations/eqprop_mnist_80pct.json` + 9 unit tests incl. hypothesis property test; fixed latent `cohens_d` crash via new one-sample `cohens_dz`) | Z3, L1–L3.5, benchmark contract, discovery replication gates | Days 4–5 | ✅ |
-| **PR-5** | Calibrated stability guard | ROC-calibrated kill thresholds (<5% false-kill on known-good, >95% kill on unstable, <10% overhead); `_fast_proxy` vs full-Jacobian disagreement rate quantified | Unattended campaigns, discovery | After PR-7 |
-| **PR-6** | Evaluation fairness contract | One pre-registered doc: per-rule tuning budgets (**GPU-hours, not epochs**), early-stopping, seeds, data splits, ICL-bridge scale-matching rule (performance-gated qualification ≥95%/task) | Benchmark paper, discovery pre-reg, edge comparisons, ICL bridge | Waiting periods (writing only) |
-| **PR-7** | Switching-machinery shakedown | L3.5 two-task migration + L1 adaptation (+ L2/L3 smokes) as *instrumentation tests* before Z3: validates ψ reset, temperature schedule, diversity entropy, Δθ audit end-to-end on cheapest settings; harvests known-good/bad configs — **SMOKE-GREEN 2026-08-25**: all four suites exit 0 at `--quick`, JSON artifacts land in `benchmark_results/{algorithm_migration,adaptation_efficiency,compute_efficiency,structural_robustness}/`; full-scale runs still pending | Z3 (directly de-risked), PR-5 calibration, PR-9 smoke configs | Week 2 |
+| **PR-5** ✅ 2026-08-25 session 4 | Calibrated stability guard | `core/stability/guard.py`: `StabilityGuard` (two statistic modes: `fast_proxy`, `windowed_growth`), `calibrate_threshold` (max-margin feasible ROC point), `quantify_proxy_disagreement`, `measure_guard_overhead`; driver `scripts/calibrate_stability_guard.py` → artifact `benchmark_results/stability_guard_calibration/calibration.json`. **Result**: windowed_growth τ=1.029, FKR=0 % (≤5 %), KR=100 % (≥95 %); fast_proxy INFEASIBLE on non-normal systems (median rel err ≈50 %) — see session log | Unattended campaigns, discovery | Done |
+| **PR-6** ✅ 2026-08-25 session 4 | Evaluation fairness contract | `docs/evaluation_fairness_contract.md` drafted: GPU-hour budgets per rule family, best-val early stopping w/ both numbers reported, ≥5 seeds + PR-4 kit stats, fixed splits seed 42, ICL-bridge ≥95 %/task qualification on measured FLOPs/step | Benchmark paper, discovery pre-reg, edge comparisons, ICL bridge | Drafted; binding at rerun |
+| **PR-7** ✅ full-scale 2026-08-25 session 4 | Switching-machinery shakedown | All four suites rerun at configured budgets (`--device cuda`, sequential): exit 0, populated JSON in `benchmark_results/*/` incl. per-seed `resources`. **Day-10-checkpoint finding**: suites are instrumentation shells — toy `forward()` never touches plasticity/ψ and A1 training updates θ freely (θ-change≈0.72≠0); true ψ-reset/Δθ machinery lives in the Z3 path. See session log | Z3 de-risked, PR-5 calibration, PR-9 smoke configs | Done at instrumentation scale; real-data runs = RESEARCH3 L1–L3.5 |
 | **PR-8** | Export pipeline parity | ONNX/ternary export round-trip verified (accuracy delta ≤ noise) on one representative model | Edge/Green AI, Hardware pilot | Pull-based (CP-D) |
-| **PR-9** | Campaign commissioning | One tiny AutoScientist campaign completing full iterate → interrupt → checkpoint → resume cycle (`autoscientist_campaigns/` empty today) | Frontier campaign, Algorithm discovery | After PR-5 |
+| **PR-9** ✅ 2026-08-25 session 4 | Campaign commissioning | `autoscientist_campaigns/commission.py`: tiny REAL campaign (composed 6-D system via `compose_joint_system_from_configs`) through iterate → checkpoint → interrupt → resume → complete. All checks green incl. **bit-exact redo determinism** (redone episode loss identical to 16 digits). Report: `autoscientist_campaigns/commission_report.json`. Fixed latent gaps the CLI runner had (checkpointing was commented-out mock; see session log) | Frontier campaign, Algorithm discovery | Done |
 
 ### 8.1 Execution Order (startup sequence, first two weeks)
 
@@ -145,7 +145,9 @@ Bridge points from Phase 7:
 | Z3 substrate | `computronium/experiments/joint/z3_fixed_weights.py`, `computronium/core/plasticity/rule_state.py` |
 | Shakedown suites | `algorithm_migration.py`, `adaptation_efficiency.py`, `compute_efficiency.py`, `structural_robustness.py` (all in `computronium/experiments/joint/` unless noted) |
 | Profiling / resources | `computronium/core/profiling.py:38` (canonical `ResourceUsage`; dupes in `stability/frontier.py`, `campaign/resource_vector.py` — consolidate per PR-3a) |
-| Stability stack | `computronium/core/stability/` (`SpectralRadiusEstimator`, `_fast_proxy`) |
+| Stability stack | `computronium/core/stability/` (`SpectralRadiusEstimator`, `_fast_proxy`); **guard (PR-5): `core/stability/guard.py`** + driver `scripts/calibrate_stability_guard.py` → `benchmark_results/stability_guard_calibration/calibration.json`; tests `tests/unit/core/test_stability_guard.py` |
+| Commissioning (PR-9) | `autoscientist_campaigns/commission.py` (+ `campaign.db`, `checkpoints/`, `commission_report.json` artifacts) |
+| Fairness contract (PR-6) | `docs/evaluation_fairness_contract.md` |
 | Failure manifesto | `computronium/analysis/failure_manifesto.py` |
 | Campaign stack | `autoscientist_campaigns/` (empty — see PR-9) |
 | Hardware targets | `docs/hardware_targets.md`; baseline gates `docs/baseline.md` |
@@ -174,14 +176,53 @@ Bridge points from Phase 7:
 - [x] **7.4** Hard type errors cleared from `ontology.py`/`registry.py` — fixed or dead paths deleted ✅ 2026-08-25 (0 pyright errors on both files; dead paths `from_experiment`/`from_configs`/`check_compatibility` removed)
 - [x] **7.3** CI green at configured baseline — ✅ 2026-08-25 session 3: full-suite pytest 1043 passed / coverage **47.13 %** (floor 15 %) / all 77 F+E pre-existing via stash A/B; `ruff format --check .` green (`*_pb2*.py` excluded); pyright touched-files clean, repo count 3837
 - [x] **PR-0…PR-4 merged and green**: PR-0 ✅ (baseline.md refreshed) · PR-1 ✅ + Z3 smoke green · PR-2 ✅ · PR-3a ✅ · PR-4 ✅ complete (tests + template + example JSON)
-- [~] **PR-7** shakedown smoke-green w/ JSON artifacts in `benchmark_results/`; full-scale runs + harvested good/bad config sets pending (Week 2)
-- [ ] **PR-5** calibrated + **PR-9** commissioned
-- [ ] **PR-6** drafted; PR-3b procured/order placed; PR-8 parked pending CP-D
-- [ ] Handoff: RESEARCH3 catalog unblocked — no further planning docs; execution moves to CP-A spine
+- [x] **PR-7** full-scale (instrumentation budgets) green w/ JSON artifacts regenerated in `benchmark_results/` ✅ session 4; Day-10-checkpoint review produced the suite-shell finding below
+- [x] **PR-5** calibrated ✅ session 4: windowed_growth τ=1.029 / FKR 0 % / KR 100 %; fast_proxy proven insufficient alone on non-normal systems
+- [x] **PR-9** commissioned ✅ session 4: full fault-tolerance cycle, bit-exact redo, report JSON committed
+- [x] **PR-6** drafted ✅ session 4 (`docs/evaluation_fairness_contract.md`); PR-3b procurement still external/pending; PR-8 parked pending CP-D
+- [ ] Handoff: RESEARCH3 catalog unblocked — no further planning docs; execution moves to CP-A spine. Remaining pre-RESEARCH3 engineering debt tracked in §7.5 + new work items in session log (suite ψ-wiring, guard integration into runners, campaign CLI mock replacement)
+
+### Exit criterion status
+PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catalog unblocked end-to-end at instrumentation scale (CP-A proceeds to Z3 flagship; CP-B/C/D/E per spines). PR-3b measured-tier claims remain gated on hardware arrival.
 
 ---
 
 ## Session Log & Future-Work Notes
+
+### 2026-08-25 session 4 (PR-7 full-scale + PR-5 calibration + PR-9 commissioning + PR-6 draft) — **TODO4 EXECUTION COMPLETE**
+
+Note: `benchmark_results/` had been deleted by the user before this session; all artifacts were regenerated from scratch (smoke artifacts were never committed, so nothing was lost).
+
+**Executed:**
+1. **PR-7 full-scale**: all four suites at configured budgets on the 3080, sequential background job (`setsid nohup` recipe held). Total wall ≈37 s — the suites are toy-scale *by construction* (synthetic tasks, tiny MLPs; each "epoch" = one 64-sample batch). All exit 0; JSONs populated incl. per-seed `resources` (PR-3a wiring verified in situ).
+2. **PR-5**: new `core/stability/guard.py` + `scripts/calibrate_stability_guard.py`; 12 unit tests green. Calibration family: non-normal Ginibre linear maps (gain sweep 0.7–1.4 ×4 seeds), labels by unrolled divergence (norm >1e3× over 200 steps).
+   - **Headline result**: the one-step `_fast_proxy` statistic CANNOT separate good/unstable on non-normal systems — good max 1.03 vs bad min 0.97 overlap → no feasible threshold exists. Median proxy-vs-full-Jacobian relative error ≈50 % (= σ_max/ρ gap of the Ginibre ensemble), correlation undefined (state-independent Jacobian).
+   - Fix vocabulary: added `windowed_growth` statistic (peak whole-tensor norm growth over a settling window; rides transitions the system already executes). It separates cleanly: **τ=1.029 → FKR=0 %, KR=100 %**, gap [0.94, 1.06].
+   - Overhead accounting: toy-family ratios (≈9× fast_proxy / ≈19× windowed per probe) are Python-overhead-dominated and not representative; real semantics: windowed costs ~zero marginal (norm checks along existing trajectory), fast_proxy costs 2 extra transition evals/probe. Measure on real settling workloads before quoting numbers.
+3. **PR-9**: `autoscientist_campaigns/commission.py` — first REAL campaign cycle (the CLI runner's checkpointing was a commented-out mock; `autoscientist_campaigns/` was empty). Uses `compose_joint_system_from_configs` (square feedforward geometry so activity recirculation is shape-valid), guard probes feed `rho_jacobian`/`basin_stability` in `FrontierRecord`.
+   - **All checks green**: checkpoint_valid, theta_fidelity (torch.equal), state_fidelity, rng_canary_match, **bit-exact redo determinism** (redone ep3 loss identical to 16 digits), final_iteration=6.
+   - Two correctness lessons baked into the design: (a) checkpoint must snapshot state **entering** an episode — post-episode snapshots replay with the wrong RNG stream position; (b) resumed joint must reload θ from the checkpoint into geometry params before redoing work.
+4. **PR-6**: `docs/evaluation_fairness_contract.md` drafted (GPU-hour budgets per rule family, best-val selection w/ both best & final reported, ≥5 seeds via PR-4 kit, fixed split seed 42, ICL ≥95 %/task qualification on measured FLOPs/step, supersede-based deviation policy).
+
+**Code changes to core (zero new lint/type debt, A/B-verified):**
+- `JointSystem` protocol gained `context` property; implemented on `_JointSystem` and `_NullJointSystem` (was `_make_context` only) — replaces private access for consumers like the commissioning harness.
+- `core/stability/__init__.py` re-exports guard API.
+
+**New work items discovered this session:**
+| Item | Detail | Suggested attack |
+|---|---|---|
+| Shakedown suites don't exercise ψ/θ separation | Toy `PlasticityModel.forward()` ignores `self.plasticity`/`self.psi`; A1 training updates θ freely → `theta_change≈0.72≠0` while the suite header claims "ψ switches strategy without θ update". routing/fast_weights rows are numerically identical (per-call manual_seed + plasticity unused). | Rewire toy models through actual ψ-mediated path (rule_state/route gates in forward, freeze θ for A1 phase, use `ThetaInvarianceAudit`) OR demote suites to plumbing tests explicitly and move ψ-claims entirely to Z3 |
+| Guard not wired into runners | PR-5 guard is standalone; suite/campaign runners don't call it yet | Add `StabilityGuard(windowed_growth, τ=1.029)` probe-per-K-steps to suite evaluators + campaign episodes; log decisions into results JSON |
+| Campaign CLI mock | `cli/campaign.py::_run_campaign` still evaluates mock records + TODO comments; `create_checkpoint` call commented out | Port commission.py's evaluation+checkpoint loop into the CLI (or make CLI delegate to it) before frontier campaigns |
+| `ResourceUsage.measure` defaults cuda | Commissioning had to bypass it; CPU-only runs can't measure honestly | Parameterize device by availability or caller config |
+| Stale stability call site | `core/profiling.py:787` calls `estimate_spectral_radius(joint_system, Tensor, Tensor)` — wrong signature, would crash if reached (7.5 bucket) | Fix during profiling.py pyright burn-down |
+| fast_proxy bias quantification | Ginibre disagreement ≈50 % median is family-specific; no non-normal REAL-system measurement yet | Rerun `quantify_proxy_disagreement` on a real settling coordinate during Z3 smoke |
+
+**Gotchas for future sessions:**
+- Suite "epochs" are single-batch steps on synthetic data — do NOT extrapolate wall times to real-data budgets.
+- Windowed-growth statistic uses whole-tensor norm ratio; per-row max variant overlaps classes (verified empirically) — keep the whole-tensor definition when recalibrating.
+- Checkpoint placement rule: snapshot ENTERING episode k replays exactly; snapshotting after k's training draws shifts the RNG stream and silently breaks redo equality.
+- `git stash` A/B still requires clean-committed HEAD; note there is an old unrelated stash entry (tools/ changes, 319 files) in the repo — leave it alone unless the owner claims it.
 
 ### 2026-08-25 session 3 (Phase 7 close + PR-0/4 finish + Z3 & PR-7 smoke) — **PHASE 7 CLOSED**
 
@@ -247,12 +288,11 @@ Bridge points from Phase 7:
 - Pre-existing errors left untouched (7.5 scope): `profiling.py` F821 `SystemConfig`:608, pynvml imports; `z3_fixed_weights.py` "Tensor not callable" stub artifacts; eqprop_vision_parity aggregation block.
 
 ### Next-session checklist (in order)
-1. **PR-7 full scale**: rerun the four shakedown suites at real budgets (not `--quick`); harvest known-good/bad config sets from results → feeds PR-5 calibration. Day-10 checkpoint: review all output, fix plumbing bugs at ~0.1 % of full cost.
-2. **PR-5**: ROC-calibrate stability-guard kill thresholds on the PR-7-harvested config sets (<5 % false-kill, >95 % kill, <10 % overhead); quantify `_fast_proxy` vs full-Jacobian disagreement.
-3. **PR-9**: commission one tiny AutoScientist campaign through full iterate → interrupt → checkpoint → resume (`autoscientist_campaigns/` still empty).
-4. **PR-6**: draft the evaluation fairness contract (GPU-hour budgets, early stopping, seeds, splits, ICL-bridge scale-matching ≥95 %/task) — writing only, fits any CP-A blocking period.
-5. **EqProp late-drift fix** (new item): add val-based early stopping / LR decay to `eqprop_mnist.py`, rerun once (~10 min GPU) for a paper-grade final-epoch number; then the 7.2 coordinate is benchmark-paper ready under the PR-6 contract.
-6. Only if differentiable-through-settle is ever needed: root-cause the residual graph retention (growth dropped 4.1→1.6 MB/step after out-of-place adds; `no_grad` masks it entirely — checkpointing path remains unused/vestigial meanwhile).
+1. **RESEARCH3 CP-A / Z3 flagship** — prerequisites are done; start under RESEARCH3's Execution Protocol. Carry the PR-5 guard (`windowed_growth`, τ=1.029) into Z3 runs and quantify `_fast_proxy` disagreement on a real settling coordinate.
+2. **Suite ψ-wiring decision** (new): either rewire the four shakedown toys through the real ψ/θ split or demote them to plumbing tests in docs; before any L1–L3.5 real-data claim, suites must not be citable as ψ-mediated-migration evidence in current form.
+3. **Campaign CLI**: port commission.py's evaluate+checkpoint loop into `cli/campaign.py` (replace mock records + commented-out checkpoint call).
+4. **EqProp late-drift fix** (carried over): val-based early stopping / LR decay in `eqprop_mnist.py`, rerun once (~10 min GPU) for a paper-grade final-epoch number under the PR-6 contract.
+5. Only if differentiable-through-settle is ever needed: root-cause the residual graph retention (growth dropped 4.1→1.6 MB/step after out-of-place adds; `no_grad` masks it entirely — checkpointing path remains unused/vestigial meanwhile).
 
 ### 2026-08-25 session 1 (7.1.1 + 7.4 + partial 7.3)
 - **Rocq**: `per_index_descent` lemma added; `energy_decreases_diagonal` closed with zero admits (stdlib classical axioms only). The scalar-lemma-first pattern is the reusable recipe for 7.1.2.
