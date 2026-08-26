@@ -99,9 +99,10 @@ def _thunk[**P, T](
 
 
 _SUBSTRATE_FACTORIES = {
-    name: _thunk(getattr(SubstrateConfig, name))
-    for name in ("digital", "analog", "memristive", "neuromorphic", "sparse", "ternary")
+    name: _thunk(getattr(SubstrateConfig, name)) for name in ("digital",)
 }
+# Non-digital substrates are intentionally NOT accepted yet (see
+# _EXCLUDED_AXES below for the reason).
 _DYNAMICS_FACTORIES = {
     "energy_minimization": _thunk(
         StateDynamicsConfig.energy_minimization, max_steps=3, step_size=0.1
@@ -121,24 +122,57 @@ _CREDIT_FACTORIES = {
     "local_goodness": _thunk(CreditAssignmentConfig.local_goodness),
     "temporal_trace": _thunk(CreditAssignmentConfig.temporal_trace),
     "target_inversion": _thunk(CreditAssignmentConfig.target_inversion),
-    "gradient": _thunk(CreditAssignmentConfig.gradient),
 }
-_CREDIT_ALIASES = {"thermo": "thermodynamic_contrast", "backprop": "gradient"}
 _UPDATE_FACTORIES = {
-    update: _thunk(getattr(ParameterUpdateConfig, update), step_size=0.01)
-    for update in (
-        "euclidean",
-        "riemannian_orthogonal",
-        "spectral_constrained",
-        "natural_gradient",
-        "elastic_consolidation",
-    )
+    "euclidean": _thunk(ParameterUpdateConfig.euclidean, step_size=0.01)
+}
+
+# Axis values whose composition is NOT yet faithful or does not yet run under
+# ``compose_joint_system_from_configs``. These are composition gaps to fix,
+# NOT judgments on the methods themselves; probed empirically (TODO4 session
+# 5). Revisit each after its underlying issue closes.
+_EXCLUDED_AXES: dict[tuple[str, str], str] = {
+    # Substrate class is selected by config.precision, which cannot
+    # distinguish e.g. analog ("float32") from digital and silently falls
+    # back to DigitalSubstrate — dropping behavioral overrides (noise
+    # models, precision bounds). Needs an explicit substrate-type tag.
+    **{
+        ("substrate", s): "substrate class not selected faithfully by compose"
+        for s in ("analog", "memristive", "neuromorphic", "sparse", "ternary")
+    },
+    (
+        "credit",
+        "gradient",
+    ): "requires autograd through settle; composed train_step runs detached",
+    (
+        "credit",
+        "backprop",
+    ): "requires autograd through settle; composed train_step runs detached",
+    **{
+        ("update", name): (
+            f"{name} step crashes on composed params "
+            "(shape [hidden] vs [batch, hidden]; likely bias handling)"
+        )
+        for name in (
+            "riemannian_orthogonal",
+            "spectral_constrained",
+            "natural_gradient",
+            "elastic_consolidation",
+        )
+    },
+}
+
+
+_CREDIT_ALIASES = {
+    "thermo": "thermodynamic_contrast",
+    "backprop": "gradient",
 }
 
 
 def _dispatch[T](table: dict[str, Callable[[], T]], axis: str, value: str) -> T:
-    factory = table.get(_CREDIT_ALIASES.get(value, value))
-    if factory is None:
+    canonical = _CREDIT_ALIASES.get(value, value)
+    factory = table.get(canonical)
+    if factory is None or (axis, canonical) in _EXCLUDED_AXES:
         raise UnsupportedCoordinateError(axis, value)
     return factory()
 

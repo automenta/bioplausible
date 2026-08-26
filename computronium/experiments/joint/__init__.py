@@ -7,17 +7,24 @@ This package contains the 5 benchmark levels for the joint architecture:
 - Level 3.5: Algorithm Migration
 - Level 4: Z3 Fixed Weights
 
-The L1/L2/L3/L3.5 shakedown suites are INSTRUMENTATION SHELLS: their toy
-models bypass the ψ/θ split (``forward()`` ignores plasticity; training
-updates θ freely), so they validate plumbing and metrics wiring only. They
-are not citable as ψ-mediated evidence; real-data claims route through the
-Z3 path (TODO4 session-log finding, upheld after review).
+Each suite result carries a ``claims_scope`` audit status (see
+``_claims.py``): L3.5 and L3 are ``plumbing_only`` (no ψ mediation in the
+forward loop today); L1 and L2 are ``psi_wired_uncontrolled`` — ψ is stepped
+inside forward and modulates computation (plasticity types empirically
+differentiate), but θ trains concurrently and no frozen-θ control exists, so
+they are suggestive rather than clean ψ evidence. Clean ψ claims route
+through the Z3 fixed-weights path; rewiring L1/L2 with frozen-θ phases +
+``ThetaInvarianceAudit`` is open and would upgrade their status.
 """
 
-from computronium.experiments.joint._claims import SUITE_CLAIMS_SCOPE
+from computronium.experiments.joint._claims import (
+    CLAIMS_SCOPE_PLUMBING_ONLY,
+    CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED,
+)
 
 __all__ = [
-    "SUITE_CLAIMS_SCOPE",
+    "CLAIMS_SCOPE_PLUMBING_ONLY",
+    "CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED",
     "adaptation_efficiency",
     "algorithm_migration",
     "compute_efficiency",

@@ -21,7 +21,7 @@ import torch
 from torch import Tensor, nn
 
 from computronium.core.profiling import measure_suite_resources
-from computronium.experiments.joint import SUITE_CLAIMS_SCOPE
+from computronium.experiments.joint import CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED
 
 
 def create_switching_task(
@@ -277,7 +277,7 @@ def evaluate_adaptation(
     final_accuracy = correct / total
 
     return {
-        "claims_scope": SUITE_CLAIMS_SCOPE,
+        "claims_scope": CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED,
         "coordinate": coordinate,
         "phase_a_final_loss": phase_a_losses[-1],
         "phase_b_final_loss": phase_b_losses[-1],

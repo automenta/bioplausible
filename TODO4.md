@@ -1,8 +1,78 @@
 # Computronium Sprint Plan: TODO4 — Sprint Close-Out & Research Foundation
 
-## Status: COMPLETE | PR-0…PR-4 ✅ | PR-7 full-scale ✅ | PR-5 ✅ calibrated | PR-9 ✅ commissioned | PR-6 ✅ drafted | Pre-handoff engineering debt cleared (session 5) ✅ → RESEARCH3 catalog
+## Status: REOPENED — **Phase 9 (family-neutral pipeline) inserted with IMMEDIATE PRIORITY** | Prior close-out intact: PR-0…PR-4 ✅ | PR-7 ✅ | PR-5 ✅ | PR-9 ✅ | PR-6 ✅ | §7 debt cleared (session 5) — RESEARCH3 campaign-scale sweeps now GATED on Phase 9
 
 > Consolidates all unchecked work from `TODO3.md` with the preliminary infrastructure defined in `RESEARCH3.md`. After Phase 7 + 8, work hands off to the RESEARCH3 catalog (15 items, 5 critical paths) under its Execution Protocol (E-1…E-11).
+
+---
+
+## ⚡ Phase 9: Family-Neutral Training Pipeline — EXECUTE FIRST
+
+**Goal:** support ALL algorithms without biasing toward any specific one (EqProp included). Discovered during session-5 review; the current pipeline hardcodes EqProp's two-phase ritual for every family. Numbered after Phase 8 (discovered post-close-out) but executes ahead of everything else, including RESEARCH3 sweeps.
+
+**Owner's directive:** no algorithm is second-class; capabilities are declared, not assumed.
+
+### Evidence base (gathered session 5 — do not re-derive)
+
+*Free/nudged usage inside each credit's `compute_pseudo_gradient`:*
+
+| Credit | free refs | nudged refs | Verdict under today's pipeline |
+|---|---|---|---|
+| ThermodynamicContrast | 6 | 6 | native two-phase ✓ |
+| HomeostaticCredit | 7 | 7 | two-phase ✓ |
+| RandomProjectionsCredit | 6 | 3 | two-phase, mostly used |
+| TargetInversionCredit | 1 | 2 | partially wasted settles |
+| LocalGoodnessCredit | 2 | **0** | nudged settle = pure waste |
+| BackpropCredit | **0** | 2 | free settle = pure waste (+ crashes detached, see 9.2) |
+| TemporalTraceCredit | **0** | **0** | **both settles pure waste** |
+
+*Structural bias markers:* `core/credit/adapters.py` star topology (`LocalGoodnessToThermodynamicAdapter`, `TemporalTraceToThermodynamicAdapter`, `BackpropToThermodynamicAdapter`, …) routes all cross-family interop THROUGH the EqProp credit. `_train_step_spiking` shows per-dynamics dispatch precedent exists but was never generalized. The 6-D `train_step` self-documents as a 5-D port ("For now, use the 5-D system train_step as the base"). `SystemTrainer` itself is innocent (pure delegation + epoch bookkeeping).
+
+*Axis probe (session 5):* 16/21 combos green; 5 fenced in `_EXCLUDED_AXES` with reasons (substrate selection ×5, gradient credit ×2 spellings, non-euclidean updates ×4).
+
+### 9.1 Capability-declared phase negotiation *(removes the double-settle tax)*
+- [ ] Credits declare required phases (e.g., `phases: ClassVar[tuple[Phase, ...]]`; contrastive = `("free", "nudged")`, one-shot = `("state",)` or similar)
+- [ ] Composed `train_step` (both generations) settles only declared phases; pass states as a phase-keyed mapping so signatures stay uniform
+- [ ] Generalize `_train_step_spiking`'s dispatch precedent instead of special-casing
+- [ ] Regression tests: settle-call count == declared phases per family; step-time smoke showing one-phase families no longer pay 2×
+- [ ] Deprecate/reduce the `*ToThermodynamicAdapter` star — each family gets a direct path (adapters remain only for deliberate hybrid-composition experiments)
+
+### 9.2 Autograd-capable path for gradient credit *(un-fences `credit=gradient/backprop`)*
+- [ ] `requires_autograd` capability flag; enable grad through settle ONLY when flagged — the 7.2.1 leak fixes (detach pseudo-grads, `no_grad` train_step, out-of-place adds) stay default-on for everyone else
+- [ ] Memory-leak regression test: flat MB/step across N hundred steps for non-autograd families (hard gate)
+- [ ] Un-exclude `gradient`/`backprop` from `_EXCLUDED_AXES` when green
+
+### 9.3 Non-euclidean update fixes *(un-fences 4 updates)*
+- [ ] Root-cause `[hidden]` vs `[batch, hidden]` crash in `riemannian_orthogonal`/`spectral_constrained`/`natural_gradient`/`elastic_consolidation` `.step()` on composed params (suspected bias-vector handling)
+- [ ] Fix + unit tests per update over composed params including biases
+- [ ] Un-exclude from `_EXCLUDED_AXES`
+
+### 9.4 Substrate-type tag *(un-fences 5 substrates; kills silent mislabeling)*
+- [ ] Add explicit `substrate_type` discriminator field to `SubstrateConfig`; factories set it
+- [ ] Fix class selection in `compose_joint_system_from_configs` to use the tag (precision is ambiguous — analog is `"float32"` too); align `from_spec` selector
+- [ ] Behavioral fidelity test: e.g. `AnalogSubstrate.inject_state_noise` actually fires under composed coordinates
+- [ ] Un-exclude the 5 substrates from `_EXCLUDED_AXES`
+
+### 9.5 Neutrality verification harness *(keeps us honest)*
+- [ ] Promote the session-5 axis probe into a permanent parametrized test: every accepted combo builds + trains one real step; every excluded combo raises with its reason
+- [ ] Metrics schema parity across families (same keys, same semantics — no family-specific shortcuts in shared bookkeeping)
+- [ ] Decide trainer consolidation: one canonical family-neutral training loop for `JointSystem`, or formally document raw-loop pattern as canonical and retire `SystemTrainer` duplication
+
+### Constraints (hard)
+- Preserve 7.2.1 stability/memory semantics everywhere except explicitly-flagged autograd paths
+- Commissioning bit-exact redo determinism stays green
+- Z3 `theta_invariant=true` semantics unchanged
+- Rocq proofs untouched (they formalize energy math, not pipeline plumbing)
+- Backwards compatibility NONE — signatures may break freely; sweep zoo/experiments call sites
+- After 9.1 lands, recalibrate PR-6 per-family GPU-hour budgets (relative step costs shift)
+
+### Dependency chain
+```
+9.1 (phase negotiation) ──→ 9.2 (autograd flag rides the negotiation)
+        └──→ 9.5 harness (grows alongside, gates exit)
+9.3, 9.4 independent ──→ un-exclusions land as each closes
+Exit: probe fully green-or-reasoned + parity reruns + harness merged ⇒ RESEARCH3 sweeps UNBLOCKED
+```
 
 ---
 
@@ -34,7 +104,7 @@ Locked-in fixes: separate free/nudged state objects in `train_step`; multi-layer
   4. optimizer momentum 0.9 amplified noise ×10 past the accuracy peak (80% @ep0 then collapse); `create_eqprop_system(update_momentum=…)` parameterized, 7.2 uses 0.0
   - Plus the blocking memory leak: settle autograd graphs accumulated ~4 MB/step → CUDA OOM at epoch 4. Pseudo-grads are consumed as plain values (no backward anywhere in the pipeline) → detached in `EuclideanUpdate.step`; `_ComposedSystem.train_step` runs under `torch.no_grad()`; `forward_with_intermediates` bias/recurrent adds made out-of-place. Verified flat 16.6 MB over 400 steps.
 - [x] **7.2.2** Run full 20-epoch MNIST training — **DONE (2026-08-25 session 3)**. Clean 20-epoch record, no divergence/OOM/NaN abort (558.9 s on the 3080). `results/eqprop_mnist/results.json`: best_val_acc=**81.17 %** (~ep7), final_val_acc=57.14 % (late-run drift — see session log). Runner's strict `target_met` flag (final-epoch gate) is False by design; the registered claim ("reaches ≥80 % within schedule") is met by the best.
-- [x] **7.2.3** Target >80% test accuracy — **DONE**: best 81.17 % crosses target (prior session's ep7 81.2 % reproduced under seed 42). Known limitation recorded as new work item: val accuracy decays after ~ep10 (energy keeps dropping to −6e4 while acc falls → late-phase objective misalignment); fix vocabulary = LR decay, early stopping on val, or weight-norm regularization before any rerun for a paper-grade final-epoch number. **→ Late-drift FIXED session 5**: per-epoch LR decay (γ=0.9 from ep3) + val-based early stopping (patience 4); rerun gave best **81.32 %** @ep7, final **79.30 %** @ep11 (early-stopped) vs prior 57.14 % collapse at ep19 — drift eliminated, both numbers reported per PR-6 contract (`results/eqprop_mnist/results.json`).
+- [x] **7.2.3** Target >80% test accuracy — **DONE**: best 81.17 % crosses target (prior session's ep7 81.2 % reproduced under seed 42). Known limitation recorded as new work item: val accuracy decays after ~ep10 (energy keeps dropping to −6e4 while acc falls → late-phase objective misalignment); fix vocabulary = LR decay, early stopping on val, or weight-norm regularization before any rerun for a paper-grade final-epoch number. **→ Late-drift FIXED session 5**: per-epoch LR decay (γ=0.9 from ep3) + val-based early stopping (patience 4); rerun gave best **81.32 %** @ep7, final **79.30 %** @ep11 (early-stopped) vs prior 57.14 % collapse at ep19 — drift absent in this rerun (single seed; multi-seed confirmation pending), both numbers reported per PR-6 contract (`results/eqprop_mnist/results.json`).
 
 ### 7.3 CI Gates (TODO3 DoD remainder)
 Gate = current *configured* baseline (`pyproject.toml [tool.pyright]` — `strict` was deliberately relaxed to a per-rule profile; do NOT reintroduce), not aspirational strictness:
@@ -143,6 +213,7 @@ Bridge points from Phase 7:
 | EqProp locality tests | `tests/property/test_eqprop_locality.py` |
 | Rocq formalization | `rocq/` (canonical; Lean retired) |
 | Campaign episode machinery (session 5) | `computronium/core/campaign/evaluation.py` (`build_coordinate_system`, `evaluate_episode`, `episode_batch`, `activity_transition`); consumed by `autoscientist_campaigns/commission.py` + `computronium/cli/campaign.py` |
+| Credit adapter star (Phase 9 target) | `computronium/core/credit/adapters.py` (`*ToThermodynamic*` hub); phase-usage evidence in ⚡ Phase 9 header |
 | Z3 substrate | `computronium/experiments/joint/z3_fixed_weights.py`, `computronium/core/plasticity/rule_state.py` |
 | Shakedown suites | `algorithm_migration.py`, `adaptation_efficiency.py`, `compute_efficiency.py`, `structural_robustness.py` (all in `computronium/experiments/joint/` unless noted) |
 | Profiling / resources | `computronium/core/profiling.py:38` (canonical `ResourceUsage`; dupes in `stability/frontier.py`, `campaign/resource_vector.py` — consolidate per PR-3a) |
@@ -170,8 +241,9 @@ Bridge points from Phase 7:
 
 ---
 
-## Definition of Done (TODO4 Complete)
+## Definition of Done (TODO4 Complete — reopened by ⚡ Phase 9)
 
+- [ ] **⚡ Phase 9 family-neutral pipeline** — all of 9.1–9.5 closed; probe green-or-reasoned; parity reruns (eqprop seed-42 within noise, commission bit-exact, Z3 theta_invariant); PR-6 budgets recalibrated
 - [x] **7.1.1** `energy_decreases_diagonal` proved (0-admit diagonal case) ✅ 2026-08-25; 7.1.2–7.1.4 remain explicitly parked under CP-B pull-based policy
 - [x] **7.2** EqProp 20-epoch MNIST >80% accuracy — ✅ 2026-08-25 session 3: full 20-epoch record, best_val_acc **81.17 %** (target crossed), no divergence/OOM/NaN; final-epoch drift (57.14 %) recorded as new work item
 - [x] **7.4** Hard type errors cleared from `ontology.py`/`registry.py` — fixed or dead paths deleted ✅ 2026-08-25 (0 pyright errors on both files; dead paths `from_experiment`/`from_configs`/`check_compatibility` removed)
@@ -181,7 +253,8 @@ Bridge points from Phase 7:
 - [x] **PR-5** calibrated ✅ session 4: windowed_growth τ=1.029 / FKR 0 % / KR 100 %; fast_proxy proven insufficient alone on non-normal systems
 - [x] **PR-9** commissioned ✅ session 4: full fault-tolerance cycle, bit-exact redo, report JSON committed
 - [x] **PR-6** drafted ✅ session 4 (`docs/evaluation_fairness_contract.md`); PR-3b procurement still external/pending; PR-8 parked pending CP-D
-- [x] **Handoff: RESEARCH3 catalog unblocked** ✅ session 5 — pre-RESEARCH3 engineering debt from §7.5 + session logs cleared (see Session Log session 5): campaign CLI runs real composed systems w/ fault-tolerant checkpointing; `ResourceUsage.measure` device-honest; stale `profiling.py` stability call fixed & live; suite ψ-wiring **decided = demoted to instrumentation shells** (`SUITE_CLAIMS_SCOPE` marker in every result + package docstring); EqProp late-drift fixed. Remaining open items live in RESEARCH3 (guard kill-decision wiring into runners, fast_proxy disagreement on real settling coordinates, PR-3b hardware, PR-8 export parity).
+- [x] **Handoff: RESEARCH3 catalog unblocked** ✅ session 5 — pre-RESEARCH3 engineering debt from §7.5 + session logs cleared (see Session Log session 5): campaign CLI runs real composed systems w/ fault-tolerant checkpointing; `ResourceUsage.measure` device-honest; stale `profiling.py` stability call fixed & live; suite ψ-wiring **audited per-suite** (L1/L2 `psi_wired_uncontrolled`, L3.5/L3 `plumbing_only`; rewiring stays open); EqProp late-drift fixed.
+- [ ] **GATE (session 6): RESEARCH3 campaign-scale sweeps blocked on ⚡ Phase 9** — family-neutral pipeline. Instrumentation-scale work may continue; anything that sweeps coordinate families at scale, or composes non-digital substrates / gradient credit / non-euclidean updates, waits on Phase 9 exit criteria.
 
 ### Exit criterion status
 PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catalog unblocked end-to-end at instrumentation scale (CP-A proceeds to Z3 flagship; CP-B/C/D/E per spines). PR-3b measured-tier claims remain gated on hardware arrival.
@@ -190,25 +263,39 @@ PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catal
 
 ## Session Log & Future-Work Notes
 
+### 2026-08-25 session 6 (review → Phase 9 inserted) — **TODO4 REOPENED, IMMEDIATE PRIORITY SET**
+
+**Owner review of session 5 surfaced two directives:**
+1. *Don't prematurely condemn possibilities* — the ψ-wiring demotion was re-audited (per-suite `claims_scope` replaced the blanket "instrumentation_shell"; empirical differential test proved L1/L2 wiring differentiates), and a full axis probe of the new composition path found 5 broken combos (gradient credit + 4 non-euclidean updates) plus a silent substrate-mislabeling gap — all fenced with reasons in `_EXCLUDED_AXES` rather than assumed away.
+2. *Family-neutrality is now a first-class requirement.* Audit evidence: every composed train_step runs EqProp's free+nudged ritual regardless of family (LocalGoodness ignores nudged; Backprop ignores free; TemporalTrace ignores both); all cross-family interop routes through ThermodynamicContrast adapters (star topology); the 6-D path self-documents as a 5-D port. `SystemTrainer` itself is clean (pure delegation).
+
+**Decision:** inserted **⚡ Phase 9 — Family-Neutral Training Pipeline** at the top of this file with immediate priority; RESEARCH3 campaign-scale sweeps are gated on its exit criteria (instrumentation-scale work may proceed). Capability-declared phase negotiation is the core fix; autograd flag, update-rule fixes, substrate tag, and a permanent neutrality harness ride alongside. Evidence tables embedded in Phase 9 header so execution needs no archaeology.
+
 ### 2026-08-25 session 5 (pre-handoff debt clear: campaign CLI real, EqProp drift fix, suite demotion) — **TODO4 CLOSED**
 
 **Executed (in next-session-checklist order):**
 1. **Campaign CLI de-mocked** (`computronium/cli/campaign.py::_run_campaign`): mock FrontierRecords + commented-out checkpoint call replaced with the commission.py machinery, which was first **extracted into a shared module** `computronium/core/campaign/evaluation.py` — `build_coordinate_system(coordinate)` composes any 6-D coordinate via ontology config factories + `compose_joint_system_from_configs`; `evaluate_episode(...)` runs one deterministic-batch `train_step`, probes windowed growth, fills `FrontierRecord` stability fields **and now also real `registry_signature`/`composite_state_shape`** (via `compute_registry_signature`/`compute_composite_state_shape`) replacing "mock_signature". Checkpointing follows the PR-9 lessons: snapshot ENTERING an interval episode; resume restores θ into geometry params + RNG states and redoes unrecorded episodes since the latest checkpoint. Unsupported coordinates raise `UnsupportedCoordinateError(axis, value)` → logged + skipped per experiment. Verified: fresh 7-iteration run on CPU (25 episodes/9 iterations in DB incl. real snapshots), checkpoint at ep5, resume clean; commissioning rerun end-to-end **PASSED** with bit-exact redo after the refactor.
-2. **EqProp late-drift fix** (`experiments/joint/eqprop_mnist.py`): `_decay_lr` scales `system.update.config.step_size` ×0.9/epoch from ep3 (frozen `ParameterUpdateConfig` handled via `dataclasses.replace`); early stopping at patience 4 on val_acc; result record adds `best_epoch` + `early_stopped`. Rerun (3080, seed 42): **best 81.32 % @ep7, final 79.30 % @ep11 (early-stopped), 337.5 s** vs prior best 81.17 %/final 57.14 % @ep19 — post-peak collapse eliminated. `target_met=False` is still the strict final-epoch gate; registered ≥80 % claim met by best.
-3. **Suite ψ-wiring decision = demote**: L1/L2/L3/L3.5 suites are instrumentation shells by construction; rewiring through the real ψ/θ split is Z3-path work. Each per-run result dict now carries `"claims_scope": "instrumentation_shell"` (constant in `experiments/joint/_claims.py`, re-exported from the package init whose docstring states the non-citability explicitly). No rerun needed — marker regenerates with next suite invocation.
+2. **EqProp late-drift fix** (`experiments/joint/eqprop_mnist.py`): `_decay_lr` scales `system.update.config.step_size` ×0.9/epoch from ep3 (frozen `ParameterUpdateConfig` handled via `dataclasses.replace`); early stopping at patience 4 on val_acc; result record adds `best_epoch` + `early_stopped`. Rerun (3080, seed 42): **best 81.32 % @ep7, final 79.30 % @ep11 (early-stopped), 337.5 s** vs prior best 81.17 %/final 57.14 % @ep19 — post-peak drift absent under this rerun (single seed; treat as promising, not proven general). `target_met=False` is still the strict final-epoch gate; registered ≥80 % claim met by best.
+3. **Suite ψ-wiring audit** (`experiments/joint/`): per-suite inspection + empirical test replaced the session-4 blanket finding. **Correction to the earlier "suites ignore ψ" claim — it was overbroad:** `adaptation_efficiency` and `compute_efficiency` (routing variant) DO step ψ inside forward and modulate computation; a quick differential run showed routing vs fast_weights trajectories are NOT identical (final loss 0.0122 vs 0.0096, real ψ keys populated). The unwired case is specific: `algorithm_migration`'s forward ignores ψ by documented in-code simplification ("here we allow full training"), and `structural_robustness` is a plain-MLP damage test. Remaining caveat for L1/L2 is control, not wiring: θ trains concurrently, `plasticity.step` gets a `None` context, no frozen-θ phase. Each suite result now carries an honest per-suite `claims_scope`: L1/L2 = `psi_wired_uncontrolled`, L3.5/L3 = `plumbing_only` (constants in `_claims.py`; docstrings state these are audit status, not verdicts, and that frozen-θ rewiring via `ThetaInvarianceAudit` would upgrade L1/L2). No suite rerun needed.
 4. **Small work items cleared**: `ResourceUsage.measure` device default `"cuda"` → `None` (infers from model params; CPU-only callers measure honestly); stale `profiling.py` call `estimate_spectral_radius(system, x, y)` replaced via shared `activity_transition` — and found to be **live-crashing for non-square geometries** once actually executed (perturbation is in-place) → new `_activity_spectral_radius` helper returns None unless input_dim==output_dim (square case verified ρ≈0.27).
 5. **Type-contract fix surfaced by real data**: `FrontierRecord.composite_state_shape` widened to nested `dict[str, dict[str, tuple[int, ...]]]` matching what `compute_composite_state_shape` produces; `to_dict`/`from_dict` made losslessly round-trippable (was `list(v)` key-flattening).
+6. **Axis-coverage probe of the new composition path** (prompted by review — "don't assume what you haven't run"): swept every accepted axis value with build + one `train_step` on CPU. **16/21 combos verified green** (all 5 dynamics, all 5 plasticities, 4/5 credits, euclidean). **5 combos fail and are now explicitly excluded** via `_EXCLUDED_AXES` in `evaluation.py` so campaigns reject them with a reason instead of silently misrunning:
+   - `credit=gradient/backprop`: needs autograd through settle; composed `train_step` is deliberately detached/no_grad → "element 0 does not require grad". Fix direction: an autograd-enabled train path or a gradient-credit variant over settle-phase differences.
+   - All 4 non-euclidean updates crash: shape `[hidden]` vs `[batch, hidden]` inside their `step` on composed params (likely bias-vector handling). Fix direction: normalize param iteration/shape handling in each update rule.
+   These are **composition gaps to fix, not judgments on the methods** — the exclusions keep possibilities open while preventing dishonest records.
+7. **Substrate-fidelity gap found & fenced**: `compose_joint_system_from_configs` selects the substrate class by `config.precision`, which cannot distinguish analog (`"float32"` = digital's) and silently falls back to `DigitalSubstrate`, dropping behavioral overrides (`AnalogSubstrate.inject_state_noise` etc. — confirmed they differ). Root cause: `SubstrateConfig` has no substrate-type field, so intent is unrecoverable from config alone; note `from_spec` has its own working selector keyed on device+precision. `build_coordinate_system` therefore accepts only `digital` today and rejects the rest with a reason. Fix = add an explicit substrate-type tag to `SubstrateConfig` (ontology change, ripples into to_spec/from_spec) — deferred as its own item below rather than half-fixed here.
 
 **Verification:** pyright 0 errors on all touched files (profiling 9→6, remainder parked 7.5 debt); ruff zero new findings (cli/campaign −16 net vs HEAD; complexity counts reduced via helper extraction); `tests/unit/core/test_checkpoint.py` 9/9; unit/core+validation failures proven pre-existing via `git worktree` A/B at HEAD (identical 5-F set).
 
 **⚠️ Incident + gotcha (read before any A/B testing):** the old foreign stash (`stash@{0}`, tools/-era WIP, ~319 files — documented session 4) makes `git stash` A/B **unsafe**: a scoped `stash push` + `pop` popped the WRONG entry, splattering conflict markers across 330 paths. Recovery used: backup touched files → `git reset` + `git checkout -- .` → restore from backup → delete pop-created untracked junk (`bioplausible/`, `examples/`, `tools/`, stray test files identified by mtime). The foreign stash itself survived untouched. **Rule: until that stash is claimed/dropped, do baseline A/B only via `git worktree add /tmp/x HEAD`.**
 
-**Remaining open items (all RESEARCH3 scope now):**
+**Remaining open items (Phase 9 owns the composition gaps; rest are RESEARCH3 scope):**
 | Item | Detail | Where |
 |---|---|---|
+| **⚡ Family-neutral pipeline** | Phase 9 (above) — phase negotiation, autograd flag, update fixes, substrate tag, neutrality harness | **TODO4 Phase 9 — immediate priority** |
 | Guard kill-decisions in runners | Probes now feed FrontierRecords (CLI/commission) but no runner *decides* on τ=1.029 yet | RESEARCH3 CP-A/Z3 smoke |
 | fast_proxy disagreement on real systems | Ginibre ≈50 % median is family-specific | RESEARCH3 CP-A |
-| Suite ψ-wiring (if ever needed as evidence) | Suites remain plumbing tests; real claims route through Z3 | RESEARCH3 L1–L3.5 full runs |
+| Suite ψ-wiring upgrade path | L1/L2 are `psi_wired_uncontrolled` (ψ works, no frozen-θ control); frozen-θ phases + real step context would make them citable. L3.5 forward is unwired by design choice | RESEARCH3 L1–L3.5 full runs |
 | PR-3b hardware anchor / PR-8 export parity | Unchanged, external/pull-based | CP-D |
 
 ### 2026-08-25 session 4 (PR-7 full-scale + PR-5 calibration + PR-9 commissioning + PR-6 draft) — **TODO4 EXECUTION COMPLETE**
@@ -310,11 +397,9 @@ Note: `benchmark_results/` had been deleted by the user before this session; all
 - Pre-existing errors left untouched (7.5 scope): `profiling.py` F821 `SystemConfig`:608, pynvml imports; `z3_fixed_weights.py` "Tensor not callable" stub artifacts; eqprop_vision_parity aggregation block.
 
 ### Next-session checklist (in order)
-1. **RESEARCH3 CP-A / Z3 flagship** — prerequisites done; TODO4 debt cleared (session 5). Start under RESEARCH3's Execution Protocol. Carry the PR-5 guard (`windowed_growth`, τ=1.029) into Z3 runs and quantify `_fast_proxy` disagreement on a real settling coordinate.
-2. ~~Suite ψ-wiring decision~~ — **DECIDED session 5**: demoted to instrumentation shells (`SUITE_CLAIMS_SCOPE` marker); real ψ-claims route through Z3 only.
-3. ~~Campaign CLI mock~~ — **DONE session 5**: real evaluation + fault-tolerant checkpointing via `core/campaign/evaluation.py`.
-4. ~~EqProp late-drift fix~~ — **DONE session 5**: LR decay + early stopping; 81.32 % @ep7 / 79.30 % final under PR-6 reporting.
-5. Only if differentiable-through-settle is ever needed: root-cause the residual graph retention (growth dropped 4.1→1.6 MB/step after out-of-place adds; `no_grad` masks it entirely — checkpointing path remains unused/vestigial meanwhile).
+1. **⚡ Phase 9 — family-neutral pipeline** (immediate priority, see its section): start with 9.1 capability-declared phases + negotiated settling (evidence tables are in the phase header), then ride the dependency chain. Everything below yields until the Phase 9 exit criteria close.
+2. **RESEARCH3 CP-A / Z3 flagship** — instrumentation-scale work may proceed in parallel where it doesn't sweep families at scale; full sweeps wait on Phase 9.
+3. Only if differentiable-through-settle is ever needed: root-cause the residual graph retention (growth dropped 4.1→1.6 MB/step after out-of-place adds; `no_grad` masks it entirely — checkpointing path remains unused/vestigial meanwhile).
 
 ### 2026-08-25 session 1 (7.1.1 + 7.4 + partial 7.3)
 - **Rocq**: `per_index_descent` lemma added; `energy_decreases_diagonal` closed with zero admits (stdlib classical axioms only). The scalar-lemma-first pattern is the reusable recipe for 7.1.2.

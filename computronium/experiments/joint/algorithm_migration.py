@@ -21,7 +21,7 @@ import torch
 from torch import Tensor
 
 from computronium.core.profiling import measure_suite_resources
-from computronium.experiments.joint import SUITE_CLAIMS_SCOPE
+from computronium.experiments.joint import CLAIMS_SCOPE_PLUMBING_ONLY
 
 
 def create_task_a0(
@@ -241,7 +241,7 @@ def evaluate_migration(
     a0_accuracy_after_a1 = correct / total
 
     return {
-        "claims_scope": SUITE_CLAIMS_SCOPE,
+        "claims_scope": CLAIMS_SCOPE_PLUMBING_ONLY,
         "coordinate": coordinate,
         "a0_accuracy": a0_accuracy,
         "a1_accuracy": a1_accuracy,
