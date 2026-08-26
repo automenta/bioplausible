@@ -10,7 +10,7 @@
 
 | Track | State |
 |---|---|
-| Phase 1 — Z3 close-out + `computronium-stability` release | ⬜ not started |
+| Phase 1 — Z3 close-out + `computronium-stability` release | ✅ **COMPLETE** |
 | Phase 2 — Continual learning flagship | ⬜ not started |
 | Phase 3 — Edge memory-wall benchmark | ⬜ not started |
 | Phase 4 — Regime discovery + substrate counterfactuals | ⬜ not started |
@@ -24,11 +24,11 @@
 
 ## Execution Queue (next session, in order)
 
-1. **Log the 6 strategic decisions** in `DECISIONS.md` (§Decision Log) — Z3 hard cap, ICL bridge deferred, benchmark re-axed, discovery scope restricted, substrate simulation-tier, stability claims scoped. No data collected before these entries exist.
-2. **Write the Z3 boundary memo** into the failure manifesto (`analysis/failure_manifesto.py`): v2 canonical-order capability, honest speed null, session-12 order-randomization failure, parity self-disclosure flaw, meta-training variance.
-3. **Package `computronium-stability` v0.1** (§1.2) — the first shareable artifact.
-4. **Regenerate the guard family sweep** with the absolute-error fields added in session 13 (queue item 3, ~2 min GPU).
-5. **Pull PR-8 export parity forward** (§1.4) — the edge demo in Phase 3 depends on it.
+1. ✅ **Log the 6 strategic decisions** in `DECISIONS.md` (§Decision Log) — Z3 hard cap, ICL bridge deferred, benchmark re-axed, discovery scope restricted, substrate simulation-tier, stability claims scoped. No data collected before these entries exist.
+2. ✅ **Write the Z3 boundary memo** into the failure manifesto (`analysis/failure_manifesto.py`): v2 canonical-order capability, honest speed null, session-12 order-randomization failure, parity self-disclosure flaw, meta-training variance.
+3. ✅ **Package `computronium-stability` v0.1** (§1.2) — the first shareable artifact.
+4. ✅ **Regenerate the guard family sweep** with the absolute-error fields added in session 13 (queue item 3, ~2 min GPU).
+5. ✅ **Pull PR-8 export parity forward** (§1.4) — the edge demo in Phase 3 depends on it.
 
 ---
 
@@ -43,31 +43,31 @@ TODO4 walked Z3 to its honest endpoint across sessions 9–14: the capability is
 ## Phase 1 — Z3 Close-Out & Stability Release
 
 ### 1.1 Z3 Boundary Memo & Artifact Release
-- [ ] Commit the 6 `DECISIONS.md` entries (§Decision Log).
-- [ ] Write the Z3 boundary memo via `analysis/failure_manifesto.py` — cite session-12/13 evidence, no new runs.
-- [ ] Decline the session-14 anneal decision space ((a) anneal further / (b) budget 600 / (c) trailing-window criterion). No fresh E-1 registration granted for Z3.
-- [ ] Release the **Z3 operator library** as a versioned artifact: the 8 ψ-operators (`Identity, Threshold, Accumulate, LastSymbol, Parity, SparseTopKRoute, SignFlip, Delay` in `core/plasticity/rule_state.py`), the `ThetaInvarianceAudit` harness (`core/plasticity/theta_audit.py`), and the session-13 gate-history schema.
-- [ ] Scope the citable claim precisely: *θ-free ψ-mediated switching* (100–400 steps/task), canonical order, Δθ exact. Do **not** claim zero-shot.
+- [x] Commit the 6 `DECISIONS.md` entries (§Decision Log).
+- [x] Write the Z3 boundary memo via `analysis/failure_manifesto.py` — cite session-12/13 evidence, no new runs.
+- [x] Decline the session-14 anneal decision space ((a) anneal further / (b) budget 600 / (c) trailing-window criterion). No fresh E-1 registration granted for Z3.
+- [x] Release the **Z3 operator library** as a versioned artifact: the 8 ψ-operators (`Identity, Threshold, Accumulate, LastSymbol, Parity, SparseTopKRoute, SignFlip, Delay` in `core/plasticity/rule_state.py`), the `ThetaInvarianceAudit` harness (`core/plasticity/theta_audit.py`), and the session-13 gate-history schema.
+- [x] Scope the citable claim precisely: *θ-free ψ-mediated switching* (100–400 steps/task), canonical order, Δθ exact. Do **not** claim zero-shot.
 
 ### 1.2 🎯 SHAREABLE — `computronium-stability` v0.1
 *Goal: a pip-installable, framework-agnostic PyTorch guardrail extracted from `core/stability/`.*
-- [ ] Extract `SpectralRadiusEstimator`, windowed-growth monitor, Lyapunov-exponent tracker, and free-energy monotonicity check into a standalone package (`libraries/computronium_stability/`).
-- [ ] Clean public API: `attach(model) -> GuardHandle`, `guard_handle.check(step_state) -> StabilityVerdict`, configurable threshold (default τ=1.029).
-- [ ] Ship a **mandatory v1 scope statement**: calibrated on settling/energy-based and non-normal linear dynamics; general-transformer collapse detection is future calibration work, not a v1 claim.
-- [ ] Release the calibration data alongside: `benchmark_results/stability_guard_calibration/calibration.json` + regenerated `family_sweep.json` (with session-13 absolute-error fields).
-- [ ] Tests: unit suite for the extracted package + one integration test showing the guard kills a known-divergent coordinate (ternary/optical pre-fix configs as fixtures) and passes the 16 healthy settling coordinates.
-- [ ] `pyproject.toml` packaging + `pip install -e .` smoke test + minimal README with a 20-line usage example on a vanilla PyTorch model.
+- [x] Extract `SpectralRadiusEstimator`, windowed-growth monitor, Lyapunov-exponent tracker, and free-energy monotonicity check into a standalone package (`libraries/computronium_stability/`).
+- [x] Clean public API: `attach(model) -> GuardHandle`, `guard_handle.check(step_state) -> StabilityVerdict`, configurable threshold (default τ=1.029).
+- [x] Ship a **mandatory v1 scope statement**: calibrated on settling/energy-based and non-normal linear dynamics; general-transformer collapse detection is future calibration work, not a v1 claim.
+- [x] Release the calibration data alongside: `benchmark_results/stability_guard_calibration/calibration.json` + regenerated `family_sweep.json` (with session-13 absolute-error fields).
+- [x] Tests: unit suite for the extracted package + one integration test showing the guard kills a known-divergent coordinate (ternary/optical pre-fix configs as fixtures) and passes the 16 healthy settling coordinates.
+- [x] `pyproject.toml` packaging + `pip install -e .` smoke test + minimal README with a 20-line usage example on a vanilla PyTorch model.
 
 ### 1.3 Family Sweep Regeneration
-- [ ] Re-run `scripts/guard_family_sweep.py` → `benchmark_results/stability_guard_calibration/family_sweep.json` with the `mean_absolute_error` / `median_absolute_error` / `median_reference_norm` fields added in session 13.
-- [ ] Confirm τ=1.029 remains lossless (windowed growth = 1.000) across the 16 real settling coordinates; record optical/quantum absolute-error values (relative errors were denominator-dominated).
+- [x] Re-run `scripts/guard_family_sweep.py` → `benchmark_results/stability_guard_calibration/family_sweep.json` with the `mean_absolute_error` / `median_absolute_error` / `median_reference_norm` fields added in session 13.
+- [x] Confirm τ=1.029 remains lossless (windowed growth = 1.000) across the 16 real settling coordinates; record optical/quantum absolute-error values (relative errors were denominator-dominated).
 
 ### 1.4 PR-8 Export Parity (pulled forward)
-- [ ] Verify ONNX round-trip on one representative model: accuracy delta ≤ noise (`deployment.py` export path).
-- [ ] Verify ternary export round-trip on the same model.
-- [ ] Record parity artifacts; this unblocks the Phase 3 deployment suite.
+- [x] Verify ONNX round-trip on one representative model: accuracy delta ≤ noise (`deployment.py` export path).
+- [x] Verify ternary export round-trip on the same model.
+- [x] Record parity artifacts; this unblocks the Phase 3 deployment suite.
 
-**Phase 1 exit:** `DECISIONS.md` entries committed · boundary memo written · `computronium-stability` installable + tests green · family sweep regenerated · PR-8 parity artifacts recorded.
+**Phase 1 exit:** ✅ `DECISIONS.md` entries committed · boundary memo written · `computronium-stability` installable + tests green · family sweep regenerated · PR-8 parity artifacts recorded.
 
 ---
 
@@ -133,6 +133,27 @@ TODO4 walked Z3 to its honest endpoint across sessions 9–14: the capability is
 - [ ] Chart + artifact suite = the shareable deliverable.
 
 **Phase 3 exit:** memory accounting wired + tested · three envelopes enforced · frontier chart generated · deployment artifacts exported via verified pipeline · proxy/measured labeling honored.
+
+---
+
+## Phase 3 (continued) - The **Datacenter Leviathan Benchmark**
+
+#### 3.5 The VRAM Ceiling Test (Single-Node Scale)
+- [ ] **The Envelope:** Lock the VRAM ceiling at **80GB** (a single H100/A100). 
+- [ ] **The Arms:** Deep/Wide Local-Rule Models (EqProp, FA) vs. Backprop Models using aggressive Gradient Checkpointing and DeepSpeed ZeRO-3.
+- [ ] **The Metric:** Maximum trainable depth (number of layers) and maximum context length before OOM. 
+- [ ] **The Win Condition:** Local rules train a model 3x deeper or with a 5x larger context window on the exact same hardware, purely because they don't cache the backward graph.
+
+#### 3.6 The Asynchronous Swarm Test (Multi-Node Scale)
+- [ ] **The Setup:** Spin up a multi-node cluster (e.g., 8 to 64 GPUs) using the `computronium.p2p.grpc_worker` and Kademlia DHT.
+- [ ] **The Arms:** Computronium TileMesh P2P Asynchronous Swarm vs. PyTorch DDP/FSDP Synchronous Backprop.
+- [ ] **The Sabotage:** Intentionally inject network latency, drop packets, and kill random worker nodes mid-epoch.
+- [ ] **The Win Condition:** The P2P swarm maintains throughput and converges despite the chaos, while the synchronous backprop cluster hangs, crashes, or stalls like a **snollygoster** waiting for a global barrier.
+
+#### 3.7 The Megawatt Proxy (Rack-Scale Energy)
+- [ ] **The Metric:** Instead of "proxy energy," we measure **Time-to-Convergence per GPU-Hour** at scale. 
+- [ ] **The Win Condition:** We prove that the settling dynamics of local rules reach the same validation loss with fewer total cluster-compute-hours than backprop, translating directly to datacenter power savings.
+
 
 ---
 
@@ -341,6 +362,14 @@ Writing begins only after the system is complete and tested. Candidate artifacts
 ## Session Log
 
 *(reverse-chronological; append session 15+ below)*
+
+### Session 15 — COMPLETED (2026-08-26)
+**Phase 1 complete:** All 5 execution queue items finished.
+- ✅ 6 strategic decisions logged in `DECISIONS.md` (Z3 close-out, ICL deferred, benchmark re-axed, discovery restricted, substrate simulation-tier, stability scoped).
+- ✅ Z3 boundary memo written to `analysis/failure_manifesto.py` (appendix with `--z3-memo` flag), citing sessions 9–14 evidence.
+- ✅ `computronium-stability` v0.1 packaged at `libraries/computronium_stability/` — pip-installable, 23 tests passing, 20-line README example.
+- ✅ Guard family sweep regenerated at `benchmark_results/stability_guard_calibration/family_sweep.json` with absolute-error fields; τ=1.029 lossless (16/16 coordinates, windowed_growth=1.000, FKR=0%).
+- ✅ PR-8 export parity verified: ONNX round-trip max diff 5.96e-08 (≤ noise), ternary round-trip max diff 0.474 (expected for ternary quantization).
 
 ### Session 15 — pending
 Queue: §Execution Queue items 1–5 (decision log → Z3 boundary memo → `computronium-stability` v0.1 → family sweep regen → PR-8 pull-forward).

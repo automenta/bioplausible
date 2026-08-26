@@ -1,0 +1,349 @@
+{
+  "summary": {
+    "n_coordinates": 16,
+    "n_skipped": 0,
+    "max_windowed_growth": 1.0,
+    "false_kill_rate_at_default_tau": 0.0,
+    "worst_proxy_median_relative_error": 4348.951727110957,
+    "tau_lossless": true
+  },
+  "coordinates": [
+    {
+      "coordinate": "digital/feedforward/energy_minimization/rule_state/thermodynamic_contrast/euclidean",
+      "substrate": "digital",
+      "dynamics": "energy_minimization",
+      "train_metrics": {
+        "loss": 1.6451908349990845,
+        "energy": -1.8430640697479248,
+        "accuracy": 0.9375
+      },
+      "windowed_growth": 1.0,
+      "guard_would_kill_at_default_tau": false,
+      "default_tau": 1.029,
+      "proxy_disagreement": {
+        "mean_relative_error": 0.6153788190920638,
+        "median_relative_error": 0.6173126083211739,
+        "p95_relative_error": 0.6562544836737451,
+        "pearson_correlation": 0.0
+      },
+      "overhead_probe_per_step": 8.139484292427186,
+      "probe_seconds": 0.0010771789820864797
+    },
+    {
+      "coordinate": "digital/feedforward/predictive_settling/rule_state/thermodynamic_contrast/euclidean",
+      "substrate": "digital",
+      "dynamics": "predictive_settling",
+      "train_metrics": {
+        "loss": 2.477656126022339,
+        "energy": 63.57929992675781,
+        "accuracy": 0.0
+      },
+      "windowed_growth": 1.0,
+      "guard_would_kill_at_default_tau": false,
+      "default_tau": 1.029,
+      "proxy_disagreement": {
+        "mean_relative_error": 0.57388321600837,
+        "median_relative_error": 0.5786550282717722,
+        "p95_relative_error": 0.6185598052569494,
+        "pearson_correlation": 0.0
+      },
+      "overhead_probe_per_step": 8.39605515762598,
+      "probe_seconds": 0.000786020013038069
+    },
+    {
+      "coordinate": "analog/feedforward/energy_minimization/rule_state/thermodynamic_contrast/euclidean",
+      "substrate": "analog",
+      "dynamics": "energy_minimization",
+      "train_metrics": {
+        "loss": 1.6479250192642212,
+        "energy": -1.8248566389083862,
+        "accuracy": 1.0
+      },
+      "windowed_growth": 1.0,
+      "guard_would_kill_at_default_tau": false,
+      "default_tau": 1.029,
+      "proxy_disagreement": {
+        "mean_relative_error": 0.3997597621587839,
+        "median_relative_error": 0.4030815072795838,
+        "p95_relative_error": 0.4673463857566445,
+        "pearson_correlation": 0.0
+      },
+      "overhead_probe_per_step": 8.593439043948027,
+      "probe_seconds": 0.0008130299975164235
+    },
+    {
+      "coordinate": "analog/feedforward/predictive_settling/rule_state/thermodynamic_contrast/euclidean",
+      "substrate": "analog",
+      "dynamics": "predictive_settling",
+      "train_metrics": {
+        "loss": 2.463895559310913,
+        "energy": 73.16925811767578,
+        "accuracy": 0.0
+      },
+      "windowed_growth": 1.0,
+      "guard_would_kill_at_default_tau": false,
+      "default_tau": 1.029,
+      "proxy_disagreement": {
+        "mean_relative_error": 0.5228029588235293,
+        "median_relative_error": 0.5249994390385808,
+        "p95_relative_error": 0.562498372037572,
+        "pearson_correlation": 0.0
+      },
+      "overhead_probe_per_step": 8.574885576971885,
+      "probe_seconds": 0.0007563489489257336
+    },
+    {
+      "coordinate": "memristive/feedforward/energy_minimization/rule_state/thermodynamic_contrast/euclidean",
+      "substrate": "memristive",
+      "dynamics": "energy_minimization",
+      "train_metrics": {
+        "loss": 1.6786271333694458,
+        "energy": -0.6851414442062378,
+        "accuracy": 1.0
+      },
+      "windowed_growth": 1.0,
+      "guard_would_kill_at_default_tau": false,
+      "default_tau": 1.029,
+      "proxy_disagreement": {
+        "mean_relative_error": 0.0,
+        "median_relative_error": 0.0,
+        "p95_relative_error": 0.0,
+        "pearson_correlation": 0.0
+      },
+      "overhead_probe_per_step": 7.970334907696425,
+      "probe_seconds": 0.0019259499968029559
+    },
+    {
+      "coordinate": "memristive/feedforward/predictive_settling/rule_state/thermodynamic_contrast/euclidean",
+      "substrate": "memristive",
+      "dynamics": "predictive_settling",
+      "train_metrics": {
+        "loss": 2.3621716499328613,
+        "energy": 71.6179428100586,
+        "accuracy": 0.0
+      },
+      "windowed_growth": 1.0,
+      "guard_would_kill_at_default_tau": false,
+      "default_tau": 1.029,
+      "proxy_disagreement": {
+        "mean_relative_error": 0.0,
+        "median_relative_error": 0.0,
+        "p95_relative_error": 0.0,
+        "pearson_correlation": 0.0
+      },
+      "overhead_probe_per_step": 8.000807005401015,
+      "probe_seconds": 0.0018625690136104822
+    },
+    {
+      "coordinate": "neuromorphic/feedforward/energy_minimization/rule_state/thermodynamic_contrast/euclidean",
+      "substrate": "neuromorphic",
+      "dynamics": "energy_minimization",
+      "train_metrics": {
+        "loss": 1.6632171869277954,
+        "energy": -1.768040418624878,
+        "accuracy": 0.875
+      },
+      "windowed_growth": 1.0,
+      "guard_would_kill_at_default_tau": false,
+      "default_tau": 1.029,
+      "proxy_disagreement": {
+        "mean_relative_error": 1.2676492049144372,
+        "median_relative_error": 1.1341536881229377,
+        "p95_relative_error": 2.5977145513336795,
+        "pearson_correlation": 0.0
+      },
+      "overhead_probe_per_step": 7.513424181377598,
+      "probe_seconds": 0.0023434190079569817
+    },
+    {
+      "coordinate": "neuromorphic/feedforward/predictive_settling/rule_state/thermodynamic_contrast/euclidean",
+      "substrate": "neuromorphic",
+      "dynamics": "predictive_settling",
+      "train_metrics": {
+        "loss": 2.07694673538208,
+        "energy": 0.02374427765607834,
+        "accuracy": 0.1875
+      },
+      "windowed_growth": 1.0,
+      "guard_would_kill_at_default_tau": false,
+      "default_tau": 1.029,
+      "proxy_disagreement": {
+        "mean_relative_error": 0.9934972537012283,
+        "median_relative_error": 0.8589454321860959,
+        "p95_relative_error": 1.9722061044892456,
+        "pearson_correlation": 0.0
+      },
+      "overhead_probe_per_step": 6.688694865079556,
+      "probe_seconds": 0.0014618299901485443
+    },
+    {
+      "coordinate": "sparse/feedforward/energy_minimization/rule_state/thermodynamic_contrast/euclidean",
+      "substrate": "sparse",
+      "dynamics": "energy_minimization",
+      "train_metrics": {
+        "loss": 1.7031539678573608,
+        "energy": -1.603020191192627,
+        "accuracy": 0.9375
+      },
+      "windowed_growth": 1.0,
+      "guard_would_kill_at_default_tau": false,
+      "default_tau": 1.029,
+      "proxy_disagreement": {
+        "mean_relative_error": 0.5099642980361316,
+        "median_relative_error": 0.5038520910166266,
+        "p95_relative_error": 0.5540244831542354,
+        "pearson_correlation": 0.0
+      },
+      "overhead_probe_per_step": 8.53934159118868,
+      "probe_seconds": 0.0015800789697095752
+    },
+    {
+      "coordinate": "sparse/feedforward/predictive_settling/rule_state/thermodynamic_contrast/euclidean",
+      "substrate": "sparse",
+      "dynamics": "predictive_settling",
+      "train_metrics": {
+        "loss": 2.444070816040039,
+        "energy": 68.45075225830078,
+        "accuracy": 0.0
+      },
+      "windowed_growth": 1.0,
+      "guard_would_kill_at_default_tau": false,
+      "default_tau": 1.029,
+      "proxy_disagreement": {
+        "mean_relative_error": 0.5289073210948003,
+        "median_relative_error": 0.5238956818134024,
+        "p95_relative_error": 0.5825639608983484,
+        "pearson_correlation": 0.0
+      },
+      "overhead_probe_per_step": 8.627303306151052,
+      "probe_seconds": 0.001506269967649132
+    },
+    {
+      "coordinate": "ternary/feedforward/energy_minimization/rule_state/thermodynamic_contrast/euclidean",
+      "substrate": "ternary",
+      "dynamics": "energy_minimization",
+      "train_metrics": {
+        "loss": 1.6469488143920898,
+        "energy": -1.3711284399032593,
+        "accuracy": 1.0
+      },
+      "windowed_growth": 1.0,
+      "guard_would_kill_at_default_tau": false,
+      "default_tau": 1.029,
+      "proxy_disagreement": {
+        "mean_relative_error": 0.469352818267429,
+        "median_relative_error": 0.4622366472488061,
+        "p95_relative_error": 0.5269036314401488,
+        "pearson_correlation": 0.3471478309368567
+      },
+      "overhead_probe_per_step": 8.65742317928109,
+      "probe_seconds": 0.0023134900256991386
+    },
+    {
+      "coordinate": "ternary/feedforward/predictive_settling/rule_state/thermodynamic_contrast/euclidean",
+      "substrate": "ternary",
+      "dynamics": "predictive_settling",
+      "train_metrics": {
+        "loss": 2.5231587886810303,
+        "energy": 63.25442123413086,
+        "accuracy": 0.0
+      },
+      "windowed_growth": 1.0,
+      "guard_would_kill_at_default_tau": false,
+      "default_tau": 1.029,
+      "proxy_disagreement": {
+        "mean_relative_error": 0.43605141988441176,
+        "median_relative_error": 0.43065630734122706,
+        "p95_relative_error": 0.5190178445457525,
+        "pearson_correlation": 0.0
+      },
+      "overhead_probe_per_step": 8.912585717518857,
+      "probe_seconds": 0.0022039489704184234
+    },
+    {
+      "coordinate": "optical/feedforward/energy_minimization/rule_state/thermodynamic_contrast/euclidean",
+      "substrate": "optical",
+      "dynamics": "energy_minimization",
+      "train_metrics": {
+        "loss": 1.6830673217773438,
+        "energy": -1.9793267250061035,
+        "accuracy": 0.9375
+      },
+      "windowed_growth": 1.0,
+      "guard_would_kill_at_default_tau": false,
+      "default_tau": 1.029,
+      "proxy_disagreement": {
+        "mean_relative_error": 4196.709010047853,
+        "median_relative_error": 4183.7602608052675,
+        "p95_relative_error": 5680.414177090317,
+        "pearson_correlation": -0.03754229810322102
+      },
+      "overhead_probe_per_step": 7.676449485964063,
+      "probe_seconds": 0.002564408991020173
+    },
+    {
+      "coordinate": "optical/feedforward/predictive_settling/rule_state/thermodynamic_contrast/euclidean",
+      "substrate": "optical",
+      "dynamics": "predictive_settling",
+      "train_metrics": {
+        "loss": 2.5027389526367188,
+        "energy": 69.75366973876953,
+        "accuracy": 0.0
+      },
+      "windowed_growth": 1.0,
+      "guard_would_kill_at_default_tau": false,
+      "default_tau": 1.029,
+      "proxy_disagreement": {
+        "mean_relative_error": 4639.796671931411,
+        "median_relative_error": 4348.951727110957,
+        "p95_relative_error": 6125.951627920077,
+        "pearson_correlation": 0.15257868330612556
+      },
+      "overhead_probe_per_step": 7.881484998345324,
+      "probe_seconds": 0.0025639989762566984
+    },
+    {
+      "coordinate": "quantum/feedforward/energy_minimization/rule_state/thermodynamic_contrast/euclidean",
+      "substrate": "quantum",
+      "dynamics": "energy_minimization",
+      "train_metrics": {
+        "loss": 1.6626075506210327,
+        "energy": -1.2658122777938843,
+        "accuracy": 1.0
+      },
+      "windowed_growth": 1.0,
+      "guard_would_kill_at_default_tau": false,
+      "default_tau": 1.029,
+      "proxy_disagreement": {
+        "mean_relative_error": 1858.5332429601228,
+        "median_relative_error": 1846.8406233705573,
+        "p95_relative_error": 2039.8278130191434,
+        "pearson_correlation": 0.18345622265773015
+      },
+      "overhead_probe_per_step": 8.568073529102055,
+      "probe_seconds": 0.0011257990263402462
+    },
+    {
+      "coordinate": "quantum/feedforward/predictive_settling/rule_state/thermodynamic_contrast/euclidean",
+      "substrate": "quantum",
+      "dynamics": "predictive_settling",
+      "train_metrics": {
+        "loss": 2.5326623916625977,
+        "energy": 68.87000274658203,
+        "accuracy": 0.0
+      },
+      "windowed_growth": 1.0,
+      "guard_would_kill_at_default_tau": false,
+      "default_tau": 1.029,
+      "proxy_disagreement": {
+        "mean_relative_error": 1838.2495715837817,
+        "median_relative_error": 1777.1770407836202,
+        "p95_relative_error": 2087.7146412982465,
+        "pearson_correlation": 0.0
+      },
+      "overhead_probe_per_step": 8.63323276260561,
+      "probe_seconds": 0.0011166990152560174
+    }
+  ],
+  "skipped": []
+}
