@@ -19,6 +19,7 @@ from pathlib import Path
 import torch
 
 from computronium.core.profiling import measure_suite_resources
+from computronium.experiments.joint import SUITE_CLAIMS_SCOPE
 
 
 def create_damage_scenarios(
@@ -272,6 +273,7 @@ def evaluate_structural_robustness(
     ) / len(damage_results)
 
     return {
+        "claims_scope": SUITE_CLAIMS_SCOPE,
         "coordinate": coordinate,
         "pre_damage_accuracy": pre_damage_accuracy,
         "damage_severity": damage_severity,

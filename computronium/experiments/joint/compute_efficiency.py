@@ -20,6 +20,7 @@ from pathlib import Path
 import torch
 
 from computronium.core.profiling import measure_suite_resources
+from computronium.experiments.joint import SUITE_CLAIMS_SCOPE
 import torch.nn.functional as F
 from torch import Tensor, nn
 
@@ -291,6 +292,7 @@ def evaluate_compute_efficiency(
     flops_reduction = 1.0 - (routing_flops / dense_flops) if dense_flops > 0 else 0
 
     return {
+        "claims_scope": SUITE_CLAIMS_SCOPE,
         "coordinate": coordinate,
         "final_accuracy": final_accuracy,
         "final_loss": losses[-1],

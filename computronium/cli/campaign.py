@@ -17,6 +17,13 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from computronium.core.campaign.campaign_store import CampaignStore
+    from computronium.core.campaign.checkpoint import (
+        CheckpointManager,
+        JointCheckpoint,
+    )
+    from computronium.core.system_trainer import JointSystem
+
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -192,18 +199,134 @@ def _generate_random_coordinate(space: dict) -> str:
     ])
 
 
-def _run_campaign(args) -> int:
-    """Run a campaign."""
-    import random
+def _restore_checkpointed_joint(
+    mgr: CheckpointManager,
+    checkpoint: JointCheckpoint,
+) -> JointSystem:
+    """Rebuild the checkpointed coordinate's joint and reload its θ + RNG.
 
+    Fresh joints start from initialization; continuity requires copying the
+    checkpointed θ into geometry params before any redo work.
+    """
     import torch
 
-    from computronium.core.campaign import CampaignStore, get_kernel_cache
-    from computronium.core.campaign.checkpoint import (
-        CheckpointManager,
+    from computronium.core.campaign.evaluation import build_coordinate_system
+
+    joint = build_coordinate_system(
+        checkpoint.coordinate
+        or "digital/feedforward/instantaneous/null/thermodynamic_contrast/euclidean"
     )
-    from computronium.core.campaign.frontier_record import FrontierRecord
-    from computronium.core.profiling import ResourceUsage
+    with torch.no_grad():
+        for name, array in checkpoint.theta.items():
+            joint.geometry.params[name].copy_(torch.from_numpy(array))
+    mgr.restore_rng_states(checkpoint)
+    return joint
+
+
+def _redo_unrecorded_episodes(
+    store: CampaignStore,
+    mgr: CheckpointManager,
+    *,
+    campaign_id: str,
+    last_complete: int,
+    task_name: str,
+) -> None:
+    """Replay episodes lost to a crash between the latest checkpoint and now."""
+    from computronium.core.campaign.evaluation import evaluate_episode
+
+    ckpt_path = mgr.get_latest_checkpoint(campaign_id)
+    if ckpt_path is None:
+        return
+    checkpoint = mgr.load_checkpoint(ckpt_path)
+    if not mgr.validate_checkpoint(checkpoint):
+        print(
+            f"  Warning: checkpoint {ckpt_path.name} failed validation; skipping redo"
+        )
+        return
+
+    recorded = {ep.iteration for ep in store.get_episodes(campaign_id)}
+    joint = _restore_checkpointed_joint(mgr, checkpoint)
+    for episode in range(checkpoint.episode_index, last_complete + 1):
+        if episode in recorded:
+            continue
+        record, metrics = evaluate_episode(
+            joint,
+            coordinate=checkpoint.coordinate,
+            task_name=task_name,
+            campaign_id=campaign_id,
+            episode=episode,
+        )
+        episode_id = store.add_episode(
+            campaign_id=campaign_id,
+            branch_name=checkpoint.branch_name,
+            iteration=episode,
+            coordinate=record.coordinate,
+            task_name=task_name,
+            frontier_record=record,
+        )
+        store.add_registry_snapshot(
+            campaign_id=campaign_id,
+            episode_id=episode_id,
+            registry_signature=record.registry_signature,
+            composite_state_shape=record.composite_state_shape,
+            plasticity_primitive=record.plasticity_primitive,
+            plasticity_config=record.plasticity_config,
+        )
+        store.update_iteration(campaign_id, episode)
+        print(f"  Redid episode {episode}: loss={metrics['loss']:.4f}")
+
+
+def _maybe_checkpoint(
+    store: CampaignStore,
+    mgr: CheckpointManager,
+    *,
+    campaign_id: str,
+    iteration: int,
+    coordinate: str,
+    task_name: str,
+    joint: JointSystem,  # noqa: PLR0913 - mirrors create_checkpoint's own signature
+) -> bool:
+    """Snapshot the system ENTERING this episode; resume replays bit-exact."""
+    from computronium.core.campaign.evaluation import episode_batch
+    from computronium.core.joint.state import CompositeState
+
+    campaign_snapshot = store.get_campaign(campaign_id)
+    if campaign_snapshot is None:
+        return False
+    path = mgr.create_checkpoint(
+        campaign_state=campaign_snapshot,
+        episode_index=iteration,
+        composite_state=CompositeState(
+            activity={"x": episode_batch(iteration)[0]},
+            plastic={},
+            substrate={},
+        ),
+        context=joint.context,
+        coordinate=coordinate,
+        task_name=task_name,
+    )
+    print(f"    checkpoint -> {path.name}")
+    return True
+
+
+def _run_campaign(args) -> int:  # noqa: PLR0914 - campaign orchestration state
+    """Run a campaign of real composed-system episodes.
+
+    Each experiment composes a fresh JointSystem from its coordinate and runs
+    one real train_step on a deterministic per-episode batch; stability fields
+    come from a windowed-growth guard probe. Checkpoints snapshot the first
+    experiment's system ENTERING an interval episode so a resumed campaign
+    replays it bit-identically (same θ, same RNG stream position).
+    """
+    from computronium.core.campaign.campaign_store import CampaignStore
+    from computronium.core.campaign.checkpoint import CheckpointManager
+    from computronium.core.campaign.evaluation import (
+        DEFAULT_INPUT_DIM,
+        DEFAULT_NUM_CLASSES,
+        UnsupportedCoordinateError,
+        build_coordinate_system,
+        evaluate_episode,
+    )
 
     space = _get_search_space(args.space)
     campaign_id = args.campaign_id or f"camp_{uuid.uuid4().hex[:8]}"
@@ -214,12 +337,17 @@ def _run_campaign(args) -> int:
     checkpoint_dir = output_dir / "checkpoints"
 
     store = CampaignStore(db_path, checkpoint_dir)
-    kernel_cache = get_kernel_cache()
     checkpoint_mgr = CheckpointManager(
         checkpoint_dir, checkpoint_interval=args.checkpoint_interval
     )
 
-    # Create or resume campaign
+    task_name = f"{args.space}_synthetic"
+    build_kwargs = {
+        "input_dim": DEFAULT_INPUT_DIM,
+        "output_dim": DEFAULT_NUM_CLASSES,
+        "hidden_dims": (16,),
+    }
+
     if args.resume:
         campaign_state = store.get_latest_on_branch(args.branch)
         if not campaign_state:
@@ -227,7 +355,15 @@ def _run_campaign(args) -> int:
             return 1
         campaign_id = campaign_state.campaign_id
         print(
-            f"Resuming campaign {campaign_id} on branch '{args.branch}' at iteration {campaign_state.iteration}"
+            f"Resuming campaign {campaign_id} on branch '{args.branch}'"
+            f" at iteration {campaign_state.iteration}"
+        )
+        _redo_unrecorded_episodes(
+            store,
+            checkpoint_mgr,
+            campaign_id=campaign_id,
+            last_complete=campaign_state.iteration,
+            task_name=task_name,
         )
     else:
         campaign_state = store.create_campaign(
@@ -248,6 +384,7 @@ def _run_campaign(args) -> int:
         n_experiments = args.experiments_per_iter
         coordinates = [_generate_random_coordinate(space) for _ in range(n_experiments)]
 
+        checkpointed_this_iteration = False
         for exp_idx, coordinate in enumerate(coordinates):
             print(f"  [{exp_idx + 1}/{n_experiments}] Evaluating: {coordinate}")
 
@@ -255,65 +392,55 @@ def _run_campaign(args) -> int:
                 print("    [DRY RUN] Skipping execution")
                 continue
 
-            # TODO: Actually evaluate the coordinate
-            # For now, create a mock FrontierRecord
-            task_name = random.choice(space["tasks"])
+            try:
+                joint = build_coordinate_system(coordinate, **build_kwargs)
+            except UnsupportedCoordinateError as exc:
+                print(f"    skipped: {exc}")
+                continue
 
-            # Mock evaluation - replace with actual joint system evaluation
-            frontier_record = FrontierRecord(
+            if not checkpointed_this_iteration and checkpoint_mgr.should_checkpoint(
+                iteration
+            ):
+                checkpointed_this_iteration = _maybe_checkpoint(
+                    store,
+                    checkpoint_mgr,
+                    campaign_id=campaign_id,
+                    iteration=iteration,
+                    coordinate=coordinate,
+                    task_name=task_name,
+                    joint=joint,
+                )
+
+            record, _metrics = evaluate_episode(
+                joint,
                 coordinate=coordinate,
                 task_name=task_name,
-                task_loss=random.uniform(0.1, 1.0),
-                task_accuracy=random.uniform(0.5, 0.99),
-                adaptation_time=random.randint(10, 100),
-                rho_jacobian=random.uniform(0.5, 1.5),
-                lyapunov_local=random.uniform(-0.5, 0.5),
-                settling_time=random.uniform(5, 50),
-                basin_stability=random.uniform(0.3, 1.0),
-                resources=ResourceUsage.measure(
-                    model=torch.nn.Linear(784, 10),
-                    input_tensor=torch.randn(64, 784),
-                ),
-                plasticity_primitive=coordinate.split("/")[3],
-                plasticity_config={},
                 campaign_id=campaign_id,
-                episode_index=iteration,
+                episode=iteration,
             )
 
-            # Store episode
             episode_id = store.add_episode(
                 campaign_id=campaign_id,
                 branch_name=args.branch,
                 iteration=iteration,
                 coordinate=coordinate,
                 task_name=task_name,
-                frontier_record=frontier_record,
+                frontier_record=record,
             )
 
-            # Store registry snapshot
-            # TODO: Get actual registry signature and composite state shape
             store.add_registry_snapshot(
                 campaign_id=campaign_id,
                 episode_id=episode_id,
-                registry_signature="mock_signature",
-                composite_state_shape={
-                    "activity": {"weight": (784, 10)},
-                    "plastic": {},
-                    "substrate": {},
-                },
-                plasticity_primitive=frontier_record.plasticity_primitive,
-                plasticity_config=frontier_record.plasticity_config,
+                registry_signature=record.registry_signature,
+                composite_state_shape=record.composite_state_shape,
+                plasticity_primitive=record.plasticity_primitive,
+                plasticity_config=record.plasticity_config,
             )
 
             print(
-                f"    ✓ Accuracy: {frontier_record.task_accuracy:.4f}, Loss: {frontier_record.task_loss:.4f}"
+                f"    ✓ Accuracy: {record.task_accuracy:.4f},"
+                f" Loss: {record.task_loss:.4f}"
             )
-
-        # Checkpoint
-        if checkpoint_mgr.should_checkpoint(iteration):
-            # TODO: Get actual composite_state and context
-            print(f"  Checkpointing at iteration {iteration}...")
-            # checkpoint_mgr.create_checkpoint(...)
 
         # Update campaign state
         store.update_iteration(campaign_id, iteration)
@@ -508,7 +635,7 @@ def _export_campaign(args) -> int:
             fieldnames = ["iteration", "timestamp", "coordinate", "task_name"]
             # Add frontier record fields
             sample_fr = episodes[0].frontier_record
-            for key in sample_fr.keys():
+            for key in sample_fr:
                 fieldnames.append(f"fr_{key}")
 
             writer = csv.DictWriter(output_io, fieldnames=fieldnames)
@@ -526,7 +653,7 @@ def _export_campaign(args) -> int:
         output = output_io.getvalue()
 
     if args.output:
-        Path(args.output).write_text(output)
+        Path(args.output).write_text(output, encoding="utf-8")
         print(f"Exported to {args.output}")
     else:
         print(output)
@@ -542,21 +669,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         _build_parser().print_help()
         return 1
 
-    if args.subcommand == "run":
-        return _run_campaign(args)
-    elif args.subcommand == "status":
-        return _show_status(args)
-    elif args.subcommand == "list":
-        return _list_campaigns(args)
-    elif args.subcommand == "compare":
-        return _compare_campaigns(args)
-    elif args.subcommand == "checkpoint":
-        return _manage_checkpoints(args)
-    elif args.subcommand == "export":
-        return _export_campaign(args)
-    else:
+    handlers = {
+        "run": _run_campaign,
+        "status": _show_status,
+        "list": _list_campaigns,
+        "compare": _compare_campaigns,
+        "checkpoint": _manage_checkpoints,
+        "export": _export_campaign,
+    }
+    handler = handlers.get(args.subcommand)
+    if handler is None:
         print(f"Unknown subcommand: {args.subcommand}")
         return 1
+    return handler(args)
 
 
 if __name__ == "__main__":

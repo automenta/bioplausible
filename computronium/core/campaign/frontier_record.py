@@ -41,7 +41,7 @@ class FrontierRecord:
 
     # State Registry metadata
     registry_signature: str = ""  # Hash of StateVariable registrations
-    composite_state_shape: dict[str, tuple[int, ...]] = field(
+    composite_state_shape: dict[str, dict[str, tuple[int, ...]]] = field(
         default_factory=dict
     )  # Shape of z=(x,ψ,σ)
 
@@ -76,7 +76,8 @@ class FrontierRecord:
             "plasticity_config": self.plasticity_config,
             "registry_signature": self.registry_signature,
             "composite_state_shape": {
-                k: list(v) for k, v in self.composite_state_shape.items()
+                k: {name: list(shape) for name, shape in v.items()}
+                for k, v in self.composite_state_shape.items()
             },
             "consolidation_events": self.consolidation_events,
             "timestamp": self.timestamp,
@@ -106,7 +107,8 @@ class FrontierRecord:
             plasticity_config=data.get("plasticity_config", {}),
             registry_signature=data.get("registry_signature", ""),
             composite_state_shape={
-                k: tuple(v) for k, v in data.get("composite_state_shape", {}).items()
+                k: {name: tuple(shape) for name, shape in v.items()}
+                for k, v in data.get("composite_state_shape", {}).items()
             },
             consolidation_events=data.get("consolidation_events", []),
             timestamp=data.get("timestamp", datetime.now().isoformat()),

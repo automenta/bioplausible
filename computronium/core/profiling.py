@@ -188,9 +188,14 @@ class ResourceUsage:
         model: nn.Module,
         input_tensor: torch.Tensor,
         plastic_state: dict[str, torch.Tensor] | None = None,
-        device: str = "cuda",
+        device: str | None = None,
     ) -> ResourceUsage:
-        """Measure resource usage for one forward/backward pass."""
+        """Measure resource usage for one forward/backward pass.
+
+        ``device=None`` infers from the model's parameters so CPU-only callers
+        are measured honestly instead of silently requiring CUDA.
+        """
+        device = device or _infer_model_device(model)
         model.eval()
         model.to(device)
         input_tensor = input_tensor.to(device)
@@ -264,6 +269,14 @@ class ResourceUsage:
             backward_flops=backward_flops,
             param_count=param_count,
         )
+
+
+def _infer_model_device(model: nn.Module) -> str:
+    """Infer the model's device so CPU-only callers measure honestly."""
+    try:
+        return next(model.parameters()).device.type
+    except StopIteration:
+        return "cpu"
 
 
 def _build_spatial_dummy(model: nn.Module, device: torch.device) -> torch.Tensor:
@@ -604,6 +617,29 @@ class EnergyTracker:
         return False
 
 
+def _activity_spectral_radius(
+    system: JointSystem, x: torch.Tensor, input_dim: int, output_dim: int
+) -> float | None:
+    """Spectral radius of the activity Jacobian via power iteration.
+
+    Only defined when the transition preserves dimension (perturbations are
+    in-place); non-square geometries report None rather than crashing.
+    """
+    if input_dim != output_dim:
+        return None
+    try:
+        from computronium.core.campaign.evaluation import activity_transition
+        from computronium.core.joint.state import CompositeState
+        from computronium.core.stability.spectral_radius import (
+            estimate_spectral_radius,
+        )
+
+        z = CompositeState(activity={"x": x}, plastic={}, substrate={})
+        return estimate_spectral_radius(activity_transition(system), z, system.context)
+    except Exception:
+        return None
+
+
 def analyze_joint_system(
     coordinate: str | SystemConfig,
     batch_size: int = 64,
@@ -779,14 +815,7 @@ def analyze_joint_system(
             except Exception:
                 pass
 
-    # Stability proxy: spectral radius of Jacobian (if available)
-    spectral_radius = None
-    try:
-        from computronium.core.stability.spectral_radius import estimate_spectral_radius
-
-        spectral_radius = estimate_spectral_radius(system, x, y)
-    except Exception:
-        pass
+    spectral_radius = _activity_spectral_radius(system, x, input_dim, output_dim)
 
     coord_str = f"{substrate_type}/{geometry_type}/{dynamics_type}/{plasticity_type}/{credit_type}/{update_type}"
     return ResourceUsage(

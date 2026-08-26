@@ -15,6 +15,16 @@ from computronium.core.campaign.checkpoint import (
     JointCheckpoint,
     create_resume_script,
 )
+from computronium.core.campaign.evaluation import (
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_INPUT_DIM,
+    DEFAULT_NUM_CLASSES,
+    UnsupportedCoordinateError,
+    activity_transition,
+    build_coordinate_system,
+    episode_batch,
+    evaluate_episode,
+)
 from computronium.core.campaign.frontier_record import FrontierRecord
 from computronium.core.campaign.kernel_cache import (
     JointKernelCache,
@@ -25,6 +35,9 @@ from computronium.core.campaign.pareto import ParetoFrontier, pareto_frontier
 from computronium.core.profiling import ResourceUsage
 
 __all__ = [
+    "DEFAULT_BATCH_SIZE",
+    "DEFAULT_INPUT_DIM",
+    "DEFAULT_NUM_CLASSES",
     "CampaignState",
     "CampaignStore",
     "CheckpointManager",
@@ -34,7 +47,12 @@ __all__ = [
     "JointKernelCache",
     "ParetoFrontier",
     "ResourceUsage",
+    "UnsupportedCoordinateError",
+    "activity_transition",
+    "build_coordinate_system",
     "create_resume_script",
+    "episode_batch",
+    "evaluate_episode",
     "get_kernel_cache",
     "pareto_frontier",
     "set_kernel_cache",

@@ -1,8 +1,9 @@
 """EqProp competitive verification on MNIST (TODO4 §7.2).
 
 Trains the canonical EqProp ontology coordinate (``MODEL_CONFIGS["eqprop"]``
-via ``create_eqprop_system``) for a full 20-epoch schedule and reports
-test accuracy against the >80% target.
+via ``create_eqprop_system``) for a full 20-epoch schedule with per-epoch LR
+decay and val-based early stopping (late-drift fix), and reports test
+accuracy against the >80% target.
 
 Usage:
     python -m computronium.experiments.joint.eqprop_mnist [--epochs 20] [--quick]
@@ -15,7 +16,7 @@ import json
 import logging
 import math
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
 from torch.utils.data import DataLoader, Subset
@@ -48,6 +49,9 @@ class EqPropMnistConfig:
     momentum: float = 0.0
     batch_size: int = 128
     epochs: int = 20
+    lr_gamma: float = 0.9
+    lr_decay_start: int = 3
+    early_stop_patience: int = 4
     seed: int = 42
     device: str = "auto"
     max_train_samples: int | None = None
@@ -80,7 +84,23 @@ def _loaders(
     )
 
 
-def train_eqprop_mnist(config: EqPropMnistConfig) -> dict[str, object]:
+def _decay_lr(system: object, gamma: float, epoch: int, start: int) -> None:
+    """Multiplicative per-epoch LR decay on the system's Euclidean update.
+
+    Counters late-phase drift: a constant step size keeps random-walking past
+    the accuracy peak while energy keeps falling (objective misalignment).
+    """
+    if gamma >= 1.0 or epoch < start:
+        return
+    update = getattr(system, "update", None)
+    config = getattr(update, "config", None)
+    step_size = getattr(config, "step_size", None)
+    if update is None or config is None or not isinstance(step_size, int | float):
+        return
+    update.config = replace(config, step_size=float(step_size) * gamma)
+
+
+def train_eqprop_mnist(config: EqPropMnistConfig) -> dict[str, object]:  # noqa: PLR0914 - epoch schedule state (best/patience/lr)
     """Run the full training schedule and return the result record."""
     seed_everything(config.seed)
 
@@ -98,6 +118,10 @@ def train_eqprop_mnist(config: EqPropMnistConfig) -> dict[str, object]:
 
     history: list[dict[str, float]] = []
     aborted: str | None = None
+    early_stopped: str | None = None
+    best_acc = 0.0
+    best_epoch = -1
+    epochs_since_best = 0
     start = time.time()
 
     with SystemTrainer(
@@ -115,28 +139,44 @@ def train_eqprop_mnist(config: EqPropMnistConfig) -> dict[str, object]:
         for _ in range(config.epochs):
             metrics = trainer.train_epoch()
             history.append(metrics)
+            val_acc = metrics.get("val_acc", 0.0)
+            epoch = int(metrics.get("epoch", -1))
+            if val_acc > best_acc:
+                best_acc, best_epoch, epochs_since_best = val_acc, epoch, 0
+            else:
+                epochs_since_best += 1
             logger.info(
-                "epoch %d: train_loss=%.4f val_acc=%.4f",
-                metrics.get("epoch", -1),
+                "epoch %d: train_loss=%.4f val_acc=%.4f (best %.4f @%d)",
+                epoch,
                 metrics.get("train_loss", float("nan")),
-                metrics.get("val_acc", 0.0),
+                val_acc,
+                best_acc,
+                best_epoch,
             )
             if not math.isfinite(metrics.get("train_loss", float("nan"))):
-                aborted = f"non-finite loss at epoch {metrics.get('epoch')}"
+                aborted = f"non-finite loss at epoch {epoch}"
                 break
+            patience = config.early_stop_patience
+            if patience > 0 and epochs_since_best >= patience:
+                early_stopped = (
+                    f"no val improvement for {patience} epochs (best ep{best_epoch})"
+                )
+                break
+            _decay_lr(system, config.lr_gamma, epoch, config.lr_decay_start)
 
     elapsed = time.time() - start
-    best_acc = max((h.get("val_acc", 0.0) for h in history), default=0.0)
+    final_val_acc = history[-1].get("val_acc", 0.0) if history else 0.0
     return {
         "config": asdict(config),
         "param_count": sum(p.numel() for p in system.geometry.params.values()),
         "device": str(trainer.device),
         "elapsed_s": elapsed,
         "best_val_acc": best_acc,
-        "final_val_acc": history[-1].get("val_acc", 0.0) if history else 0.0,
-        "target_met": bool(history)
-        and history[-1].get("val_acc", 0.0) >= _ACCURACY_TARGET,
+        "best_epoch": best_epoch,
+        "final_val_acc": final_val_acc,
+        "target_met": bool(history) and final_val_acc >= _ACCURACY_TARGET,
         "aborted": aborted,
+        "early_stopped": early_stopped,
         "history": history,
     }
 
@@ -190,10 +230,14 @@ def main() -> None:
         json.dump(result, f, indent=2, default=str)
 
     logger.info(
-        "EqProp MNIST complete: best_val_acc=%.4f target_met=%s aborted=%s (%.1fs)",
+        "EqProp MNIST complete: best_val_acc=%.4f @ep%s final=%.4f target_met=%s "
+        "aborted=%s early_stopped=%s (%.1fs)",
         result["best_val_acc"],
+        result["best_epoch"],
+        result["final_val_acc"],
         result["target_met"],
         result["aborted"],
+        result["early_stopped"],
         result["elapsed_s"],
     )
 

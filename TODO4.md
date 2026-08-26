@@ -1,6 +1,6 @@
 # Computronium Sprint Plan: TODO4 — Sprint Close-Out & Research Foundation
 
-## Status: COMPLETE for planning purposes | PR-0…PR-4 ✅ | PR-7 full-scale ✅ (instrumentation scale) | PR-5 ✅ calibrated | PR-9 ✅ commissioned | PR-6 ✅ drafted → handoff to RESEARCH3 catalog
+## Status: COMPLETE | PR-0…PR-4 ✅ | PR-7 full-scale ✅ | PR-5 ✅ calibrated | PR-9 ✅ commissioned | PR-6 ✅ drafted | Pre-handoff engineering debt cleared (session 5) ✅ → RESEARCH3 catalog
 
 > Consolidates all unchecked work from `TODO3.md` with the preliminary infrastructure defined in `RESEARCH3.md`. After Phase 7 + 8, work hands off to the RESEARCH3 catalog (15 items, 5 critical paths) under its Execution Protocol (E-1…E-11).
 
@@ -34,7 +34,7 @@ Locked-in fixes: separate free/nudged state objects in `train_step`; multi-layer
   4. optimizer momentum 0.9 amplified noise ×10 past the accuracy peak (80% @ep0 then collapse); `create_eqprop_system(update_momentum=…)` parameterized, 7.2 uses 0.0
   - Plus the blocking memory leak: settle autograd graphs accumulated ~4 MB/step → CUDA OOM at epoch 4. Pseudo-grads are consumed as plain values (no backward anywhere in the pipeline) → detached in `EuclideanUpdate.step`; `_ComposedSystem.train_step` runs under `torch.no_grad()`; `forward_with_intermediates` bias/recurrent adds made out-of-place. Verified flat 16.6 MB over 400 steps.
 - [x] **7.2.2** Run full 20-epoch MNIST training — **DONE (2026-08-25 session 3)**. Clean 20-epoch record, no divergence/OOM/NaN abort (558.9 s on the 3080). `results/eqprop_mnist/results.json`: best_val_acc=**81.17 %** (~ep7), final_val_acc=57.14 % (late-run drift — see session log). Runner's strict `target_met` flag (final-epoch gate) is False by design; the registered claim ("reaches ≥80 % within schedule") is met by the best.
-- [x] **7.2.3** Target >80% test accuracy — **DONE**: best 81.17 % crosses target (prior session's ep7 81.2 % reproduced under seed 42). Known limitation recorded as new work item: val accuracy decays after ~ep10 (energy keeps dropping to −6e4 while acc falls → late-phase objective misalignment); fix vocabulary = LR decay, early stopping on val, or weight-norm regularization before any rerun for a paper-grade final-epoch number.
+- [x] **7.2.3** Target >80% test accuracy — **DONE**: best 81.17 % crosses target (prior session's ep7 81.2 % reproduced under seed 42). Known limitation recorded as new work item: val accuracy decays after ~ep10 (energy keeps dropping to −6e4 while acc falls → late-phase objective misalignment); fix vocabulary = LR decay, early stopping on val, or weight-norm regularization before any rerun for a paper-grade final-epoch number. **→ Late-drift FIXED session 5**: per-epoch LR decay (γ=0.9 from ep3) + val-based early stopping (patience 4); rerun gave best **81.32 %** @ep7, final **79.30 %** @ep11 (early-stopped) vs prior 57.14 % collapse at ep19 — drift eliminated, both numbers reported per PR-6 contract (`results/eqprop_mnist/results.json`).
 
 ### 7.3 CI Gates (TODO3 DoD remainder)
 Gate = current *configured* baseline (`pyproject.toml [tool.pyright]` — `strict` was deliberately relaxed to a per-rule profile; do NOT reintroduce), not aspirational strictness:
@@ -142,6 +142,7 @@ Bridge points from Phase 7:
 | Parity tests | `tests/property/test_ontology_parity.py` |
 | EqProp locality tests | `tests/property/test_eqprop_locality.py` |
 | Rocq formalization | `rocq/` (canonical; Lean retired) |
+| Campaign episode machinery (session 5) | `computronium/core/campaign/evaluation.py` (`build_coordinate_system`, `evaluate_episode`, `episode_batch`, `activity_transition`); consumed by `autoscientist_campaigns/commission.py` + `computronium/cli/campaign.py` |
 | Z3 substrate | `computronium/experiments/joint/z3_fixed_weights.py`, `computronium/core/plasticity/rule_state.py` |
 | Shakedown suites | `algorithm_migration.py`, `adaptation_efficiency.py`, `compute_efficiency.py`, `structural_robustness.py` (all in `computronium/experiments/joint/` unless noted) |
 | Profiling / resources | `computronium/core/profiling.py:38` (canonical `ResourceUsage`; dupes in `stability/frontier.py`, `campaign/resource_vector.py` — consolidate per PR-3a) |
@@ -180,7 +181,7 @@ Bridge points from Phase 7:
 - [x] **PR-5** calibrated ✅ session 4: windowed_growth τ=1.029 / FKR 0 % / KR 100 %; fast_proxy proven insufficient alone on non-normal systems
 - [x] **PR-9** commissioned ✅ session 4: full fault-tolerance cycle, bit-exact redo, report JSON committed
 - [x] **PR-6** drafted ✅ session 4 (`docs/evaluation_fairness_contract.md`); PR-3b procurement still external/pending; PR-8 parked pending CP-D
-- [ ] Handoff: RESEARCH3 catalog unblocked — no further planning docs; execution moves to CP-A spine. Remaining pre-RESEARCH3 engineering debt tracked in §7.5 + new work items in session log (suite ψ-wiring, guard integration into runners, campaign CLI mock replacement)
+- [x] **Handoff: RESEARCH3 catalog unblocked** ✅ session 5 — pre-RESEARCH3 engineering debt from §7.5 + session logs cleared (see Session Log session 5): campaign CLI runs real composed systems w/ fault-tolerant checkpointing; `ResourceUsage.measure` device-honest; stale `profiling.py` stability call fixed & live; suite ψ-wiring **decided = demoted to instrumentation shells** (`SUITE_CLAIMS_SCOPE` marker in every result + package docstring); EqProp late-drift fixed. Remaining open items live in RESEARCH3 (guard kill-decision wiring into runners, fast_proxy disagreement on real settling coordinates, PR-3b hardware, PR-8 export parity).
 
 ### Exit criterion status
 PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catalog unblocked end-to-end at instrumentation scale (CP-A proceeds to Z3 flagship; CP-B/C/D/E per spines). PR-3b measured-tier claims remain gated on hardware arrival.
@@ -188,6 +189,27 @@ PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catal
 ---
 
 ## Session Log & Future-Work Notes
+
+### 2026-08-25 session 5 (pre-handoff debt clear: campaign CLI real, EqProp drift fix, suite demotion) — **TODO4 CLOSED**
+
+**Executed (in next-session-checklist order):**
+1. **Campaign CLI de-mocked** (`computronium/cli/campaign.py::_run_campaign`): mock FrontierRecords + commented-out checkpoint call replaced with the commission.py machinery, which was first **extracted into a shared module** `computronium/core/campaign/evaluation.py` — `build_coordinate_system(coordinate)` composes any 6-D coordinate via ontology config factories + `compose_joint_system_from_configs`; `evaluate_episode(...)` runs one deterministic-batch `train_step`, probes windowed growth, fills `FrontierRecord` stability fields **and now also real `registry_signature`/`composite_state_shape`** (via `compute_registry_signature`/`compute_composite_state_shape`) replacing "mock_signature". Checkpointing follows the PR-9 lessons: snapshot ENTERING an interval episode; resume restores θ into geometry params + RNG states and redoes unrecorded episodes since the latest checkpoint. Unsupported coordinates raise `UnsupportedCoordinateError(axis, value)` → logged + skipped per experiment. Verified: fresh 7-iteration run on CPU (25 episodes/9 iterations in DB incl. real snapshots), checkpoint at ep5, resume clean; commissioning rerun end-to-end **PASSED** with bit-exact redo after the refactor.
+2. **EqProp late-drift fix** (`experiments/joint/eqprop_mnist.py`): `_decay_lr` scales `system.update.config.step_size` ×0.9/epoch from ep3 (frozen `ParameterUpdateConfig` handled via `dataclasses.replace`); early stopping at patience 4 on val_acc; result record adds `best_epoch` + `early_stopped`. Rerun (3080, seed 42): **best 81.32 % @ep7, final 79.30 % @ep11 (early-stopped), 337.5 s** vs prior best 81.17 %/final 57.14 % @ep19 — post-peak collapse eliminated. `target_met=False` is still the strict final-epoch gate; registered ≥80 % claim met by best.
+3. **Suite ψ-wiring decision = demote**: L1/L2/L3/L3.5 suites are instrumentation shells by construction; rewiring through the real ψ/θ split is Z3-path work. Each per-run result dict now carries `"claims_scope": "instrumentation_shell"` (constant in `experiments/joint/_claims.py`, re-exported from the package init whose docstring states the non-citability explicitly). No rerun needed — marker regenerates with next suite invocation.
+4. **Small work items cleared**: `ResourceUsage.measure` device default `"cuda"` → `None` (infers from model params; CPU-only callers measure honestly); stale `profiling.py` call `estimate_spectral_radius(system, x, y)` replaced via shared `activity_transition` — and found to be **live-crashing for non-square geometries** once actually executed (perturbation is in-place) → new `_activity_spectral_radius` helper returns None unless input_dim==output_dim (square case verified ρ≈0.27).
+5. **Type-contract fix surfaced by real data**: `FrontierRecord.composite_state_shape` widened to nested `dict[str, dict[str, tuple[int, ...]]]` matching what `compute_composite_state_shape` produces; `to_dict`/`from_dict` made losslessly round-trippable (was `list(v)` key-flattening).
+
+**Verification:** pyright 0 errors on all touched files (profiling 9→6, remainder parked 7.5 debt); ruff zero new findings (cli/campaign −16 net vs HEAD; complexity counts reduced via helper extraction); `tests/unit/core/test_checkpoint.py` 9/9; unit/core+validation failures proven pre-existing via `git worktree` A/B at HEAD (identical 5-F set).
+
+**⚠️ Incident + gotcha (read before any A/B testing):** the old foreign stash (`stash@{0}`, tools/-era WIP, ~319 files — documented session 4) makes `git stash` A/B **unsafe**: a scoped `stash push` + `pop` popped the WRONG entry, splattering conflict markers across 330 paths. Recovery used: backup touched files → `git reset` + `git checkout -- .` → restore from backup → delete pop-created untracked junk (`bioplausible/`, `examples/`, `tools/`, stray test files identified by mtime). The foreign stash itself survived untouched. **Rule: until that stash is claimed/dropped, do baseline A/B only via `git worktree add /tmp/x HEAD`.**
+
+**Remaining open items (all RESEARCH3 scope now):**
+| Item | Detail | Where |
+|---|---|---|
+| Guard kill-decisions in runners | Probes now feed FrontierRecords (CLI/commission) but no runner *decides* on τ=1.029 yet | RESEARCH3 CP-A/Z3 smoke |
+| fast_proxy disagreement on real systems | Ginibre ≈50 % median is family-specific | RESEARCH3 CP-A |
+| Suite ψ-wiring (if ever needed as evidence) | Suites remain plumbing tests; real claims route through Z3 | RESEARCH3 L1–L3.5 full runs |
+| PR-3b hardware anchor / PR-8 export parity | Unchanged, external/pull-based | CP-D |
 
 ### 2026-08-25 session 4 (PR-7 full-scale + PR-5 calibration + PR-9 commissioning + PR-6 draft) — **TODO4 EXECUTION COMPLETE**
 
@@ -288,10 +310,10 @@ Note: `benchmark_results/` had been deleted by the user before this session; all
 - Pre-existing errors left untouched (7.5 scope): `profiling.py` F821 `SystemConfig`:608, pynvml imports; `z3_fixed_weights.py` "Tensor not callable" stub artifacts; eqprop_vision_parity aggregation block.
 
 ### Next-session checklist (in order)
-1. **RESEARCH3 CP-A / Z3 flagship** — prerequisites are done; start under RESEARCH3's Execution Protocol. Carry the PR-5 guard (`windowed_growth`, τ=1.029) into Z3 runs and quantify `_fast_proxy` disagreement on a real settling coordinate.
-2. **Suite ψ-wiring decision** (new): either rewire the four shakedown toys through the real ψ/θ split or demote them to plumbing tests in docs; before any L1–L3.5 real-data claim, suites must not be citable as ψ-mediated-migration evidence in current form.
-3. **Campaign CLI**: port commission.py's evaluate+checkpoint loop into `cli/campaign.py` (replace mock records + commented-out checkpoint call).
-4. **EqProp late-drift fix** (carried over): val-based early stopping / LR decay in `eqprop_mnist.py`, rerun once (~10 min GPU) for a paper-grade final-epoch number under the PR-6 contract.
+1. **RESEARCH3 CP-A / Z3 flagship** — prerequisites done; TODO4 debt cleared (session 5). Start under RESEARCH3's Execution Protocol. Carry the PR-5 guard (`windowed_growth`, τ=1.029) into Z3 runs and quantify `_fast_proxy` disagreement on a real settling coordinate.
+2. ~~Suite ψ-wiring decision~~ — **DECIDED session 5**: demoted to instrumentation shells (`SUITE_CLAIMS_SCOPE` marker); real ψ-claims route through Z3 only.
+3. ~~Campaign CLI mock~~ — **DONE session 5**: real evaluation + fault-tolerant checkpointing via `core/campaign/evaluation.py`.
+4. ~~EqProp late-drift fix~~ — **DONE session 5**: LR decay + early stopping; 81.32 % @ep7 / 79.30 % final under PR-6 reporting.
 5. Only if differentiable-through-settle is ever needed: root-cause the residual graph retention (growth dropped 4.1→1.6 MB/step after out-of-place adds; `no_grad` masks it entirely — checkpointing path remains unused/vestigial meanwhile).
 
 ### 2026-08-25 session 1 (7.1.1 + 7.4 + partial 7.3)
