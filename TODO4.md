@@ -1,8 +1,23 @@
 # Computronium Sprint Plan: TODO4 — Sprint Close-Out & Research Foundation
 
-## Status: REOPENED — **Phase 9 (family-neutral pipeline) inserted with IMMEDIATE PRIORITY** | Prior close-out intact: PR-0…PR-4 ✅ | PR-7 ✅ | PR-5 ✅ | PR-9 ✅ | PR-6 ✅ | §7 debt cleared (session 5) — RESEARCH3 campaign-scale sweeps now GATED on Phase 9
+> Consolidates all unchecked work from `TODO3.md` with the preliminary infrastructure defined in `RESEARCH3.md`. After Phases 7 + 8, work hands off to the RESEARCH3 catalog (15 items, 5 critical paths) under its Execution Protocol (E-1…E-11). Session Log at the bottom is reverse-chronological.
 
-> Consolidates all unchecked work from `TODO3.md` with the preliminary infrastructure defined in `RESEARCH3.md`. After Phase 7 + 8, work hands off to the RESEARCH3 catalog (15 items, 5 critical paths) under its Execution Protocol (E-1…E-11).
+## Status — REOPENED (session 6)
+
+⚡ **Phase 9 (family-neutral training pipeline) inserted with immediate priority**; it gates RESEARCH3 campaign-scale sweeps. Prior close-out stands:
+
+| Track | State |
+|---|---|
+| Phase 7 close-out — 7.1.1, 7.2, 7.3, 7.4 | ✅ done |
+| Phase 8 prerequisites — PR-0…PR-7, PR-9 (+ PR-6 draft) | ✅ done (PR-3b procurement-pending, PR-8 pull-based) |
+| §7 debt — pyright/lint/F-E triage, CLI de-mock, EqProp drift fix | ✅ cleared session 5 |
+| ⚡ Phase 9 family-neutral pipeline (9.1–9.5) | 🔴 open — blocks campaign-scale sweeps |
+| RESEARCH3 catalog execution | ⏸ gated on Phase 9 exit criteria |
+
+### Execution queue (next session, in order)
+1. **⚡ Phase 9 — family-neutral pipeline** (see its section): start with 9.1 capability-declared phases + negotiated settling (evidence tables live in the phase header), then ride the dependency chain. Everything else yields until the Phase 9 exit criteria close.
+2. **RESEARCH3 CP-A / Z3 flagship** — instrumentation-scale work may proceed in parallel where it doesn't sweep families at scale; full sweeps wait on Phase 9.
+3. Only if differentiable-through-settle is ever needed: root-cause residual graph retention (growth dropped 4.1→1.6 MB/step after out-of-place adds; `no_grad` masks it entirely — checkpointing path remains unused/vestigial meanwhile).
 
 ---
 
@@ -28,7 +43,7 @@
 
 *Structural bias markers:* `core/credit/adapters.py` star topology (`LocalGoodnessToThermodynamicAdapter`, `TemporalTraceToThermodynamicAdapter`, `BackpropToThermodynamicAdapter`, …) routes all cross-family interop THROUGH the EqProp credit. `_train_step_spiking` shows per-dynamics dispatch precedent exists but was never generalized. The 6-D `train_step` self-documents as a 5-D port ("For now, use the 5-D system train_step as the base"). `SystemTrainer` itself is innocent (pure delegation + epoch bookkeeping).
 
-*Axis probe (session 5):* 16/21 combos green; 5 fenced in `_EXCLUDED_AXES` with reasons (substrate selection ×5, gradient credit ×2 spellings, non-euclidean updates ×4).
+*Axis probe (session 5):* 16/21 probed combos (build + one `train_step`) green; the 5 failures fall under the fences below. `_EXCLUDED_AXES` records a reason per fenced axis value — 11 total: substrates ×5 (`analog`, `memristive`, `neuromorphic`, `sparse`, `ternary`), gradient-credit spellings ×2 (`gradient`, `backprop`), non-euclidean updates ×4 (`riemannian_orthogonal`, `spectral_constrained`, `natural_gradient`, `elastic_consolidation`).
 
 ### 9.1 Capability-declared phase negotiation *(removes the double-settle tax)*
 - [ ] Credits declare required phases (e.g., `phases: ClassVar[tuple[Phase, ...]]`; contrastive = `("free", "nudged")`, one-shot = `("state",)` or similar)
@@ -76,7 +91,7 @@ Exit: probe fully green-or-reasoned + parity reruns + harness merged ⇒ RESEARC
 
 ---
 
-## Phase 7: TODO3 Sprint Close-Out
+## Phase 7: TODO3 Sprint Close-Out — CLOSED *(residual: 7.1.2–7.1.4 parked CP-B pull-based; 7.1.5 superseded)*
 
 ### 7.1 Rocq Proof Artifact (was TODO3 §4.3.4, PARTIAL)
 **State**: statements repaired & compiling via `make` in `rocq/`. Proved: `Utils.v` (8 Qed, 0 admits), `gradE_diagonal`, `energyFunction_diagonal`, `stationary_is_fixed_point`.
@@ -147,16 +162,16 @@ Remaining ~3853 errors are concentrated in `acceleration/compile.py`, `accelerat
 
 ---
 
-## Phase 8: Research Prerequisites (from RESEARCH3 §Factored Prerequisites)
+## Phase 8: Research Prerequisites (from RESEARCH3 §Factored Prerequisites) — COMPLETE except PR-3b *(procurement-pending)* & PR-8 *(pull-based CP-D)*
 
 Built once; consumed by the RESEARCH3 catalog. Startup sequence per RESEARCH3 §Team Allocation.
 
 | ID | Prerequisite | Contents | Unblocks | When |
 |----|--------------|----------|----------|------|
-| **PR-0** | Verification gate | `docs/baseline.md` gates at-or-better (pytest / pyright strict / ruff) + TIER 0/digits campaign green — **DONE 2026-08-25**: baseline.md refreshed w/ full-suite numbers (47.13 % cov; 77 pre-existing F/E proven via stash A/B) | Every empirical item | **Day 1** |
-| **PR-1** | Optimizer-phase hygiene | Rebuild Adam between meta-train and ψ-adaptation; `evaluate_z3` currently carries momentum buffers over frozen θ → contaminates exact-zero Δθ claim | Z3, Algorithm Migration | Days 2–3 |
-| **PR-2** | θ-invariance audit harness | Snapshot → freeze → run → re-snapshot → exact-diff as reusable context manager, per-seed reports | Z3, Algorithm Migration, continual learning | Days 2–3 |
-| **PR-3a** | Software resource instrumentation | Canonical `ResourceUsage` = `core/profiling.py:38` — **consolidate the two duplicate definitions first** (`core/stability/frontier.py:9`, `core/campaign/resource_vector.py:18`), then wire into every suite runner (proxy FLOPs/memory/latency; no hardware needed) | Z3 proxy-tier energy, L2 effective-FLOPs, AutoScientist frontier | Days 3–4 |
+| **PR-0** ✅ | Verification gate | `docs/baseline.md` gates at-or-better (pytest / pyright strict / ruff) + TIER 0/digits campaign green — **DONE 2026-08-25**: baseline.md refreshed w/ full-suite numbers (47.13 % cov; 77 pre-existing F/E proven via stash A/B) | Every empirical item | **Day 1** |
+| **PR-1** ✅ | Optimizer-phase hygiene | Rebuild Adam between meta-train and ψ-adaptation; `evaluate_z3` currently carries momentum buffers over frozen θ → contaminates exact-zero Δθ claim | Z3, Algorithm Migration | ~~Days 2–3~~ Done |
+| **PR-2** ✅ | θ-invariance audit harness | Snapshot → freeze → run → re-snapshot → exact-diff as reusable context manager, per-seed reports | Z3, Algorithm Migration, continual learning | ~~Days 2–3~~ Done |
+| **PR-3a** ✅ | Software resource instrumentation | Canonical `ResourceUsage` = `core/profiling.py:38` — duplicates deleted (`stability/frontier.py`, `campaign/resource_vector.py`), wired into every suite runner via `measure_suite_resources` (proxy FLOPs/memory/latency; no hardware needed) | Z3 proxy-tier energy, L2 effective-FLOPs, AutoScientist frontier | ~~Days 3–4~~ Done |
 | **PR-3b** | Physical calibration anchor | One *measured* Joule/FLOP anchor workload (board sensor / wall meter / RAPL per `docs/hardware_targets.md`); calibrates proxies → measured tier w/ error bars | Measured-tier energy claims, Edge/Green AI, Hardware pilot | Procurement **Day 1** (lead-time-gated) |
 | **PR-4** | Pre-registration & statistics kit | Seed count ≥5, bootstrap-CI utility, paired-comparison harness, threshold-registration template in repo — **DONE 2026-08-25** (`validation/preregistration.py` + `docs/preregistration_template.md` + `configs/preregistrations/eqprop_mnist_80pct.json` + 9 unit tests incl. hypothesis property test; fixed latent `cohens_d` crash via new one-sample `cohens_dz`) | Z3, L1–L3.5, benchmark contract, discovery replication gates | Days 4–5 | ✅ |
 | **PR-5** ✅ 2026-08-25 session 4 | Calibrated stability guard | `core/stability/guard.py`: `StabilityGuard` (two statistic modes: `fast_proxy`, `windowed_growth`), `calibrate_threshold` (max-margin feasible ROC point), `quantify_proxy_disagreement`, `measure_guard_overhead`; driver `scripts/calibrate_stability_guard.py` → artifact `benchmark_results/stability_guard_calibration/calibration.json`. **Result**: windowed_growth τ=1.029, FKR=0 % (≤5 %), KR=100 % (≥95 %); fast_proxy INFEASIBLE on non-normal systems (median rel err ≈50 %) — see session log | Unattended campaigns, discovery | Done |
@@ -208,7 +223,7 @@ Bridge points from Phase 7:
 | 7.2 MNIST runner | `computronium/experiments/joint/eqprop_mnist.py` (results: `results/eqprop_mnist/results.json`) |
 | θ-invariance harness (PR-2) | `computronium/core/plasticity/theta_audit.py`; Z3 consumer in `experiments/joint/z3_fixed_weights.py::evaluate_z3` |
 | Pre-registration kit (PR-4) | `computronium/validation/preregistration.py`; template `docs/preregistration_template.md`; example `configs/preregistrations/eqprop_mnist_80pct.json`; tests `tests/unit/validation/test_preregistration.py` |
-| Canonical `ResourceUsage` (PR-3a) | `computronium/core/profiling.py` (+ `measure_suite_resources`); dupes deleted |
+| Profiling / resources (PR-3a) | `computronium/core/profiling.py:38` canonical `ResourceUsage` (+ `measure_suite_resources`); duplicate definitions deleted (`stability/frontier.py` now imports/re-exports, `campaign/resource_vector.py` removed) |
 | Parity tests | `tests/property/test_ontology_parity.py` |
 | EqProp locality tests | `tests/property/test_eqprop_locality.py` |
 | Rocq formalization | `rocq/` (canonical; Lean retired) |
@@ -216,12 +231,11 @@ Bridge points from Phase 7:
 | Credit adapter star (Phase 9 target) | `computronium/core/credit/adapters.py` (`*ToThermodynamic*` hub); phase-usage evidence in ⚡ Phase 9 header |
 | Z3 substrate | `computronium/experiments/joint/z3_fixed_weights.py`, `computronium/core/plasticity/rule_state.py` |
 | Shakedown suites | `algorithm_migration.py`, `adaptation_efficiency.py`, `compute_efficiency.py`, `structural_robustness.py` (all in `computronium/experiments/joint/` unless noted) |
-| Profiling / resources | `computronium/core/profiling.py:38` (canonical `ResourceUsage`; dupes in `stability/frontier.py`, `campaign/resource_vector.py` — consolidate per PR-3a) |
 | Stability stack | `computronium/core/stability/` (`SpectralRadiusEstimator`, `_fast_proxy`); **guard (PR-5): `core/stability/guard.py`** + driver `scripts/calibrate_stability_guard.py` → `benchmark_results/stability_guard_calibration/calibration.json`; tests `tests/unit/core/test_stability_guard.py` |
 | Commissioning (PR-9) | `autoscientist_campaigns/commission.py` (+ `campaign.db`, `checkpoints/`, `commission_report.json` artifacts) |
 | Fairness contract (PR-6) | `docs/evaluation_fairness_contract.md` |
 | Failure manifesto | `computronium/analysis/failure_manifesto.py` |
-| Campaign stack | `autoscientist_campaigns/` (empty — see PR-9) |
+| Campaign stack | `autoscientist_campaigns/commission.py` (PR-9) + `computronium/cli/campaign.py` (real runner post-session 5); artifacts `campaign.db`, `checkpoints/`, `commission_report.json` |
 | Hardware targets | `docs/hardware_targets.md`; baseline gates `docs/baseline.md` |
 | Research catalog & protocol | `RESEARCH3.md` (items, CP-A…CP-E, E-1…E-11) |
 
@@ -229,15 +243,18 @@ Bridge points from Phase 7:
 
 ## Risk Mitigation
 
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| Gradient explosion in recurrent weights | Blocks 7.2 | `grad_clip` locked in; settling-loop fix is 7.2.1 gate |
-| GPU OOM on 512×3 EqProp | Blocks 7.2 | Auto-gradient checkpointing (fits ~100MB on 10GB) |
-| Rocq proof friction (no `nra`/`nlinarith`) | Delays 7.1 | Recipe + watch-outs recorded; admits acceptable past 7.1.1 per hard-stop policy |
-| Momentum carry-over contaminates Δθ claims | Invalidates Z3 headline | PR-1 before any ψ-adaptation run; PR-2 audits mid-run |
-| PR-3b hardware lead time | Gates measured-tier claims only | Procure Day 1; PR-3a keeps proxy tier unblocked |
-| PR-5 false-kill rate | Blocks unattended campaigns | ROC calibration on PR-7-harvested config sets |
-| PR-9 never exercised | Blocks frontier/discovery | Commissioning cycle is small + cheap; run right after PR-5 |
+| Risk | Impact | Mitigation | State |
+|------|--------|------------|-------|
+| Gradient explosion in recurrent weights | Blocked 7.2 | Global-norm `grad_clip` locked in (7.2.1 fix chain) | ✅ retired |
+| GPU OOM on 512×3 EqProp | Blocked 7.2 | Auto-gradient checkpointing + leak fixes (flat 16.6 MB / 400 steps verified) | ✅ retired |
+| Autograd through settle reintroduces memory leak | Blocks 9.2 | `requires_autograd` flag gates grad-enable; flat-MB/step regression test stays a hard gate for all other families | 🔴 live (9.2) |
+| Non-euclidean updates crash on composed params | Fences 4 axes (9.3) | Root-cause `[hidden]` vs `[batch, hidden]` (suspected bias handling); unit tests per update incl. biases | 🔴 live (9.3) |
+| Substrate mislabeling via precision-only class selection | Fences 5 substrates; silently wrong behavior (9.4) | Explicit `substrate_type` tag in `SubstrateConfig` + behavioral fidelity test | 🔴 live (9.4) |
+| Rocq proof friction (no `nra`/`nlinarith`) | Delays CP-B items | Scalar-lemma-first recipe recorded (7.1.1); admits acceptable past 7.1.1 per hard-stop policy | 🟡 managed |
+| Momentum carry-over contaminates Δθ claims | Invalidates Z3 headline | PR-1 rebuilds Adam post-freeze; PR-2 audits mid-run; Z3 smoke green | ✅ mitigated |
+| PR-3b hardware lead time | Gates measured-tier claims only | Procure Day 1 (still pending); PR-3a keeps proxy tier unblocked | 🟡 external |
+| PR-5 false-kill rate | Blocks unattended campaigns | ROC-calibrated τ=1.029 (FKR 0 %, KR 100 %); runner kill-decision wiring still open (RESEARCH3 CP-A/Z3 smoke) | 🟡 mitigated at calibration scale |
+| Foreign git stash makes `git stash` A/B unsafe | Corrupts working tree (~330 paths splattered once, session 5 incident) | Baseline A/B only via `git worktree add /tmp/x HEAD` until that stash is claimed/dropped | 🔴 live |
 
 ---
 
@@ -320,12 +337,12 @@ Note: `benchmark_results/` had been deleted by the user before this session; all
 **New work items discovered this session:**
 | Item | Detail | Suggested attack |
 |---|---|---|
-| Shakedown suites don't exercise ψ/θ separation | Toy `PlasticityModel.forward()` ignores `self.plasticity`/`self.psi`; A1 training updates θ freely → `theta_change≈0.72≠0` while the suite header claims "ψ switches strategy without θ update". routing/fast_weights rows are numerically identical (per-call manual_seed + plasticity unused). | Rewire toy models through actual ψ-mediated path (rule_state/route gates in forward, freeze θ for A1 phase, use `ThetaInvarianceAudit`) OR demote suites to plumbing tests explicitly and move ψ-claims entirely to Z3 |
-| Guard not wired into runners | PR-5 guard is standalone; suite/campaign runners don't call it yet | Add `StabilityGuard(windowed_growth, τ=1.029)` probe-per-K-steps to suite evaluators + campaign episodes; log decisions into results JSON |
-| Campaign CLI mock | `cli/campaign.py::_run_campaign` still evaluates mock records + TODO comments; `create_checkpoint` call commented out | Port commission.py's evaluation+checkpoint loop into the CLI (or make CLI delegate to it) before frontier campaigns |
-| `ResourceUsage.measure` defaults cuda | Commissioning had to bypass it; CPU-only runs can't measure honestly | Parameterize device by availability or caller config |
-| Stale stability call site | `core/profiling.py:787` calls `estimate_spectral_radius(joint_system, Tensor, Tensor)` — wrong signature, would crash if reached (7.5 bucket) | Fix during profiling.py pyright burn-down |
-| fast_proxy bias quantification | Ginibre disagreement ≈50 % median is family-specific; no non-normal REAL-system measurement yet | Rerun `quantify_proxy_disagreement` on a real settling coordinate during Z3 smoke |
+| Shakedown suites don't exercise ψ/θ separation | Toy `PlasticityModel.forward()` ignores `self.plasticity`/`self.psi`; A1 training updates θ freely → `theta_change≈0.72≠0` while the suite header claims "ψ switches strategy without θ update". routing/fast_weights rows are numerically identical (per-call manual_seed + plasticity unused). | Rewire toy models through actual ψ-mediated path (rule_state/route gates in forward, freeze θ for A1 phase, use `ThetaInvarianceAudit`) OR demote suites to plumbing tests explicitly and move ψ-claims entirely to Z3. **→ audited session 5**: per-suite `claims_scope` recorded (L1/L2 `psi_wired_uncontrolled`, L3.5/L3 `plumbing_only`); frozen-θ rewiring stays open (RESEARCH3 L1–L3.5) |
+| Guard not wired into runners | PR-5 guard is standalone; suite/campaign runners don't call it yet | Add `StabilityGuard(windowed_growth, τ=1.029)` probe-per-K-steps to suite evaluators + campaign episodes; log decisions into results JSON. **Still open** — RESEARCH3 CP-A/Z3 smoke |
+| Campaign CLI mock | `cli/campaign.py::_run_campaign` still evaluates mock records + TODO comments; `create_checkpoint` call commented out | Port commission.py's evaluation+checkpoint loop into the CLI (or make CLI delegate to it) before frontier campaigns. **→ done session 5** |
+| `ResourceUsage.measure` defaults cuda | Commissioning had to bypass it; CPU-only runs can't measure honestly | Parameterize device by availability or caller config. **→ done session 5** (default `None`, inferred from model device) |
+| Stale stability call site | `core/profiling.py:787` calls `estimate_spectral_radius(joint_system, Tensor, Tensor)` — wrong signature, would crash if reached (7.5 bucket) | Fix during profiling.py pyright burn-down. **→ fixed session 5** (`_activity_spectral_radius`, square geometries only) |
+| fast_proxy bias quantification | Ginibre disagreement ≈50 % median is family-specific; no non-normal REAL-system measurement yet | Rerun `quantify_proxy_disagreement` on a real settling coordinate during Z3 smoke. **Still open** — RESEARCH3 CP-A |
 
 **Gotchas for future sessions:**
 - Suite "epochs" are single-batch steps on synthetic data — do NOT extrapolate wall times to real-data budgets.
@@ -357,11 +374,11 @@ Note: `benchmark_results/` had been deleted by the user before this session; all
 **New work items discovered this session:**
 | Item | Detail | Suggested attack |
 |---|---|---|
-| EqProp late-training drift | val acc peaks ~81 % @ep7 then decays to 57 % @ep19 while energy keeps falling (−6e4) — late-phase objective misalignment, not divergence | LR decay or val-based early stopping first (runner already tracks best); weight-norm regularization second. Needed before any paper-grade final-epoch number |
-| grpc subprocess worker deadlock | `test_grpc_seam_subprocess.py`: spawned worker at 0 CPU, pytest blocked on pipe read; no timeout infra (no pytest-timeout dep) | Debug worker startup (stdin inheritance/port binding); consider adding `pytest-timeout` as suite-level guard |
-| `test_ontology_parity.py` hang | pre-existing, noted since session 1 | Investigate before using parity suite as verification tooling |
-| Full-suite F/E burn-down | 59 F / 18 E pre-existing; biggest chunk is settle_protocol fixture errors | After dead-code purge (same bucket as 7.5 lint/pyright burn-down) |
-| Pyright burn-down continues | repo count 3853 → 3837; concentration unchanged (`acceleration/compile.py`, `contrastive_kernels.py`, `eqprop_kernel_backend.py`, `experiments/`) | 7.5 vocabulary applies |
+| EqProp late-training drift | val acc peaks ~81 % @ep7 then decays to 57 % @ep19 while energy keeps falling (−6e4) — late-phase objective misalignment, not divergence | LR decay or val-based early stopping first (runner already tracks best); weight-norm regularization second. Needed before any paper-grade final-epoch number. **→ FIXED session 5** (LR decay γ=0.9 from ep3 + patience-4 early stop; rerun best 81.32 % @ep7, final 79.30 %) |
+| grpc subprocess worker deadlock | `test_grpc_seam_subprocess.py`: spawned worker at 0 CPU, pytest blocked on pipe read; no timeout infra (no pytest-timeout dep) | Debug worker startup (stdin inheritance/port binding); consider adding `pytest-timeout` as suite-level guard. **Still open** |
+| `test_ontology_parity.py` hang | pre-existing, noted since session 1 | Investigate before using parity suite as verification tooling. **Still open** |
+| Full-suite F/E burn-down | 59 F / 18 E pre-existing; biggest chunk is settle_protocol fixture errors | After dead-code purge (same bucket as 7.5 lint/pyright burn-down). **Still open** |
+| Pyright burn-down continues | repo count 3853 → 3837; concentration unchanged (`acceleration/compile.py`, `contrastive_kernels.py`, `eqprop_kernel_backend.py`, `experiments/`) | 7.5 vocabulary applies. **Still open** (repo count 3837) |
 
 **Gotchas for future sessions:**
 - Background GPU/CPU jobs from this agent shell need `setsid nohup … < /dev/null & disown` — plain `nohup cmd &` gets killed when the shell tool times out.
@@ -387,7 +404,7 @@ Note: `benchmark_results/` had been deleted by the user before this session; all
 | `core/profiling.py::ResourceUsage` | PR-3a canonical merged class (vector core compute/memory/energy/latency/ψ + measurement detail; `__add__`=sum w/ peak-max, `/`, `to_dict`/`from_dict` campaign-keyed, `measure()`); `measure_suite_resources()` helper wired into all four joint evaluators (`"resources"` key per seed result) |
 | deleted | `core/campaign/resource_vector.py`; dup class in `core/stability/frontier.py` (importers repointed to profiling; `stability/__init__` still re-exports) |
 
-**PR-1**: `evaluate_z3` now rebuilds Adam post-freeze over trainable-only params (no meta-train momentum survives into ψ-adaptation) and wraps the whole switching/adaptation phase in `ThetaInvarianceAudit`; results schema unchanged (`theta_change`, `theta_invariant`). ⚠️ NOT yet smoke-run end-to-end — next session step 3.
+**PR-1**: `evaluate_z3` now rebuilds Adam post-freeze over trainable-only params (no meta-train momentum survives into ψ-adaptation) and wraps the whole switching/adaptation phase in `ThetaInvarianceAudit`; results schema unchanged (`theta_change`, `theta_invariant`). ⚠️ NOT yet smoke-run at the time — **verified green in session 3** (`theta_change=0.0`, `theta_invariant=true`).
 
 **Gotchas for future sessions:**
 - Frozen-check must read **live** params; `p.detach().clone().requires_grad` is always False (bit me in the audit itself).
@@ -395,11 +412,6 @@ Note: `benchmark_results/` had been deleted by the user before this session; all
 - Divide-by-zero in `ResourceUsage.__truediv__` now raises (old frontier class returned zeros); `test_stability_metrics.py` 33/33 green with new semantics.
 - `eqprop_vision_parity.py` repaired (dead `CoreTrainer` import removed; routes through ontology factories; only `eqprop` + `backprop_mlp` supported, others logged+skipped; latent `n_permutations=` kwarg bug fixed). Its pandas/numpy pyright findings (~25) pre-date this work — part of 7.5 debt.
 - Pre-existing errors left untouched (7.5 scope): `profiling.py` F821 `SystemConfig`:608, pynvml imports; `z3_fixed_weights.py` "Tensor not callable" stub artifacts; eqprop_vision_parity aggregation block.
-
-### Next-session checklist (in order)
-1. **⚡ Phase 9 — family-neutral pipeline** (immediate priority, see its section): start with 9.1 capability-declared phases + negotiated settling (evidence tables are in the phase header), then ride the dependency chain. Everything below yields until the Phase 9 exit criteria close.
-2. **RESEARCH3 CP-A / Z3 flagship** — instrumentation-scale work may proceed in parallel where it doesn't sweep families at scale; full sweeps wait on Phase 9.
-3. Only if differentiable-through-settle is ever needed: root-cause the residual graph retention (growth dropped 4.1→1.6 MB/step after out-of-place adds; `no_grad` masks it entirely — checkpointing path remains unused/vestigial meanwhile).
 
 ### 2026-08-25 session 1 (7.1.1 + 7.4 + partial 7.3)
 - **Rocq**: `per_index_descent` lemma added; `energy_decreases_diagonal` closed with zero admits (stdlib classical axioms only). The scalar-lemma-first pattern is the reusable recipe for 7.1.2.
