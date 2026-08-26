@@ -2,7 +2,7 @@
 
 > Consolidates all unchecked work from `TODO3.md` with the preliminary infrastructure defined in `RESEARCH3.md`. After Phases 7 + 8, work hands off to the RESEARCH3 catalog (15 items, 5 critical paths) under its Execution Protocol (E-1…E-11). Session Log at the bottom is reverse-chronological.
 
-## Status — Phase 9 EXECUTED (session 7); session 8 closed queue items 1–2 at their gates
+## Status — Phase 9 EXECUTED (session 7); session 8 closed queue items 1–2 at their gates; session 9 ran Z3 pilot (null + 2 fixes)
 
 | Track | State |
 |---|---|
@@ -11,13 +11,14 @@
 | §7 debt — pyright/lint/F-E triage, CLI de-mock, EqProp drift fix | ✅ cleared session 5 |
 | ⚡ Phase 9 family-neutral pipeline (9.1–9.5) | ✅ executed session 7; seed-42 parity rerun ✅ session 8 (bit-level match) |
 | Guard kill-decisions in runners (PR-5 → CP-A) | ✅ wired session 8 (+ 2 composition bugs fixed; random-space crash-free) |
-| Z3 flagship | 🟡 E-1 smoke rung complete session 8 (metrics + E-10 controls implemented & verified); pilot rung next |
-| RESEARCH3 catalog execution | ✅ UNBLOCKED — sweeps may compose any axis value; every coordinate trains, fences, or guard-kills with reason |
+| Z3 flagship | 🔴 E-1 pilot rung executed session 9 → **E-7 null; promotion DENIED** — all arms chance-level; ψ-integrator + soft/hard-mismatch plumbing bugs fixed; task-identity acquisition is the open algorithmic blocker (autopsy in DECISIONS.md) |
+| RESEARCH3 catalog execution | 🟡 sweeps remain unblocked for composed-system coordinates; Z3 full run gated on a promoted pilot |
 
 ### Execution queue (next session, in order)
-1. **Z3 pilot rung (E-1 rung 2)** — 2 seeds, reduced dims, ≤2 h budget; commit pre-registration thresholds FIRST (E-1/E-11: prereg precedes pilot-promoted full config). Metrics/controls are live from session 8 — zero code work blocking. Watch: steps-to-criterion uses a batch-window proxy; switch to the registered 100-step-window definition for the pilot report.
-2. **Z3 full run** only on promoted pilot (≥5 seeds, PR-4 stats kit, paired vs baseline-(a)).
-3. Substrate divergence fixes (pull-based): ternary α_init=1.0 gives unit-magnitude weights → settling gain≫1 (fan-in-scaled α would fix); optical overflows to inf. Both honestly guard-killed today; a fix must consciously flip `_GUARD_KILLED_SUBSTRATES` in `tests/unit/core/test_axis_probe.py`.
+1. **Z3 meta-training repair (CP-A, E-2 rounds 1–3)** — the pilot autopsy localizes the failure: controller cannot acquire task identity when all three tasks share identical input distributions and ψ carries only a scalar-summary history. Ranked attacks: (a) feed the adaptation loss/selection-history into ψ so identity becomes observable within-task; (b) temperature annealing 2→0.5 + gate-entropy bonus during meta-train (RESEARCH3's named mitigation); (c) two-phase recipe (θ warm-up under forced selections → controller-only ST training) which already lifts threshold/last-symbol to 0.8–0.9; (d) if (a)–(c) stall, reframe tasks with distinguishable input statistics or register parity as a known boundary (M-axis negative-result memo). Each round ≤8 configs; stop at 3.
+2. **Z3 pilot rerun** only after a repair shows meta hard-selection accuracy materially above chance on all three tasks; then compare vs the session-9 null artifacts under the committed registration `configs/preregistrations/z3_psi_vs_finetune_steps.json`.
+3. **Z3 full run** only on promoted pilot (≥5 seeds, PR-4 stats kit, paired vs baseline-(a)).
+4. Substrate divergence fixes (pull-based): ternary α_init=1.0 gives unit-magnitude weights → settling gain≫1 (fan-in-scaled α would fix); optical overflows to inf. Both honestly guard-killed today; a fix must consciously flip `_GUARD_KILLED_SUBSTRATES` in `tests/unit/core/test_axis_probe.py`.
 
 ---
 
@@ -256,6 +257,8 @@ Bridge points from Phase 7:
 | **Neutrality harness (Phase 9)** | `tests/unit/core/test_axis_probe.py` + `test_family_neutral_pipeline.py` + `test_update_rules.py` |
 | **Guard kill-decisions (session 8)** | `core/campaign/evaluation.py::DEFAULT_GUARD_TAU`/`GuardKillError`/`evaluate_episode(guard_threshold=…)`; CLI skip paths in `computronium/cli/campaign.py`; kill-set pinned in `test_axis_probe.py::_GUARD_KILLED_SUBSTRATES` |
 | **Z3 metrics & controls (session 8)** | `experiments/joint/z3_fixed_weights.py` (`TaskShape`, `_adapt_all_tasks`, `_run_baselines`; baselines a/b/c + steps-to-criterion + soft-eval + collapse flag in results JSON) |
+| **Z3 registered metric & prereg (session 9)** | `_windowed_criterion_step` (100-step window) + `_fixed_probe`/`_probe_accuracy` in `z3_fixed_weights.py`; registration `configs/preregistrations/z3_psi_vs_finetune_steps.json`; decision log `DECISIONS.md`; null-run artifacts `benchmark_results/z3_pilot/` (+ `manifest.json`) |
+| **E-11 decision log** | `DECISIONS.md` (append-only; prereg timestamps, kill/death decisions, deviations) |
 | Hardware targets | `docs/hardware_targets.md`; baseline gates `docs/baseline.md` |
 | Research catalog & protocol | `RESEARCH3.md` (items, CP-A…CP-E, E-1…E-11) |
 
@@ -275,6 +278,7 @@ Bridge points from Phase 7:
 | PR-3b hardware lead time | Gates measured-tier claims only | Procure Day 1 (still pending); PR-3a keeps proxy tier unblocked | 🟡 external |
 | PR-5 false-kill rate | Blocks unattended campaigns | τ=1.029 wired into runners session 8; zero false kills on 29 healthy composed coordinates (growth=1.000 exactly); ternary/optical caught as designed | ✅ mitigated (recalibrate on more families at Z3 pilot) |
 | Foreign git stash makes `git stash` A/B unsafe | Corrupts working tree (~330 paths splattered once, session 5 incident) | Baseline A/B only via `git worktree add /tmp/x HEAD` until that stash is claimed/dropped | 🔴 live |
+| Z3 non-convergence (RESEARCH3 named risk) | Gates CP-A fan-out (ICL bridge, frontier M-axis seed) | Session 9 pilot confirmed live: two plumbing causes fixed, task-identity acquisition open; structural fallback = L1 adaptation figure + negative-result memo per RESEARCH3 | 🔴 live |
 
 ---
 
@@ -292,6 +296,7 @@ Bridge points from Phase 7:
 - [x] **PR-6** drafted ✅ session 4 (`docs/evaluation_fairness_contract.md`); PR-3b procurement still external/pending; PR-8 parked pending CP-D
 - [x] **Handoff: RESEARCH3 catalog unblocked** ✅ session 5 — pre-RESEARCH3 engineering debt from §7.5 + session logs cleared (see Session Log session 5): campaign CLI runs real composed systems w/ fault-tolerant checkpointing; `ResourceUsage.measure` device-honest; stale `profiling.py` stability call fixed & live; suite ψ-wiring **audited per-suite** (L1/L2 `psi_wired_uncontrolled`, L3.5/L3 `plumbing_only`; rewiring stays open); EqProp late-drift fixed.
 - [x] **GATE LIFTED (session 7): RESEARCH3 campaign-scale sweeps UNBLOCKED** — Phase 9 exit criteria met at harness scale (probe green/fenced + parity reruns green + harness merged). Parity item CLOSED session 8: eqprop seed-42 MNIST rerun bit-level matches the record. Anything touching new axis values must keep `_EXCLUDED_AXES`/pairwise fences honest via `test_axis_probe.py`.
+- [x] **Z3 pilot rung (session 9): executed honestly to an E-7 null** — prereg committed pre-run (`z3_psi_vs_finetune_steps.json`, unevaluated by design until a promoted full run); registered 100-step-window metric + probe curves + E-3 manifests live; two plumbing defects fixed (ψ integrator, soft/hard mismatch); promotion DENIED with autopsy. Z3 remains the open CP-A blocker; everything else in this file stays closed.
 
 ### Exit criterion status
 PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catalog unblocked end-to-end at instrumentation scale (CP-A proceeds to Z3 flagship; CP-B/C/D/E per spines). PR-3b measured-tier claims remain gated on hardware arrival.
@@ -299,6 +304,29 @@ PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catal
 ---
 
 ## Session Log & Future-Work Notes
+
+### 2026-08-26 session 9 (queue item 1: Z3 pilot rung — prereg committed first; E-7 null with autopsy) — **CP-A RUNG FAILED, LOOPED BACK**
+
+**Executed (E-1/E-11 order held):**
+1. **Pre-registration committed BEFORE the pilot ran** (stricter than E-1's post-promotion slot, per queue directive): `configs/preregistrations/z3_psi_vs_finetune_steps.json` — primary endpoint = worst-task mean log step ratio log(steps_finetune/steps_z3), threshold log(1.25)≈0.2231, α=0.05, ≥5 seeds, paired via the PR-4 kit; Δθ-exact and all-tasks-≥95 % as gate conditions; censoring policy (never-reached → scored at budget) registered explicitly. `DECISIONS.md` created as the E-11 append-only log.
+2. **Registered steps-to-criterion implemented** (`z3_fixed_weights.py`): `_windowed_criterion_step` = first step whose trailing **100-step window** mean probe accuracy ≥0.98 (replaces session-8 batch-window proxy). Per-task fixed probe sets (16 batches × 64, generated once before adaptation → deterministic + disjoint from the fresh training stream); per-step `accuracy_curve` recorded for every arm (Fig. 1 deliverable data); baseline-(a) now also reports per-stage `steps_to_criterion`; suite writes an **E-3 manifest.json** (config sha256 + git commit + UTC timestamp) next to results; CLI gained `--seq-len/--input-dim/--probe-batches`.
+3. **Pilot run** (2 seeds, meta 50 / adapt 240 steps/task, GPU): ~3 min, θ-invariance exact both seeds. **Outcome: every arm at chance (~0.50) on every task; diversity entropy ≤0.003; criterion never met.** Even baseline-(a) θ-fine-tuning sat at chance on its own training task ⇒ plumbing-class failure, not a science result yet.
+
+**Root-cause chain (all empirically isolated, CPU diagnostics in DECISIONS.md):**
+| # | Defect | Evidence | Fix |
+|---|---|---|---|
+| 1 | ψ-logit integrator: `new_logits = psi_logits + update` is an unbounded random walk | ‖ψ‖ 1→157 in 60 steps, H 2.08→0.036, loss pinned at ln 8 — softmax saturation kills all gradients everywhere | Removed; forward now matches RESEARCH3's gating equation `g_k=softmax(controller(ψ_t,x_t))` |
+| 2 | Soft-mixture steering: controller classifies by weighting the mixture, a solution that vanishes under eval argmax | train loss → ln 2 while hard-eval stays chance (pre- and post-fix-1) | **Straight-through Gumbel**: hard selection forward (= eval semantics), soft gradients |
+| 3 | Task-identity acquisition: joint from-scratch meta-training collapses onto an arbitrary operator before the decoder means anything | ST + fix 1 still → ln 2 / chance; forced-operator controls are HEALTHY (parity 100 %, last-symbol ≥95 %, threshold ~87 %) so features+decoder+loss path are fine; parity label is invisible in x stats and scalar ψ carries too little history | **OPEN** — next-session queue item 1 (ranked attacks a–d) |
+
+**Verification:** new window-metric unit tests 7/7 (hypothesis oracle-equality property + boundary table); ruff findings on z3 file byte-identical to HEAD (checked via `/tmp/bio-head` worktree diff of rule histograms); pyright errors unchanged at the 9 pre-existing "Tensor not callable" artifacts; smoke (--quick, cuda) green end-to-end incl. manifest write. Full pytest suite NOT rerun (touched surface = one experiment module + one new test file; per instruction to minimize redundant executions).
+
+**New work items discovered this session:**
+| Item | Detail | Suggested attack |
+|---|---|---|
+| Z3 meta-training repair | Queue item 1 above; null memo material for M-axis boundary publication if attacks stall | Loss-feedback ψ channel > temp-anneal+entropy-bonus > two-phase curriculum > task redesign |
+| `Z3Model.forward` persists batch-shaped ψ state | Any batch-size change mid-stream crashes (`expand` mismatch); worked around by chunking probe evals to the training batch | Store ψ as `[1, …]` canonical (mean or first-row), expand at read; flip consciously + rerun smoke |
+| Parity task observability | All 3 tasks share identical randn inputs; parity (order-n counting mod 2) has no first-moment signature → controller cannot condition selection on input statistics alone | Either give tasks distinguishable input distributions (design change — register first!) or make task ID enter via ψ adaptation history only, and prove it suffices |
 
 ### 2026-08-25 session 8 (queue 1–2: EqProp parity ✅, guard kill-decisions wired, Z3 smoke rung) — **CP-A ADVANCED**
 

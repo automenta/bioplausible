@@ -14,6 +14,7 @@ Parameter invariance MUST be exact: ||θ_after - θ_before|| == 0
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import random
@@ -306,14 +307,25 @@ class Z3Model(torch.nn.Module):
 
         # Controller produces operator logits update
         logits_update = self.controller(psi_controller, x)
-        new_logits = psi_logits + logits_update
+        # RESEARCH3 gating equation: g_k(ψ_t, x_t) = softmax(controller(ψ_t,
+        # x_t)). Integrating logits across steps (`psi_logits + update`) is
+        # an unbounded random walk that saturates softmax within ~60 steps
+        # and zeroes every downstream gradient (2026-08-26 pilot autopsy).
+        new_logits = logits_update
 
         # Get operator weights
         if is_training:
-            # Soft mixture (differentiable)
+            # Straight-through Gumbel-softmax: forward propagates the HARD
+            # selection (matching eval semantics exactly) while gradients
+            # flow through the soft distribution. Plain soft mixtures let
+            # the controller solve tasks by steering the mixture — a
+            # solution that evaporates under eval's argmax (2026-08-26).
             gumbels = -torch.empty_like(new_logits).exponential_().log()
-            gumbels = (new_logits + gumbels) / self.temperature
-            operator_weights = torch.softmax(gumbels, dim=-1)
+            scores = (new_logits + gumbels) / self.temperature
+            soft = torch.softmax(scores, dim=-1)
+            indices = scores.argmax(dim=-1, keepdim=True)
+            hard = torch.zeros_like(soft).scatter_(-1, indices, 1.0)
+            operator_weights = hard + soft - soft.detach()
         else:
             # Hard selection (argmax)
             _, indices = torch.topk(new_logits, k=1, dim=-1)
@@ -390,6 +402,30 @@ def _is_theta_param(name: str, _p: torch.nn.Parameter) -> bool:
 
 
 _CRITERION_ACCURACY = 0.98
+_WINDOW_STEPS = 100
+
+
+def _windowed_criterion_step(
+    curve: list[float],
+    *,
+    window: int = _WINDOW_STEPS,
+    threshold: float = _CRITERION_ACCURACY,
+) -> int | None:
+    """First 1-indexed step whose trailing ``window`` mean meets ``threshold``.
+
+    The registered RESEARCH3 Z3 definition (configs/preregistrations/
+    z3_psi_vs_finetune_steps.json). ``None`` when the budget ends first —
+    censored at the budget by the analysis harness.
+    """
+    if len(curve) < window:
+        return None
+    total = sum(curve[:window])
+    for step in range(window, len(curve) + 1):
+        if total / window >= threshold:
+            return step
+        if step < len(curve):
+            total += curve[step] - curve[step - window]
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -426,6 +462,38 @@ def _eval_task_accuracy(
     return correct / total
 
 
+def _fixed_probe(shape: TaskShape, task_fn, *, batches: int) -> tuple[Tensor, Tensor]:
+    """Fixed held-out probe set scored every adaptation step.
+
+    Generated once per task before adaptation so the registered window
+    metric is deterministic and disjoint from the fresh training stream.
+    """
+    samples = [shape.sample(task_fn) for _ in range(batches)]
+    return (
+        torch.cat([x for x, _ in samples]),
+        torch.cat([y for _, y in samples]),
+    )
+
+
+def _probe_accuracy(
+    model: Z3Model, probe: tuple[Tensor, Tensor], *, batch_size: int
+) -> float:
+    """Hard-selection accuracy over the whole probe set, batch-chunked.
+
+    Chunks match the training batch: Z3Model persists batch-shaped ψ state,
+    so a differently-sized forward pass would crash (pre-existing wart).
+    """
+    x, y = probe
+    model.eval()
+    correct = 0
+    with torch.no_grad():
+        for start in range(0, x.shape[0], batch_size):
+            logits = model(x[start : start + batch_size])
+            target = y[start : start + batch_size]
+            correct += (logits.argmax(dim=-1) == target).sum().item()
+    return correct / x.shape[0]
+
+
 def _run_adaptation(  # noqa: PLR0913 - protocol tuple stays flat
     model: Z3Model,
     optimizer: torch.optim.Optimizer,
@@ -434,17 +502,18 @@ def _run_adaptation(  # noqa: PLR0913 - protocol tuple stays flat
     task_fn,
     *,
     epochs: int,
-) -> tuple[list[float], int | None]:
+    probe: tuple[Tensor, Tensor],
+) -> tuple[list[float], list[float], int | None]:
     """Adam steps over whatever ``requires_grad`` currently selects.
 
-    Returns per-epoch losses plus the 1-indexed step where batch accuracy
-    first met the criterion (None if never) — the smoke-scale batch-window
-    proxy for the registered 100-step definition.
+    One epoch = one fresh-batch gradient step. Returns per-step losses, the
+    per-step hard-selection probe-accuracy curve, and the registered
+    100-step-window criterion step (None when censored at the budget).
     """
-    model.train()
     losses: list[float] = []
-    steps_to_criterion: int | None = None
-    for epoch in range(epochs):
+    curve: list[float] = []
+    for _epoch in range(epochs):
+        model.train()
         x, y = shape.sample(task_fn)
         optimizer.zero_grad()
         logits = model(x, is_training=True)
@@ -452,11 +521,8 @@ def _run_adaptation(  # noqa: PLR0913 - protocol tuple stays flat
         loss.backward()
         optimizer.step()
         losses.append(loss.item())
-        if steps_to_criterion is None:
-            acc = _eval_task_accuracy(model, shape, task_fn, batches=1)
-            if acc >= _CRITERION_ACCURACY:
-                steps_to_criterion = epoch + 1
-    return losses, steps_to_criterion
+        curve.append(_probe_accuracy(model, probe, batch_size=shape.batch_size))
+    return losses, curve, _windowed_criterion_step(curve)
 
 
 def _meta_train(  # noqa: PLR0913 - protocol tuple stays flat
@@ -498,13 +564,14 @@ def _reinit_psi(model: Z3Model) -> None:
     model.psi_operator_logits.zero_()
 
 
-def _adapt_all_tasks(
+def _adapt_all_tasks(  # noqa: PLR0913 - protocol tuple stays flat
     model: Z3Model,
     tasks,
     criterion,
     shape: TaskShape,
     *,
     epochs: int,
+    probe_batches: int = 16,
 ) -> tuple[dict[str, dict], float]:
     """ψ-only adaptation protocol over the switching stream (θ stays frozen).
 
@@ -519,37 +586,46 @@ def _adapt_all_tasks(
     for task_name, task_fn in tasks:
         model.psi_controller_state.zero_()
         model.psi_operator_logits.zero_()
-        losses, steps = _run_adaptation(
-            model, optimizer, criterion, shape, task_fn, epochs=epochs
+        probe = _fixed_probe(shape, task_fn, batches=probe_batches)
+        losses, curve, steps = _run_adaptation(
+            model, optimizer, criterion, shape, task_fn, epochs=epochs, probe=probe
         )
         rows[task_name] = {
             "accuracy": _eval_task_accuracy(model, shape, task_fn),
             "soft_eval_accuracy": _eval_task_accuracy(model, shape, task_fn, soft=True),
             "adaptation_losses": losses,
+            "accuracy_curve": curve,
             "steps_to_criterion": steps,
         }
     return rows, time.perf_counter() - started
 
 
-def _finetune_forgetting_baseline(
+def _finetune_forgetting_baseline(  # noqa: PLR0913 - protocol tuple stays flat
     model: Z3Model,
     tasks,
     criterion,
     shape: TaskShape,
     *,
     epochs: int,
+    probe_batches: int = 16,
 ) -> dict:
     """Baseline (a): sequential θ fine-tuning at the same per-task step budget.
 
     Produces the stage×task accuracy matrix whose diagonal-vs-last-column
-    gap is the forgetting tax Z3 claims to avoid.
+    gap is the forgetting tax Z3 claims to avoid. Stages are scored by the
+    same registered window definition as the ψ-only arm.
     """
     model.unfreeze_theta()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     matrix: dict[str, dict[str, float]] = {}
+    steps_by_stage: dict[str, int | None] = {}
     started = time.perf_counter()
     for stage_name, stage_fn in tasks:
-        _run_adaptation(model, optimizer, criterion, shape, stage_fn, epochs=epochs)
+        probe = _fixed_probe(shape, stage_fn, batches=probe_batches)
+        _losses, _curve, steps = _run_adaptation(
+            model, optimizer, criterion, shape, stage_fn, epochs=epochs, probe=probe
+        )
+        steps_by_stage[stage_name] = steps
         matrix[stage_name] = {
             name: _eval_task_accuracy(model, shape, fn) for name, fn in tasks
         }
@@ -563,6 +639,7 @@ def _finetune_forgetting_baseline(
         "accuracy_matrix": matrix,
         "forgetting": forgetting,
         "final_accuracy": final_row,
+        "steps_to_criterion": steps_by_stage,
         "wall_clock_s": elapsed,
     }
 
@@ -575,6 +652,7 @@ def _run_baselines(  # noqa: PLR0913 - protocol tuple stays flat
     shape: TaskShape,
     *,
     epochs: int,
+    probe_batches: int = 16,
 ) -> dict:
     """E-10 control set; arms restore the meta-trained state first.
 
@@ -591,12 +669,14 @@ def _run_baselines(  # noqa: PLR0913 - protocol tuple stays flat
     model.load_state_dict(meta_state)
     model.freeze_theta()
     _reinit_psi(model)
-    random_psi_rows, _ = _adapt_all_tasks(model, tasks, criterion, shape, epochs=epochs)
+    random_psi_rows, _ = _adapt_all_tasks(
+        model, tasks, criterion, shape, epochs=epochs, probe_batches=probe_batches
+    )
 
     # (a) fine-tune θ, same step budget — the forgetting tax
     model.load_state_dict(meta_state)
     finetune = _finetune_forgetting_baseline(
-        model, tasks, criterion, shape, epochs=epochs
+        model, tasks, criterion, shape, epochs=epochs, probe_batches=probe_batches
     )
 
     return {
@@ -617,6 +697,7 @@ def evaluate_z3(
     batch_size: int = 64,
     seq_len: int = 10,
     input_dim: int = 32,
+    probe_batches: int = 16,
     device: torch.device | str = "cpu",
     seed: int = 42,
 ) -> dict:
@@ -674,7 +755,12 @@ def evaluate_z3(
     # no meta-training momentum survives into ψ adaptation.
     with ThetaInvarianceAudit(model, selector=_is_theta_param) as audit:
         results["tasks"], psi_wall = _adapt_all_tasks(
-            model, tasks, criterion, shape, epochs=eval_epochs_per_task
+            model,
+            tasks,
+            criterion,
+            shape,
+            epochs=eval_epochs_per_task,
+            probe_batches=probe_batches,
         )
     results["wall_clock_s"] = {"psi_adaptation": psi_wall}
 
@@ -716,10 +802,22 @@ def evaluate_z3(
     # ===== BASELINES (E-10 control set) =====
     print("  Baselines: frozen floor / random-ψ / θ fine-tune...")
     results["baselines"] = _run_baselines(
-        model, meta_state, tasks, criterion, shape, epochs=eval_epochs_per_task
+        model,
+        meta_state,
+        tasks,
+        criterion,
+        shape,
+        epochs=eval_epochs_per_task,
+        probe_batches=probe_batches,
     )
 
     return results
+
+
+def _git_commit() -> str:
+    from computronium.utils import capture_environment
+
+    return capture_environment()["git_commit"]
 
 
 def run_z3_suite(
@@ -728,11 +826,26 @@ def run_z3_suite(
     meta_train_epochs: int = 50,
     eval_epochs: int = 20,
     batch_size: int = 64,
+    seq_len: int = 10,
+    input_dim: int = 32,
+    probe_batches: int = 16,
     seeds: int = 3,
     device: str = "auto",
 ) -> list[dict]:
     """Run Z3 fixed weights benchmark suite."""
     device = "cuda" if device == "auto" and torch.cuda.is_available() else device
+
+    config = {
+        "coordinates": coordinates,
+        "meta_train_epochs": meta_train_epochs,
+        "eval_epochs": eval_epochs,
+        "batch_size": batch_size,
+        "seq_len": seq_len,
+        "input_dim": input_dim,
+        "probe_batches": probe_batches,
+        "seeds": seeds,
+        "device": str(device),
+    }
 
     all_results = []
 
@@ -747,6 +860,9 @@ def run_z3_suite(
                 meta_train_epochs=meta_train_epochs,
                 eval_epochs_per_task=eval_epochs,
                 batch_size=batch_size,
+                seq_len=seq_len,
+                input_dim=input_dim,
+                probe_batches=probe_batches,
                 device=device,
                 seed=seed,
             )
@@ -777,11 +893,25 @@ def run_z3_suite(
 
         all_results.append(coord_results)
 
-    # Save results
+    # Save results (E-3 manifest: pinned config hash + git commit next to data)
     output_dir.mkdir(parents=True, exist_ok=True)
     results_file = output_dir / "z3_fixed_weights_results.json"
     with results_file.open("w") as f:
         json.dump(all_results, f, indent=2)
+    manifest_file = output_dir / "manifest.json"
+    with manifest_file.open("w") as f:
+        json.dump(
+            {
+                "config": config,
+                "config_sha256": hashlib.sha256(
+                    json.dumps(config, sort_keys=True).encode()
+                ).hexdigest(),
+                "git_commit": _git_commit(),
+                "created_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            },
+            f,
+            indent=2,
+        )
 
     print(f"\nResults saved to {results_file}")
 
@@ -827,6 +957,14 @@ def main():
         "--eval-epochs", type=int, default=20, help="Evaluation epochs per task"
     )
     parser.add_argument("--batch-size", type=int, default=64, help="Batch size")
+    parser.add_argument("--seq-len", type=int, default=10, help="Sequence length")
+    parser.add_argument("--input-dim", type=int, default=32, help="Input dimension")
+    parser.add_argument(
+        "--probe-batches",
+        type=int,
+        default=16,
+        help="Fixed probe batches scored per adaptation step",
+    )
     parser.add_argument("--seeds", type=int, default=3, help="Number of seeds")
     parser.add_argument("--device", default="auto", help="Device (auto, cpu, cuda)")
     parser.add_argument(
@@ -849,6 +987,9 @@ def main():
         meta_train_epochs=args.meta_train_epochs,
         eval_epochs=args.eval_epochs,
         batch_size=args.batch_size,
+        seq_len=args.seq_len,
+        input_dim=args.input_dim,
+        probe_batches=args.probe_batches,
         seeds=args.seeds,
         device=args.device,
     )

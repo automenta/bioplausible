@@ -1,0 +1,23 @@
+{
+  "claim": "After meta-training, Z3 \u03c8-only adaptation reaches the registered 98%-accuracy criterion on every task using at most 80% of the gradient steps \u03b8-fine-tuning needs (baseline-a), at exactly \u0394\u03b8 = 0, with final hard-selection accuracy \u2265 95% on all three tasks",
+  "metric": "worst_task_log_finetune_over_z3_steps",
+  "threshold": 0.2231435513,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-08-26",
+  "protocol": "RESEARCH3 E-1/E-11; committed before the Z3 pilot run (stricter than E-1's post-promotion requirement) so no full-scale configuration can precede it",
+  "metric_definition": {
+    "steps_to_criterion": "Per adaptation arm and task: first step t where the mean probe accuracy over the trailing 100-step window [t-99, t] is >= 0.98. Probe accuracy is hard-selection accuracy on a fixed 16-batch probe set (1024 samples) generated once per task from the task generator before adaptation begins.",
+    "censoring": "An arm that never meets the criterion within its per-task budget is scored at that budget (eval_epochs_per_task). If both paired arms censor identically the pair contributes a zero difference.",
+    "aggregation": "Per seed: worst_task_log_finetune_over_z3_steps = mean over tasks of log(steps_finetune_censored / steps_z3_censored), then take the minimum across tasks (the worst task gates 'every task'). Treatment arm = baseline-(a) \u03b8-fine-tune; control arm = Z3 \u03c8-only. Positive values favor Z3."
+  },
+  "decision_rule_full_run": "Confirm iff ALL of: (1) paired_comparison(treatment=fine-tune log-steps, control=Z3 log-steps).passes(this registration) i.e. bootstrap 95% CI lower bound > log(1.25) = 0.2231 and sign-flip permutation p < 0.05 on >= 5 matched seeds; (2) every seed reports theta_invariant == true (max abs \u0394\u03b8 < 1e-6); (3) every seed reaches hard-selection accuracy >= 0.95 on all three tasks after \u03c8 adaptation.",
+  "secondary_endpoints_descriptive": [
+    "Fine-tuning forgetting tax: mean accuracy drop on previously learned tasks under baseline (a) >= 10 points (hypothesis direction check, reported not gated)",
+    "Operator diversity entropy H(g_k): collapse flag H < log 2 reported per seed",
+    "Soft-vs-hard eval gap (control d) reported per task"
+  ],
+  "pilot_role": "E-1 rung 2 (2 seeds): promotion requires no NaNs, all metrics populated, effect direction matching the hypothesis (or an interpretable pattern), and sane variances to set the full-run minimum detectable effect. The pilot does NOT evaluate this registration statistically (n < MIN_SEEDS); confirmation happens only on the promoted full run.",
+  "equal_budget_note": "Baseline-(a) receives the identical per-task step budget and data pipeline as the Z3 arm (E-4); both arms are scored by the same registered window definition.",
+  "budget_gpu_hours_registered": 24
+}
