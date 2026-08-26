@@ -20,6 +20,7 @@ from computronium.core.ontology import (
     SubstrateConfig,
     ThermodynamicContrast,
 )
+from computronium.core.pipeline import phase_states
 from computronium.core.system_trainer import compose_system
 
 
@@ -161,8 +162,7 @@ class TestGradientEquivalence:
 
         # Compute pseudo-gradients - should use only local activity correlations
         pseudo_grads = credit.compute_pseudo_gradient(
-            free_state=free_state,
-            nudged_state=nudged_state,
+            states=phase_states(free=free_state, nudged=nudged_state),
             loss=torch.tensor(0.5),
             geometry=system.geometry,
         )
@@ -220,8 +220,7 @@ class TestGradientEquivalence:
 
         credit = system.credit
         pseudo_grads = credit.compute_pseudo_gradient(
-            free_state=free_state,
-            nudged_state=nudged_state,
+            states=phase_states(free=free_state, nudged=nudged_state),
             loss=torch.tensor(0.5),
             geometry=system.geometry,
         )

@@ -134,11 +134,15 @@ async def _run_single_process_step(
         state, system.geometry, system.substrate, target=y
     )
     nudged_state.energy = system.dynamics.compute_energy(nudged_state, system.geometry)
-    nudged_state.loss = system._compute_loss(nudged_state, y)
+    nudged_state.loss = task_loss(nudged_state, y)
 
     # Credit assignment
+    from computronium.core.pipeline import phase_states
+
     pseudo_grads = system.credit.compute_pseudo_gradient(
-        free_state, nudged_state, nudged_state.loss, system.geometry
+        phase_states(free=free_state, nudged=nudged_state),
+        nudged_state.loss,
+        system.geometry,
     )
 
     # Parameter update

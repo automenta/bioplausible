@@ -24,6 +24,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from computronium.core.pipeline import phase_states
 from computronium.utils import seed_everything
 
 __all__ = [
@@ -253,7 +254,7 @@ def check_surrogate_equivalence(
     # Get pseudo-gradients from the credit rule
     loss = nudged_state.loss if nudged_state.loss is not None else torch.tensor(0.0)
     pseudo_grads = credit.compute_pseudo_gradient(
-        free_state, nudged_state, loss, geometry
+        phase_states(free=free_state, nudged=nudged_state), loss, geometry
     )
 
     # Get surrogate objective from the credit rule

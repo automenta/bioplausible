@@ -21,11 +21,10 @@ from __future__ import annotations
 
 import math
 from abc import abstractmethod
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, fields
-from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
+from enum import StrEnum
+from typing import TYPE_CHECKING, ClassVar, Protocol, TypeVar, runtime_checkable
 
 import torch
 from torch import Tensor, nn
@@ -66,6 +65,7 @@ __all__ = [
     "OpticalSubstrate",
     "ParameterUpdate",
     "ParameterUpdateConfig",
+    "Phase",
     "PlasticityConfig",
     "PredictiveSettlingDynamics",
     "QuantizedSubstrate",
@@ -80,6 +80,7 @@ __all__ = [
     "StateDynamicsConfig",
     "Substrate",
     "SubstrateConfig",
+    "SubstrateType",
     "System",
     "SystemConfig",
     "SystemState",
@@ -87,12 +88,46 @@ __all__ = [
     "TemporalTraceCredit",
     "TernarySubstrate",
     "ThermodynamicContrast",
+    "substrate_from_config",
 ]
 
 
 def _set_param_name(tensor: Tensor, name: str) -> None:
     """Tag a parameter tensor with its substrate keying name."""
     setattr(tensor, "_param_name", name)
+
+
+def _learnable_weight_names(params: dict[str, Tensor]) -> list[str]:
+    """Parameter names that receive pseudo-gradients (2-D weight matrices).
+
+    Credits emit exactly one pseudo-gradient per learnable weight, in this
+    order. Biases and other auxiliary parameters never receive gradients
+    from the local learning rules.
+    """
+    return [n for n, p in params.items() if "weight" in n and p.ndim == 2]
+
+
+def apply_pseudo_gradients(
+    params: dict[str, Tensor],
+    pseudo_grads: list[Tensor],
+    transform: Callable[[str, Tensor, Tensor], Tensor],
+) -> dict[str, Tensor]:
+    """Pair pseudo-gradients with their parameters by learnable-weight order.
+
+    The single choke point for update rules: non-weight parameters pass
+    through untouched (fixes the index-pairing crash on bias interleaving),
+    surplus gradients are ignored, and gradients are detached — pseudo-
+    gradients are consumed as plain values everywhere in this pipeline.
+
+    Args:
+        params: Current parameters (name -> tensor).
+        pseudo_grads: One pseudo-gradient per learnable weight.
+        transform: ``(name, param, grad) -> updated_param`` for matched pairs.
+    """
+    updated = dict(params)
+    for name, grad in zip(_learnable_weight_names(params), pseudo_grads):
+        updated[name] = transform(name, params[name], grad.detach())
+    return updated
 
 
 def _layer_stack(geometry: Geometry) -> nn.ModuleList | None:
@@ -110,6 +145,23 @@ def _recurrent_weight(geometry: Geometry) -> Tensor | None:
 # ============================================================
 # Configuration Dataclasses (immutable, slotted)
 # ============================================================
+
+
+class SubstrateType(StrEnum):
+    """Physical substrate family declared by a SubstrateConfig.
+
+    The explicit discriminator for substrate class selection — precision
+    alone is ambiguous (analog is "float32" too).
+    """
+
+    DIGITAL = "digital"
+    ANALOG = "analog"
+    MEMRISTIVE = "memristive"
+    NEUROMORPHIC = "neuromorphic"
+    SPARSE = "sparse"
+    TERNARY = "ternary"
+    OPTICAL = "optical"
+    QUANTUM = "quantum"
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +183,7 @@ class SubstrateConfig:
     weight_bounds: tuple[float, float] | None
     sparsity: float
     device: str
+    substrate_type: SubstrateType = SubstrateType.DIGITAL
 
     @classmethod
     def digital(
@@ -143,6 +196,7 @@ class SubstrateConfig:
         device: str = "cpu",
     ) -> SubstrateConfig:
         return cls(
+            substrate_type=SubstrateType.DIGITAL,
             precision=precision,
             noise_level=noise_level,
             weight_bounds=weight_bounds,
@@ -158,6 +212,7 @@ class SubstrateConfig:
         device: str = "cpu",
     ) -> SubstrateConfig:
         return cls(
+            substrate_type=SubstrateType.ANALOG,
             precision="float32",
             noise_level=noise_level,
             weight_bounds=(-1.0, 1.0),
@@ -173,6 +228,7 @@ class SubstrateConfig:
         device: str = "cpu",
     ) -> SubstrateConfig:
         return cls(
+            substrate_type=SubstrateType.MEMRISTIVE,
             precision="int8",
             noise_level=noise_level,
             weight_bounds=(0.0, 1.0),
@@ -188,6 +244,7 @@ class SubstrateConfig:
         device: str = "cpu",
     ) -> SubstrateConfig:
         return cls(
+            substrate_type=SubstrateType.NEUROMORPHIC,
             precision="float16",
             noise_level=noise_level,
             sparsity=0.95,
@@ -203,6 +260,7 @@ class SubstrateConfig:
         device: str = "cpu",
     ) -> SubstrateConfig:
         return cls(
+            substrate_type=SubstrateType.OPTICAL,
             precision="float32",
             noise_level=noise_level,
             weight_bounds=None,
@@ -218,6 +276,7 @@ class SubstrateConfig:
         device: str = "cpu",
     ) -> SubstrateConfig:
         return cls(
+            substrate_type=SubstrateType.QUANTUM,
             precision="complex64",
             noise_level=noise_level,
             weight_bounds=None,
@@ -240,6 +299,7 @@ class SubstrateConfig:
         with Triton-accelerated complex ops (matmul, tanh, conjugate transpose).
         """
         return cls(
+            substrate_type=SubstrateType.DIGITAL,
             precision="float32",  # Emulated complex via real/imag channels
             noise_level=noise_level,
             weight_bounds=weight_bounds,
@@ -263,6 +323,7 @@ class SubstrateConfig:
         with efficient sparse matmul where available.
         """
         return cls(
+            substrate_type=SubstrateType.SPARSE,
             precision=precision,
             noise_level=noise_level,
             weight_bounds=weight_bounds,
@@ -284,6 +345,7 @@ class SubstrateConfig:
         for gradient backpropagation through the quantization function.
         """
         return cls(
+            substrate_type=SubstrateType.TERNARY,
             precision="float32",  # Latent weights stay float32
             noise_level=noise_level,
             weight_bounds=weight_bounds,
@@ -642,6 +704,25 @@ class CreditAssignmentConfig:
     ) -> CreditAssignmentConfig:
         return cls(
             credit_type="target_inversion",
+            beta=beta,
+            feedback_matrix=feedback_matrix,
+            local_objective=local_objective,
+            orthogonal_init=orthogonal_init,
+            feedback_scale=feedback_scale,
+        )
+
+    @classmethod
+    def homeostatic(
+        cls,
+        *,
+        beta: float = 0.5,
+        feedback_matrix: Tensor | None = None,
+        local_objective: str = "mse",
+        orthogonal_init: bool = False,
+        feedback_scale: float = 0.01,
+    ) -> CreditAssignmentConfig:
+        return cls(
+            credit_type="homeostatic",
             beta=beta,
             feedback_matrix=feedback_matrix,
             local_objective=local_objective,
@@ -1031,6 +1112,18 @@ class StateDynamics(Protocol):
 # ============================================================
 
 
+class Phase(StrEnum):
+    """Settling phase declared by a credit rule.
+
+    Credits declare exactly the phases they consume (``phases`` ClassVar);
+    the pipeline settles only declared phases, removing wasted settles for
+    families that ignore free or nudged states.
+    """
+
+    FREE = "free"
+    NUDGED = "nudged"
+
+
 @runtime_checkable
 class CreditAssignment(Protocol):
     """How the network computes the direction of learning (pseudo-gradient).
@@ -1043,30 +1136,38 @@ class CreditAssignment(Protocol):
     - TemporalTrace: Spike-timing correlations (STDP)
     - TargetInversion: Propagating local targets (Target Prop)
 
-    Output is a list of pseudo-gradients, one per layer/module, matching
-    the Geometry's parameter structure.
+    Capabilities are declared, not assumed:
+    - ``phases``: settling phases the rule consumes; the pipeline settles
+      only these.
+    - ``requires_autograd``: True when the rule needs autograd through
+      settling (the default detached/no-grad path is bypassed only then).
+
+    Output is a list of pseudo-gradients, one per learnable weight layer,
+    matching the Geometry's parameter structure.
     """
 
     config: CreditAssignmentConfig
 
+    phases: ClassVar[tuple[Phase, ...]]
+    requires_autograd: ClassVar[bool]
+
     @abstractmethod
     def compute_pseudo_gradient(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
-        """Compute pseudo-gradients from free and nudged states.
+        """Compute pseudo-gradients from the settled phase states.
 
         Args:
-            free_state: State after free-phase settling
-            nudged_state: State after nudged-phase settling
-            loss: Task loss at nudged state
+            states: Phase-keyed settled states; contains exactly the phases
+                this rule declares.
+            loss: Task loss at the pipeline's output state (None-safe).
             geometry: Network topology (provides layer structure)
 
         Returns:
-            List of pseudo-gradient tensors, one per learnable layer
+            List of pseudo-gradient tensors, one per learnable weight layer
         """
         ...
 
@@ -1164,65 +1265,24 @@ class System(Protocol[TS, TG, TD, TC, TU]):
     update: TU
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
-        """Execute one training step through the 5-layer pipeline."""
-        state = SystemState(x=x, y=y)
+        """Execute one training step through the family-neutral pipeline."""
+        from computronium.core.pipeline import run_train_step
 
-        # 1. Substrate + Geometry: Forward pass (initial state)
-        state.activations = self.geometry.forward(x, self.substrate)
-        if state.activations is not None:
-            state.activations = self.substrate.inject_state_noise(state.activations)
-
-        # 2. StateDynamics: Free phase settling
-        free_state = self.dynamics.settle(
-            state, self.geometry, self.substrate, target=None
+        return run_train_step(
+            self.substrate,
+            self.geometry,
+            self.dynamics,
+            self.credit,
+            self.update,
+            x,
+            y,
         )
-        free_state.energy = self.dynamics.compute_energy(free_state, self.geometry)
-
-        # 3. StateDynamics: Nudged phase settling
-        nudged_state = self.dynamics.settle(
-            state, self.geometry, self.substrate, target=y
-        )
-        nudged_state.energy = self.dynamics.compute_energy(nudged_state, self.geometry)
-        nudged_state.loss = self._compute_loss(nudged_state, y)
-
-        # 4. CreditAssignment: Compute pseudo-gradients
-        pseudo_grads = self.credit.compute_pseudo_gradient(
-            free_state, nudged_state, nudged_state.loss, self.geometry
-        )
-
-        # 5. ParameterUpdate: Apply updates
-        new_params = self.update.step(self.geometry.params, pseudo_grads, self.geometry)
-        self.geometry.update_params(new_params)
-
-        return {
-            "loss": nudged_state.loss.item() if nudged_state.loss is not None else 0.0,
-            "energy": free_state.energy.item()
-            if free_state.energy is not None
-            else 0.0,
-            "accuracy": free_state.metrics.get("accuracy", 0.0),
-        }
-
-    def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:  # ruff: ignore[no-self-use]
-        """Compute task loss from final state."""
-        acts = state.activations
-        if acts is None:
-            return torch.tensor(0.0)
-        logits = acts[-1] if isinstance(acts, list) else acts
-        return torch.nn.functional.cross_entropy(logits, y)
 
     def forward(self, x: Tensor) -> Tensor:
         """Inference forward pass (free phase only, no weight updates)."""
-        state = SystemState(x=x)
-        state.activations = self.geometry.forward(x, self.substrate)
-        if state.activations is not None:
-            state.activations = self.substrate.inject_state_noise(state.activations)
-        state = self.dynamics.settle(state, self.geometry, self.substrate, target=None)
-        acts = state.activations
-        if acts is None:
-            return torch.empty(0)
-        if isinstance(acts, list):
-            return acts[-1]
-        return acts
+        from computronium.core.pipeline import run_forward
+
+        return run_forward(self.substrate, self.geometry, self.dynamics, x)
 
     def to_spec(self) -> dict:
         """Serialize the System to a specification dictionary.
@@ -2478,16 +2538,22 @@ class ThermodynamicContrast:
     contrastive Hebbian rule: ΔW = (free_pre @ free_post - nudged_pre @ nudged_post) / β
     """
 
+    phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
+    requires_autograd: ClassVar[bool] = False
+
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.thermodynamic_contrast()
 
     def compute_pseudo_gradient(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
+        free_state = states.get(Phase.FREE)
+        nudged_state = states.get(Phase.NUDGED)
+        if free_state is None or nudged_state is None:
+            return []
         if free_state.activations is None or nudged_state.activations is None:
             return []
 
@@ -2502,11 +2568,7 @@ class ThermodynamicContrast:
             else [nudged_state.activations]
         )
 
-        # Get parameter names to match gradients
-        param_names = list(geometry.params.keys())
-        weight_names = [
-            n for n in param_names if "weight" in n and geometry.params[n].ndim == 2
-        ]
+        weight_names = _learnable_weight_names(geometry.params)
 
         grads = []
         # Compute contrastive Hebbian gradients for each weight matrix
@@ -2556,54 +2618,36 @@ class EuclideanUpdate:
         self.config = config or ParameterUpdateConfig.euclidean()
         self._momentum_buffers: dict[str, Tensor] = {}
 
+    def _clip(self, grads: list[Tensor]) -> list[Tensor]:
+        """Global-norm clip (clip_grad_norm_ semantics): keeps relative
+        per-parameter magnitudes intact so updates shrink naturally near
+        equilibrium. Per-tensor rescaling would erase that signal and turn
+        every step into a fixed-norm jump."""
+        clip = self.config.grad_clip
+        if clip is None or clip <= 0 or not grads:
+            return grads
+        stacked_norms = torch.stack([g.norm() for g in grads])
+        total_norm = torch.linalg.vector_norm(stacked_norms)
+        if total_norm > clip:
+            scale = clip / (total_norm + 1e-8)
+            grads = [g * scale for g in grads]
+        return grads
+
     def step(
         self,
         params: dict[str, Tensor],
         pseudo_grads: list[Tensor],
         geometry: Geometry,  # ruff: ignore[unused-method-argument]
     ) -> dict[str, Tensor]:
-        updated = {}
-        # Pseudo-gradients are consumed as plain values (no backward pass exists
-        # in this pipeline); detaching prevents settle-graph chains from being
-        # retained by momentum buffers across training steps.
-        detached_grads = [g.detach() for g in pseudo_grads]
+        def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
+            if self.config.momentum > 0:
+                buf = self._momentum_buffers.get(name, torch.zeros_like(param))
+                buf.mul_(self.config.momentum).add_(grad)
+                self._momentum_buffers[name] = buf
+                return param - self.config.step_size * buf
+            return param - self.config.step_size * grad
 
-        # Global-norm clipping (clip_grad_norm_ semantics): keeps relative
-        # per-parameter magnitudes intact so updates shrink naturally near
-        # equilibrium. Per-tensor rescaling would erase that signal and turn
-        # every step into a fixed-norm jump.
-        if self.config.grad_clip is not None and self.config.grad_clip > 0:
-            stacked_norms = (
-                torch.stack([g.norm() for g in detached_grads])
-                if detached_grads
-                else torch.zeros(1)
-            )
-            total_norm = torch.linalg.vector_norm(stacked_norms)
-            if total_norm > self.config.grad_clip:
-                scale = self.config.grad_clip / (total_norm + 1e-8)
-                detached_grads = [g * scale for g in detached_grads]
-
-        grad_idx = 0
-        for name, param in params.items():
-            if grad_idx < len(detached_grads):
-                grad = detached_grads[grad_idx]
-                # Only apply gradient if shapes match
-                if grad.shape == param.shape:
-                    if self.config.momentum > 0:
-                        buf = self._momentum_buffers.get(name, torch.zeros_like(param))
-                        buf.mul_(self.config.momentum).add_(grad)
-                        self._momentum_buffers[name] = buf
-                        updated[name] = param - self.config.step_size * buf
-                    else:
-                        updated[name] = param - self.config.step_size * grad
-                    grad_idx += 1
-                else:
-                    # Shape mismatch - skip this parameter
-                    updated[name] = param
-            else:
-                updated[name] = param
-
-        return updated
+        return apply_pseudo_gradients(params, self._clip(list(pseudo_grads)), apply)
 
 
 # ============================================================
@@ -3507,6 +3551,11 @@ class MemristiveSubstrate(DigitalSubstrate):
         self._pulse_width = 100e-9  # Pulse width (s)
         self._drift_coefficient = 0.01  # Conductance drift per cycle
 
+    def inject_state_noise(self, s: Tensor) -> Tensor:
+        """Analog read noise on states; int8 precision applies to conductances
+        (weights) only — casting states would break float state arithmetic."""
+        return s + torch.randn_like(s) * self.config.noise_level
+
     def quantize_weights(self, w: Tensor) -> Tensor:
         """Quantize weights to memristor conductance levels (positive, bounded)."""
         # Map from [-1, 1] to [G_min, G_max] conductance range
@@ -3525,11 +3574,8 @@ class MemristiveSubstrate(DigitalSubstrate):
         def crossbar_forward(x: Tensor, w: Tensor) -> Tensor:
             # x: input voltages (batch_size, n_inputs)
             # w: conductance matrix (n_outputs, n_inputs)
-            # Output: currents (batch_size, n_outputs)
-            # Simplified IR-drop: voltage drop along columns
-
-            x = self._to_precision(x)
-            w = self._to_precision(w)
+            # Output: analog currents (batch_size, n_outputs) — int8 precision
+            # is a conductance-level property of the weights, not of signals.
 
             # Compute ideal currents
             currents = x @ w.T  # (batch, n_outputs)
@@ -3544,7 +3590,7 @@ class MemristiveSubstrate(DigitalSubstrate):
             # Scale currents by effective voltage
             currents = currents * (effective_voltage / self._read_voltage)
 
-            return self._to_precision(currents)
+            return currents
 
         return crossbar_forward
 
@@ -3831,6 +3877,37 @@ class NoisySubstrate(DigitalSubstrate):
         return s + noise
 
 
+def substrate_from_config(config: SubstrateConfig) -> DigitalSubstrate:
+    """Instantiate the substrate implementation named by ``config.substrate_type``.
+
+    Single source of truth for config → class selection; precision is never
+    consulted (it cannot distinguish e.g. analog from digital).
+    """
+    match SubstrateType(config.substrate_type):
+        case SubstrateType.ANALOG:
+            return AnalogSubstrate(config)
+        case SubstrateType.MEMRISTIVE:
+            return MemristiveSubstrate(config)
+        case SubstrateType.NEUROMORPHIC:
+            return NeuromorphicSubstrate(config)
+        case SubstrateType.OPTICAL:
+            return OpticalSubstrate(config)
+        case SubstrateType.QUANTUM:
+            return QuantumSubstrate(config)
+        case SubstrateType.SPARSE:
+            from computronium.core.substrates.sparse_substrate import SparseSubstrate
+
+            return SparseSubstrate.from_config(config)
+        case SubstrateType.TERNARY:
+            from computronium.core.substrates.ternary_substrate import (
+                TernarySubstrate,
+            )
+
+            return TernarySubstrate.from_config(config)
+        case _:
+            return DigitalSubstrate(config)
+
+
 # Additional dynamics implementations
 class EnergyMinimizationDynamics:
     """Energy-based settling (EqProp, Hopfield, CHL).
@@ -4089,7 +4166,7 @@ class EnergyMinimizationDynamics:
 
         # Use gradient checkpointing if enabled
         if use_checkpointing:
-            import torch.utils.checkpoint as checkpoint
+            from torch.utils import checkpoint
 
             for step in range(self.config.max_steps):
                 prev_output = all_acts[-1].detach()
@@ -4687,6 +4764,9 @@ class RandomProjectionsCredit:
     where e_{l+1} is the error from the layer above.
     """
 
+    phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
+    requires_autograd: ClassVar[bool] = False
+
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.random_projections()
         self._feedback_weights: dict[str, Tensor] | None = None
@@ -4750,9 +4830,8 @@ class RandomProjectionsCredit:
 
     def compute_pseudo_gradient(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
         """Compute pseudo-gradients using fixed random feedback matrices.
@@ -4760,6 +4839,10 @@ class RandomProjectionsCredit:
         For FA/DFA, we compute the output error and propagate it backward
         through fixed random matrices instead of the weight transposes.
         """
+        free_state = states.get(Phase.FREE)
+        nudged_state = states.get(Phase.NUDGED)
+        if free_state is None or nudged_state is None:
+            return []
         device = next(iter(geometry.params.values())).device
         self._init_feedback_weights(geometry, device)
 
@@ -4821,8 +4904,8 @@ class RandomProjectionsCredit:
                 else:
                     pre_act = acts_list[i]
                 if pre_act is not None:
-                    grad = layer_error.T @ pre_act  # (h_dim, in_dim)
-                    grads.append(grad.T)  # (out_dim, in_dim) to match weight shape
+                    # dL/dW has the weight's own (out_dim, in_dim) orientation
+                    grads.append(layer_error.T @ pre_act)
         else:
             # FA: Layer-wise feedback
             error = output_error
@@ -4841,8 +4924,7 @@ class RandomProjectionsCredit:
                     else (free_state.x if free_state.x is not None else acts_list[0])
                 )
                 if pre_act is not None:
-                    grad = layer_error.T @ pre_act
-                    grads.insert(0, grad.T)
+                    grads.insert(0, layer_error.T @ pre_act)
                 error = layer_error  # Propagate to next lower layer
 
         return grads
@@ -4862,25 +4944,34 @@ class RandomProjectionsCredit:
 class LocalGoodnessCredit:
     """Forward-Forward / PEPITA: layer-local contrastive objectives."""
 
+    phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE,)
+    requires_autograd: ClassVar[bool] = False
+
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.local_goodness()
 
     def compute_pseudo_gradient(  # ruff: ignore[no-self-use]
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
-        # Layer-local goodness gradients
+        # Layer-local goodness gradients (free phase only by declaration).
+        # Per-neuron goodness factor delta_l mapped to weights through the
+        # incoming activations: dG/dW_l = delta_{l+1}^T @ pre_l / batch.
+        free_state = states.get(Phase.FREE)
+        if free_state is None:
+            return []
         grads = []
         acts = free_state.activations
         if isinstance(acts, list):
-            for act in acts[1:]:  # Skip input
-                # Positive pass: maximize goodness
-                # Negative pass: minimize goodness
-                pos_grad = act * (1 - torch.sigmoid(act))
-                grads.append(pos_grad)
+            weight_names = _learnable_weight_names(geometry.params)
+            for l in range(len(acts) - 1):
+                if l >= len(weight_names):
+                    break
+                delta = acts[l + 1] * (1 - torch.sigmoid(acts[l + 1]))
+                pre = acts[l]
+                grads.append((delta.T @ pre) / pre.shape[0])
         return grads
 
     def surrogate_objective(
@@ -4900,20 +4991,23 @@ class LocalGoodnessCredit:
 class BackpropCredit:
     """Standard backpropagation (global credit assignment)."""
 
+    phases: ClassVar[tuple[Phase, ...]] = (Phase.NUDGED,)
+    requires_autograd: ClassVar[bool] = True
+
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.gradient()
 
     def compute_pseudo_gradient(  # ruff: ignore[no-self-use]
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
-        # Backprop computes true gradients via autograd
-        # This is a placeholder - actual implementation uses autograd
-        params = list(geometry.params.values())
-        if params and loss is not None:
+        # Backprop computes true gradients via autograd; the pipeline only
+        # routes a grad-carrying loss here when requires_autograd is declared.
+        names = _learnable_weight_names(geometry.params)
+        params = [geometry.params[n] for n in names]
+        if params and isinstance(loss, Tensor) and loss.requires_grad:
             grads = torch.autograd.grad(
                 loss, params, create_graph=False, allow_unused=True
             )
@@ -4941,6 +5035,9 @@ class TemporalTraceCredit:
     - Causal (pre before post) -> LTP (potentiation)
     - Anti-causal (post before pre) -> LTD (depression)
     """
+
+    phases: ClassVar[tuple[Phase, ...]] = ()
+    requires_autograd: ClassVar[bool] = False
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.temporal_trace()
@@ -4982,15 +5079,18 @@ class TemporalTraceCredit:
 
     def compute_pseudo_gradient(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
-        """Compute STDP-based pseudo-gradients from recorded spikes."""
+        """Compute STDP-based pseudo-gradients from recorded spikes.
+
+        Declares no settling phases: STDP reads externally recorded spike
+        times only.
+        """
         grads = []
+        weight_names = _learnable_weight_names(geometry.params)
         params = geometry.params
-        weight_names = [n for n in params if "weight" in n and params[n].ndim == 2]
 
         for layer_idx, weight_name in enumerate(weight_names):
             if (
@@ -5046,14 +5146,16 @@ class TemporalTraceCredit:
 class TargetInversionCredit:
     """Target Propagation: propagate local targets backward."""
 
+    phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
+    requires_autograd: ClassVar[bool] = False
+
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.target_inversion()
 
     def compute_pseudo_gradient(  # ruff: ignore[no-self-use]
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
         # Target propagation uses learned inverse maps
@@ -5098,6 +5200,9 @@ class HomeostaticCredit:
 
     This provides autonomous stability without external hyperparameter tuning.
     """
+
+    phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
+    requires_autograd: ClassVar[bool] = False
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig(
@@ -5149,9 +5254,8 @@ class HomeostaticCredit:
 
     def compute_pseudo_gradient(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
         """Compute homeostatic pseudo-gradients.
@@ -5159,6 +5263,10 @@ class HomeostaticCredit:
         The pseudo-gradient is the standard contrastive gradient scaled
         by the homeostatic layer scales (which adapt based on velocity/Lipschitz).
         """
+        free_state = states.get(Phase.FREE)
+        nudged_state = states.get(Phase.NUDGED)
+        if free_state is None or nudged_state is None:
+            return []
         if free_state.activations is None or nudged_state.activations is None:
             return []
 
@@ -5173,10 +5281,7 @@ class HomeostaticCredit:
             else [nudged_state.activations]
         )
 
-        param_names = list(geometry.params.keys())
-        weight_names = [
-            n for n in param_names if "weight" in n and geometry.params[n].ndim == 2
-        ]
+        weight_names = _learnable_weight_names(geometry.params)
 
         grads = []
         n_layers = len(free_acts) - 1
@@ -5365,17 +5470,13 @@ class RiemannianOrthogonalUpdate:
         pseudo_grads: list[Tensor],
         geometry: Geometry,  # ruff: ignore[unused-method-argument]
     ) -> dict[str, Tensor]:
-        updated = {}
-        for i, (name, param) in enumerate(params.items()):
-            if i < len(pseudo_grads) and pseudo_grads[i] is not None:
-                grad = pseudo_grads[i]
-                if grad.ndim >= 2 and grad.shape[0] == grad.shape[1]:  # ruff: ignore[magic-value-comparison]
-                    # Only orthogonalize square gradients
-                    grad = self._newton_schulz(grad, self.config.ortho_steps)
-                updated[name] = param - self.config.step_size * grad
-            else:
-                updated[name] = param
-        return updated
+        def apply(_name: str, param: Tensor, grad: Tensor) -> Tensor:
+            if grad.ndim >= 2 and grad.shape[0] == grad.shape[1]:  # ruff: ignore[magic-value-comparison]
+                # Only orthogonalize square gradients
+                grad = self._newton_schulz(grad, self.config.ortho_steps)
+            return param - self.config.step_size * grad
+
+        return apply_pseudo_gradients(params, pseudo_grads, apply)
 
 
 class SpectralConstrainedUpdate:
@@ -5390,20 +5491,17 @@ class SpectralConstrainedUpdate:
         pseudo_grads: list[Tensor],
         geometry: Geometry,  # ruff: ignore[unused-method-argument]
     ) -> dict[str, Tensor]:
-        updated = {}
         min_ndim_for_svd = 2
-        for i, (name, param) in enumerate(params.items()):
-            if i < len(pseudo_grads) and pseudo_grads[i] is not None:
-                grad = pseudo_grads[i]
-                # Project gradient to satisfy spectral constraint
-                if grad.ndim >= min_ndim_for_svd:
-                    u, s, v = torch.linalg.svd(grad, full_matrices=False)
-                    s = torch.clamp(s, max=self.config.spectral_norm)
-                    grad = u @ torch.diag(s) @ v
-                updated[name] = param - self.config.step_size * grad
-            else:
-                updated[name] = param
-        return updated
+
+        def apply(_name: str, param: Tensor, grad: Tensor) -> Tensor:
+            # Project gradient to satisfy spectral constraint
+            if grad.ndim >= min_ndim_for_svd:
+                u, s, vh = torch.linalg.svd(grad, full_matrices=False)
+                s = torch.clamp(s, max=self.config.spectral_norm)
+                grad = u @ torch.diag(s) @ vh
+            return param - self.config.step_size * grad
+
+        return apply_pseudo_gradients(params, pseudo_grads, apply)
 
 
 class NaturalGradientUpdate:
@@ -5419,22 +5517,18 @@ class NaturalGradientUpdate:
         pseudo_grads: list[Tensor],
         geometry: Geometry,  # ruff: ignore[unused-method-argument]
     ) -> dict[str, Tensor]:
-        updated = {}
-        for i, (name, param) in enumerate(params.items()):
-            if i < len(pseudo_grads) and pseudo_grads[i] is not None:
-                grad = pseudo_grads[i]
-                # Accumulate Fisher (diagonal approximation)
-                if name not in self._fisher:
-                    self._fisher[name] = torch.zeros_like(param)
-                self._fisher[name].mul_(0.99).addcmul_(grad, grad, value=0.01)
-                # Natural gradient: F^-1 * g
-                nat_grad = grad / (
-                    self._fisher[name].sqrt() + self.config.fisher_damping
-                )
-                updated[name] = param - self.config.step_size * nat_grad
-            else:
-                updated[name] = param
-        return updated
+        def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
+            fisher = self._fisher.get(name)
+            if fisher is None:
+                fisher = torch.zeros_like(param)
+                self._fisher[name] = fisher
+            # Accumulate Fisher (diagonal approximation)
+            fisher.mul_(0.99).addcmul_(grad, grad, value=0.01)
+            # Natural gradient: F^-1 * g
+            nat_grad = grad / (fisher.sqrt() + self.config.fisher_damping)
+            return param - self.config.step_size * nat_grad
+
+        return apply_pseudo_gradients(params, pseudo_grads, apply)
 
 
 class ElasticConsolidationUpdate:
@@ -5451,22 +5545,18 @@ class ElasticConsolidationUpdate:
         pseudo_grads: list[Tensor],
         geometry: Geometry,  # ruff: ignore[unused-method-argument]
     ) -> dict[str, Tensor]:
-        updated = {}
-        for i, (name, param) in enumerate(params.items()):
-            if i < len(pseudo_grads) and pseudo_grads[i] is not None:
-                grad = pseudo_grads[i]
-                # EWC penalty: lambda * importance * (param - old_param)
-                ewc_penalty = torch.zeros_like(param)
-                if name in self._importance and name in self._old_params:
-                    ewc_penalty = (
-                        self.config.ewc_lambda
-                        * self._importance[name]
-                        * (param - self._old_params[name])
-                    )
-                updated[name] = param - self.config.step_size * (grad + ewc_penalty)
-            else:
-                updated[name] = param
-        return updated
+        def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
+            # EWC penalty: lambda * importance * (param - old_param)
+            ewc_penalty = torch.zeros_like(param)
+            if name in self._importance and name in self._old_params:
+                ewc_penalty = (
+                    self.config.ewc_lambda
+                    * self._importance[name]
+                    * (param - self._old_params[name])
+                )
+            return param - self.config.step_size * (grad + ewc_penalty)
+
+        return apply_pseudo_gradients(params, pseudo_grads, apply)
 
     def consolidate(self, params: dict[str, Tensor], fisher: dict[str, Tensor]) -> None:
         """Call after task completion to consolidate weights."""
@@ -5517,37 +5607,18 @@ class _AdaptedSystem:
                 return result
             # Legacy model returned None (e.g., EqProp single-hidden implicit path)
             # Fall back to ontology 5-layer pipeline
-        # Ontology 5-layer pipeline fallback
-        state = SystemState(x=x, y=y)
-        # 1. Substrate + Geometry: Forward pass
-        state.activations = self.geometry.forward(x, self.substrate)
-        if state.activations is not None:
-            state.activations = self.substrate.inject_state_noise(state.activations)
-        # 2. StateDynamics: Free phase settling
-        free_state = self.dynamics.settle(
-            state, self.geometry, self.substrate, target=None
+        # Family-neutral pipeline fallback
+        from computronium.core.pipeline import run_train_step
+
+        return run_train_step(
+            self.substrate,
+            self.geometry,
+            self.dynamics,
+            self.credit,
+            self.update,
+            x,
+            y,
         )
-        free_state.energy = self.dynamics.compute_energy(free_state, self.geometry)
-        # 3. StateDynamics: Nudged phase settling
-        nudged_state = self.dynamics.settle(
-            state, self.geometry, self.substrate, target=y
-        )
-        nudged_state.energy = self.dynamics.compute_energy(nudged_state, self.geometry)
-        nudged_state.loss = self._compute_loss(nudged_state, y)
-        # 4. CreditAssignment: Compute pseudo-gradients
-        pseudo_grads = self.credit.compute_pseudo_gradient(
-            free_state, nudged_state, nudged_state.loss, self.geometry
-        )
-        # 5. ParameterUpdate: Apply updates
-        new_params = self.update.step(self.geometry.params, pseudo_grads, self.geometry)
-        self.geometry.update_params(new_params)
-        return {
-            "loss": nudged_state.loss.item() if nudged_state.loss is not None else 0.0,
-            "energy": free_state.energy.item()
-            if free_state.energy is not None
-            else 0.0,
-            "accuracy": free_state.metrics.get("accuracy", 0.0),
-        }
 
     def forward(self, x: Tensor) -> Tensor:
         return self._model(x)  # type: ignore[operator]
@@ -5567,14 +5638,6 @@ class _AdaptedSystem:
             "_AdaptedSystem wraps a legacy nn.Module that is not part of the "
             "spec; reconstruct via ModelAdapter instead."
         )
-
-    def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:  # ruff: ignore[no-self-use]
-        """Compute task loss from final state (required by System protocol)."""
-        acts = state.activations
-        if acts is None:
-            return torch.tensor(0.0)
-        logits = acts[-1] if isinstance(acts, list) else acts
-        return torch.nn.functional.cross_entropy(logits, y)
 
     @property
     def model(self) -> nn.Module:

@@ -7,6 +7,8 @@ and adapter-based composition of credit mechanisms.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, ClassVar
+
 import torch
 from torch import Tensor
 
@@ -17,12 +19,16 @@ from computronium.core.ontology import (
     Geometry,
     HomeostaticCredit,
     LocalGoodnessCredit,
+    Phase,
     RandomProjectionsCredit,
     SystemState,
     TargetInversionCredit,
     TemporalTraceCredit,
     ThermodynamicContrast,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 # ============================================================
 # Base Adapter Class
@@ -33,7 +39,13 @@ class CreditAdapter:
     """Base class for cross-credit adapters.
 
     Wraps a source credit assignment and emulates target credit behavior.
+
+    Capabilities cover the hybrid by default (both declared phases,
+    no autograd); backprop-involving hybrids override ``requires_autograd``.
     """
+
+    phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
+    requires_autograd: ClassVar[bool] = False
 
     def __init__(
         self,
@@ -54,14 +66,11 @@ class CreditAdapter:
 
     def compute_pseudo_gradient(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
-        return self._source.compute_pseudo_gradient(
-            free_state, nudged_state, loss, geometry
-        )
+        return self._source.compute_pseudo_gradient(states, loss, geometry)
 
     def surrogate_objective(
         self,
@@ -78,6 +87,7 @@ class CreditAdapter:
 
 
 class ThermodynamicToBackpropAdapter(CreditAdapter):
+    requires_autograd: ClassVar[bool] = True
     """Compare local EqProp gradients with global backprop gradients.
 
     Computes both contrastive Hebbian (EqProp) and autograd (backprop)
@@ -104,23 +114,20 @@ class ThermodynamicToBackpropAdapter(CreditAdapter):
 
     def compute_pseudo_gradient(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
         """Compute both EqProp and backprop gradients."""
         # EqProp pseudo-gradient
-        eqprop_grads = self._source.compute_pseudo_gradient(
-            free_state, nudged_state, loss, geometry
-        )
+        eqprop_grads = self._source.compute_pseudo_gradient(states, loss, geometry)
 
         if not self._compute_both:
             return eqprop_grads
 
         # Backprop gradients (requires autograd)
         backprop_grads = self._backprop_credit.compute_pseudo_gradient(
-            free_state, nudged_state, loss, geometry
+            states, loss, geometry
         )
 
         # Store comparison for analysis
@@ -209,23 +216,20 @@ class RandomProjectionsToThermodynamicAdapter(CreditAdapter):
 
     def compute_pseudo_gradient(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
         """Hybrid FA + EqProp pseudo-gradients."""
         # FA gradients for all layers
-        fa_grads = self._source.compute_pseudo_gradient(
-            free_state, nudged_state, loss, geometry
-        )
+        fa_grads = self._source.compute_pseudo_gradient(states, loss, geometry)
 
         if not self._use_eqprop_for_output:
             return fa_grads
 
         # EqProp gradients
         eqprop_grads = self._thermodynamic_credit.compute_pseudo_gradient(
-            free_state, nudged_state, loss, geometry
+            states, loss, geometry
         )
 
         # Combine: FA for hidden, EqProp for output (or weighted blend)
@@ -280,20 +284,17 @@ class LocalGoodnessToThermodynamicAdapter(CreditAdapter):
 
     def compute_pseudo_gradient(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
         """Hybrid local goodness + EqProp gradients."""
         # Local goodness gradients
-        lg_grads = self._source.compute_pseudo_gradient(
-            free_state, nudged_state, loss, geometry
-        )
+        lg_grads = self._source.compute_pseudo_gradient(states, loss, geometry)
 
         # EqProp gradients
         eqprop_grads = self._thermodynamic_credit.compute_pseudo_gradient(
-            free_state, nudged_state, loss, geometry
+            states, loss, geometry
         )
 
         # Combine per-layer
@@ -358,15 +359,14 @@ class ThermodynamicToHomeostaticAdapter(CreditAdapter):
 
     def compute_pseudo_gradient(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
         """EqProp gradients with homeostatic scaling."""
         # Apply homeostatic scaling
         scaled_grads = self._homeostatic_credit.compute_pseudo_gradient(
-            free_state, nudged_state, loss, geometry
+            states, loss, geometry
         )
 
         return scaled_grads
@@ -409,20 +409,17 @@ class TemporalTraceToThermodynamicAdapter(CreditAdapter):
 
     def compute_pseudo_gradient(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
         """Hybrid STDP + EqProp gradients."""
         # STDP gradients (requires spike data)
-        stdp_grads = self._source.compute_pseudo_gradient(
-            free_state, nudged_state, loss, geometry
-        )
+        stdp_grads = self._source.compute_pseudo_gradient(states, loss, geometry)
 
         # EqProp gradients
         eqprop_grads = self._thermodynamic_credit.compute_pseudo_gradient(
-            free_state, nudged_state, loss, geometry
+            states, loss, geometry
         )
 
         # Combine
@@ -467,20 +464,17 @@ class TargetInversionToThermodynamicAdapter(CreditAdapter):
 
     def compute_pseudo_gradient(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
         """Hybrid Target Prop + EqProp gradients."""
         # Target Prop gradients
-        tp_grads = self._source.compute_pseudo_gradient(
-            free_state, nudged_state, loss, geometry
-        )
+        tp_grads = self._source.compute_pseudo_gradient(states, loss, geometry)
 
         # EqProp gradients
         eqprop_grads = self._thermodynamic_credit.compute_pseudo_gradient(
-            free_state, nudged_state, loss, geometry
+            states, loss, geometry
         )
 
         # Combine
@@ -504,6 +498,7 @@ class TargetInversionToThermodynamicAdapter(CreditAdapter):
 
 
 class BackpropToThermodynamicAdapter(CreditAdapter):
+    requires_autograd: ClassVar[bool] = True
     """Backprop-guided Equilibrium Propagation.
 
     Uses backprop gradients as a teacher signal to guide
@@ -528,20 +523,17 @@ class BackpropToThermodynamicAdapter(CreditAdapter):
 
     def compute_pseudo_gradient(
         self,
-        free_state: SystemState,
-        nudged_state: SystemState,
-        loss: Tensor,
+        states: Mapping[Phase, SystemState],
+        loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
         """Backprop-distilled EqProp gradients."""
         # Backprop gradients (teacher)
-        bp_grads = self._source.compute_pseudo_gradient(
-            free_state, nudged_state, loss, geometry
-        )
+        bp_grads = self._source.compute_pseudo_gradient(states, loss, geometry)
 
         # EqProp gradients (student)
         eqprop_grads = self._thermodynamic_credit.compute_pseudo_gradient(
-            free_state, nudged_state, loss, geometry
+            states, loss, geometry
         )
 
         # Distill: blend with backprop as regularization

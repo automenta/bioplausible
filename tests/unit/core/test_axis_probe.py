@@ -1,0 +1,183 @@
+"""Permanent neutrality verification harness (TODO4 9.5).
+
+Every accepted per-axis coordinate builds and trains one real step with
+parity-guaranteed metric keys; every fenced combination raises
+``UnsupportedCoordinateError`` with its reason instead of misrunning.
+
+Probe methodology (session 5): sweep each axis value against a fixed
+baseline for the other axes, plus the pairwise fences recorded in
+``_INCOMPATIBLE_PAIRS``.
+"""
+
+from __future__ import annotations
+
+from typing import Final
+
+import pytest
+import torch
+
+from computronium.core.campaign.evaluation import (
+    _EXCLUDED_AXES,
+    UnsupportedCoordinateError,
+    build_coordinate_system,
+    evaluate_episode,
+)
+
+INPUT_DIM = 8
+OUTPUT_DIM = 8
+
+BASELINE: Final = (
+    "digital/feedforward/energy_minimization/null/thermodynamic_contrast/euclidean"
+)
+
+AXIS_VALUES: Final[dict[int, tuple[str, ...]]] = {
+    0: (
+        "digital",
+        "analog",
+        "memristive",
+        "neuromorphic",
+        "sparse",
+        "ternary",
+        "optical",
+        "quantum",
+    ),
+    1: ("feedforward", "recurrent", "tile_mesh"),
+    2: (
+        "energy_minimization",
+        "predictive_settling",
+        "spike_integration",
+        "instantaneous",
+        "diffusion",
+    ),
+    3: ("null", "routing", "fast_weights", "substrate_coupled", "rule_state"),
+    4: (
+        "thermodynamic_contrast",
+        "random_projections",
+        "local_goodness",
+        "temporal_trace",
+        "target_inversion",
+        "gradient",
+    ),
+    5: (
+        "euclidean",
+        "riemannian_orthogonal",
+        "spectral_constrained",
+        "natural_gradient",
+        "elastic_consolidation",
+    ),
+}
+
+# Settling dynamics iterate layered activations; tile-mesh exposes none.
+_INCOMPATIBLE_PAIRS: Final[frozenset[tuple[str, str]]] = frozenset({
+    ("tile_mesh", "energy_minimization"),
+    ("tile_mesh", "predictive_settling"),
+    ("tile_mesh", "spike_integration"),
+})
+
+
+def _coordinate(slot: int, value: str) -> str:
+    segments = [str(part) for part in BASELINE.split("/")]
+    segments[slot] = value
+    return "/".join(segments)
+
+
+def _is_fenced(coordinate: str) -> bool:
+    geometry, dynamics = coordinate.split("/")[1:3]
+    return (geometry, dynamics) in _INCOMPATIBLE_PAIRS
+
+
+@pytest.fixture
+def small_batch() -> tuple[torch.Tensor, torch.Tensor]:
+    return torch.randn(4, INPUT_DIM), torch.randint(0, OUTPUT_DIM, (4,))
+
+
+@pytest.mark.parametrize("slot", sorted(AXIS_VALUES))
+@pytest.mark.parametrize("value_idx", range(max(len(v) for v in AXIS_VALUES.values())))
+def test_accepted_axis_combinations_train_one_real_step(
+    slot: int, value_idx: int, small_batch
+) -> None:
+    values = AXIS_VALUES[slot]
+    if value_idx >= len(values):
+        pytest.skip("exhausted axis values")
+    coordinate = _coordinate(slot, values[value_idx])
+    if _is_fenced(coordinate):
+        pytest.skip("pairwise-fenced; covered by test_fenced_pairs_raise")
+    joint = build_coordinate_system(
+        coordinate, input_dim=INPUT_DIM, output_dim=OUTPUT_DIM
+    )
+    _, metrics = evaluate_episode(
+        joint,
+        coordinate=coordinate,
+        task_name="probe",
+        campaign_id="harness",
+        episode=0,
+    )
+    assert {"loss", "energy", "accuracy"} <= set(metrics)
+    assert all(isinstance(v, float) for k, v in metrics.items() if k in metrics)
+
+
+def test_excluded_axes_raise_with_reason() -> None:
+    """Every fence recorded in _EXCLUDED_AXES must actually reject."""
+    assert all(isinstance(reason, str) and reason for reason in _EXCLUDED_AXES.values())
+    for (_axis, value), _reason in _EXCLUDED_AXES.items():
+        slot = next((s for s, vals in AXIS_VALUES.items() if value in vals), None)
+        if slot is None:
+            continue
+        coordinate = _coordinate(slot, value)
+        if _is_fenced(coordinate):
+            continue
+        with pytest.raises(UnsupportedCoordinateError):
+            build_coordinate_system(coordinate)
+
+
+@pytest.mark.parametrize(("geometry", "dynamics"), sorted(_INCOMPATIBLE_PAIRS))
+def test_fenced_pairs_raise(geometry: str, dynamics: str) -> None:
+    segments = [str(part) for part in BASELINE.split("/")]
+    segments[1], segments[2] = geometry, dynamics
+    coordinate = "/".join(segments)
+    with pytest.raises(UnsupportedCoordinateError, match="layered"):
+        build_coordinate_system(coordinate, input_dim=INPUT_DIM, output_dim=OUTPUT_DIM)
+
+
+# --- Substrate-type fidelity (9.4) -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("substrate_value", "expected_class_name"),
+    [
+        ("digital", "DigitalSubstrate"),
+        ("analog", "AnalogSubstrate"),
+        ("memristive", "MemristiveSubstrate"),
+        ("neuromorphic", "NeuromorphicSubstrate"),
+        ("sparse", "SparseSubstrate"),
+        ("ternary", "TernarySubstrate"),
+        ("optical", "OpticalSubstrate"),
+        ("quantum", "QuantumSubstrate"),
+    ],
+)
+def test_substrate_class_selected_by_type_tag(
+    substrate_value: str, expected_class_name: str
+) -> None:
+    joint = build_coordinate_system(
+        _coordinate(0, substrate_value),
+        input_dim=INPUT_DIM,
+        output_dim=OUTPUT_DIM,
+    )
+    assert type(joint.substrate).__name__ == expected_class_name
+
+
+def test_analog_noise_fires_under_composed_coordinates() -> None:
+    """Behavioral fidelity: AnalogSubstrate.inject_state_noise actually runs."""
+    digital = build_coordinate_system(
+        _coordinate(0, "digital"), input_dim=INPUT_DIM, output_dim=OUTPUT_DIM
+    )
+    analog = build_coordinate_system(
+        _coordinate(0, "analog"), input_dim=INPUT_DIM, output_dim=OUTPUT_DIM
+    )
+    acts = torch.randn(4, INPUT_DIM)
+    torch.manual_seed(7)
+    noisy = analog.substrate.inject_state_noise(acts.clone())
+    torch.manual_seed(7)
+    clean = digital.substrate.inject_state_noise(acts.clone())
+    assert not torch.equal(noisy, clean)
+    assert noisy.dtype.is_floating_point

@@ -36,6 +36,7 @@ from computronium.core.ontology import (
     ThermodynamicContrast,
     TileGeometry,
 )
+from computronium.core.pipeline import phase_states, task_loss
 from computronium.core.registry import Registry
 from computronium.core.system_trainer import (
     SystemTrainer,
@@ -225,7 +226,7 @@ def _run_settle_and_compute_loss(
         state.activations = sys.substrate.inject_state_noise(state.activations)
     state = sys.dynamics.settle(state, sys.geometry, sys.substrate, target=target)
     if target is not None:
-        state.loss = sys._compute_loss(state, target)
+        state.loss = task_loss(state, target)
     return state
 
 
@@ -333,10 +334,14 @@ class TestL2OrthogonalityLock:
         nudged2 = _run_settle_and_compute_loss(sys2, x, y, target=y)
 
         grads1 = sys1.credit.compute_pseudo_gradient(
-            free1, nudged1, nudged1.loss, sys1.geometry
+            phase_states(free=free1, nudged=nudged1),
+            nudged1.loss,
+            sys1.geometry,
         )
         grads2 = sys2.credit.compute_pseudo_gradient(
-            free2, nudged2, nudged2.loss, sys2.geometry
+            phase_states(free=free2, nudged=nudged2),
+            nudged2.loss,
+            sys2.geometry,
         )
 
         assert len(grads1) == len(grads2)
@@ -385,7 +390,9 @@ class TestL3LocalityLock:
             nudged = _run_settle_and_compute_loss(sys, x, y, target=y)
 
             grads_orig = sys.credit.compute_pseudo_gradient(
-                free, nudged, nudged.loss, sys.geometry
+                phase_states(free=free, nudged=nudged),
+                nudged.loss,
+                sys.geometry,
             )
 
             if len(grads_orig) >= MIN_LAYERS_FOR_LOCALITY:
@@ -393,7 +400,9 @@ class TestL3LocalityLock:
                 nudged_pert = perturb_nonlocal(nudged, 0, PERTURB_SCALE)
 
                 grads_pert = sys.credit.compute_pseudo_gradient(
-                    free_pert, nudged_pert, nudged_pert.loss, sys.geometry
+                    phase_states(free=free_pert, nudged=nudged_pert),
+                    nudged_pert.loss,
+                    sys.geometry,
                 )
 
                 assert torch.allclose(
@@ -730,7 +739,7 @@ class TestU_EuclideanProperties:
             update = EuclideanUpdate(
                 ParameterUpdateConfig.euclidean(step_size=0.01, momentum=0.9)
             )
-            params = {"w": torch.randn(10, 10, device=device)}
+            params = {"0.weight": torch.randn(10, 10, device=device)}
             grads = [torch.randn(10, 10, device=device)]
 
             # First step
@@ -739,8 +748,8 @@ class TestU_EuclideanProperties:
             p2 = update.step(p1, grads, None)
 
             # Momentum buffer should cause larger second step
-            step1_norm = (params["w"] - p1["w"]).norm()
-            step2_norm = (p1["w"] - p2["w"]).norm()
+            step1_norm = (params["0.weight"] - p1["0.weight"]).norm()
+            step2_norm = (p1["0.weight"] - p2["0.weight"]).norm()
             assert step2_norm > step1_norm * 1.5, (
                 f"Momentum not accumulating: step1={step1_norm:.4f}, step2={step2_norm:.4f}"
             )
@@ -784,11 +793,13 @@ class TestC_BackpropCreditProperties:
             nudged_state.energy = sys.dynamics.compute_energy(
                 nudged_state, sys.geometry
             )
-            nudged_state.loss = sys._compute_loss(nudged_state, y)
+            nudged_state.loss = task_loss(nudged_state, y)
 
             # Get pseudo-gradients from BackpropCredit (uses autograd internally)
             pseudo_grads = sys.credit.compute_pseudo_gradient(
-                free_state, nudged_state, nudged_state.loss, sys.geometry
+                phase_states(free=free_state, nudged=nudged_state),
+                nudged_state.loss,
+                sys.geometry,
             )
 
             # Get autograd gradients by recomputing the forward pass for a fresh graph
@@ -799,10 +810,16 @@ class TestC_BackpropCreditProperties:
             nudged_state2 = sys.dynamics.settle(
                 state, sys.geometry, sys.substrate, target=y
             )
-            nudged_state2.loss = sys._compute_loss(nudged_state2, y)
+            nudged_state2.loss = task_loss(nudged_state2, y)
 
             sys_geometry = sys.geometry
-            params = list(sys_geometry.params.values())
+            # Credit contract: one gradient per learnable weight, same order
+            weight_names = [
+                n
+                for n, p in sys_geometry.params.items()
+                if "weight" in n and p.ndim == 2
+            ]
+            params = [sys_geometry.params[n] for n in weight_names]
             autograd_grads = torch.autograd.grad(
                 nudged_state2.loss, params, create_graph=False, allow_unused=True
             )
@@ -859,7 +876,7 @@ def test_u_muon_gradient_orthogonal() -> None:
         update = RiemannianOrthogonalUpdate(
             ParameterUpdateConfig.riemannian_orthogonal(ortho_steps=5)
         )
-        params = {"w": torch.randn(10, 10, device=device)}
+        params = {"0.weight": torch.randn(10, 10, device=device)}
         grads = [torch.randn(10, 10, device=device)]
 
         # Test the internal orthogonalization
@@ -882,18 +899,18 @@ def test_u_elastic_moves_toward_old_params() -> None:
         update = ElasticConsolidationUpdate(
             ParameterUpdateConfig.elastic_consolidation(ewc_lambda=1000.0)
         )
-        params = {"w": torch.randn(10, 10, device=device)}
+        params = {"0.weight": torch.randn(10, 10, device=device)}
         grads = [torch.randn(10, 10, device=device)]
 
         # Consolidate first with old_params = ones
-        old_params = {"w": torch.ones(10, 10, device=device)}
-        update.consolidate(params, {"w": torch.ones(10, 10, device=device)})
+        old_params = {"0.weight": torch.ones(10, 10, device=device)}
+        update.consolidate(params, {"0.weight": torch.ones(10, 10, device=device)})
 
         new_params = update.step(params, grads, None)
 
         # Delta should have negative dot product with (w - old_w)
-        delta = new_params["w"] - params["w"]
-        diff = params["w"] - old_params["w"]
+        delta = new_params["0.weight"] - params["0.weight"]
+        diff = params["0.weight"] - old_params["0.weight"]
         dot_prod = (delta * diff).sum().item()
         assert dot_prod < 0, (
             f"ElasticConsolidationUpdate: delta·(w-old_w)={dot_prod:.4f} should be < 0"
@@ -1071,15 +1088,15 @@ class TestU_StepProperties:
             update = ElasticConsolidationUpdate(
                 ParameterUpdateConfig.elastic_consolidation(ewc_lambda=1000.0)
             )
-            params = {"w": torch.randn(10, 10, device=device)}
+            params = {"0.weight": torch.randn(10, 10, device=device)}
             grads = [torch.randn(10, 10, device=device)]
-            old_params = {"w": torch.ones(10, 10, device=device)}
+            old_params = {"0.weight": torch.ones(10, 10, device=device)}
 
             update.consolidate(params, old_params)
             new_params = update.step(params, grads, None)
 
-            delta = new_params["w"] - params["w"]
-            assert (delta * (params["w"] - old_params["w"])).sum() < 0
+            delta = new_params["0.weight"] - params["0.weight"]
+            assert (delta * (params["0.weight"] - old_params["0.weight"])).sum() < 0
 
 
 # ======================================================================

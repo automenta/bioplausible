@@ -8,7 +8,6 @@ from pathlib import Path
 import torch
 
 # Import zoo models to trigger registration
-import computronium.zoo  # ruff: ignore[unused-import]  # triggers model registration
 from computronium.core.logging import get_logger
 from computronium.core.registry import Registry
 from computronium.core.utils.device import get_device
@@ -281,7 +280,7 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:
             nudged_state.energy = system.dynamics.compute_energy(
                 nudged_state, system.geometry
             )
-            nudged_state.loss = system._compute_loss(nudged_state, y)
+            nudged_state.loss = task_loss(nudged_state, y)
 
             # Record energy
             trajectory["energy"].append(
@@ -317,8 +316,12 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:
 
             # Update plastic state if applicable
             if hasattr(system, "plasticity") and system.plasticity is not None:
+                from computronium.core.pipeline import phase_states
+
                 pseudo_grads = system.credit.compute_pseudo_gradient(
-                    free_state, nudged_state, nudged_state.loss, system.geometry
+                    phase_states(free=free_state, nudged=nudged_state),
+                    nudged_state.loss,
+                    system.geometry,
                 )
                 # Simple plastic step
                 if hasattr(system.plasticity, "step"):

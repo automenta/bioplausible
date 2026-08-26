@@ -9,7 +9,6 @@ Tests verify the thermodynamic contrast (EqProp) gradient is strictly local:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import pytest
 import torch
@@ -23,7 +22,6 @@ from computronium.core.ontology import (
     EnergyMinimizationDynamics,
     EuclideanUpdate,
     GeometryConfig,
-    InstantaneousDynamics,
     ParameterUpdateConfig,
     RecurrentGeometry,
     StateDynamicsConfig,
@@ -31,10 +29,8 @@ from computronium.core.ontology import (
     SystemState,
     ThermodynamicContrast,
 )
+from computronium.core.pipeline import phase_states
 from computronium.core.system_trainer import compose_system
-
-if TYPE_CHECKING:
-    from computronium.core.ontology import Geometry
 
 # Tolerances
 TIGHT = {"rtol": 1e-5, "atol": 1e-6, "equal_nan": False}
@@ -195,7 +191,9 @@ def test_thermodynamic_contrast_depends_only_on_local_activities(
         loss = torch.nn.functional.cross_entropy(nudged_logits, y)
 
         system_grads = system.credit.compute_pseudo_gradient(
-            free_state, nudged_state, loss, system.geometry
+            phase_states(free=free_state, nudged=nudged_state),
+            loss,
+            system.geometry,
         )
 
         if l < len(system_grads):
@@ -264,10 +262,14 @@ def test_thermodynamic_contrast_scale_free_property(
     nudged_state_scaled.activations = nudged_acts_scaled
 
     grads_orig = system.credit.compute_pseudo_gradient(
-        free_state_orig, nudged_state_orig, loss, system.geometry
+        phase_states(free=free_state_orig, nudged=nudged_state_orig),
+        loss,
+        system.geometry,
     )
     grads_scaled = system.credit.compute_pseudo_gradient(
-        free_state_scaled, nudged_state_scaled, loss, system.geometry
+        phase_states(free=free_state_scaled, nudged=nudged_state_scaled),
+        loss,
+        system.geometry,
     )
 
     # Gradient scales by scale^2 (outer product scaling)
@@ -368,10 +370,14 @@ def test_eqprop_gradient_strictly_local_per_layer(
     nudged_state_pert.activations = perturbed_nudged
 
     grads_orig = system.credit.compute_pseudo_gradient(
-        free_state_orig, nudged_state_orig, loss, system.geometry
+        phase_states(free=free_state_orig, nudged=nudged_state_orig),
+        loss,
+        system.geometry,
     )
     grads_pert = system.credit.compute_pseudo_gradient(
-        free_state_pert, nudged_state_pert, loss, system.geometry
+        phase_states(free=free_state_pert, nudged=nudged_state_pert),
+        loss,
+        system.geometry,
     )
 
     # Gradient for target_layer should be UNCHANGED
@@ -459,7 +465,9 @@ def test_eqprop_all_layers_strictly_local(
         loss = torch.nn.functional.cross_entropy(nudged_logits, y)
 
         system_grads = system.credit.compute_pseudo_gradient(
-            free_state, nudged_state, loss, system.geometry
+            phase_states(free=free_state, nudged=nudged_state),
+            loss,
+            system.geometry,
         )
 
         if l < len(system_grads):
@@ -543,10 +551,14 @@ def test_eqprop_invariance_to_non_adjacent_noise(
         nudged_state_local.activations = local_nudged
 
         grads_full = system.credit.compute_pseudo_gradient(
-            free_state_full, nudged_state_full, loss, system.geometry
+            phase_states(free=free_state_full, nudged=nudged_state_full),
+            loss,
+            system.geometry,
         )
         grads_local = system.credit.compute_pseudo_gradient(
-            free_state_local, nudged_state_local, loss, system.geometry
+            phase_states(free=free_state_local, nudged=nudged_state_local),
+            loss,
+            system.geometry,
         )
 
         if target_l < len(grads_full) and target_l < len(grads_local):
@@ -630,7 +642,9 @@ def test_eqprop_feedback_alignment_still_local(
         nudged_state.activations = nudged_acts
 
         system_grads = system.credit.compute_pseudo_gradient(
-            free_state, nudged_state, loss, system.geometry
+            phase_states(free=free_state, nudged=nudged_state),
+            loss,
+            system.geometry,
         )
 
         if l < len(system_grads):

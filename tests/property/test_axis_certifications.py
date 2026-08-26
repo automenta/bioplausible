@@ -43,6 +43,7 @@ from computronium.core.ontology import (
     TemporalTraceCredit,
     ThermodynamicContrast,
 )
+from computronium.core.pipeline import phase_states
 from computronium.core.substrates.complex_substrate import ComplexSubstrate
 from computronium.core.substrates.sparse_substrate import SparseSubstrate
 from computronium.core.substrates.ternary_substrate import TernarySubstrate
@@ -281,7 +282,7 @@ def _run_nudged_phase(sys, x: Tensor, y: Tensor) -> SystemState:
         state.activations = sys.substrate.inject_state_noise(state.activations)
     state = sys.dynamics.settle(state, sys.geometry, sys.substrate, target=y)
     state.energy = sys.dynamics.compute_energy(state, sys.geometry)
-    state.loss = sys._compute_loss(state, y)
+    state.loss = task_loss(state, y)
     return state
 
 
@@ -317,7 +318,9 @@ class TestCAxisLocalGoodnessCredit:
 
         # Get pseudo-gradients from the credit rule
         pseudo_grads = credit.compute_pseudo_gradient(
-            free_state, nudged_state, nudged_state.loss, geometry
+            phase_states(free=free_state, nudged=nudged_state),
+            nudged_state.loss,
+            geometry,
         )
 
         # Get layer-local surrogate objectives and FD them
@@ -380,7 +383,9 @@ class TestCAxisTargetInversionCredit:
         nudged_state = _run_nudged_phase(sys, x, y)
 
         pseudo_grads = credit.compute_pseudo_gradient(
-            free_state, nudged_state, nudged_state.loss, geometry
+            phase_states(free=free_state, nudged=nudged_state),
+            nudged_state.loss,
+            geometry,
         )
 
         param_names = list(geometry.params.keys())
@@ -775,7 +780,9 @@ class TestSAxisSubstrateCertification:
         nudged_state = _run_nudged_phase(sys, x, y)
 
         pseudo_grads = credit.compute_pseudo_gradient(
-            free_state, nudged_state, nudged_state.loss, geometry
+            phase_states(free=free_state, nudged=nudged_state),
+            nudged_state.loss,
+            geometry,
         )
         assert len(pseudo_grads) > 0, (
             f"Substrate {substrate_name}: should produce pseudo-gradients"
@@ -811,7 +818,9 @@ class TestSAxisSubstrateCertification:
         nudged_state = _run_nudged_phase(sys, x, y)
 
         pseudo_grads = credit.compute_pseudo_gradient(
-            free_state, nudged_state, nudged_state.loss, geometry
+            phase_states(free=free_state, nudged=nudged_state),
+            nudged_state.loss,
+            geometry,
         )
         assert len(pseudo_grads) > 0, (
             f"Substrate {substrate_name}: should produce pseudo-gradients"
@@ -845,7 +854,9 @@ class TestSAxisSubstrateCertification:
         nudged_state = _run_nudged_phase(sys, x, y)
 
         pseudo_grads = credit.compute_pseudo_gradient(
-            free_state, nudged_state, nudged_state.loss, geometry
+            phase_states(free=free_state, nudged=nudged_state),
+            nudged_state.loss,
+            geometry,
         )
         assert len(pseudo_grads) > 0, (
             f"Substrate {substrate_name}: should produce pseudo-gradients"

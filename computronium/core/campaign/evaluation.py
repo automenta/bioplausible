@@ -99,10 +99,18 @@ def _thunk[**P, T](
 
 
 _SUBSTRATE_FACTORIES = {
-    name: _thunk(getattr(SubstrateConfig, name)) for name in ("digital",)
+    name: _thunk(getattr(SubstrateConfig, name))
+    for name in (
+        "digital",
+        "analog",
+        "memristive",
+        "neuromorphic",
+        "sparse",
+        "ternary",
+        "optical",
+        "quantum",
+    )
 }
-# Non-digital substrates are intentionally NOT accepted yet (see
-# _EXCLUDED_AXES below for the reason).
 _DYNAMICS_FACTORIES = {
     "energy_minimization": _thunk(
         StateDynamicsConfig.energy_minimization, max_steps=3, step_size=0.1
@@ -122,51 +130,55 @@ _CREDIT_FACTORIES = {
     "local_goodness": _thunk(CreditAssignmentConfig.local_goodness),
     "temporal_trace": _thunk(CreditAssignmentConfig.temporal_trace),
     "target_inversion": _thunk(CreditAssignmentConfig.target_inversion),
+    "homeostatic": _thunk(CreditAssignmentConfig.homeostatic),
+    "gradient": _thunk(CreditAssignmentConfig.gradient),
 }
 _UPDATE_FACTORIES = {
-    "euclidean": _thunk(ParameterUpdateConfig.euclidean, step_size=0.01)
+    "euclidean": _thunk(ParameterUpdateConfig.euclidean, step_size=0.01),
+    "riemannian_orthogonal": _thunk(
+        ParameterUpdateConfig.riemannian_orthogonal, step_size=0.01
+    ),
+    "spectral_constrained": _thunk(
+        ParameterUpdateConfig.spectral_constrained, step_size=0.01
+    ),
+    "natural_gradient": _thunk(ParameterUpdateConfig.natural_gradient, step_size=0.01),
+    "elastic_consolidation": _thunk(
+        ParameterUpdateConfig.elastic_consolidation, step_size=0.01
+    ),
 }
 
 # Axis values whose composition is NOT yet faithful or does not yet run under
 # ``compose_joint_system_from_configs``. These are composition gaps to fix,
 # NOT judgments on the methods themselves; probed empirically (TODO4 session
 # 5). Revisit each after its underlying issue closes.
-_EXCLUDED_AXES: dict[tuple[str, str], str] = {
-    # Substrate class is selected by config.precision, which cannot
-    # distinguish e.g. analog ("float32") from digital and silently falls
-    # back to DigitalSubstrate — dropping behavioral overrides (noise
-    # models, precision bounds). Needs an explicit substrate-type tag.
-    **{
-        ("substrate", s): "substrate class not selected faithfully by compose"
-        for s in ("analog", "memristive", "neuromorphic", "sparse", "ternary")
-    },
-    (
-        "credit",
-        "gradient",
-    ): "requires autograd through settle; composed train_step runs detached",
-    (
-        "credit",
-        "backprop",
-    ): "requires autograd through settle; composed train_step runs detached",
-    **{
-        ("update", name): (
-            f"{name} step crashes on composed params "
-            "(shape [hidden] vs [batch, hidden]; likely bias handling)"
-        )
-        for name in (
-            "riemannian_orthogonal",
-            "spectral_constrained",
-            "natural_gradient",
-            "elastic_consolidation",
-        )
-    },
-}
+#
+# Empty since Phase 9: substrate classes are selected by the explicit
+# ``substrate_type`` tag, gradient credit runs on the autograd-capable path
+# (``requires_autograd``), and all update rules pair gradients via
+# ``apply_pseudo_gradients`` (bias-safe).
+_EXCLUDED_AXES: dict[tuple[str, str], str] = {}
 
 
 _CREDIT_ALIASES = {
     "thermo": "thermodynamic_contrast",
     "backprop": "gradient",
 }
+
+# Settling dynamics iterate layered activations; tile-mesh routing exposes no
+# layer sequence, so these pairs are structurally incompatible.
+_LAYERED_ONLY_DYNAMICS = frozenset({
+    "energy_minimization",
+    "predictive_settling",
+    "spike_integration",
+})
+
+
+def _check_pairwise(parts: list[str]) -> None:
+    if parts[1] == "tile_mesh" and parts[2] in _LAYERED_ONLY_DYNAMICS:
+        raise UnsupportedCoordinateError(
+            "dynamics",
+            f"{parts[2]} (requires layered geometry; incompatible with tile_mesh)",
+        )
 
 
 def _dispatch[T](table: dict[str, Callable[[], T]], axis: str, value: str) -> T:
@@ -209,6 +221,7 @@ def build_coordinate_system(
     parts = coordinate.split("/")
     if len(parts) != COORDINATE_AXES:
         raise UnsupportedCoordinateError("parts", coordinate)
+    _check_pairwise(parts)
     substrate_cfg = _dispatch(_SUBSTRATE_FACTORIES, "substrate", parts[0])
     geometry_cfg = _geometry_config(parts[1], input_dim, output_dim, hidden_dims)
     dynamics_cfg = _dispatch(_DYNAMICS_FACTORIES, "dynamics", parts[2])

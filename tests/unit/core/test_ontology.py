@@ -20,6 +20,7 @@ from computronium.core.ontology import (
     ThermodynamicContrast,
     TileGeometry,
 )
+from computronium.core.pipeline import phase_states
 from computronium.core.system_trainer import (
     SystemTrainer,
     SystemTrainerConfig,
@@ -427,7 +428,9 @@ class TestCreditAssignment:
                 recurrent_weight=None,
             )
         )
-        grads = credit.compute_pseudo_gradient(free_state, nudged_state, loss, geometry)
+        grads = credit.compute_pseudo_gradient(
+            phase_states(free=free_state, nudged=nudged_state), loss, geometry
+        )
         assert len(grads) == 1  # One hidden layer
 
 
@@ -446,7 +449,10 @@ class TestParameterUpdate:
                 ewc_lambda=1000.0,
             )
         )
-        params = {"w1": torch.randn(20, 10), "b1": torch.randn(20)}
+        params = {
+            "layer_0_weight": torch.randn(20, 10),
+            "layer_0_bias": torch.randn(20),
+        }
         pseudo_grads = [torch.randn(20, 10), torch.randn(20)]
         geometry = FeedforwardGeometry(
             GeometryConfig(
@@ -460,9 +466,9 @@ class TestParameterUpdate:
             )
         )
         new_params = update.step(params, pseudo_grads, geometry)
-        assert "w1" in new_params
-        assert "b1" in new_params
-        assert not torch.equal(new_params["w1"], params["w1"])
+        assert "layer_0_weight" in new_params
+        assert "layer_0_bias" in new_params
+        assert not torch.equal(new_params["layer_0_weight"], params["layer_0_weight"])
 
     def test_euclidean_update_with_momentum(self):
         update = EuclideanUpdate(
@@ -476,7 +482,7 @@ class TestParameterUpdate:
                 ewc_lambda=1000.0,
             )
         )
-        params = {"w1": torch.randn(20, 10)}
+        params = {"layer_0_weight": torch.randn(20, 10)}
         pseudo_grads = [torch.randn(20, 10)]
         geometry = FeedforwardGeometry(
             GeometryConfig(
@@ -492,7 +498,9 @@ class TestParameterUpdate:
         new_params = update.step(params, pseudo_grads, geometry)
         # Second step should use momentum
         new_params2 = update.step(new_params, pseudo_grads, geometry)
-        assert not torch.equal(new_params2["w1"], new_params["w1"])
+        assert not torch.equal(
+            new_params2["layer_0_weight"], new_params["layer_0_weight"]
+        )
 
 
 class TestSystemComposition:

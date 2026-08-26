@@ -31,8 +31,9 @@ from computronium.core.ontology import (
     Substrate,
     SubstrateConfig,
     System,
-    SystemState,
+    substrate_from_config,
 )
+from computronium.core.pipeline import run_forward, run_train_step
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -271,6 +272,39 @@ class SystemTrainer:
         return False
 
 
+def _credit_from_config(config: CreditAssignmentConfig):
+    """Instantiate the credit implementation named by ``config.credit_type``."""
+    from computronium.core.ontology import (
+        BackpropCredit,
+        HomeostaticCredit,
+        LocalGoodnessCredit,
+        RandomProjectionsCredit,
+        TargetInversionCredit,
+        TemporalTraceCredit,
+        ThermodynamicContrast,
+    )
+
+    match config.credit_type.lower():
+        case "thermodynamic_contrast" | "equilibrium":
+            return ThermodynamicContrast(config)
+        case (
+            "random_projections" | "feedback_alignment" | ("direct_feedback_alignment")
+        ):
+            return RandomProjectionsCredit(config)
+        case "local_goodness" | "forward_only":
+            return LocalGoodnessCredit(config)
+        case "temporal_trace" | "spiking":
+            return TemporalTraceCredit(config)
+        case "target_inversion" | "target_prop":
+            return TargetInversionCredit(config)
+        case "homeostatic":
+            return HomeostaticCredit(config)
+        case "gradient" | "backprop":
+            return BackpropCredit(config)
+        case other:
+            raise ValueError(f"Unknown credit_type: {other!r}")
+
+
 def compose_system[
     TS: Substrate,
     TG: Geometry,
@@ -340,14 +374,6 @@ def compose_system[
                 "update": dataclasses.asdict(self.update.config),
             }
 
-        def _is_spiking_system(self) -> bool:
-            """Check if this is a spiking system (SpikeIntegrationDynamics + TemporalTraceCredit)."""
-            return (
-                hasattr(self.dynamics, "settle")
-                and hasattr(self.credit, "record_spikes")
-                and hasattr(self.credit, "compute_pseudo_gradient")
-            )
-
         @classmethod
         def from_spec(cls, spec: dict) -> System:
             """Reconstruct a System from a specification dictionary.
@@ -364,63 +390,27 @@ def compose_system[
                 )
 
             from computronium.core.ontology import (
-                AnalogSubstrate,
-                BackpropCredit,
                 CreditAssignmentConfig,
-                DigitalSubstrate,
                 ElasticConsolidationUpdate,
                 EnergyMinimizationDynamics,
                 EuclideanUpdate,
                 FeedforwardGeometry,
                 GeometryConfig,
                 InstantaneousDynamics,
-                LocalGoodnessCredit,
-                MemristiveSubstrate,
                 NaturalGradientUpdate,
-                NeuromorphicSubstrate,
-                OpticalSubstrate,
                 ParameterUpdateConfig,
                 PredictiveSettlingDynamics,
-                QuantumSubstrate,
-                RandomProjectionsCredit,
                 RecurrentGeometry,
                 RiemannianOrthogonalUpdate,
                 SpectralConstrainedUpdate,
                 SpikeIntegrationDynamics,
                 StateDynamicsConfig,
                 SubstrateConfig,
-                TargetInversionCredit,
-                TemporalTraceCredit,
-                ThermodynamicContrast,
             )
 
-            # Reconstruct substrate
+            # Reconstruct substrate (class named by the explicit type tag)
             substrate_cfg = SubstrateConfig(**spec["substrate"])
-            substrate_map = {
-                "digital": DigitalSubstrate,
-                "float32": DigitalSubstrate,
-                "float16": DigitalSubstrate,
-                "bfloat16": DigitalSubstrate,
-                "int8": DigitalSubstrate,
-                "int4": DigitalSubstrate,
-                "binary": DigitalSubstrate,
-                "analog": AnalogSubstrate,
-                "memristive": MemristiveSubstrate,
-                "memristor": MemristiveSubstrate,
-                "neuromorphic": NeuromorphicSubstrate,
-                "optical": OpticalSubstrate,
-                "quantum": QuantumSubstrate,
-                "quantized": DigitalSubstrate,
-                "noisy": DigitalSubstrate,
-            }
-            # Use device field to determine substrate type, fallback to precision
-            substrate_key = (
-                substrate_cfg.device.lower()
-                if substrate_cfg.device != "cpu"
-                else substrate_cfg.precision.lower()
-            )
-            substrate_cls = substrate_map.get(substrate_key, DigitalSubstrate)
-            substrate = substrate_cls(substrate_cfg)
+            substrate = substrate_from_config(substrate_cfg)
 
             # Reconstructed geometry
             geometry_dict = spec["geometry"]
@@ -476,19 +466,7 @@ def compose_system[
 
             # Reconstruct credit
             credit_cfg = CreditAssignmentConfig(**spec["credit"])
-            credit_type = credit_cfg.credit_type.lower()
-            if credit_type in ("thermodynamic_contrast", "equilibrium"):
-                credit = ThermodynamicContrast(credit_cfg)
-            elif credit_type in ("random_projections", "feedback_alignment"):
-                credit = RandomProjectionsCredit(credit_cfg)
-            elif credit_type in ("local_goodness", "forward_only"):
-                credit = LocalGoodnessCredit(credit_cfg)
-            elif credit_type in ("temporal_trace", "spiking"):
-                credit = TemporalTraceCredit(credit_cfg)
-            elif credit_type in ("target_inversion", "target_prop"):
-                credit = TargetInversionCredit(credit_cfg)
-            else:
-                credit = BackpropCredit(credit_cfg)
+            credit = _credit_from_config(credit_cfg)
 
             # Reconstruct update
             update_cfg = ParameterUpdateConfig(**spec["update"])
@@ -507,167 +485,19 @@ def compose_system[
             return compose_system(substrate, geometry, dynamics, credit, update)
 
         def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
-            # The contrastive pipeline consumes pseudo-gradients as plain
-            # values (no backward pass exists end-to-end); disabling autograd
-            # here keeps settling graphs from accumulating on GPU.
-            with torch.no_grad():
-                return self._train_step_inner(x, y)
-
-        def _train_step_inner(self, x: Tensor, y: Tensor) -> dict[str, float]:
-            # Use separate state objects for free and nudged phases to avoid
-            # in-place modification of shared activations
-            free_state = SystemState(x=x, y=y)
-            nudged_state = SystemState(x=x, y=y)
-
-            # 1. Substrate + Geometry: Forward pass (initial state for both phases)
-            free_state.activations = self.geometry.forward(x, self.substrate)
-            if free_state.activations is not None:
-                free_state.activations = self.substrate.inject_state_noise(
-                    free_state.activations
-                )
-            # Nudged phase starts from same initial state
-            nudged_state.activations = free_state.activations
-
-            # Handle spiking systems (SpikeIntegrationDynamics + TemporalTraceCredit)
-            if self._is_spiking_system():
-                return self._train_step_spiking(free_state, nudged_state, y)
-
-            # Standard (non-spiking) training path
-            # 2. StateDynamics: Free phase
-            free_state = self.dynamics.settle(
-                free_state, self.geometry, self.substrate, target=None
+            """Execute one training step through the family-neutral pipeline."""
+            return run_train_step(
+                self.substrate,
+                self.geometry,
+                self.dynamics,
+                self.credit,
+                self.update,
+                x,
+                y,
             )
-            free_state.energy = self.dynamics.compute_energy(free_state, self.geometry)
-
-            # 3. StateDynamics: Nudged phase
-            nudged_state = self.dynamics.settle(
-                nudged_state, self.geometry, self.substrate, target=y
-            )
-            # Compute loss before energy so InstantaneousDynamics.compute_energy can use it
-            nudged_state.loss = self._compute_loss(nudged_state, y)
-            nudged_state.energy = self.dynamics.compute_energy(
-                nudged_state, self.geometry
-            )
-
-            # 4. CreditAssignment
-            pseudo_grads = self.credit.compute_pseudo_gradient(
-                free_state, nudged_state, nudged_state.loss, self.geometry
-            )
-
-            # 5. ParameterUpdate
-            new_params = self.update.step(
-                self.geometry.params, pseudo_grads, self.geometry
-            )
-            self.geometry.update_params(new_params)
-
-            metrics = {
-                "loss": nudged_state.loss.item()
-                if nudged_state.loss is not None
-                else 0.0,
-                "energy": free_state.energy.item()
-                if free_state.energy is not None
-                else 0.0,
-                "accuracy": nudged_state.metrics.get("accuracy", 0.0),
-            }
-
-            # Track free energy history for Control-Lyapunov analysis
-            get_history = getattr(self.dynamics, "get_free_energy_history", None)
-            if callable(get_history):
-                free_energy_hist = get_history()
-                if free_energy_hist is not None:
-                    metrics["free_energy_per_iter"] = free_energy_hist
-
-            return metrics
-
-        def _train_step_spiking(
-            self, free_state: SystemState, nudged_state: SystemState, y: Tensor
-        ) -> dict[str, float]:
-            """Training step for spiking systems (STDP-based credit assignment).
-
-            Spiking systems use temporal dynamics where:
-            - Free phase: settle without target, record pre/post spike times
-            - Nudged phase: settle with target, record pre/post spike times
-            - CreditAssignment (TemporalTraceCredit) computes STDP from recorded spikes
-            """
-            # 2. StateDynamics: Free phase (record spikes for STDP)
-            free_state = self.dynamics.settle(
-                free_state, self.geometry, self.substrate, target=None
-            )
-            # Record free phase spikes for credit assignment
-            if hasattr(free_state, "spike_counts") and free_state.spike_counts:
-                # For each layer, record pre/post spike patterns
-                # In a full implementation, this would pass actual spike times
-                # Here we use spike counts as proxy
-                pass
-
-            # 3. StateDynamics: Nudged phase (record spikes for STDP)
-            nudged_state = self.dynamics.settle(
-                nudged_state, self.geometry, self.substrate, target=y
-            )
-            nudged_state.loss = self._compute_loss(nudged_state, y)
-            nudged_state.energy = self.dynamics.compute_energy(
-                nudged_state, self.geometry
-            )
-
-            # 4. CreditAssignment: TemporalTraceCredit uses recorded spikes
-            pseudo_grads = self.credit.compute_pseudo_gradient(
-                free_state, nudged_state, nudged_state.loss, self.geometry
-            )
-
-            # 5. ParameterUpdate
-            new_params = self.update.step(
-                self.geometry.params, pseudo_grads, self.geometry
-            )
-            self.geometry.update_params(new_params)
-
-            metrics = {
-                "loss": nudged_state.loss.item()
-                if nudged_state.loss is not None
-                else 0.0,
-                "energy": nudged_state.energy.item()
-                if nudged_state.energy is not None
-                else 0.0,
-                "accuracy": nudged_state.metrics.get("accuracy", 0.0),
-            }
-
-            # Add spike statistics if available
-            if nudged_state.metrics:
-                avg_spikes = nudged_state.metrics.get("avg_spikes_per_neuron")
-                if avg_spikes is not None:
-                    metrics["avg_spikes_per_neuron"] = avg_spikes
-
-            return metrics
-
-        def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:
-            acts = state.activations
-            if acts is None:
-                return torch.tensor(0.0)
-            if isinstance(acts, list):
-                logits = acts[-1]
-            else:
-                logits = acts
-            loss = torch.nn.functional.cross_entropy(logits, y)
-            # Compute accuracy and store in state.metrics
-            with torch.no_grad():
-                preds = logits.argmax(dim=-1)
-                acc = (preds == y).float().mean().item()
-            state.metrics = {"accuracy": acc}
-            return loss
 
         def forward(self, x: Tensor) -> Tensor:
-            state = SystemState(x=x)
-            state.activations = self.geometry.forward(x, self.substrate)
-            if state.activations is not None:
-                state.activations = self.substrate.inject_state_noise(state.activations)
-            state = self.dynamics.settle(
-                state, self.geometry, self.substrate, target=None
-            )
-            acts = state.activations
-            if acts is None:
-                return torch.empty(0)
-            if isinstance(acts, list):
-                return acts[-1]
-            return acts
+            return run_forward(self.substrate, self.geometry, self.dynamics, x)
 
     return _ComposedSystem[TS, TG, TD, TC, TU](
         substrate=substrate,
@@ -945,44 +775,21 @@ def compose_system_from_configs(
         A composed System with default implementations for each layer.
     """
     from computronium.core.ontology import (
-        BackpropCredit,
-        DigitalSubstrate,
         ElasticConsolidationUpdate,
         EnergyMinimizationDynamics,
         EuclideanUpdate,
         FeedforwardGeometry,
         InstantaneousDynamics,
-        LocalGoodnessCredit,
         NaturalGradientUpdate,
-        NeuromorphicSubstrate,
-        OpticalSubstrate,
         PredictiveSettlingDynamics,
-        QuantumSubstrate,
-        RandomProjectionsCredit,
         RecurrentGeometry,
         RiemannianOrthogonalUpdate,
         SpectralConstrainedUpdate,
         SpikeIntegrationDynamics,
-        TargetInversionCredit,
-        ThermodynamicContrast,
     )
 
-    # Instantiate substrate from config
-    substrate_map = {
-        "digital": DigitalSubstrate,
-        "analog": "AnalogSubstrate",
-        "memristive": "MemristiveSubstrate",
-        "neuromorphic": NeuromorphicSubstrate,
-        "optical": OpticalSubstrate,
-        "quantum": QuantumSubstrate,
-        "quantized": "QuantizedSubstrate",
-        "noisy": "NoisySubstrate",
-    }
-    substrate_cls_name = substrate_map.get(
-        substrate.precision.lower(), "DigitalSubstrate"
-    )
-    substrate_cls = globals().get(substrate_cls_name, DigitalSubstrate)
-    substrate_instance = substrate_cls(substrate)
+    # Instantiate substrate from config (class named by the explicit type tag)
+    substrate_instance = substrate_from_config(substrate)
 
     # Instantiate geometry from config
     topology_type = geometry.topology_type.lower()
@@ -1017,21 +824,7 @@ def compose_system_from_configs(
         dynamics_instance = InstantaneousDynamics(dynamics)
 
     # Instantiate credit from config
-    credit_type = credit.credit_type.lower()
-    if credit_type in ("thermodynamic_contrast", "equilibrium"):
-        credit_instance = ThermodynamicContrast(credit)
-    elif credit_type in ("random_projections", "feedback_alignment"):
-        credit_instance = RandomProjectionsCredit(credit)
-    elif credit_type in ("local_goodness", "forward_only"):
-        credit_instance = LocalGoodnessCredit(credit)
-    elif credit_type in ("temporal_trace", "spiking"):
-        credit_instance = TargetInversionCredit(
-            credit
-        )  # Will use TemporalTraceCredit if available
-    elif credit_type in ("target_inversion", "target_prop"):
-        credit_instance = TargetInversionCredit(credit)
-    else:
-        credit_instance = BackpropCredit(credit)
+    credit_instance = _credit_from_config(credit)
 
     # Instantiate update from config
     update_type = update.update_type.lower()
@@ -1148,96 +941,21 @@ def compose_joint_system[
         update: TU
 
         def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
-            """Execute one training step through the 6-layer pipeline."""
-            from computronium.core.joint.state import CompositeState
-
-            # Build initial joint state
-            z = CompositeState(
-                activity={"x": x, "y": y},
-                plastic=self.plasticity.initial_psi(
-                    self._make_context(), batch_size=x.shape[0]
-                ),
-                substrate={},
+            """Execute one training step through the family-neutral pipeline."""
+            # Preserve lazy ψ initialization side effects before the loop.
+            self.plasticity.initial_psi(self.context, batch_size=x.shape[0])
+            return run_train_step(
+                self.substrate,
+                self.geometry,
+                self.dynamics,
+                self.credit,
+                self.update,
+                x,
+                y,
             )
-
-            # Build context
-            context = self._make_context()
-
-            # Run joint transition (settling + plasticity)
-            # For now, use the 5-D system train_step as the base
-            # and apply plasticity within the settling loop
-            state = SystemState(x=x, y=y)
-
-            # 1. Substrate + Geometry: Forward pass (initial state)
-            state.activations = self.geometry.forward(x, self.substrate)
-            if state.activations is not None:
-                state.activations = self.substrate.inject_state_noise(state.activations)
-
-            # 2. StateDynamics: Free phase settling
-            free_state = self.dynamics.settle(
-                state, self.geometry, self.substrate, target=None
-            )
-            free_state.energy = self.dynamics.compute_energy(free_state, self.geometry)
-
-            # 3. StateDynamics: Nudged phase settling
-            nudged_state = self.dynamics.settle(
-                state, self.geometry, self.substrate, target=y
-            )
-            nudged_state.energy = self.dynamics.compute_energy(
-                nudged_state, self.geometry
-            )
-            nudged_state.loss = self._compute_loss(nudged_state, y)
-
-            # 4. CreditAssignment: Compute pseudo-gradients
-            pseudo_grads = self.credit.compute_pseudo_gradient(
-                free_state, nudged_state, nudged_state.loss, self.geometry
-            )
-
-            # 5. ParameterUpdate: Apply updates
-            new_params = self.update.step(
-                self.geometry.params, pseudo_grads, self.geometry
-            )
-            self.geometry.update_params(new_params)
-
-            return {
-                "loss": nudged_state.loss.item()
-                if nudged_state.loss is not None
-                else 0.0,
-                "energy": free_state.energy.item()
-                if free_state.energy is not None
-                else 0.0,
-                "accuracy": nudged_state.metrics.get("accuracy", 0.0),
-            }
-
-        def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:
-            """Compute task loss from final state."""
-            acts = state.activations
-            if acts is None:
-                return torch.tensor(0.0)
-            logits = acts[-1] if isinstance(acts, list) else acts
-            loss = torch.nn.functional.cross_entropy(logits, y)
-            # Compute accuracy and store in state.metrics
-            with torch.no_grad():
-                preds = logits.argmax(dim=-1)
-                acc = (preds == y).float().mean().item()
-            state.metrics = {"accuracy": acc}
-            return loss
 
         def forward(self, x: Tensor) -> Tensor:
-            """Inference forward pass (free phase only, no weight updates)."""
-            state = SystemState(x=x)
-            state.activations = self.geometry.forward(x, self.substrate)
-            if state.activations is not None:
-                state.activations = self.substrate.inject_state_noise(state.activations)
-            state = self.dynamics.settle(
-                state, self.geometry, self.substrate, target=None
-            )
-            acts = state.activations
-            if acts is None:
-                return torch.empty(0)
-            if isinstance(acts, list):
-                return acts[-1]
-            return acts
+            return run_forward(self.substrate, self.geometry, self.dynamics, x)
 
         def _make_context(self) -> SystemContext:
             """Create SystemContext from this joint system."""
@@ -1446,9 +1164,6 @@ def compose_joint_system[
                     ParameterUpdateConfig(**spec["update"]),
                 )
 
-            def _compute_loss(self, state: SystemState, y: Tensor) -> Tensor:
-                return base_system._compute_loss(state, y)
-
         return _NullJointSystem[TS, TG, TD, TC, TU](base_system)  # type: ignore[return-value]
 
     return _JointSystem[TS, TG, TD, TP, TC, TU](
@@ -1493,27 +1208,17 @@ def compose_joint_system_from_configs(
         A composed JointSystem with default implementations for each layer.
     """
     from computronium.core.ontology import (
-        BackpropCredit,
-        DigitalSubstrate,
         ElasticConsolidationUpdate,
         EnergyMinimizationDynamics,
         EuclideanUpdate,
         FeedforwardGeometry,
         InstantaneousDynamics,
-        LocalGoodnessCredit,
         NaturalGradientUpdate,
-        NeuromorphicSubstrate,
-        OpticalSubstrate,
         PredictiveSettlingDynamics,
-        QuantumSubstrate,
-        RandomProjectionsCredit,
         RecurrentGeometry,
         RiemannianOrthogonalUpdate,
         SpectralConstrainedUpdate,
         SpikeIntegrationDynamics,
-        TargetInversionCredit,
-        TemporalTraceCredit,
-        ThermodynamicContrast,
     )
     from computronium.core.plasticity import (
         NullPlasticity,
@@ -1522,22 +1227,8 @@ def compose_joint_system_from_configs(
         create_substrate_coupled_plasticity,
     )
 
-    # Instantiate substrate from config
-    substrate_map = {
-        "digital": DigitalSubstrate,
-        "analog": "AnalogSubstrate",
-        "memristive": "MemristiveSubstrate",
-        "neuromorphic": NeuromorphicSubstrate,
-        "optical": OpticalSubstrate,
-        "quantum": QuantumSubstrate,
-        "quantized": "QuantizedSubstrate",
-        "noisy": "NoisySubstrate",
-    }
-    substrate_cls_name = substrate_map.get(
-        substrate.precision.lower(), "DigitalSubstrate"
-    )
-    substrate_cls = globals().get(substrate_cls_name, DigitalSubstrate)
-    substrate_instance = substrate_cls(substrate)
+    # Instantiate substrate from config (class named by the explicit type tag)
+    substrate_instance = substrate_from_config(substrate)
 
     # Instantiate geometry from config
     topology_type = geometry.topology_type.lower()
@@ -1572,19 +1263,7 @@ def compose_joint_system_from_configs(
         dynamics_instance = InstantaneousDynamics(dynamics)
 
     # Instantiate credit from config
-    credit_type = credit.credit_type.lower()
-    if credit_type in ("thermodynamic_contrast", "equilibrium"):
-        credit_instance = ThermodynamicContrast(credit)
-    elif credit_type in ("random_projections", "feedback_alignment"):
-        credit_instance = RandomProjectionsCredit(credit)
-    elif credit_type in ("local_goodness", "forward_only"):
-        credit_instance = LocalGoodnessCredit(credit)
-    elif credit_type in ("temporal_trace", "spiking"):
-        credit_instance = TemporalTraceCredit(credit)
-    elif credit_type in ("target_inversion", "target_prop"):
-        credit_instance = TargetInversionCredit(credit)
-    else:
-        credit_instance = BackpropCredit(credit)
+    credit_instance = _credit_from_config(credit)
 
     # Instantiate update from config
     update_type = update.update_type.lower()

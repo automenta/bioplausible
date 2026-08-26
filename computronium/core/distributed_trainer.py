@@ -28,6 +28,7 @@ from computronium.core.ontology import (
     SystemState,
     TileGeometry,
 )
+from computronium.core.pipeline import phase_states
 from computronium.p2p.grpc_service import GRPCConnectionPool
 
 
@@ -415,7 +416,9 @@ class DistributedSystemTrainer:
 
         # 4. CreditAssignment: Compute pseudo-gradients (local)
         pseudo_grads = self.system.credit.compute_pseudo_gradient(
-            free_state, nudged_state, nudged_state.loss, self.system.geometry
+            phase_states(free=free_state, nudged=nudged_state),
+            nudged_state.loss,
+            self.system.geometry,
         )
 
         # 5. ParameterUpdate: Compute local updates

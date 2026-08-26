@@ -12,6 +12,7 @@ import torch
 from torch import Tensor
 
 from computronium.core.ontology import System, SystemState
+from computronium.core.pipeline import task_loss
 
 # ----------------------------------------------------------------------
 # Constants (do not inline shapes)
@@ -114,7 +115,7 @@ def settle_phases(
         state, system.geometry, system.substrate, target=y
     )
     nudged_state.energy = system.dynamics.compute_energy(nudged_state, system.geometry)
-    nudged_state.loss = system._compute_loss(nudged_state, y)
+    nudged_state.loss = task_loss(nudged_state, y)
 
     return free_state, nudged_state
 
