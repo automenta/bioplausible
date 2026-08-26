@@ -2,7 +2,7 @@
 
 > Consolidates all unchecked work from `TODO3.md` with the preliminary infrastructure defined in `RESEARCH3.md`. After Phases 7 + 8, work hands off to the RESEARCH3 catalog (15 items, 5 critical paths) under its Execution Protocol (E-1…E-11). Session Log at the bottom is reverse-chronological.
 
-## Status — Phase 9 EXECUTED (session 7); session 8 closed queue items 1–2 at their gates; session 9 ran Z3 pilot (null + 2 fixes)
+## Status — Phase 9 EXECUTED (session 7); session 8 closed queue items 1–2 at their gates; session 9 ran Z3 pilot (null); session 10 REPAIRED Z3 meta-training → pilot rerun POSITIVE
 
 | Track | State |
 |---|---|
@@ -11,14 +11,13 @@
 | §7 debt — pyright/lint/F-E triage, CLI de-mock, EqProp drift fix | ✅ cleared session 5 |
 | ⚡ Phase 9 family-neutral pipeline (9.1–9.5) | ✅ executed session 7; seed-42 parity rerun ✅ session 8 (bit-level match) |
 | Guard kill-decisions in runners (PR-5 → CP-A) | ✅ wired session 8 (+ 2 composition bugs fixed; random-space crash-free) |
-| Z3 flagship | 🔴 E-1 pilot rung executed session 9 → **E-7 null; promotion DENIED** — all arms chance-level; ψ-integrator + soft/hard-mismatch plumbing bugs fixed; task-identity acquisition is the open algorithmic blocker (autopsy in DECISIONS.md) |
-| RESEARCH3 catalog execution | 🟡 sweeps remain unblocked for composed-system coordinates; Z3 full run gated on a promoted pilot |
+| Z3 flagship | 🟢 session 10: meta-training REPAIRED (E-2 rounds 1–3) → pilot rerun POSITIVE vs session-9 null (ψ-only criterion on parity+lastsym @~110–130 steps, threshold 0.84 censored; Δθ exact; diversity 1.42). Scope caveat: random-ψ control adapts equally well → meta-training differential not yet demonstrated (autopsy in DECISIONS.md) |
+| RESEARCH3 catalog execution | 🟡 sweeps unblocked for composed-system coordinates; Z3 full run gated on closing the meta-vs-random differential + ≥5 seeds |
 
 ### Execution queue (next session, in order)
-1. **Z3 meta-training repair (CP-A, E-2 rounds 1–3)** — the pilot autopsy localizes the failure: controller cannot acquire task identity when all three tasks share identical input distributions and ψ carries only a scalar-summary history. Ranked attacks: (a) feed the adaptation loss/selection-history into ψ so identity becomes observable within-task; (b) temperature annealing 2→0.5 + gate-entropy bonus during meta-train (RESEARCH3's named mitigation); (c) two-phase recipe (θ warm-up under forced selections → controller-only ST training) which already lifts threshold/last-symbol to 0.8–0.9; (d) if (a)–(c) stall, reframe tasks with distinguishable input statistics or register parity as a known boundary (M-axis negative-result memo). Each round ≤8 configs; stop at 3.
-2. **Z3 pilot rerun** only after a repair shows meta hard-selection accuracy materially above chance on all three tasks; then compare vs the session-9 null artifacts under the committed registration `configs/preregistrations/z3_psi_vs_finetune_steps.json`.
-3. **Z3 full run** only on promoted pilot (≥5 seeds, PR-4 stats kit, paired vs baseline-(a)).
-4. Substrate divergence fixes (pull-based): ternary α_init=1.0 gives unit-magnitude weights → settling gain≫1 (fan-in-scaled α would fix); optical overflows to inf. Both honestly guard-killed today; a fix must consciously flip `_GUARD_KILLED_SUBSTRATES` in `tests/unit/core/test_axis_probe.py`.
+1. **Close the meta-vs-random-ψ differential (CP-A)** — pilot rerun's E-10 controls show random-ψ ≈ meta-ψ: adaptation succeeds via feedback-driven bandit exploration over the warmed-up θ trunk, so meta-training doesn't yet buy faster adaptation. Ranked attacks: (a) verify pre-adaptation routing converges with a much longer controller phase (meta 200–400, controller share up) — if pre-routing lands near-correct, ψ-adaptation starts near-solved and criterion drops sharply; (b) curriculum the entropy bonus (high→low within controller phase) so routing locks instead of merely exploring; (c) train the controller against FROZEN feedback trajectories (replay-style) to sharpen the policy mapping ψ-history → op without Gumbel noise. Each round ≤8 configs, stop at 3.
+2. **Z3 full run** once worst-task ψ-only reaches registered criterion materially faster than baseline-(a): ≥5 seeds, PR-4 paired stats vs baseline-(a) under `configs/preregistrations/z3_psi_vs_finetune_steps.json`. Note the registration's censoring policy binds: threshold must actually reach 0.98-window inside budget for a citable endpoint, else re-register (E-1 deviation protocol) with a threshold-feasible budget first.
+3. Substrate divergence fixes (pull-based, unchanged): ternary α_init=1.0 gives unit-magnitude weights → settling gain≫1 (fan-in-scaled α would fix); optical overflows to inf. Both honestly guard-killed today; a fix must consciously flip `_GUARD_KILLED_SUBSTRATES` in `tests/unit/core/test_axis_probe.py`.
 
 ---
 
@@ -258,6 +257,7 @@ Bridge points from Phase 7:
 | **Guard kill-decisions (session 8)** | `core/campaign/evaluation.py::DEFAULT_GUARD_TAU`/`GuardKillError`/`evaluate_episode(guard_threshold=…)`; CLI skip paths in `computronium/cli/campaign.py`; kill-set pinned in `test_axis_probe.py::_GUARD_KILLED_SUBSTRATES` |
 | **Z3 metrics & controls (session 8)** | `experiments/joint/z3_fixed_weights.py` (`TaskShape`, `_adapt_all_tasks`, `_run_baselines`; baselines a/b/c + steps-to-criterion + soft-eval + collapse flag in results JSON) |
 | **Z3 registered metric & prereg (session 9)** | `_windowed_criterion_step` (100-step window) + `_fixed_probe`/`_probe_accuracy` in `z3_fixed_weights.py`; registration `configs/preregistrations/z3_psi_vs_finetune_steps.json`; decision log `DECISIONS.md`; null-run artifacts `benchmark_results/z3_pilot/` (+ `manifest.json`) |
+| **Z3 meta-training repair (session 10)** | `z3_fixed_weights.py`: `MetaRecipe`, `step_plasticity`/pure `forward`, episode-structured `_meta_train`, `TASK_OPERATOR_MAP`, two-phase orchestration in `evaluate_z3`; round driver `scripts/z3_meta_repair.py`; artifacts `benchmark_results/z3_meta_repair/round{2,3}.json` + repaired pilot `benchmark_results/z3_pilot_rerun/` (+ manifest) |
 | **E-11 decision log** | `DECISIONS.md` (append-only; prereg timestamps, kill/death decisions, deviations) |
 | Hardware targets | `docs/hardware_targets.md`; baseline gates `docs/baseline.md` |
 | Research catalog & protocol | `RESEARCH3.md` (items, CP-A…CP-E, E-1…E-11) |
@@ -278,7 +278,7 @@ Bridge points from Phase 7:
 | PR-3b hardware lead time | Gates measured-tier claims only | Procure Day 1 (still pending); PR-3a keeps proxy tier unblocked | 🟡 external |
 | PR-5 false-kill rate | Blocks unattended campaigns | τ=1.029 wired into runners session 8; zero false kills on 29 healthy composed coordinates (growth=1.000 exactly); ternary/optical caught as designed | ✅ mitigated (recalibrate on more families at Z3 pilot) |
 | Foreign git stash makes `git stash` A/B unsafe | Corrupts working tree (~330 paths splattered once, session 5 incident) | Baseline A/B only via `git worktree add /tmp/x HEAD` until that stash is claimed/dropped | 🔴 live |
-| Z3 non-convergence (RESEARCH3 named risk) | Gates CP-A fan-out (ICL bridge, frontier M-axis seed) | Session 9 pilot confirmed live: two plumbing causes fixed, task-identity acquisition open; structural fallback = L1 adaptation figure + negative-result memo per RESEARCH3 | 🔴 live |
+| Z3 non-convergence (RESEARCH3 named risk) | Gates CP-A fan-out (ICL bridge, frontier M-axis seed) | Session 9 pilot confirmed live (null); **session 10 repair flips absolute performance to positive** (criterion on 2/3 tasks, third materially above chance) — remaining risk is narrower: meta-training differential vs random-ψ not yet demonstrated, and threshold criterion censoring | 🟡 downgraded (was 🔴) |
 
 ---
 
@@ -297,6 +297,7 @@ Bridge points from Phase 7:
 - [x] **Handoff: RESEARCH3 catalog unblocked** ✅ session 5 — pre-RESEARCH3 engineering debt from §7.5 + session logs cleared (see Session Log session 5): campaign CLI runs real composed systems w/ fault-tolerant checkpointing; `ResourceUsage.measure` device-honest; stale `profiling.py` stability call fixed & live; suite ψ-wiring **audited per-suite** (L1/L2 `psi_wired_uncontrolled`, L3.5/L3 `plumbing_only`; rewiring stays open); EqProp late-drift fixed.
 - [x] **GATE LIFTED (session 7): RESEARCH3 campaign-scale sweeps UNBLOCKED** — Phase 9 exit criteria met at harness scale (probe green/fenced + parity reruns green + harness merged). Parity item CLOSED session 8: eqprop seed-42 MNIST rerun bit-level matches the record. Anything touching new axis values must keep `_EXCLUDED_AXES`/pairwise fences honest via `test_axis_probe.py`.
 - [x] **Z3 pilot rung (session 9): executed honestly to an E-7 null** — prereg committed pre-run (`z3_psi_vs_finetune_steps.json`, unevaluated by design until a promoted full run); registered 100-step-window metric + probe curves + E-3 manifests live; two plumbing defects fixed (ψ integrator, soft/hard mismatch); promotion DENIED with autopsy. Z3 remains the open CP-A blocker; everything else in this file stays closed.
+- [x] **Z3 meta-training repair (session 10): E-2 rounds executed → promoted recipe found; pilot rerun POSITIVE vs null** — solver-map correction (threshold→Identity, probe-verified), feedback ψ channel with episode structure, temp anneal + entropy bonus, two-phase forced warm-up; ψ-only criterion on parity+lastsym @~107–130 steps, threshold 0.84 (censored), Δθ exact, diversity 1.42. Scope caveat recorded: random-ψ control ≈ meta-ψ → closing the meta-training differential is the next CP-A gate before the full run.
 
 ### Exit criterion status
 PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catalog unblocked end-to-end at instrumentation scale (CP-A proceeds to Z3 flagship; CP-B/C/D/E per spines). PR-3b measured-tier claims remain gated on hardware arrival.
@@ -304,6 +305,32 @@ PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catal
 ---
 
 ## Session Log & Future-Work Notes
+
+### 2026-08-26 session 10 (queue item 1: Z3 meta-training repair E-2 rounds 1–3 + queue item 2: pilot rerun) — **CP-A REPAIRED; PILOT POSITIVE**
+
+**Executed (E-2 → E-1 order held):**
+1. **Repair implemented in `z3_fixed_weights.py`** (attacks a–c from the session-9 autopsy):
+   - *Feedback ψ channel:* `forward` is now PURE — plastic state moves only via explicit `step_plasticity(loss)`: ψ ← tanh(decay·ψ + scale·proj([mean-gates ; loss])), fixed random projection (`feedback_proj`), decay=0.9 / scale=0.15. Purity also fixes two latent defects at once: probe/eval passes can no longer corrupt adaptation dynamics, and the batch-shaped-ψ wart (`_probe_accuracy` had to chunk to the training batch) is gone — ψ lives as canonical `[1, hidden]`, expanded at read. The old `psi_operator_logits` buffer was dead post-fix-1 and is deleted.
+   - *Episode structure:* `_meta_train` runs per-task episodes (episode_len consecutive batches, ψ reset at boundaries) instead of interleaving one batch per task per epoch — without this ψ has no within-task segment to summarize.
+   - *Attack b:* linear temp anneal temp_start→temp_end across controller episodes + gate-entropy bonus −β·H(g).
+   - *Attack c:* two-phase recipe — forced-operator θ warm-up (TASK_OPERATOR_MAP, warmup_lr=3e-3) → θ-frozen controller-only ST phase with fresh Adam between phases.
+   - Recipe knobs consolidated into frozen dataclass `MetaRecipe` (episode_len/feedback/entropy_beta/temp_start/temp_end/warmup_fraction/warmup_lr/adapt_temp); CLI flags added; results schema additive (`meta_recipe` echo). `with_baselines=False` skips E-10 arms for triage rounds.
+2. **Load-bearing bug found by round-1 nulls: TASK_OPERATOR_MAP was WRONG.** threshold→Threshold-op cannot work: the label is sum(values)>0 while that op's features keep only signs (linear-probe solvability: sign features ≈ chance; Identity features ≈0.99). Corrected map: parity→4, last_symbol→3, **threshold→Identity(0)**. Round-1's all-chance results (kept in `benchmark_results/z3_meta_repair/` … note: R1 JSON crashed on Path serialization after compute — logs only; fixed for later rounds) were the tell; a single-task forced-warm-up control isolated it.
+3. **Second mid-repair fix: ψ saturation.** First feedback design used raw O(1)-norm projections; tanh railed within a few steps → ψ froze as constant context → flat-at-chance adaptation curves. Decay+scale keeps the running summary responsive.
+4. **E-2 rounds** (driver `scripts/z3_meta_repair.py`, gate = seed-mean ≥0.7 on ALL tasks): R2 (post-map-fix): `full_b02`/`full_longep` pass. R3 (compose winners, meta-100): **promoted `b02_longep_wu60`** = entropy_beta 0.2, episode_len 16, warmup_fraction 0.6 → 1.000/0.988/0.808. Stopped at 3 rounds per plan.
+5. **Pilot rerun** (seeds {0,1}, adapt 240/task, GPU): flat failing-task curves diagnosed as exploration failure (solver op never sampled) → added `adapt_temp` (gating temperature during adaptation), set 2.0. Final artifact `benchmark_results/z3_pilot_rerun/`: **Δθ exact both seeds; diversity H=1.42 (null: ≤0.003); criterion reached on parity @107–112 and last_symbol @107–130; threshold 0.83–0.85, censored at budget**. Registered endpoint remains UNEVALUATED (both ψ and baseline-(a) censored on threshold).
+
+**Honest scope caveat:** random_psi control ≈ meta-trained controller (≈1.0/0.99/0.82) — the repair's mechanism is feedback-driven bandit exploration over the warmed-up trunk, not meta-learned routing. Frozen floor shows meta-training DOES install a correct threshold prior (~0.99 fresh-ψ) which sequential adaptation then erodes (final 0.84 < floor). Closing the differential = next-session queue item 1. Full autopsy + deviations (epoch-semantics change justifying meta-100; adapt_temp addition) in DECISIONS.md.
+
+**Verification:** z3-relevant suites green (`test_z3_criterion_window` 7/7, integration `test_z3_fixed_weights_runs`); pyright 0 errors on touched files (also cleared the old register_parameter typing artifact); ruff histogram vs HEAD net-improved (C901/ERA001×2/F841/SIM102 gone; operator-output shaping extracted to `_operator_feature`); CPU smoke of `evaluate_z3` green incl. θ-invariance. Full suite NOT rerun (single experiment module + new driver; per instruction to minimize redundant executions).
+
+**New work items discovered this session:**
+| Item | Detail | Suggested attack |
+|---|---|---|
+| Meta-vs-random differential ≈ 0 | Random-ψ adapts as fast as meta-trained controller; Z3 headline ("meta-training buys speed") undemonstrated even though absolute performance is strong | Queue item 1: longer controller phase / entropy curriculum / replay-style policy sharpening; verify pre-adaptation routing converges |
+| Threshold criterion censoring | Threshold plateaus ~0.84 at 240-step budget (identity found late; floor erosion from earlier task phases) | Either longer per-task budget (re-register first) or per-phase Adam reset to stop cross-task drift; check whether routing prior survives when task order varies |
+| Task-order sensitivity unquantified | Adaptation always runs parity→lastsym→threshold; shared-controller drift makes order matter (floor erosion evidence) | Randomize task order per seed in next run; report order-broken stats |
+| Round-1 artifact loss | R1 JSON write crashed (Path not serializable) AFTER compute — only stdout logs survive | Driver fixed; keep artifacts for any rerun |
 
 ### 2026-08-26 session 9 (queue item 1: Z3 pilot rung — prereg committed first; E-7 null with autopsy) — **CP-A RUNG FAILED, LOOPED BACK**
 
@@ -324,9 +351,9 @@ PR-7 green ✅ + PR-5 calibrated ✅ + PR-9 commissioned ✅ ⇒ RESEARCH3 catal
 **New work items discovered this session:**
 | Item | Detail | Suggested attack |
 |---|---|---|
-| Z3 meta-training repair | Queue item 1 above; null memo material for M-axis boundary publication if attacks stall | Loss-feedback ψ channel > temp-anneal+entropy-bonus > two-phase curriculum > task redesign |
-| `Z3Model.forward` persists batch-shaped ψ state | Any batch-size change mid-stream crashes (`expand` mismatch); worked around by chunking probe evals to the training batch | Store ψ as `[1, …]` canonical (mean or first-row), expand at read; flip consciously + rerun smoke |
-| Parity task observability | All 3 tasks share identical randn inputs; parity (order-n counting mod 2) has no first-moment signature → controller cannot condition selection on input statistics alone | Either give tasks distinguishable input distributions (design change — register first!) or make task ID enter via ψ adaptation history only, and prove it suffices |
+| Z3 meta-training repair | Queue item 1 above; null memo material for M-axis boundary publication if attacks stall | Loss-feedback ψ channel > temp-anneal+entropy-bonus > two-phase curriculum > task redesign. **→ DONE session 10** (all three composed + solver-map correction; pilot rerun positive) |
+| `Z3Model.forward` persists batch-shaped ψ state | Any batch-size change mid-stream crashes (`expand` mismatch); worked around by chunking probe evals to the training batch | Store ψ as `[1, …]` canonical (mean or first-row), expand at read; flip consciously + rerun smoke. **→ FIXED session 10** (pure forward; ψ = `[1, hidden]`; probes chunk-free) |
+| Parity task observability | All 3 tasks share identical randn inputs; parity (order-n counting mod 2) has no first-moment signature → controller cannot condition selection on input statistics alone | Either give tasks distinguishable input distributions (design change — register first!) or make task ID enter via ψ adaptation history only, and prove it suffices. **→ RESOLVED session 10**: ψ adaptation-history feedback suffices — identity acquisition works from selection-consequence memory alone |
 
 ### 2026-08-25 session 8 (queue 1–2: EqProp parity ✅, guard kill-decisions wired, Z3 smoke rung) — **CP-A ADVANCED**
 
