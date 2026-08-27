@@ -15,10 +15,9 @@ from computronium.core.registry import (
     Registry,
     register_metric,
     register_model,
-    register_optimizer,
     register_param_update,
     register_propagator,
-    register_sparsity,
+    register_hardware,
 )
 
 # Import submodules to trigger registration
@@ -166,9 +165,8 @@ __all__ = [
     "propagators",
     "register_metric",
     "register_model",
-    "register_optimizer",
     "register_param_update",
     "register_propagator",
-    "register_sparsity",
+    "register_hardware",
     "sparsity",
 ]

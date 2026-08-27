@@ -1,0 +1,17 @@
+{
+  "claim": "FastWeightPlasticity (ψ/θ decoupling) achieves superior backward transfer compared to replay buffer at matched total memory on Split-MNIST (5 binary tasks, 5 tasks, 2 classes each) under task-incremental protocol.",
+  "metric": "backward_transfer",
+  "threshold": 0.1,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-08-27",
+  "arms": {
+    "treatment": "fast_weights",
+    "control": "replay"
+  },
+  "protocol": "task_incremental",
+  "memory_matching": "replay buffer capacity matched to fast weight plastic state memory footprint",
+  "paired_structure": true,
+  "epochs_per_task": 5,
+  "batch_size": 64
+}

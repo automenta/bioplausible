@@ -6,7 +6,7 @@ from torch.optim import SGD as TorchSGD
 from torch.optim import Adam as TorchAdam
 from torch.optim import AdamW as TorchAdamW
 
-from computronium.core.registry import register_optimizer
+from computronium.core.registry import register_param_update
 
 __all__ = [
     "SGD",
@@ -15,16 +15,16 @@ __all__ = [
 ]
 
 
-@register_optimizer("sgd", family="optimizer")
+@register_param_update("sgd", family="optimizer")
 class SGD(TorchSGD):
     """SGD optimizer wrapper."""
 
 
-@register_optimizer("adam", family="optimizer")
+@register_param_update("adam", family="optimizer")
 class Adam(TorchAdam):
     """Adam optimizer wrapper."""
 
 
-@register_optimizer("adamw", family="optimizer")
+@register_param_update("adamw", family="optimizer")
 class AdamW(TorchAdamW):
     """AdamW optimizer wrapper."""

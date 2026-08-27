@@ -11,11 +11,11 @@ import torch
 from computronium.core.registry import (
     ComputeProfile,
     LocalityLevel,
-    register_sparsity,
+    register_hardware,
 )
 
 
-@register_sparsity(
+@register_hardware(
     name="TopKPruning",
     family="sparsity",
     locality_level=LocalityLevel.LOCAL,
@@ -66,7 +66,7 @@ class TopKPruning:
                 param.data.mul_(mask)
 
 
-@register_sparsity(
+@register_hardware(
     name="ActivityDrivenPruning",
     family="sparsity",
     locality_level=LocalityLevel.LOCAL,
@@ -113,7 +113,7 @@ class ActivityDrivenPruning:
                 param.data.mul_(mask)
 
 
-@register_sparsity(
+@register_hardware(
     name="RandomPruning",
     family="sparsity",
     locality_level=LocalityLevel.GLOBAL,

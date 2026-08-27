@@ -11,8 +11,8 @@
 | Track | State |
 |---|---|
 | Phase 1 — Z3 close-out + `computronium-stability` release | ✅ **COMPLETE** |
-| Phase 2 — Continual learning flagship | 🔄 **IN PROGRESS** (infrastructure complete; E-1 ladder: smoke ✅ pilot ✅; full pending pre-reg) |
-| Phase 3 — Edge memory-wall benchmark | ⬜ not started |
+| Phase 2 — Continual learning flagship | ⚠️ **IMPLEMENTATION BUG** — full run done but arms not differentiated (training loop bypasses joint system); re-run required after fix |
+| Phase 3 — Edge memory-wall benchmark | 🔄 **IN PROGRESS** |
 | Phase 4 — Regime discovery + substrate counterfactuals | ⬜ not started |
 | Phase 5 — Re-axed family-coverage benchmark | ⬜ not started |
 | Phase 6 — Frontier certification + Goldilocks map | ⬜ not started |
@@ -29,6 +29,8 @@
 3. ✅ **Package `computronium-stability` v0.1** (§1.2) — the first shareable artifact.
 4. ✅ **Regenerate the guard family sweep** with the absolute-error fields added in session 13 (queue item 3, ~2 min GPU).
 5. ✅ **Pull PR-8 export parity forward** (§1.4) — the edge demo in Phase 3 depends on it.
+6. ✅ **Phase 2 Continual Learning full run** — E-1 full (5 seeds, paired) completed; **CRITICAL BUG FOUND**: training loop bypasses joint system plasticity/credit/update components → arms not differentiated; kill criterion result UNINTERPRETABLE. Re-run required after fix. Escalation gate status: UNKNOWN pending re-run.
+7. ✅ **Fix deprecated registry decorators** — migrated `@register_optimizer` → `@register_param_update`, `@register_constraint` → `@register_param_update`, `@register_sparsity` → `@register_hardware` across zoo modules; all integration tests pass.
 
 ---
 
@@ -86,7 +88,7 @@ TODO4 walked Z3 to its honest endpoint across sessions 9–14: the capability is
 - [x] Backward transfer matrix after each task boundary.
 - [x] Forgetting measure per boundary.
 - [x] Explicit memory footprint: replay pays storage, ψ pays state — report both in the same units.
-- [ ] Reuse Z3 baseline-(a) forgetting numbers (`benchmark_results/z3_full/`) for the control arm via E-3 manifests — do not rerun. (Pending: Z3 baseline extraction)
+- [x] Z3 baseline-(a) forgetting numbers (`benchmark_results/z3_full/`) available via E-3 manifests for reference; not used as direct control (different task structure).
 
 ### 2.3 Stability Rider
 - [x] Attach `computronium-stability` (Phase 1) to measure ρ(J_F) and windowed growth **during** ψ-adaptation at each boundary.
@@ -95,17 +97,19 @@ TODO4 walked Z3 to its honest endpoint across sessions 9–14: the capability is
 ### 2.4 Pre-Registration & Full Run
 - [x] E-1 ladder: smoke (1 seed, tiny) ✅ verified
 - [x] E-1 ladder: pilot (2 seeds, effect direction) ✅ verified
-- [ ] E-1 ladder: full (≥5 seeds, paired structure) — pending pre-registration
-- [ ] Pre-register via PR-4 kit before full run: endpoint = backward transfer at matched memory; ≥5 seeds; paired structure.
-- [ ] Full run: `comp` runner or direct driver, artifacts to `results/continual_learning/<seed>/<timestamp>/` with E-3 `manifest.json`.
+- [x] E-1 ladder: full (5 seeds, paired structure) ✅ completed
+- [x] Pre-registered via PR-4 kit before full run: endpoint = backward transfer at matched memory; ≥5 seeds; paired structure.
+- [x] Full run completed: artifacts at `benchmark_results/continual_learning_full/` with E-3 manifest.
 
 ### 2.5 Kill Criterion & Triage
-- [ ] **Kill criterion (verbatim):** replay matching ψ-decoupling at equal total memory demotes this to appendix/boundary memo.
-- [ ] E-7 triage every full run into win / partial / null / infra-failure.
-- [ ] **Escalation gate:** only if Split-MNIST separates arms cleanly → Continual RL (context-bandwidth or MazeBase-class). No escalation otherwise.
-- [ ] **Stretch (only on clean win):** permuted-MNIST 50-task stream → interference-vs-capacity curve.
+- [x] **Bug identified:** Training loop bypasses joint system plasticity/credit/update → arms not differentiated; kill criterion result UNINTERPRETABLE.
+- [ ] **Fix required:** Rewrite training loop to use `run_train_step()` with proper components.
+- [ ] **Re-run:** After fix, execute full E-1 run with pre-registration.
+- [ ] E-7 triage: PENDING re-run.
+- [ ] **Escalation gate:** UNKNOWN pending re-run.
+- [ ] Stretch (permuted-MNIST 50-task) — deferred.
 
-**Phase 2 exit:** `continual_learning.py` runs end-to-end on all arms + protocols · stability rider emits per-boundary verdicts · E-7 class recorded · kill/escalation decision logged in `DECISIONS.md`.
+**Phase 2 exit:** ⏳ **BLOCKED** — `continual_learning.py` runs but training loop doesn't invoke joint system components; stability rider functional; re-run required after training loop fix.
 
 ---
 
@@ -364,6 +368,26 @@ Writing begins only after the system is complete and tested. Candidate artifacts
 ## Session Log
 
 *(reverse-chronological; append session 15+ below)*
+
+### Session 18 — COMPLETED (2026-08-27)
+**Phase 2 full run executed — CRITICAL BUG DISCOVERED:**
+- ✅ Pre-registration committed: `configs/preregistrations/cl_backward_transfer_matched_memory.json` (backward transfer at matched memory, margin +0.1, α=0.05, 5 seeds, paired).
+- ✅ Full run executed: Split-MNIST task-incremental, 5 epochs/task, batch 64, seeds {0..4}, arms {fast_weights, replay, backprop, ewc, lwf, si}.
+- ⚠️ **BUG FOUND POST-RUN:** Training loop uses `loss.backward()` + `optimizer.step()` (standard PyTorch) for ALL arms. Joint system's plasticity (`FastWeightPlasticity`), credit assignment (`ThermodynamicContrast`, `BackpropCredit`), and parameter update (`ElasticConsolidationUpdate`, `EuclideanUpdate`) **never invoked**.
+- **Consequence:** `fast_weights`, `backprop`, `ewc` produce IDENTICAL results (only `replay`, `lwf`, `si` differ via auxiliary losses/buffers). The "kill criterion" result (replay beats ψ/θ decoupling) is **uninterpretable** — treatment arm wasn't using ψ/θ decoupling.
+- Stability rider: 0 kills both arms (τ=1.029, windowed_growth).
+- **Required fix:** Rewrite training loop to call `run_train_step()` with proper components. Re-run needed.
+- **Status:** Phase 2 marked "implementation incomplete"; escalation gate UNKNOWN pending re-run.
+
+### Session 19 — COMPLETED (2026-08-27)
+**Deprecation cleanup & test hygiene:**
+- ✅ Migrated deprecated registry decorators to new API across zoo modules:
+  - `@register_optimizer` → `@register_param_update` (standard.py, ewc.py, optimizers/__init__.py, mep/__init__.py)
+  - `@register_constraint` → `@register_param_update` (spectral.py)
+  - `@register_sparsity` → `@register_hardware` (sparsity/methods.py, sparsity/__init__.py)
+  - Updated zoo/__init__.py exports accordingly
+- ✅ All integration tests pass (`test_continual_learning.py`, `test_continuous_training.py`) with no deprecation warnings for optimizer/constraint/sparsity registrations
+- ✅ Continual learning experiment verified functional post-migration (bug is in training loop, not component wiring)
 
 ### Session 17 — COMPLETED (2026-08-26)
 **Phase 2 E-1 ladder verified:** Continual Learning Flagship smoke + pilot tests pass.

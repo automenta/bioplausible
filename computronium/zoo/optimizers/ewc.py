@@ -8,14 +8,14 @@ Uses core EWC utilities for Fisher computation.
 import torch
 
 from computronium.core.ewc import update_fisher as _core_update_fisher
-from computronium.core.registry import register_optimizer
+from computronium.core.registry import register_param_update
 
 __all__ = [
     "EWC",
 ]
 
 
-@register_optimizer("ewc", family="optimizer")
+@register_param_update("ewc", family="optimizer")
 class EWC:
     """Elastic Weight Consolidation.
 

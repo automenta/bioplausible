@@ -6,14 +6,14 @@ Wraps spectral normalization as a post-step constraint.
 
 import torch
 
-from computronium.core.registry import register_constraint
+from computronium.core.registry import register_param_update
 
 __all__ = [
     "SpectralConstraint",
 ]
 
 
-@register_constraint("spectral", family="constraint")
+@register_param_update("spectral", family="constraint")
 class SpectralConstraint:
     """Spectral constraint on weights.
 

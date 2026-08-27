@@ -266,6 +266,9 @@ class ContinualJointSystem(nn.Module):
         self.num_tasks = num_tasks
         self.classes_per_task = classes_per_task
 
+        # Register geometry as submodule so .to(device) works
+        self.geometry = joint_system.geometry
+
         # Task-specific output heads (each is binary: 2 classes)
         # We use the joint system's forward and add a final projection
         self.task_heads = nn.ModuleList([
@@ -274,6 +277,24 @@ class ContinualJointSystem(nn.Module):
 
         # Current task
         self.current_task = 0
+
+    def to(self, *args, **kwargs):
+        """Override to ensure joint system components are moved to device."""
+        self = super().to(*args, **kwargs)
+        # Move joint system components that support .to()
+        device = args[0] if args else kwargs.get("device")
+        if device is not None:
+            if hasattr(self.joint_system.substrate, "to"):
+                self.joint_system.substrate.to(device)
+            if hasattr(self.joint_system.plasticity, "to"):
+                self.joint_system.plasticity.to(device)
+            if hasattr(self.joint_system.credit, "to"):
+                self.joint_system.credit.to(device)
+            if hasattr(self.joint_system.update, "to"):
+                self.joint_system.update.to(device)
+            if hasattr(self.joint_system.dynamics, "to"):
+                self.joint_system.dynamics.to(device)
+        return self
 
     def forward(self, x: Tensor, task_id: int | None = None) -> Tensor:
         """Forward pass through joint system + task head."""
@@ -706,6 +727,7 @@ class CLConfig:
     device: str = "auto"
     seed: int = 42
     protocol: str = "task_incremental"  # or "task_free"
+    num_workers: int = 0  # 0 to avoid multiprocessing resource leaks
 
 
 def run_continual_learning(
@@ -722,13 +744,13 @@ def run_continual_learning(
     # Create task loaders
     task_loaders = []
     for task_id in range(NUM_TASKS):
-        task = SplitMNIST(task_id=task_id, batch_size=config.batch_size, device=device_str)
+        task = SplitMNIST(task_id=task_id, batch_size=config.batch_size, device=device_str, num_workers=config.num_workers)
         task.setup()
         task_loaders.append(task.get_dataloader(TaskSplit.TRAIN))
 
     test_loaders = []
     for task_id in range(NUM_TASKS):
-        task = SplitMNIST(task_id=task_id, batch_size=config.batch_size, device=device_str)
+        task = SplitMNIST(task_id=task_id, batch_size=config.batch_size, device=device_str, num_workers=config.num_workers)
         task.setup()
         test_loaders.append(task.get_dataloader(TaskSplit.TEST))
 

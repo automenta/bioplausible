@@ -20,7 +20,7 @@ See NICHES.md for optimizer selection guide.
 
 from computronium.core.registry import (
     LocalityLevel,
-    register_optimizer,
+    register_param_update,
     register_propagator,
 )
 
@@ -67,7 +67,7 @@ __all__ = [
     "local_ep",
     "muon_backprop",
     "natural_ep",
-    "register_optimizer",
+    "register_param_update",
     "register_propagator",
     "sdmep",
     "smep",
