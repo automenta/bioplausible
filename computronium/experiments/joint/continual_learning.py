@@ -25,6 +25,7 @@ Metrics:
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import random
 import time
@@ -43,12 +44,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 from computronium.core.joint.transition import NullPlasticity, PlasticityConfig
-from computronium.core.joint.state import CompositeState
 from computronium.core.pipeline import run_train_step
-from computronium.core.plasticity import (
-    create_fast_weight_plasticity,
-    create_rule_state_plasticity,
-)
+from computronium.core.plasticity import create_fast_weight_plasticity
 from computronium.core.plasticity.theta_audit import ThetaInvarianceAudit
 from computronium.core.profiling import ResourceUsage, measure_suite_resources
 from computronium.core.stability import StabilityGuard, GuardDecision
@@ -72,6 +69,7 @@ SPLIT_MNIST_TASKS = [
 
 NUM_TASKS = len(SPLIT_MNIST_TASKS)
 CLASSES_PER_TASK = 2
+TOTAL_CLASSES = NUM_TASKS * CLASSES_PER_TASK  # 10
 
 
 # ============================================================
@@ -160,25 +158,25 @@ class LwFLoss(nn.Module):
             p.requires_grad_(False)
         self.prev_model.eval()
 
-    def forward(self, x: Tensor, targets: Tensor, task_id: int, current_model: nn.Module) -> Tensor:
-        """Compute loss: CE on current model + distillation from previous model.
-        
-        Args:
-            x: Input features [batch, input_dim]
-            targets: Target labels
-            task_id: Current task ID
-            current_model: Current model to compute logits from
-        """
-        # Current model logits
-        logits = current_model(x, task_id=task_id)
-        ce_loss = F.cross_entropy(logits, targets)
-        
-        if self.prev_model is None or task_id == 0:
-            return ce_loss
+    def forward(self, logits: Tensor, targets: Tensor, task_id: int, prev_logits: Tensor | None = None) -> Tensor:
+        """Compute loss: CE on current task classes + distillation from previous model.
 
-        with torch.no_grad():
-            # Previous model logits on same input
-            prev_logits = self.prev_model(x, task_id=task_id)
+        Args:
+            logits: Full 10-class logits [batch, 10]
+            targets: Target labels (0 or 1 for current task)
+            task_id: Current task ID
+            prev_logits: Previous model's full 10-class logits [batch, 10]
+        """
+        # Current task classes
+        task_start = task_id * CLASSES_PER_TASK
+        task_end = task_start + CLASSES_PER_TASK
+        task_logits = logits[:, task_start:task_end]
+        # Map targets 0/1 to 0/1 for the task's 2 classes
+        task_targets = targets % CLASSES_PER_TASK
+        ce_loss = F.cross_entropy(task_logits, task_targets)
+
+        if self.prev_model is None or task_id == 0 or prev_logits is None:
+            return ce_loss
 
         # Distillation loss on old task logits
         num_old_classes = task_id * CLASSES_PER_TASK
@@ -248,40 +246,176 @@ class SynapticIntelligence:
 
 
 # ============================================================
-# Joint System with Plasticity for Continual Learning
+# Continual Learning Training Step (Masked Loss)
+# ============================================================
+
+
+def run_continual_train_step(
+    joint_system,
+    x: Tensor,
+    y: Tensor,
+    task_id: int,
+    psi: dict[str, Tensor] | None = None,
+) -> tuple[dict[str, float], dict[str, Tensor] | None]:
+    """Execute one training step through the joint system with task-masked loss and plasticity stepping.
+
+    The joint system outputs 10-class logits. We mask the loss to only the
+    current task's 2 classes (task_id * 2 : task_id * 2 + 2).
+
+    The labels y are already 0/1 (local to the task) from SplitMNIST.
+
+    This uses the joint system's credit assignment and parameter update,
+    ensuring ψ/θ decoupling (FastWeightPlasticity) and other components
+    are actually invoked. Also steps the plasticity to update ψ.
+
+    Returns:
+        Tuple of (metrics, updated_psi)
+    """
+    # Labels are already 0/1 from SplitMNIST
+    local_y = y
+
+    # Task logit slice
+    task_start = task_id * CLASSES_PER_TASK
+    task_end = task_start + CLASSES_PER_TASK
+
+    # Get the joint system components
+    substrate = joint_system.substrate
+    geometry = joint_system.geometry
+    dynamics = joint_system.dynamics
+    credit = joint_system.credit
+    update = joint_system.update
+    plasticity = joint_system.plasticity
+
+    # Initialize plastic state if needed
+    if psi is None and hasattr(plasticity, 'initial_psi') and plasticity is not None:
+        psi = plasticity.initial_psi(joint_system.context, batch_size=x.shape[0])
+    # Ensure psi is on the same device as x and matches batch size
+    if psi is not None:
+        device = x.device
+        batch_size = x.shape[0]
+        new_psi = {}
+        for k, v in psi.items():
+            if v.shape[0] != batch_size:
+                if v.shape[0] == 1:
+                    new_psi[k] = v.expand(batch_size, -1).to(device)
+                else:
+                    new_psi[k] = v[:batch_size].to(device)
+            else:
+                new_psi[k] = v.to(device)
+        psi = new_psi
+
+    # Run the pipeline with masked target
+    from computronium.core.pipeline import forward_pass, phase_states, task_loss
+    from computronium.core.ontology import Phase, SystemState
+    from computronium.core.joint.state import CompositeState
+    from contextlib import nullcontext
+
+    grad_ctx = nullcontext() if credit.requires_autograd else torch.no_grad()
+    with grad_ctx:
+        states: dict[Phase, SystemState] = {}
+        initial_activations = forward_pass(substrate, geometry, x)
+
+        for phase in credit.phases:
+            state = SystemState(x=x, y=local_y)  # Use local_y for nudged phase
+            state.activations = initial_activations
+            target = local_y if phase is Phase.NUDGED else None
+            settled = dynamics.settle(state, geometry, substrate, target=target)
+            if phase is Phase.NUDGED:
+                # Compute loss only on task-relevant logits
+                settled.loss = _masked_task_loss(settled, local_y, task_start, task_end)
+            settled.energy = dynamics.compute_energy(settled, geometry)
+            states[phase] = settled
+
+        output = states.get(Phase.NUDGED, states.get(Phase.FREE))
+        if output is None:
+            output = SystemState(x=x, y=local_y)
+            output.activations = initial_activations
+        loss = output.loss
+        if loss is None:
+            loss = _masked_task_loss(output, local_y, task_start, task_end)
+        elif not isinstance(loss, Tensor):
+            loss = torch.as_tensor(loss)
+        if output.energy is None:
+            output.energy = dynamics.compute_energy(output, geometry)
+
+        pseudo_grads = credit.compute_pseudo_gradient(states, loss, geometry)
+        geometry.update_params(update.step(geometry.params, pseudo_grads, geometry))
+
+        # Step plasticity if present (ψ update)
+        if psi is not None and hasattr(plasticity, 'step') and plasticity is not None:
+            # Create CompositeState from settled output
+            acts = output.activations
+            if acts is not None:
+                final_acts = acts[-1] if isinstance(acts, list) else acts
+                z = CompositeState(
+                    activity={"x": x, "y": final_acts},
+                    plastic=psi,
+                    substrate={},
+                )
+                psi = plasticity.step(psi, z, joint_system.context)
+
+        loss_val = loss.item() if isinstance(loss, Tensor) else float(loss)
+        energy_val = output.energy.item() if isinstance(output.energy, Tensor) else float(output.energy) if output.energy is not None else 0.0
+        metrics = {
+            "loss": loss_val,
+            "energy": energy_val,
+            "accuracy": output.metrics.get("accuracy", 0.0),
+        }
+        metrics.update({
+            k: v
+            for k, v in output.metrics.items()
+            if isinstance(v, (int, float)) and k != "accuracy"
+        })
+        return metrics, psi
+
+
+def _masked_task_loss(state, local_y: Tensor, task_start: int, task_end: int) -> Tensor:
+    """Compute cross-entropy loss only on task-relevant logits."""
+    acts = state.activations
+    if acts is None:
+        return torch.tensor(0.0, device=local_y.device)
+    logits = acts[-1] if isinstance(acts, list) else acts  # [batch, 10]
+    task_logits = logits[:, task_start:task_end]  # [batch, 2]
+    loss = F.cross_entropy(task_logits, local_y)
+    with torch.no_grad():
+        acc = (task_logits.argmax(dim=-1) == local_y).float().mean().item()
+    state.metrics = {**state.metrics, "accuracy": acc}
+    return loss
+
+
+# ============================================================
+# Joint System Wrapper for Continual Learning
 # ============================================================
 
 
 class ContinualJointSystem(nn.Module):
-    """Joint system adapted for continual learning with task-specific heads."""
+    """Joint system adapted for continual learning with 10-class output.
 
-    def __init__(
-        self,
-        joint_system,
-        num_tasks: int = NUM_TASKS,
-        classes_per_task: int = CLASSES_PER_TASK,
-    ):
+    Uses task masking instead of task-specific heads. The joint system
+    outputs 10-class logits (matching MNIST 10 digits), and we mask
+    the loss to the current task's 2 classes.
+
+    Maintains plastic state (ψ) across training steps for ψ/θ decoupling.
+    """
+
+    def __init__(self, joint_system):
         super().__init__()
         self.joint_system = joint_system
-        self.num_tasks = num_tasks
-        self.classes_per_task = classes_per_task
+        self.num_tasks = NUM_TASKS
+        self.classes_per_task = CLASSES_PER_TASK
 
         # Register geometry as submodule so .to(device) works
         self.geometry = joint_system.geometry
 
-        # Task-specific output heads (each is binary: 2 classes)
-        # We use the joint system's forward and add a final projection
-        self.task_heads = nn.ModuleList([
-            nn.Linear(10, classes_per_task) for _ in range(num_tasks)
-        ])
-
         # Current task
         self.current_task = 0
+
+        # Plastic state (ψ) - maintained across steps for fast weights
+        self._psi: dict[str, Tensor] | None = None
 
     def to(self, *args, **kwargs):
         """Override to ensure joint system components are moved to device."""
         self = super().to(*args, **kwargs)
-        # Move joint system components that support .to()
         device = args[0] if args else kwargs.get("device")
         if device is not None:
             if hasattr(self.joint_system.substrate, "to"):
@@ -297,37 +431,85 @@ class ContinualJointSystem(nn.Module):
         return self
 
     def forward(self, x: Tensor, task_id: int | None = None) -> Tensor:
-        """Forward pass through joint system + task head."""
-        task_id = task_id if task_id is not None else self.current_task
-        features = self.joint_system.forward(x)
-        # features shape: [batch, 10] (output_dim from joint system)
-        return self.task_heads[task_id](features)
+        """Forward pass through joint system with plastic state modulation.
+
+        For FastWeightPlasticity, modulates the last hidden layer with fast weights.
+        Returns full 10-class logits.
+        """
+        # Check if we have plastic state and fast weight plasticity
+        plasticity = self.joint_system.plasticity
+        has_fast_weights = (
+            self._psi is not None
+            and "fast_weights" in self._psi
+            and hasattr(plasticity, "fast_weight_dim")
+        )
+
+        if not has_fast_weights:
+            return self.joint_system.forward(x)
+
+        # Get intermediate activations from geometry
+        substrate = self.joint_system.substrate
+        geometry = self.joint_system.geometry
+        acts = geometry.forward_with_intermediates(x, substrate)
+        # acts: [input, hidden1, hidden2, ..., output]
+
+        # Modulate last hidden layer with fast weights
+        # Last hidden is acts[-2] (before output layer)
+        if len(acts) >= 2:
+            last_hidden = acts[-2]  # [batch, hidden_dim]
+            fast_weights = self._psi["fast_weights"]  # [batch, fast_weight_dim]
+
+            # Handle batch size mismatch - resize to current batch
+            batch_size = x.shape[0]
+            if fast_weights.shape[0] != batch_size:
+                if fast_weights.shape[0] == 1:
+                    fast_weights = fast_weights.expand(batch_size, -1)
+                elif fast_weights.shape[0] > batch_size:
+                    fast_weights = fast_weights[:batch_size]
+                else:
+                    # Cannot expand smaller batch to larger - fallback to standard forward
+                    return self.joint_system.forward(x)
+
+            # Project fast weights to hidden_dim and add
+            # Need a projection layer - create if not exists
+            if not hasattr(self, "_fast_weight_proj"):
+                hidden_dim = last_hidden.shape[-1]
+                self._fast_weight_proj = nn.Linear(
+                    plasticity.fast_weight_dim, hidden_dim, bias=False
+                ).to(x.device)
+                # Initialize with small weights
+                nn.init.normal_(self._fast_weight_proj.weight, std=0.01)
+
+            modulation = self._fast_weight_proj(fast_weights)
+            modulated_hidden = last_hidden + modulation
+
+            # Apply output layer (last layer in geometry)
+            # The output layer is the last Linear layer in geometry._layers
+            output_layer = None
+            for layer in reversed(geometry._layers):
+                if isinstance(layer, nn.Linear):
+                    output_layer = layer
+                    break
+
+            if output_layer is not None:
+                logits = output_layer(modulated_hidden)
+                return logits
+
+        # Fallback to standard forward
+        return self.joint_system.forward(x)
 
     def train_step(self, x: Tensor, y: Tensor, task_id: int | None = None) -> dict[str, float]:
-        """Training step through joint system + task head."""
+        """Training step using joint system's pipeline with task-masked loss and plasticity stepping."""
         task_id = task_id if task_id is not None else self.current_task
-        features = self.joint_system.forward(x)
-        logits = self.task_heads[task_id](features)
-        loss = F.cross_entropy(logits, y)
-
-        # Backward through joint system
-        loss.backward()
-
-        # Joint system's train_step handles parameter update
-        # We need to manually call the pipeline
-        metrics = run_train_step(
-            self.joint_system.substrate,
-            self.joint_system.geometry,
-            self.joint_system.dynamics,
-            self.joint_system.credit,
-            self.joint_system.update,
-            x, y,
-        )
-        metrics["loss"] = loss.item()
+        metrics, self._psi = run_continual_train_step(self.joint_system, x, y, task_id, self._psi)
         return metrics
 
     def set_task(self, task_id: int) -> None:
         self.current_task = task_id
+
+    def reset_plastic_state(self) -> None:
+        """Reset plastic state (e.g., at task boundary for new episode)."""
+        self._psi = None
 
 
 # ============================================================
@@ -338,7 +520,7 @@ class ContinualJointSystem(nn.Module):
 def create_fast_weight_arm(
     input_dim: int = 784,
     hidden_dim: int = 256,
-    output_dim: int = 10,
+    output_dim: int = TOTAL_CLASSES,  # 10 classes
     device: str = "cpu",
 ) -> ContinualJointSystem:
     """Create FastWeightPlasticity arm (ψ/θ decoupling)."""
@@ -390,7 +572,7 @@ def create_fast_weight_arm(
 def create_ewc_arm(
     input_dim: int = 784,
     hidden_dim: int = 256,
-    output_dim: int = 10,
+    output_dim: int = TOTAL_CLASSES,
     device: str = "cpu",
     ewc_lambda: float = 1000.0,
 ) -> tuple[ContinualJointSystem, SynapticIntelligence]:
@@ -446,7 +628,7 @@ def create_ewc_arm(
 def create_backprop_arm(
     input_dim: int = 784,
     hidden_dim: int = 256,
-    output_dim: int = 10,
+    output_dim: int = TOTAL_CLASSES,
     device: str = "cpu",
 ) -> ContinualJointSystem:
     """Create Backprop+SGD control arm."""
@@ -492,7 +674,7 @@ def create_backprop_arm(
 def create_replay_arm(
     input_dim: int = 784,
     hidden_dim: int = 256,
-    output_dim: int = 10,
+    output_dim: int = TOTAL_CLASSES,
     device: str = "cpu",
     buffer_capacity: int = 5000,
 ) -> tuple[ContinualJointSystem, ReplayBuffer]:
@@ -507,7 +689,7 @@ def create_replay_arm(
 def create_lwf_arm(
     input_dim: int = 784,
     hidden_dim: int = 256,
-    output_dim: int = 10,
+    output_dim: int = TOTAL_CLASSES,
     device: str = "cpu",
 ) -> tuple[ContinualJointSystem, LwFLoss]:
     """Create LwF arm."""
@@ -519,7 +701,7 @@ def create_lwf_arm(
 def create_si_arm(
     input_dim: int = 784,
     hidden_dim: int = 256,
-    output_dim: int = 10,
+    output_dim: int = TOTAL_CLASSES,
     device: str = "cpu",
 ) -> tuple[ContinualJointSystem, SynapticIntelligence]:
     """Create Synaptic Intelligence arm."""
@@ -592,8 +774,14 @@ def compute_cl_metrics(
                 x = x.view(x.shape[0], -1).to(device)
                 y = y.to(device)
                 logits = model(x, task_id=i)
-                pred = logits.argmax(dim=1)
-                correct += (pred == y).sum().item()
+                # Mask to task-relevant classes
+                task_start = i * CLASSES_PER_TASK
+                task_end = task_start + CLASSES_PER_TASK
+                task_logits = logits[:, task_start:task_end]
+                pred = task_logits.argmax(dim=1)
+                # Map global labels to local (0/1)
+                local_y = y % CLASSES_PER_TASK
+                correct += (pred == local_y).sum().item()
                 total += y.shape[0]
         acc = correct / total if total > 0 else 0.0
         final_accs.append(acc)
@@ -648,17 +836,19 @@ def create_stability_guard(
 
 def make_transition_fn(model: nn.Module):
     """Create a simple transition function for stability checking.
-    
+
     Returns a CompositeState with activity, plastic, and substrate.
     """
-    def transition_fn(state: CompositeState, context=None):
+    def transition_fn(state, context=None):
         """Transition function that takes a CompositeState and returns CompositeState."""
         x = state.activity.get("x")
         if x is None:
+            from computronium.core.joint.state import CompositeState
             return CompositeState.empty()
         with torch.no_grad():
             y = model(x)
         # Return CompositeState: activity contains x and y, plastic is empty, substrate is empty
+        from computronium.core.joint.state import CompositeState
         return CompositeState(
             activity={"x": y, "y": y},
             plastic={},
@@ -667,8 +857,9 @@ def make_transition_fn(model: nn.Module):
     return transition_fn
 
 
-def make_composite_state(x: Tensor) -> CompositeState:
+def make_composite_state(x: Tensor):
     """Create a simple CompositeState for stability checking."""
+    from computronium.core.joint.state import CompositeState
     return CompositeState(
         activity={"x": x},
         plastic={},
@@ -681,10 +872,11 @@ def check_stability(
     transition_fn,
     x: Tensor,
     step: int,
+    context=None,
 ) -> GuardDecision:
     """Check stability at current step."""
     state = make_composite_state(x)
-    return guard(transition_fn, state, None)
+    return guard(transition_fn, state, context)
 
 
 # ============================================================
@@ -699,7 +891,7 @@ class CLConfig:
     # Model
     input_dim: int = 784
     hidden_dim: int = 256
-    output_dim: int = 10
+    output_dim: int = TOTAL_CLASSES
 
     # Training
     epochs_per_task: int = 5
@@ -755,24 +947,24 @@ def run_continual_learning(
         test_loaders.append(task.get_dataloader(TaskSplit.TEST))
 
     # Create arm
+    model: ContinualJointSystem
+    extra: dict[str, object] = {}
     if arm_name == "fast_weights":
         model = create_fast_weight_arm(config.input_dim, config.hidden_dim, config.output_dim, device_str)
-        extra = {}
     elif arm_name == "ewc":
         model, si = create_ewc_arm(config.input_dim, config.hidden_dim, config.output_dim, device_str, config.ewc_lambda)
-        extra = {"si": si}
+        extra["si"] = si
     elif arm_name == "backprop":
         model = create_backprop_arm(config.input_dim, config.hidden_dim, config.output_dim, device_str)
-        extra = {}
     elif arm_name == "replay":
         model, buffer = create_replay_arm(config.input_dim, config.hidden_dim, config.output_dim, device_str, config.replay_capacity)
-        extra = {"buffer": buffer}
+        extra["buffer"] = buffer
     elif arm_name == "lwf":
         model, lwf_loss = create_lwf_arm(config.input_dim, config.hidden_dim, config.output_dim, device_str)
-        extra = {"lwf_loss": lwf_loss}
+        extra["lwf_loss"] = lwf_loss
     elif arm_name == "si":
         model, si = create_si_arm(config.input_dim, config.hidden_dim, config.output_dim, device_str)
-        extra = {"si": si}
+        extra["si"] = si
     else:
         raise ValueError(f"Unknown arm: {arm_name}")
 
@@ -783,9 +975,8 @@ def run_continual_learning(
         window=config.stability_window,
     )
     transition_fn = make_transition_fn(model)
-
-    # Optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
+    # Get context from joint system for stability guard
+    guard_context = model.joint_system.context
 
     # Training
     accuracy_matrix = [[0.0 for _ in range(NUM_TASKS)] for _ in range(NUM_TASKS)]
@@ -798,15 +989,20 @@ def run_continual_learning(
             model.set_task(task_id)
 
             # Arm-specific setup at task boundary
-            if arm_name == "ewc" and "si" in extra:
-                extra["si"].start_task()
-            elif arm_name == "lwf" and "lwf_loss" in extra:
+            if arm_name == "fast_weights":
+                # Reset plastic state at task boundary (new episode)
+                model.reset_plastic_state()
+            elif arm_name == "ewc":
+                si = extra["si"]  # type: SynapticIntelligence
+                si.start_task()
+            elif arm_name == "lwf":
+                lwf_loss = extra["lwf_loss"]  # type: LwFLoss
                 # Save current model as previous for distillation
-                import copy
                 prev_model = copy.deepcopy(model)
-                extra["lwf_loss"].set_prev_model(prev_model)
-            elif arm_name == "si" and "si" in extra:
-                extra["si"].start_task()
+                lwf_loss.set_prev_model(prev_model)
+            elif arm_name == "si":
+                si = extra["si"]  # type: SynapticIntelligence
+                si.start_task()
 
             loader = task_loaders[task_id]
 
@@ -815,43 +1011,34 @@ def run_continual_learning(
                     x = x.view(x.shape[0], -1).to(device)
                     y = y.to(device)
 
-                    optimizer.zero_grad()
-
-                    # Forward + loss
-                    logits = model(x, task_id=task_id)
-
-                    if arm_name == "lwf" and "lwf_loss" in extra:
-                        loss = extra["lwf_loss"](x, y, task_id, model)
-                    elif arm_name == "si" and "si" in extra:
-                        loss = F.cross_entropy(logits, y) + extra["si"].regularization_loss()
-                    else:
-                        loss = F.cross_entropy(logits, y)
-
-                    loss.backward()
-                    optimizer.step()
+                    # Use joint system's train_step with task-masked loss
+                    metrics = model.train_step(x, y, task_id=task_id)
 
                     # Stability check
-                    verdict = check_stability(guard, transition_fn, x, step=epoch * len(loader) + batch_idx)
+                    verdict = check_stability(guard, transition_fn, x, step=epoch * len(loader) + batch_idx, context=guard_context)
                     stability_verdicts.append(verdict)
 
                     # Replay buffer update
-                    if arm_name == "replay" and "buffer" in extra:
-                        extra["buffer"].add(x, y, task_id)
+                    if arm_name == "replay":
+                        buffer = extra["buffer"]  # type: ReplayBuffer
+                        buffer.add(x, y, task_id)
 
                     # Replay training
-                    if arm_name == "replay" and "buffer" in extra and len(extra["buffer"]) >= config.batch_size:
-                        rx, ry, rt = extra["buffer"].sample(config.batch_size)
-                        optimizer.zero_grad()
-                        r_logits = model(rx, task_id=rt[0].item())  # Simplified: use first task's head
-                        r_loss = F.cross_entropy(r_logits, ry)
-                        r_loss.backward()
-                        optimizer.step()
+                    if arm_name == "replay" and len(extra["buffer"]) >= config.batch_size:
+                        buffer = extra["buffer"]  # type: ReplayBuffer
+                        rx, ry, rt = buffer.sample(config.batch_size)
+                        # For replay, we need to train on the replay task
+                        # Use the replay sample's task_id
+                        replay_task_id = rt[0].item()
+                        model.train_step(rx, ry, task_id=replay_task_id)
 
                 # End of task: update importance for EWC/SI
-                if arm_name == "ewc" and "si" in extra:
-                    extra["si"].update_importance()
-                elif arm_name == "si" and "si" in extra:
-                    extra["si"].update_importance()
+                if arm_name == "ewc":
+                    si = extra["si"]  # type: SynapticIntelligence
+                    si.update_importance()
+                elif arm_name == "si":
+                    si = extra["si"]  # type: SynapticIntelligence
+                    si.update_importance()
 
             # Evaluate on all tasks so far
             for eval_task_id in range(task_id + 1):
@@ -864,14 +1051,17 @@ def run_continual_learning(
                         x = x.view(x.shape[0], -1).to(device)
                         y = y.to(device)
                         logits = model(x, task_id=eval_task_id)
-                        pred = logits.argmax(dim=1)
-                        correct += (pred == y).sum().item()
+                        task_start = eval_task_id * CLASSES_PER_TASK
+                        task_end = task_start + CLASSES_PER_TASK
+                        task_logits = logits[:, task_start:task_end]
+                        pred = task_logits.argmax(dim=1)
+                        local_y = y % CLASSES_PER_TASK
+                        correct += (pred == local_y).sum().item()
                         total += y.shape[0]
                 accuracy_matrix[eval_task_id][task_id] = correct / total if total > 0 else 0.0
 
     elif protocol == "task_free":
         # No task boundaries - gradual shift (simulate by mixing tasks)
-        # For simplicity, we'll cycle through tasks
         all_loaders = [iter(task_loaders[i]) for i in range(NUM_TASKS)]
         total_batches = config.epochs_per_task * max(len(l) for l in task_loaders)
 
@@ -888,17 +1078,14 @@ def run_continual_learning(
             x = x.view(x.shape[0], -1).to(device)
             y = y.to(device)
 
-            optimizer.zero_grad()
-            logits = model(x, task_id=task_id)
-            loss = F.cross_entropy(logits, y)
-            loss.backward()
-            optimizer.step()
+            model.train_step(x, y, task_id=task_id)
 
-            verdict = check_stability(guard, transition_fn, x, step=batch_idx)
+            verdict = check_stability(guard, transition_fn, x, step=batch_idx, context=guard_context)
             stability_verdicts.append(verdict)
 
-            if arm_name == "replay" and "buffer" in extra:
-                extra["buffer"].add(x, y, task_id)  # type: ignore[attr-defined]
+            if arm_name == "replay":
+                buffer = extra["buffer"]  # type: ReplayBuffer
+                buffer.add(x, y, task_id)
 
             # Periodic evaluation
             if batch_idx % (total_batches // NUM_TASKS) == 0:
@@ -914,8 +1101,12 @@ def run_continual_learning(
                                 ex = ex.view(ex.shape[0], -1).to(device)
                                 ey = ey.to(device)
                                 elogits = model(ex, task_id=eval_task_id)
-                                epred = elogits.argmax(dim=1)
-                                correct += (epred == ey).sum().item()
+                                task_start = eval_task_id * CLASSES_PER_TASK
+                                task_end = task_start + CLASSES_PER_TASK
+                                task_logits = elogits[:, task_start:task_end]
+                                epred = task_logits.argmax(dim=1)
+                                local_ey = ey % CLASSES_PER_TASK
+                                correct += (epred == local_ey).sum().item()
                                 total += ey.shape[0]
                         accuracy_matrix[eval_task_id][eval_task] = correct / total if total > 0 else 0.0
 
@@ -961,13 +1152,13 @@ def run_continual_learning_suite(
         all_results[arm] = {}
         for protocol in protocols:
             print(f"\n=== {arm} / {protocol} ===")
-            arm_results: dict[str, object] = {"seeds": []}
+            arm_results: dict[str, list[dict[str, float | int]] | dict[str, float]] = {"seeds": []}
 
             for seed in range(seeds):
                 print(f"  Seed {seed}...")
                 config.seed = seed
                 metrics = run_continual_learning(arm, config, protocol)
-                arm_results["seeds"].append({  # type: ignore[attr-defined]
+                arm_results["seeds"].append({
                     "final_accuracies": metrics.final_accuracies,
                     "accuracy_matrix": metrics.accuracy_matrix,
                     "backward_transfer": metrics.backward_transfer,
@@ -987,7 +1178,7 @@ def run_continual_learning_suite(
             seeds_list = arm_results["seeds"]
             if seeds_list:
                 for key in ["avg_forgetting", "backward_transfer", "forward_transfer", "max_spectral_radius", "total_time_s"]:
-                    vals = [float(s[key]) for s in seeds_list]  # type: ignore[index]
+                    vals = [float(s[key]) for s in seeds_list]
                     mean_val = sum(vals) / len(vals)
                     arm_results[f"mean_{key}"] = mean_val
                     arm_results[f"std_{key}"] = (sum((v - mean_val)**2 for v in vals) / len(vals))**0.5 if len(vals) > 1 else 0.0
