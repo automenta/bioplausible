@@ -523,14 +523,18 @@ def create_fast_weight_arm(
     output_dim: int = TOTAL_CLASSES,  # 10 classes
     device: str = "cpu",
 ) -> ContinualJointSystem:
-    """Create FastWeightPlasticity arm (ψ/θ decoupling)."""
+    """Create FastWeightPlasticity arm (ψ/θ decoupling).
+
+    Uses EnergyMinimizationDynamics with ThermodynamicContrast for proper
+    free/nudged settling dynamics required by the contrastive credit assignment.
+    """
     from computronium.core.ontology import (
         CreditAssignmentConfig,
         DigitalSubstrate,
+        EnergyMinimizationDynamics,
         EuclideanUpdate,
         FeedforwardGeometry,
         GeometryConfig,
-        InstantaneousDynamics,
         ParameterUpdateConfig,
         StateDynamicsConfig,
         SubstrateConfig,
@@ -551,7 +555,9 @@ def create_fast_weight_arm(
         )
     )
 
-    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+    dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
+    )
 
     credit = ThermodynamicContrast(
         CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
@@ -576,15 +582,20 @@ def create_ewc_arm(
     device: str = "cpu",
     ewc_lambda: float = 1000.0,
 ) -> tuple[ContinualJointSystem, SynapticIntelligence]:
-    """Create ElasticConsolidationUpdate (EWC) arm."""
+    """Create ElasticConsolidationUpdate (EWC) arm.
+
+    Uses EnergyMinimizationDynamics with ThermodynamicContrast for proper
+    free/nudged settling dynamics required by the contrastive credit assignment.
+    """
+    from computronium.core.joint.transition import NullPlasticity
     from computronium.core.ontology import (
         CreditAssignmentConfig,
         DigitalSubstrate,
         ElasticConsolidationUpdate,
+        EnergyMinimizationDynamics,
         EuclideanUpdate,
         FeedforwardGeometry,
         GeometryConfig,
-        InstantaneousDynamics,
         ParameterUpdateConfig,
         StateDynamicsConfig,
         SubstrateConfig,
@@ -605,7 +616,9 @@ def create_ewc_arm(
         )
     )
 
-    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+    dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
+    )
 
     credit = ThermodynamicContrast(
         CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
