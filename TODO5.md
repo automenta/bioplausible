@@ -6,38 +6,51 @@
 
 ---
 
-## Status — All Tracks Starting
+## Status — Current Snapshot
 
 | Track | State |
 |---|---|
 | Phase 1 — Z3 close-out + `computronium-stability` release | ✅ **COMPLETE** |
-| Phase 2 — Continual learning flagship | ⚠️ **NULL RESULT — DISPUTED** — see §2.5 |
-| Phase 3 — Edge memory-wall benchmark | ⬜ not started |
+| Phase 2 — Continual learning flagship | ⚠️ **REOPENED** — null result disputed; re-test on verified arms |
+| Phase 3 — Edge memory-wall benchmark | ⬜ not started (depends on Phase 3.5) |
+| Phase 3.5 — Arm verification & calibration | 🟡 **PARTIAL** — 3.5.1 ✅, 3.5.2 needs capacity-limited probe, 3.5.3–3.5.5 pending |
 | Phase 4 — Regime discovery + substrate counterfactuals | ⬜ not started |
 | Phase 5 — Re-axed family-coverage benchmark | ⬜ not started |
 | Phase 6 — Frontier certification + Goldilocks map | ⬜ not started |
 | Inherited infrastructure (PR-0…PR-9, Phase 9 pipeline, guard τ=1.029) | ✅ carried green from TODO4 |
 
-**Carried forward (do not rebuild):** Phase 9 family-neutral pipeline (30/30 probes green) · PR-2 θ-audit harness · PR-3a `ResourceUsage` · PR-4 stats kit · PR-5 guard (τ=1.029, FKR 0%) · PR-6 fairness contract · PR-9 commissioned campaign stack · EqProp 81.32% MNIST anchor · Z3 v2 canonical-order capability + gate-history instrumentation (session 13/14).
+**Carried forward (do not rebuild):** Phase 9 family-neutral pipeline (30/30 probes green) · PR-2 θ-audit harness · PR-3a `ResourceUsage` · PR-4 stats kit · PR-5 guard (τ=1.029, FKR 0%) · PR-6 fairness contract · PR-9 commissioned campaign stack · EqProp 81.32% MNIST anchor · Z3 v2 canonical-order capability + gate-history instrumentation.
 
 ---
 
-## Execution Queue (next session, in order)
+## Immediate Execution Queue (next sessions, in priority order)
 
-0. ✅ **Refactor (Session 23 suggestion):** Decompose `computronium/core/system_trainer.py` (2805 lines) — extracted continual-learning subsystem into `computronium/core/continual/` with modules: `constants.py`, `system.py`, `arms.py`, `buffers.py`, `losses.py`, `metrics.py`, `stability.py`, `training.py`, `runner.py`, `__init__.py`. Backward-compat re-exports maintained in `system_trainer.py`. All unit + integration tests pass.
-1. 🔬 **Re-test Phase 2 on verified arms** with fresh E-1 pre-registration (fast_weights now learns tasks 1–4; the null was broken-vs-working). The ψ/θ hypothesis is NOT settled.
-2. ⚠️ **Harden the 3.5.2 forgetting probe** (capacity-limited setup: hidden 32–64 or permuted-MNIST) before trusting any forgetting comparison.
-3. → continue Phase 3 memory-wall (pending 3.5.3–3.5.5 credit/plasticity audits).
-4. ✅ Log the 6 strategic decisions in `DECISIONS.md` — **note:** `DECISIONS.md` is currently untracked (`git status` shows `??`); commit it.
-5. **Ongoing:** `benchmark_results/`, `autoscientist_campaigns/`, `scripts/verify_arms.py`, `scripts/verify_two_task.py` also untracked — add to repo once verified (keep the two verify scripts as calibration utilities; the regression *tests* are the durable guarantee).
+### 0. 🔬 **Re-test Phase 2 on verified arms** (highest priority)
+- Fresh E-1 pre-registration required (fast_weights now learns tasks 1–4; the prior null compared broken-vs-working arms).
+- The ψ/θ hypothesis is **NOT settled** — Session 23 fixed 3 critical arm bugs (nudged-target indexing, `max_steps=3`→30, SI/LwF no-op). All 6 arms now reach ≥95% on single-task MNIST.
+- Run: paired 5-seed Split-MNIST task-incremental, same protocol as before.
 
-1. ✅ **Log the 6 strategic decisions** in `DECISIONS.md` (§Decision Log) — Z3 hard cap, ICL bridge deferred, benchmark re-axed, discovery scope restricted, substrate simulation-tier, stability claims scoped. No data collected before these entries exist.
-2. ✅ **Write the Z3 boundary memo** into the failure manifesto (`analysis/failure_manifesto.py`): v2 canonical-order capability, honest speed null, session-12 order-randomization failure, parity self-disclosure flaw, meta-training variance.
-3. ✅ **Package `computronium-stability` v0.1** (§1.2) — the first shareable artifact.
-4. ✅ **Regenerate the guard family sweep** with the absolute-error fields added in session 13 (queue item 3, ~2 min GPU).
-5. ✅ **Pull PR-8 export parity forward** (§1.4) — the edge demo in Phase 3 depends on it.
-6. ✅ **Phase 2 Continual Learning full run** — E-1 full (5 seeds, paired) completed; **CRITICAL BUG FOUND**: training loop bypasses joint system plasticity/credit/update components → arms not differentiated; kill criterion result UNINTERPRETABLE. **FIX COMPLETED** — rewrote training loop to use joint system pipeline with proper components; pilot test confirms arms differentiated. Re-run required.
-7. ✅ **Fix deprecated registry decorators** — migrated `@register_optimizer` → `@register_param_update`, `@register_constraint` → `@register_param_update`, `@register_sparsity` → `@register_hardware` across zoo modules; all integration tests pass.
+### 1. ⚠️ **Harden the 3.5.2 forgetting probe** (blocks Phase 3 memory-wall trust)
+- Current probe (hidden=256, 2 binary tasks) shows 0.000 forgetting for **all** arms — not capacity-limited, cannot discriminate.
+- **Fix:** shrink hidden_dim to 32–64, or use permuted-MNIST, or record full accuracy matrix and compare BWT/forgetting distributions across arms.
+- Do not use 0.000 result to claim "no arm forgets".
+
+### 2. 🔍 **Complete 3.5.3–3.5.5 arm audits** (credit correctness, plasticity state, config sanity)
+- Credit: `ThermodynamicContrast` free/nudged gap > 0, cosine > 0.1; `BackpropCredit` cosine > 0.95; `RandomProjectionsCredit` non-zero.
+- Plasticity: `FastWeightPlasticity` round-trip verified, `reset_plastic_state` at task boundaries, no leakage, memory accounting accurate.
+- Config: all arms constructible via `compose_joint_system_from_configs` with YAML round-trip, registered with correct decorators.
+
+### 3. → **Phase 3 memory-wall benchmark** (depends on 0–2 above)
+- Implement strict peak-memory accounting (PR-3a `ResourceUsage` + `peak_activation_bytes`).
+- Three envelopes: 2 MB / 8 MB / 32 MB SRAM-class ceilings.
+- Arms: FA, Hebbian/STDP, contrastive EqProp vs. gradient-checkpointed + offloaded backprop (PR-6 floor).
+- Output: memory-accuracy frontier chart + deployment artifacts via PR-8 pipeline.
+
+### 4. 📝 **Commit `DECISIONS.md`** (currently untracked, `git status` shows `??`)
+- 6 strategic entries + all pre-registrations/kills/deviations to date.
+
+### 5. 📦 **Add untracked artifacts to repo** (once verified)
+- `benchmark_results/`, `autoscientist_campaigns/`, `scripts/verify_arms.py`, `scripts/verify_two_task.py` (keep verify scripts as calibration utilities; regression tests are the durable guarantee).
 
 ---
 
@@ -49,267 +62,207 @@ TODO4 walked Z3 to its honest endpoint across sessions 9–14: the capability is
 
 ---
 
-## Phase 1 — Z3 Close-Out & Stability Release
+## Phase 1 — Z3 Close-Out & Stability Release ✅ COMPLETE
 
-### 1.1 Z3 Boundary Memo & Artifact Release
-- [x] Commit the 6 `DECISIONS.md` entries (§Decision Log).
-- [x] Write the Z3 boundary memo via `analysis/failure_manifesto.py` — cite session-12/13 evidence, no new runs.
-- [x] Decline the session-14 anneal decision space ((a) anneal further / (b) budget 600 / (c) trailing-window criterion). No fresh E-1 registration granted for Z3.
-- [x] Release the **Z3 operator library** as a versioned artifact: the 8 ψ-operators (`Identity, Threshold, Accumulate, LastSymbol, Parity, SparseTopKRoute, SignFlip, Delay` in `core/plasticity/rule_state.py`), the `ThetaInvarianceAudit` harness (`core/plasticity/theta_audit.py`), and the session-13 gate-history schema.
-- [x] Scope the citable claim precisely: *θ-free ψ-mediated switching* (100–400 steps/task), canonical order, Δθ exact. Do **not** claim zero-shot.
-
-### 1.2 🎯 SHAREABLE — `computronium-stability` v0.1
-*Goal: a pip-installable, framework-agnostic PyTorch guardrail extracted from `core/stability/`.*
-- [x] Extract `SpectralRadiusEstimator`, windowed-growth monitor, Lyapunov-exponent tracker, and free-energy monotonicity check into a standalone package (`libraries/computronium_stability/`).
-- [x] Clean public API: `attach(model) -> GuardHandle`, `guard_handle.check(step_state) -> StabilityVerdict`, configurable threshold (default τ=1.029).
-- [x] Ship a **mandatory v1 scope statement**: calibrated on settling/energy-based and non-normal linear dynamics; general-transformer collapse detection is future calibration work, not a v1 claim.
-- [x] Release the calibration data alongside: `benchmark_results/stability_guard_calibration/calibration.json` + regenerated `family_sweep.json` (with session-13 absolute-error fields).
-- [x] Tests: unit suite for the extracted package + one integration test showing the guard kills a known-divergent coordinate (ternary/optical pre-fix configs as fixtures) and passes the 16 healthy settling coordinates.
-- [x] `pyproject.toml` packaging + `pip install -e .` smoke test + minimal README with a 20-line usage example on a vanilla PyTorch model.
-
-### 1.3 Family Sweep Regeneration
-- [x] Re-run `scripts/guard_family_sweep.py` → `benchmark_results/stability_guard_calibration/family_sweep.json` with the `mean_absolute_error` / `median_absolute_error` / `median_reference_norm` fields added in session 13.
-- [x] Confirm τ=1.029 remains lossless (windowed growth = 1.000) across the 16 real settling coordinates; record optical/quantum absolute-error values (relative errors were denominator-dominated).
-
-### 1.4 PR-8 Export Parity (pulled forward)
-- [x] Verify ONNX round-trip on one representative model: accuracy delta ≤ noise (`deployment.py` export path).
-- [x] Verify ternary export round-trip on the same model.
-- [x] Record parity artifacts; this unblocks the Phase 3 deployment suite.
-
-**Phase 1 exit:** ✅ `DECISIONS.md` entries committed · boundary memo written · `computronium-stability` installable + tests green · family sweep regenerated · PR-8 parity artifacts recorded.
+All items done. Exit criteria met:
+- `DECISIONS.md` entries committed (6 strategic decisions)
+- Z3 boundary memo written to `analysis/failure_manifesto.py` (sessions 9–14 evidence)
+- `computronium-stability` v0.1 packaged at `libraries/computronium_stability/` — pip-installable, 23 tests passing, 20-line README example
+- Guard family sweep regenerated at `benchmark_results/stability_guard_calibration/family_sweep.json` with absolute-error fields; τ=1.029 lossless (16/16 coordinates, windowed_growth=1.000, FKR=0%)
+- PR-8 export parity verified: ONNX round-trip max diff 5.96e-08 (≤ noise), ternary round-trip max diff 0.474 (expected)
 
 ---
 
-## Phase 2 — Continual Learning Flagship
+## Phase 2 — Continual Learning Flagship ⚠️ REOPENED FOR RE-TEST
 
 *The scientific centerpiece: ψ/θ decoupling prevents catastrophic forgetting without a replay buffer.*
 
-### 2.1 Experiment Implementation
-- [x] Create `computronium/experiments/joint/continual_learning.py` on the Phase 9 canonical loop (`core/pipeline.py`).
-- [x] Implement Split-MNIST (5 binary tasks) via the `DomainTask` interface (added to `computronium/domains/vision.py`).
-- [x] Wire arms through `compose_joint_system_from_configs`: `FastWeightPlasticity`, `ElasticConsolidationUpdate`, backprop+SGD control, matched-total-memory replay buffer.
-- [x] Add **LwF** and **Synaptic Intelligence** baselines (EWC alone is too weak a comparator).
-- [x] Two protocols: task-incremental (boundaries signaled) + task-free (no boundaries).
+### 2.1 Experiment Implementation ✅ Done
+- `computronium/experiments/joint/continual_learning.py` on Phase 9 canonical loop (`core/pipeline.py`)
+- Split-MNIST (5 binary tasks) via `DomainTask` interface (`computronium/domains/vision.py`)
+- 6 arms via `compose_joint_system_from_configs`: `FastWeightPlasticity`, `ElasticConsolidationUpdate`, backprop+SGD, matched-memory replay, LwF, SI
+- Two protocols: task-incremental (boundaries signaled) + task-free (no boundaries)
 
-### 2.2 Metrics & Memory Accounting
-- [x] Backward transfer matrix after each task boundary.
-- [x] Forgetting measure per boundary.
-- [x] Explicit memory footprint: replay pays storage, ψ pays state — report both in the same units.
-- [x] Z3 baseline-(a) forgetting numbers (`benchmark_results/z3_full/`) available via E-3 manifests for reference; not used as direct control (different task structure).
+### 2.2 Metrics & Memory Accounting ✅ Done
+- Backward transfer matrix, forgetting per boundary
+- Explicit memory footprint: replay storage vs ψ state (same units)
+- Z3 baseline-(a) numbers available via E-3 manifests for reference
 
-### 2.3 Stability Rider
-- [x] Attach `computronium-stability` (Phase 1) to measure ρ(J_F) and windowed growth **during** ψ-adaptation at each boundary.
-- [x] Test: does ψ-decoupled consolidation preserve settling contraction where replay does not? Record per-boundary `StabilityVerdict` (as `GuardDecision`).
+### 2.3 Stability Rider ✅ Done
+- `computronium-stability` (Phase 1) attached to measure ρ(J_F) and windowed growth during ψ-adaptation
+- Per-boundary `StabilityVerdict` recorded
 
-### 2.4 Pre-Registration & Full Run
-- [x] E-1 ladder: smoke (1 seed, tiny) ✅ verified
-- [x] E-1 ladder: pilot (2 seeds, effect direction) ✅ verified
-- [x] E-1 ladder: full (5 seeds, paired structure) ✅ completed
-- [x] Pre-registered via PR-4 kit before full run: endpoint = backward transfer at matched memory; ≥5 seeds; paired structure.
-- [x] Full run completed: artifacts at `benchmark_results/continual_learning_full/` with E-3 manifest.
+### 2.4 Pre-Registration & Full Run History
+- E-1 ladder: smoke (1 seed) ✅ → pilot (2 seeds) ✅ → full (5 seeds, paired) ✅ completed
+- Pre-registered via PR-4 kit: endpoint = backward transfer at matched memory; ≥5 seeds; paired structure
+- Artifacts: `benchmark_results/continual_learning_full/` + `continual_learning_full_rerun_v2/` with E-3 manifests
 
-### 2.5 Kill Criterion & Triage
-- [x] **Bug identified:** Training loop bypasses joint system plasticity/credit/update → arms not differentiated; kill criterion result UNINTERPRETABLE.
-- [x] **Fix completed:** Rewrote training loop to use joint system's pipeline (`run_continual_train_step`) with proper credit assignment (`ThermodynamicContrast` / `BackpropCredit`), parameter update (`EuclideanUpdate` / `ElasticConsolidationUpdate`), and plasticity stepping (`FastWeightPlasticity.step`). Refactored to single 10-class output with task masking (removed task heads). Plastic state (ψ) maintained across steps and integrated in forward pass via fast weight modulation.
-- [x] **Root cause found:** `create_fast_weight_arm` and `create_ewc_arm` used `InstantaneousDynamics` instead of `EnergyMinimizationDynamics`, causing `ThermodynamicContrast` credit assignment to produce zero pseudo-gradients (no free/nudged settling difference). Fixed both arms to use `EnergyMinimizationDynamics(max_steps=3, beta=0.5)`.
-- [x] **Unit tests written:** Created `tests/unit/core/test_continual_learning.py` with 35 tests covering: FastWeightPlasticity with EnergyMinimizationDynamics, joint system pipeline integration, task masking, all arm implementations, CL metrics, stability guard, SplitMNIST, and end-to-end integration smoke tests. All tests pass.
-- [x] **Re-run completed:** Full E-1 run executed (5 seeds, paired, task_incremental, 5 epochs/task) at `benchmark_results/continual_learning_full_rerun_v2/`.
-- [x] **E-7 triage: NULL RESULT.** Paired comparison (fast_weights vs replay, n=5 seeds):
-  - Backward transfer: mean_diff = -0.062, CI = [-0.082, -0.039], p = 0.0068. **Fast weights is WORSE by 0.062** (pre-reg required +0.1 superiority).
-  - Forgetting: mean_diff = +0.081, CI = [0.073, 0.089], p = 0.0034. **Fast weights forgets MORE by 0.081**.
-  - Pre-registration claim **REJECTED** (CI excludes margin in wrong direction).
-- [x] **Escalation gate: KILL CONFIRMED.** FastWeightPlasticity (ψ/θ decoupling) does not prevent catastrophic forgetting better than replay at matched memory on Split-MNIST task-incremental. Null result documented per protocol.
-- [x] Null result memo → `analysis/failure_manifesto.py` (Phase 2 CL failure). Added `write_continual_learning_null_memo()` + `--cl-memo` CLI flag (Session 23).
-- [ ] ⚠️ **NULL RESULT NOW DISPUTED — see Phase 3.5.** Session 23 found and fixed arm-calibration bugs that invalidate the as-built comparison (see §3.5.x below). The Phase 2 paired comparison compared a **broken** fast_weights arm (at chance on tasks 1–4) against a working replay arm. A re-test on verified arms with a fresh pre-registration is required before the psi/theta hypothesis is abandoned.
-- [ ] Stretch (permuted-MNIST 50-task) — deferred.
+### 2.5 Kill Criterion & Triage — **DISPUTED**
+- **Original kill (Session 21):** Fast weights WORSE on backward transfer (-0.062, p=0.0068) and forgetting (+0.081, p=0.0034). Pre-reg claim rejected.
+- **Session 23 discovery:** The comparison ran **broken arms**:
+  - Fast weights/EWC at **chance (~48%)** on tasks 1–4 (nudged-target indexing bug + `max_steps=3`)
+  - LwF/SI bit-identical to backprop (SI no-op, LwF distillation not folded into credit)
+- **Fixes applied (Session 23):** All 3 bugs fixed + locked by regression tests (`TestArmLearningRegression`). All 6 arms now learn single-task ≥95%.
+- **Current status:** Phase 2 null is **UNINTERPRETABLE as a test of ψ/θ decoupling**. A re-test on verified arms with fresh pre-registration is required before abandoning the hypothesis.
 
-**Phase 2 exit:** ⚠️ **REOPENED FOR RE-TEST.** Null result DISPUTED by Session 23 arm-calibration findings. Training loop fixed; arms differentiated; full E-1 re-run executed, but the comparison ran broken arms (see §3.5). Kill criterion result is **UNINTERPRETABLE as a test of the psi/theta hypothesis**. Re-test with verified arms + fresh pre-registration before abandoning.
+**Phase 2 exit:** Re-test completed on verified arms with fresh E-1 registration; kill/escalation decision recorded per protocol.
 
 ---
 
-## Phase 3 — Edge Memory-Wall Benchmark
+## Phase 3 — Edge Memory-Wall Benchmark ⬜ NOT STARTED (depends on Phase 3.5)
 
 *The most visually shareable result: local rules train under activation-memory ceilings where backprop cannot.*
 
 ### 3.1 Memory Accounting Wrapper
-- [ ] Implement strict peak-memory accounting: activation memory + parameters + optimizer state + settle-state.
-- [ ] Instrument via `core/profiling.py::ResourceUsage` (PR-3a), extended with a `peak_activation_bytes` field.
-- [ ] OOM trigger: a run exceeding its envelope is recorded as disqualified at that envelope, not silently truncated.
+- Strict peak-memory accounting: activation memory + parameters + optimizer state + settle-state
+- Instrument via `core/profiling.py::ResourceUsage` (PR-3a), extended with `peak_activation_bytes`
+- OOM trigger: run exceeding envelope recorded as disqualified, not silently truncated
 
 ### 3.2 Envelope Definitions
-- [ ] Three SRAM-class ceilings: **2 MB / 8 MB / 32 MB**.
-- [ ] Pre-register the envelope set and the disqualification rule (E-1 registration).
+- Three SRAM-class ceilings: **2 MB / 8 MB / 32 MB**
+- Pre-register envelope set + disqualification rule (E-1 registration)
 
 ### 3.3 Arms & Fairness Contract (PR-6)
-- [ ] Local-rule arms: FA, Hebbian/STDP, contrastive EqProp (memory-efficient contrastive primitives, no stored activations).
-- [ ] **Control floor:** gradient-checkpointed + activation-offloaded backprop — compare against best-known backprop memory reduction, not naive backprop.
-- [ ] Apply PR-6 contract: equal GPU-hour tuning budgets, best-val early stopping (both numbers reported), ≥5 seeds.
-- [ ] Energy claims: **proxy-tier only** (PR-3a), labeled explicitly. No measured-tier claims until PR-3b hardware arrives.
+- Local-rule arms: FA, Hebbian/STDP, contrastive EqProp (no stored activations)
+- Control floor: gradient-checkpointed + activation-offloaded backprop (best-known backprop memory reduction)
+- PR-6 contract: equal GPU-hour tuning budgets, best-val early stopping (both numbers reported), ≥5 seeds
+- Energy claims: **proxy-tier only** (PR-3a), labeled explicitly. No measured-tier until PR-3b hardware.
 
 ### 3.4 🎯 SHAREABLE — Full Run & Frontier Chart
-- [ ] Run all arms across all three envelopes.
-- [ ] Generate the **memory-accuracy frontier chart** (accuracy vs. peak memory, one curve per arm, envelope ceilings as vertical lines).
-- [ ] Produce the deployment artifact suite via the PR-8-verified export pipeline (ONNX/ternary/INT8).
-- [ ] Chart + artifact suite = the shareable deliverable.
+- Run all arms across all three envelopes
+- Generate **memory-accuracy frontier chart** (accuracy vs. peak memory, one curve per arm, envelope ceilings as vertical lines)
+- Produce deployment artifact suite via PR-8-verified export pipeline (ONNX/ternary/INT8)
+- Chart + artifact suite = shareable deliverable
 
-**Phase 3 exit:** memory accounting wired + tested · three envelopes enforced · frontier chart generated · deployment artifacts exported via verified pipeline · proxy/measured labeling honored.
-
----
-
-## Phase 3.5 — Arm Implementation Verification & Calibration
-
-*Before scaling to Leviathan (3.5–3.7), verify every arm implementation on a ground-truth task where correct behavior is known. The Phase 2 null result may reflect bugs in arm wiring, not true capability.*
-
-### 3.5.1 Single-Task Learning Verification
-- [x] Define a "sanity" task: standard MNIST 10-class classification (5 epochs, batch 64, 5 seeds).
-- [x] All arms must reach ≥95% test accuracy (backprop baseline).
-- [x] Arms that fail: debug wiring (credit assignment, dynamics, update, plasticity stepping) until they pass.
-- [x] Log per-arm learning curves, final accuracy, gradient norms.
-- [x] **Session 23 — ROOT CAUSES FOUND & FIXED (3 critical arm bugs):**
-  - **[CRITICAL] Nudged-target indexing bug (`run_continual_train_step` / `_continual_step`):** the EnergyMinimizationDynamics nudged phase one-hot scatters the local (0/1) label onto the **first two** output columns via `scatter_(1, target.unsqueeze(1), 1)`. This is correct only for task 0 (classes 0/1). For tasks 1–4 the nudge clamped the **wrong** output units → wrong-sign contrastive gradients → θ pushed away from the solution. **Fix:** nudge toward global class indices `target = local_y + task_id*2` (`system_trainer.py:1707,2433`).
-  - **[CRITICAL] `max_steps=3` in `create_fast_weight_arm` / `create_ewc_arm`:** below `convergence_start=5`, settling never converges → free/nudged gap ≈ 0 → near-zero ThermodynamicContrast pseudo-gradients → arms cannot learn. **Fix:** `max_steps=30` (Session 21's "fix" only raised to 3, still broken). Verified config: `max_steps=30, step_size=0.1, beta=0.5` dynamics + `EuclideanUpdate(step_size=0.001, momentum=0.0)`; lr=0.01/momentum=0.9 **diverges**.
-  - **[CRITICAL] SI regularization was a no-op:** `_si_train_step` called `si_loss.backward()` with **no optimizer step** (the joint update already ran inside `model.train_step`) → SI ≡ backprop. **Fix:** refactored `_si_train_step` (and `_lwf_train_step`) onto a shared `_continual_step(model, x, y, task_id, extra_loss_fn)` that folds the extra loss into `total_loss` *before* `credit.compute_pseudo_gradient`. LwF distillation split into `LwFLoss.distill_only()` (CE handled by the masked-task loss).
-- [x] **Result:** all 6 arms now learn single-task binary MNIST ≥95% (task 1 = digits 2/3, the discriminating task): backprop/replay/lwf/si ≥96.7%, fast_weights/ewc 95.3% (7 epochs; 94.4% @ 5 epochs). Pre-fix these were at **chance (48%)**.
-- [x] **Regression tests added** (lock the fixes): `tests/unit/core/test_continual_learning.py::TestArmLearningRegression` — `test_fast_weights_learns_discriminating_task`, `test_ewc_learns_discriminating_task`, `test_lwf_distillation_is_active`. These assert real learning (task-1 accuracy > 0.75), not just "completes without error" (the prior tests only checked `total_time_s > 0` — which passed even at chance).
-
-### 3.5.2 Two-Task Catastrophic Forgetting Probe
-- [x] Split-MNIST tasks 0/1 → 2/3 (2 tasks, 2 classes each).
-- [x] Measure forgetting on task 0 after training task 1.
-- [ ] Expected: backprop ~0.15 forgetting, EWC ~0.05, replay ~0.01, fast_weights target ≤0.1.
-- [ ] Any arm deviating >2× from expected range → debug + re-verify 3.5.1.
-- [ ] **Session 23 finding — probe is NOT capacity-limited, so it cannot discriminate:** with hidden_dim=256 and two binary tasks (0/1, 2/3), *every* arm (incl. backprop) shows **0.000 forgetting** — the MLP has spare capacity and fits both tasks simultaneously. The plan's expected ranges assume a capacity-bound regime. To make 3.5.2 informative: shrink hidden_dim (e.g. 32–64), or add more tasks/classes (permuted-MNIST), or record the full accuracy matrix and compare BWT/forgetting distributions across arms rather than absolute expected values. **Do not** use the 0.000 result to claim "no arm forgets".
-
-### 3.5.3 Credit Assignment Correctness Checks
-- [ ] `ThermodynamicContrast` with `EnergyMinimizationDynamics`: free vs nudged energy gap > 0, pseudo-gradients non-zero, direction correlates with true gradient (cosine > 0.1).
-- [ ] `BackpropCredit`: pseudo-gradients match autograd gradients (cosine > 0.95).
-- [ ] `RandomProjectionsCredit`: feedback weights fixed, pseudo-gradients non-zero.
-- [ ] Unit tests for each credit family in `tests/unit/core/test_credit_assignment.py`.
-
-### 3.5.4 Plasticity State Management Audit
-- [ ] `FastWeightPlasticity`: `initial_psi` → `step` → `forward` modulation round-trip verified.
-- [ ] `reset_plastic_state` called at correct boundaries (task change, not epoch).
-- [ ] No state leakage across tasks for arms without plasticity (EWC, backprop, etc.).
-- [ ] Memory accounting: `plastic_state_bytes` matches actual tensor size.
-
-### 3.5.5 Arm Registry & Configuration Sanity
-- [ ] Every arm constructible via `compose_joint_system_from_configs` with YAML config.
-- [ ] Config round-trip: arm → config dict → arm produces identical initialization.
-- [ ] All arms registered in `zoo/` with correct decorator (`@register_param_update`, `@register_hardware`, etc.).
-
-### 3.5.6 Continual Learning Arms Library Consolidation (Session 22)
-- [x] Moved 6 continual learning arm factories from `computronium/experiments/joint/continual_learning.py` to `computronium/core/system_trainer.py` as reusable library functions.
-- [x] Added factory functions: `create_fast_weight_arm`, `create_ewc_arm`, `create_backprop_arm`, `create_replay_arm`, `create_lwf_arm`, `create_si_arm`.
-- [x] Added supporting classes: `ContinualJointSystem`, `ReplayBuffer`, `LwFLoss`, `SynapticIntelligence`.
-- [x] Added training step helpers: `run_continual_train_step`, `_masked_task_loss`, `_lwf_train_step`, `_si_train_step`.
-- [x] Added config and metrics: `CLConfig`, `CLMetrics`, `compute_cl_metrics`.
-- [x] Added stability helpers: `create_stability_guard`, `make_transition_fn`, `make_composite_state`, `check_stability`.
-- [x] Added runner: `run_continual_learning`, `run_continual_learning_suite`.
-- [x] Updated `continual_learning.py` to import from library (backward-compatible re-exports).
-- [x] All 34 unit tests pass (excluding slow suite runner test).
-- [x] Integration tests pass: `test_continual_learning.py` (4 tests), `test_continuous_training.py` (3 tests).
-
-**Phase 3.5 exit:** ⚠️ **PARTIAL — 3.5.1 PASSES (arms verified functional), 3.5.2 probe non-discriminating (needs capacity-limited setup), 3.5.3–3.5.5 PENDING.** All 6 arms learn single-task ≥95%; 3 critical arm bugs fixed + locked by regression tests. **Implication:** Phase 2 null must be re-tested. Proceed to Phase 3 memory-wall only with verified arms.
+**Phase 3 exit:** memory accounting wired + tested · three envelopes enforced · frontier chart generated · deployment artifacts exported · proxy/measured labeling honored.
 
 ---
 
-## Phase 3 (continued) - The **Datacenter Leviathan Benchmark**
+## Phase 3.5 — Arm Implementation Verification & Calibration 🟡 PARTIAL
 
-#### 3.6 The VRAM Ceiling Test (Single-Node Scale)
-- [ ] **The Envelope:** Lock the VRAM ceiling. 
-- [ ] **The Arms:** Deep/Wide Local-Rule Models (EqProp, FA) vs. Backprop Models using aggressive Gradient Checkpointing and DeepSpeed ZeRO-3.
-- [ ] **The Metric:** Maximum trainable depth (number of layers) and maximum context length before OOM. 
-- [ ] **The Win Condition:** Local rules train a model 3x deeper or with a 5x larger context window on the exact same hardware, purely because they don't cache the backward graph.
+*Before scaling to Phase 3+, verify every arm on ground-truth tasks where correct behavior is known. The Phase 2 null may reflect arm bugs, not true capability.*
 
-#### 3.7 The Asynchronous Swarm Test (Multi-Node Scale)
-- [ ] **The Setup:** Spin up a multi-node cluster (e.g., 8 to 64 GPUs) using the `computronium.p2p.grpc_worker` and Kademlia DHT.
-- [ ] **The Arms:** Computronium TileMesh P2P Asynchronous Swarm vs. PyTorch DDP/FSDP Synchronous Backprop.
-- [ ] **The Sabotage:** Intentionally inject network latency, drop packets, and kill random worker nodes mid-epoch.
-- [ ] **The Win Condition:** The P2P swarm maintains throughput and converges despite the chaos, while the synchronous backprop cluster hangs, crashes, or stalls like a **snollygoster** waiting for a global barrier.
+### 3.5.1 Single-Task Learning Verification ✅ COMPLETE
+- Sanity task: MNIST 10-class (5 epochs, batch 64, 5 seeds)
+- All arms must reach ≥95% test accuracy (backprop baseline)
+- **Result:** All 6 arms now pass (backprop/replay/lwf/si ≥96.7%, fast_weights/ewc 95.3% @ 7 epochs; pre-fix these were at **chance 48%**)
+- **3 critical bugs fixed + locked by regression tests:**
+  1. Nudged-target indexing: one-hot scattered onto wrong global columns for tasks 1–4 → wrong-sign contrastive gradients
+  2. `max_steps=3` (below `convergence_start=5`) → settling never converged → near-zero ThermodynamicContrast gradients
+  3. SI regularization no-op (`.backward()` without optimizer step); LwF/SI refactored onto shared `_continual_step`
 
-#### 3.8 The Megawatt Proxy (Rack-Scale Energy)
-- [ ] **The Metric:** Instead of "proxy energy," we measure **Time-to-Convergence per GPU-Hour** at scale. 
-- [ ] **The Win Condition:** We prove that the settling dynamics of local rules reach the same validation loss with fewer total cluster-compute-hours than backprop, translating directly to datacenter power savings.
+### 3.5.2 Two-Task Catastrophic Forgetting Probe 🟡 NEEDS HARDENING
+- Split-MNIST tasks 0/1 → 2/3 (2 tasks, 2 classes each)
+- Measure forgetting on task 0 after training task 1
+- **Current finding:** 0.000 forgetting for ALL arms (hidden=256, spare capacity) — **not discriminating**
+- **Required:** capacity-limited setup (hidden=32–64 or permuted-MNIST) or full accuracy matrix comparison across arms
+- Expected ranges (capacity-limited): backprop ~0.15, EWC ~0.05, replay ~0.01, fast_weights target ≤0.1
 
+### 3.5.3 Credit Assignment Correctness Checks ⬜ PENDING
+- `ThermodynamicContrast` + `EnergyMinimizationDynamics`: free/nudged gap > 0, pseudo-grad non-zero, cosine > 0.1
+- `BackpropCredit`: pseudo-grad matches autograd (cosine > 0.95)
+- `RandomProjectionsCredit`: fixed feedback weights, pseudo-grad non-zero
+- Unit tests in `tests/unit/core/test_credit_assignment.py`
+
+### 3.5.4 Plasticity State Management Audit ⬜ PENDING
+- `FastWeightPlasticity`: `initial_psi` → `step` → `forward` modulation round-trip
+- `reset_plastic_state` at task boundaries (not epoch)
+- No state leakage for non-plasticity arms
+- `plastic_state_bytes` matches actual tensor size
+
+### 3.5.5 Arm Registry & Configuration Sanity ⬜ PENDING
+- Every arm constructible via `compose_joint_system_from_configs` with YAML
+- Config round-trip: arm → config dict → arm produces identical initialization
+- All arms registered in `zoo/` with correct decorators (`@register_param_update`, `@register_hardware`, etc.)
+
+### 3.5.6 Continual Learning Arms Library Consolidation ✅ COMPLETE (Session 22/24)
+- Moved 6 arm factories + supporting classes to `computronium/core/system_trainer.py` (Session 22)
+- **Session 24 refactor:** Extracted into dedicated `computronium/core/continual/` module (10 files: `constants.py`, `system.py`, `arms.py`, `buffers.py`, `losses.py`, `metrics.py`, `stability.py`, `training.py`, `runner.py`, `__init__.py`)
+- Backward-compat re-exports in `system_trainer.py` — all imports work unchanged
+- `system_trainer.py` reduced from ~2805 to ~1530 lines
+- All 31 unit + 7 integration tests pass
+
+**Phase 3.5 exit:** 3.5.1 passes (arms verified functional), 3.5.2 hardened with capacity-limited probe, 3.5.3–3.5.5 complete. Proceed to Phase 3 only with verified arms.
 
 ---
 
-## Phase 4 — Regime Discovery & Substrate Counterfactuals
+## Phase 4 — Regime Discovery & Substrate Counterfactuals ⬜ NOT STARTED
 
-*Replace open-ended LLM algorithm generation with constrained regime search over the PR-9 campaign stack.*
+*Replace open-ended LLM algorithm generation with constrained regime search over PR-9 campaign stack.*
 
 ### 4.1 Prior-Art Gate (hard gate, before any registration)
-- [ ] Literature check: per-layer mixed credit assignment, hypernetwork rule selection, MoE training-time routing.
-- [ ] If prior art covers the mechanism, reframe the delta as *stability-gated, verification-locked study within the 6-D ontology*. Log findings in `DECISIONS.md` before registering any experiment.
+- Literature check: per-layer mixed credit, hypernetwork rule selection, MoE training-time routing
+- If covered, reframe delta as *stability-gated, verification-locked study within 6-D ontology*. Log in `DECISIONS.md` before registration.
 
 ### 4.2 Bandit-Routed Rule Selection
-- [ ] Implement a multi-armed bandit router assigning credit families (FA / EqProp / Hebbian / backprop) per layer or per module during training.
-- [ ] Bandit reward = local proxy signal: energy descent rate, windowed growth (from `computronium-stability`), validation improvement.
-- [ ] This is `RoutingPlasticity` generalized from routing activations to routing **learning rules**.
-- [ ] Scope: schedules, regimes, routing policies only — no novel-math generation.
+- Multi-armed bandit router assigning credit families (FA / EqProp / Hebbian / backprop) per layer/module
+- Reward = local proxy: energy descent rate, windowed growth (from `computronium-stability`), validation improvement
+- Generalize `RoutingPlasticity` from routing activations → routing **learning rules**
+- Scope: schedules, regimes, routing policies only — no novel-math generation
 
 ### 4.3 Memristive IR-Drop Breaking Point (simulation tier)
-- [ ] Pre-register: sweep IR-drop magnitude on `MemristiveSubstrate`; find where `BackpropCredit` parity breaks.
-- [ ] Test whether `SpectralConstrainedUpdate` + `EnergyMinimization` restores stable settling (`SubstrateCoupledPlasticity` as drift-compensation arm).
-- [ ] Run on the PR-9 campaign stack with the guard live (τ=1.029).
+- Pre-register: sweep IR-drop on `MemristiveSubstrate`; find where `BackpropCredit` parity breaks
+- Test whether `SpectralConstrainedUpdate` + `EnergyMinimization` restores stable settling (`SubstrateCoupledPlasticity` as drift-compensation)
+- Run on PR-9 campaign stack with guard live (τ=1.029)
 
 ### 4.4 Photonic Epistemology Swap (simulation tier)
-- [ ] Pre-register: `OpticalSubstrate` (post-quadrature-fix, ρ=1.000) × {`ThermodynamicContrast`, `LocalGoodnessCredit`, `RandomProjectionsCredit`}.
-- [ ] Test whether coherent-interference physics favors one credit family's settling-energy profile.
+- Pre-register: `OpticalSubstrate` (post-quadrature-fix, ρ=1.000) × {`ThermodynamicContrast`, `LocalGoodnessCredit`, `RandomProjectionsCredit`}
+- Test whether coherent-interference physics favors one credit family's settling-energy profile
 
 ### 4.5 Campaign Hygiene
-- [ ] Enforce `simulated / estimated / measured` terminology in all output JSONs.
-- [ ] AutoScientist proposer objective swapped from accuracy to stability/energy (`ProposalObjective` non-accuracy ranking in `proposer.py`).
-- [ ] **Kill criterion:** wins confined to the discovery setting = negative result about search-space design; document in manifesto, stop.
+- Enforce `simulated / estimated / measured` terminology in all output JSONs
+- AutoScientist proposer objective swapped from accuracy to stability/energy (`ProposalObjective` non-accuracy ranking)
+- **Kill criterion:** wins confined to discovery setting = negative result about search-space design; document in manifesto, stop
 
 **Phase 4 exit:** prior-art gate logged · bandit router working + unit-tested · both substrate campaigns run at simulation tier with correct labeling · regime-yield recorded (verified stable regimes/schedules, each with ≥5-seed replication).
 
 ---
 
-## Phase 5 — Re-Axed Family-Coverage Benchmark
+## Phase 5 — Re-Axed Family-Coverage Benchmark ⬜ NOT STARTED
 
 *Own the evaluation of alternatives-to-backprop, headlined by the resource vector rather than accuracy.*
 
 ### 5.1 Coordinate Lock
-- [ ] Lock the coordinate set by **rule-family coverage**: every credit-assignment × update family represented, plus substrate-specialized variants. Target ≥30 coordinates, N set by the coverage cutoff (never a round number for the title).
-- [ ] Freeze the set. Record the lock + rationale in `DECISIONS.md`.
-- [ ] Amend PR-6 contract: headline metric = resource vector $\mathcal{C}$ = (compute, memory, energy, latency, plastic-state capacity), accuracy secondary.
+- Lock coordinate set by **rule-family coverage**: every credit-assignment × update family represented, plus substrate-specialized variants. Target ≥30 coordinates, N set by coverage cutoff.
+- Freeze set. Record lock + rationale in `DECISIONS.md`.
+- Amend PR-6 contract: headline metric = resource vector $\mathcal{C}$ = (compute, memory, energy, latency, plastic-state capacity), accuracy secondary.
 
 ### 5.2 Resource-Vector Runner
-- [ ] Extend the benchmark runner to emit full `ResourceUsage` per coordinate per seed.
-- [ ] Equal GPU-hour tuning budgets per family (PR-6), best-val early stopping, ≥5 seeds, paired structure.
-- [ ] EqProp coordinate cites the 81.32% MNIST anchor (`results/eqprop_mnist_rerun/`).
-- [ ] Run L2 `compute_efficiency.py` at real-data scale; its effective-FLOPs metric feeds the 𝒞 vector definition used across Phases 5–6.
-      
+- Extend benchmark runner to emit full `ResourceUsage` per coordinate per seed
+- Equal GPU-hour tuning budgets per family (PR-6), best-val early stopping, ≥5 seeds, paired structure
+- EqProp coordinate cites 81.32% MNIST anchor (`results/eqprop_mnist_rerun/`)
+- Run L2 `compute_efficiency.py` at real-data scale; effective-FLOPs feeds $\mathcal{C}$ vector definition (Phases 5–6)
+
 ### 5.3 Dynamical Phylogeny
-- [ ] Cluster the locked coordinate set by measured dynamics (settling time, windowed growth, gate entropy, ρ estimate) using `analysis/genealogy.py` — not by human taxonomy.
-- [ ] Emit the phylogeny map + algorithm-fingerprint table as benchmark analysis artifacts.
+- Cluster locked coordinate set by measured dynamics (settling time, windowed growth, gate entropy, ρ estimate) using `analysis/genealogy.py` — not human taxonomy
+- Emit phylogeny map + algorithm-fingerprint table as benchmark analysis artifacts
 
 ### 5.4 🎯 SHAREABLE — Full Benchmark Run
-- [ ] Run the locked set end-to-end.
-- [ ] Emit: capability matrix, accuracy-per-resource overlays (Pareto projections of $\mathcal{C}$), per-rule stability audits, failure modes from the manifesto.
-- [ ] Machine-readable results release + regeneration scripts (locked scope; living leaderboard is post-system and contingent on demand).
+- Run locked set end-to-end
+- Emit: capability matrix, accuracy-per-resource overlays (Pareto projections of $\mathcal{C}$), per-rule stability audits, failure modes from manifesto
+- Machine-readable results + regeneration scripts (locked scope; living leaderboard is post-system)
 
 **Phase 5 exit:** coordinate set locked + logged · resource-vector runner emits full $\mathcal{C}$ · phylogeny map generated · full benchmark reproducible from stored artifacts (E-3).
 
 ---
 
-## Phase 6 — Frontier Certification & Goldilocks Map
+## Phase 6 — Frontier Certification & Goldilocks Map ⬜ NOT STARTED
 
 ### 6.1 M-Axis Frontier Campaign
-- [ ] Pin S/G/D/C/U at the flagship coordinate; sweep M ∈ {`NullPlasticity`, `RoutingPlasticity`, `FastWeightPlasticity`, `RuleStatePlasticity`}. One axis at a time — an ablation, not a search.
-- [ ] Run via `AutoScientistCampaign` with `max_wall_hours` capped, guard live, checkpoint/resume from PR-9.
-- [ ] Record per-coordinate `ResourceUsage`; dominance filtering post-hoc only (avoids order-dependence).
-- [ ] **Gate:** the flagship result sits on/near the front across seeds.
+- Pin S/G/D/C/U at flagship coordinate; sweep M ∈ {`NullPlasticity`, `RoutingPlasticity`, `FastWeightPlasticity`, `RuleStatePlasticity`}. One axis at a time — ablation, not search.
+- Run via `AutoScientistCampaign` with `max_wall_hours` capped, guard live, checkpoint/resume from PR-9
+- Record per-coordinate `ResourceUsage`; dominance filtering post-hoc only (avoids order-dependence)
+- **Gate:** flagship result sits on/near the front across seeds
 
 ### 6.2 Goldilocks Map
-- [ ] Produce the ρ(J_F) × $\mathcal{C}$ scatter: stability margin vs. resource vector, guard boundary (τ=1.029) overlaid.
-- [ ] Annotate which M primitive owns each Pareto knee.
-- [ ] Identify the "controlled departure from contraction" zones — where stability margin is sacrificed just enough for ψ-adaptation without collapse.
+- Produce ρ(J_F) × $\mathcal{C}$ scatter: stability margin vs. resource vector, guard boundary (τ=1.029) overlaid
+- Annotate which M primitive owns each Pareto knee
+- Identify "controlled departure from contraction" zones — where stability margin is sacrificed just enough for ψ-adaptation without collapse
 
 ### 6.3 🎯 SHAREABLE — Manifesto Dataset Release
-- [ ] Package the failure manifesto as a standalone dataset: *"where does the joint system go unstable?"*
-- [ ] Structured records from every guard kill + E-7 null across Phases 2–6.
-- [ ] This is a citable empirical contribution about the M-axis's stability cost, independent of any paper.
+- Package failure manifesto as standalone dataset: *"where does the joint system go unstable?"*
+- Structured records from every guard kill + E-7 null across Phases 2–6
+- Citable empirical contribution about M-axis stability cost, independent of any paper
 
 **Phase 6 exit:** frontier campaign complete with gate evaluated · Goldilocks map rendered · manifesto dataset packaged + released.
 
@@ -317,29 +270,21 @@ TODO4 walked Z3 to its honest endpoint across sessions 9–14: the capability is
 
 ## Ongoing / Pull-Based (E-8 waiting-period queue)
 
-- **CP-B Rocq:** close diagonal-case plumbing; ψ-selection coverage proposition;
-  contraction-vs-plasticity statement. Blocked-periods only; hard-stop policy
-  unchanged. Its only consumer is the post-system theory paper.
-- **Drop-in PyTorch wrapper (`torch.nn.ComputroniumLinear`):** DEFERRED, not
-  dropped. `computronium-stability` (Phase 1.2) holds adoption-artifact primacy
-  because the plan consumes it (Phases 2.3, 4.2, 6.2); the wrapper multiplies
-  audience but nothing on-plan. Valid E-8 candidate once Phase 2's flagship
-  exists. Acceptance per RESEARCH3 CP-C: unmodified training script except the
-  swapped line; NullPlasticity+backprop coordinate falls back bit-for-bit native.
-- **PR-3b procurement:** continues at its own latency; measured-tier energy
-  claims arrive when the board does.
+- **CP-B Rocq:** close diagonal-case plumbing; ψ-selection coverage proposition; contraction-vs-plasticity statement. Blocked-periods only; hard-stop policy unchanged. Consumer: post-system theory paper only.
+- **Drop-in PyTorch wrapper (`torch.nn.ComputroniumLinear`):** DEFERRED, not dropped. `computronium-stability` (Phase 1.2) holds adoption-artifact primacy (consumed by Phases 2.3, 4.2, 6.2); wrapper multiplies audience but nothing on-plan. Valid E-8 candidate once Phase 2 flagship exists. Acceptance per RESEARCH3 CP-C: unmodified training script except swapped line; NullPlasticity+backprop falls back bit-for-bit native.
+- **PR-3b procurement:** continues at own latency; measured-tier energy claims arrive when board does.
 
 ---
 
-## Execution Protocol (inherited from RESEARCH3 — not restated, always enforced)
+## Execution Protocol (inherited from RESEARCH3 — always enforced)
 
 E-1 three-rung ladder · E-2 timeboxed tuning (≤3 rounds) · E-3 reproducibility contract (manifest.json) · E-4 baseline protection · E-5 pre-promotion confound checklist · E-6 stopping rules · E-7 outcome triage · E-8 waiting-period queue · E-9 compute envelopes · E-10 minimum-viable control set · E-11 decision log.
 
 **Hard rules carried into TODO5:**
-- No data collected before the relevant `DECISIONS.md` entry + E-1 pre-registration exist.
-- Nulls are results: 1-page memo into the failure manifesto, never buried.
-- Baselines get equal GPU-hour budgets, identical pipelines, identical early stopping — set before any comparison.
-- Figures must regenerate from stored artifacts alone (E-3); if a chart can't regenerate without rerunning training, it doesn't exist.
+- No data collected before relevant `DECISIONS.md` entry + E-1 pre-registration exist
+- Nulls are results: 1-page memo into failure manifesto, never buried
+- Baselines get equal GPU-hour budgets, identical pipelines, identical early stopping — set before any comparison
+- Figures must regenerate from stored artifacts alone (E-3); if a chart can't regenerate without rerunning training, it doesn't exist
 
 ---
 
@@ -365,7 +310,7 @@ E-1 three-rung ladder · E-2 timeboxed tuning (≤3 rounds) · E-3 reproducibili
 
 ---
 
-## Decision Log Requirements (commit before Phase 1 data)
+## Decision Log Requirements (committed before Phase 1 data)
 
 1. **Z3 close-out:** anneal decision space declined; v2 canonical-order capability + speed null + order failure recorded as final epistemic state; operator library released as artifact.
 2. **ICL bridge deferred indefinitely** — superseded by the CL comparator design.
@@ -382,7 +327,7 @@ E-1 three-rung ladder · E-2 timeboxed tuning (≤3 rounds) · E-3 reproducibili
 |---|---|
 | Replay matches ψ-decoupling at equal memory (CL kill) | Pre-registered kill honored — demote to boundary memo; null published, not buried |
 | Memory-wall claim inflated vs. naive backprop | PR-6 floor: gradient-checkpointed + offloaded backprop as control |
-| `computronium-stability` overclaimed for transformers | v1 scope statement ships with the library; calibration data released; transformer work labeled future |
+| `computronium-stability` overclaimed for transformers | v1 scope statement ships with library; calibration data released; transformer work labeled future |
 | Bandit routing reduces to known MoE/mixed-credit prior art | Prior-art gate before registration; reframe delta as verification-gated infrastructure |
 | Split-MNIST seen as saturated | Task-free protocol + permuted-MNIST stretch + escalation gate to Continual RL |
 | Compute overrun on multi-baseline CL | E-1 ladder + E-2 ≤3 rounds; Z3 baseline-(a) numbers reused, not rerun |
@@ -393,31 +338,32 @@ E-1 three-rung ladder · E-2 timeboxed tuning (≤3 rounds) · E-3 reproducibili
 
 ## Definition of Done (system complete — code, not papers)
 
-- [ ] `computronium-stability` installs via `pip install -e .` and its test suite passes; guard kills known-divergent coordinates and passes the 16 healthy settling coordinates.
-- [ ] `continual_learning.py` runs all arms (FastWeight, EWC, backprop+SGD, replay, LwF, SI) across both protocols with the stability rider attached; E-7 class logged; kill/escalation decision recorded.
-- [ ] Edge memory-wall benchmark enforces 2/8/32 MB envelopes, generates the frontier chart, and exports deployment artifacts via the PR-8-verified pipeline.
-- [ ] Bandit router unit-tested; both substrate counterfactual campaigns complete at simulation tier with correct labeling.
-- [ ] Benchmark coordinate set locked (≥30 by coverage); resource-vector runner emits full $\mathcal{C}$; phylogeny map generated; full run reproducible from stored artifacts.
-- [ ] M-axis frontier campaign complete with the on-frontier gate evaluated; Goldilocks map rendered; manifesto dataset packaged.
-- [ ] Every phase's artifacts regenerate from `results/<item>/<seed>/<timestamp>/manifest.json` alone (E-3).
-- [ ] Full pytest suite + pyright at configured baseline + `ruff format --check .` green at system completion.
-- [ ] `DECISIONS.md` contains all 6 strategic entries + every pre-registration, kill invocation, and deviation.
+- [ ] `computronium-stability` installs via `pip install -e .`; test suite passes; guard kills known-divergent coordinates and passes 16 healthy settling coordinates
+- [ ] `continual_learning.py` runs all 6 arms across both protocols with stability rider; E-7 class logged; kill/escalation decision recorded
+- [ ] Edge memory-wall benchmark enforces 2/8/32 MB envelopes, generates frontier chart, exports deployment artifacts via PR-8 pipeline
+- [ ] Bandit router unit-tested; both substrate counterfactual campaigns complete at simulation tier with correct labeling
+- [ ] Benchmark coordinate set locked (≥30 by coverage); resource-vector runner emits full $\mathcal{C}$; phylogeny map generated; full run reproducible from stored artifacts
+- [ ] M-axis frontier campaign complete with on-frontier gate evaluated; Goldilocks map rendered; manifesto dataset packaged
+- [ ] Every phase's artifacts regenerate from `results/<item>/<seed>/<timestamp>/manifest.json` alone (E-3)
+- [ ] Full pytest suite + pyright at configured baseline + `ruff format --check .` green
+- [ ] `DECISIONS.md` contains all 6 strategic entries + every pre-registration, kill invocation, and deviation
 
 ---
 
 ## Post-System: Papers (deferred — do not start until Definition of Done is met)
 
-Writing begins only after the system is complete and tested. Candidate artifacts, in dependency order:
-1. Continual learning without replay (Phase 2) — flagship.
-2. Resource-axed family-coverage benchmark + phylogeny (Phase 5).
-3. Edge memory-wall benchmark (Phase 3).
-4. `computronium-stability` + calibration (Phase 1) — software/JOSS track.
-5. Substrate counterfactual campaigns (Phase 4).
-6. Z3 boundary memo + operator library (Phase 1) — negative-results venue.
-7. Goldilocks map + manifesto dataset (Phase 6).
-8. Drop-in `ComputroniumLinear` wrapper release (post-flagship, per CP-C).
-9. Theory: ψ-coverage + contraction (only if CP-B completes in E-8 time).
-10. Physics-informed conservation (only if CP-E reopens post-system).
+Writing begins only after system is complete and tested. Candidate artifacts, in dependency order:
+
+1. Continual learning without replay (Phase 2) — flagship
+2. Resource-axed family-coverage benchmark + phylogeny (Phase 5)
+3. Edge memory-wall benchmark (Phase 3)
+4. `computronium-stability` + calibration (Phase 1) — software/JOSS track
+5. Substrate counterfactual campaigns (Phase 4)
+6. Z3 boundary memo + operator library (Phase 1) — negative-results venue
+7. Goldilocks map + manifesto dataset (Phase 6)
+8. Drop-in `ComputroniumLinear` wrapper release (post-flagship, per CP-C)
+9. Theory: ψ-coverage + contraction (only if CP-B completes in E-8 time)
+10. Physics-informed conservation (only if CP-E reopens post-system)
 
 ---
 
@@ -426,8 +372,8 @@ Writing begins only after the system is complete and tested. Candidate artifacts
 | Item | Disposition |
 |---|---|
 | L1 adaptation efficiency full run | Subsumed by Phase 6 M-axis frontier |
-| L2 compute efficiency / L3 structural robustness | L2 folded into Phase 5 (effective-FLOPs feeds 𝒞); L3 deferred (instrumentation layer, not headline) |
-| L3.5 algorithm migration full run | Optional companion to the Phase 1.1 Z3 artifact; else deferred |
+| L2 compute efficiency / L3 structural robustness | L2 folded into Phase 5 (effective-FLOPs feeds $\mathcal{C}$); L3 deferred (instrumentation layer, not headline) |
+| L3.5 algorithm migration full run | Optional companion to Phase 1.1 Z3 artifact; else deferred |
 | ICL bridge | Deferred indefinitely (DECISIONS #2) |
 | Physics-informed conservation proof | Deferred (CP-E; zero coupling to system build-out) |
 | Biological twin | Out of scope (net-new domain build; catalog-last by design) |
@@ -435,7 +381,61 @@ Writing begins only after the system is complete and tested. Candidate artifacts
 
 ---
 
-## Low-Priority Refactoring (future sessions)
+## Session Log (reverse-chronological)
+
+### Session 24 — COMPLETED (2026-08-27)
+**Refactor: Extract continual learning subsystem into dedicated module:**
+- Created `computronium/core/continual/` with 10 modules (constants, system, arms, buffers, losses, metrics, stability, training, runner, `__init__`)
+- Backward-compat re-exports in `system_trainer.py` — all imports work unchanged
+- All 31 unit + 7 integration tests pass
+- Reduced `system_trainer.py` from ~2805 to ~1530 lines
+
+### Session 23 — COMPLETED (2026-08-27)
+**Phase 2 null DISPUTED — arm-calibration bugs found & fixed (Phase 3.5):**
+- Wrote Phase 2 CL null memo to `failure_manifesto.py` (`write_continual_learning_null_memo()` + `--cl-memo`)
+- Discovered Phase 2 null was built on broken arms: fast_weights/EWC at chance, LwF/SI bit-identical to backprop
+- Fixed 3 critical bugs (nudged-target indexing, `max_steps=3`→30, SI/LwF no-op) — all 6 arms now learn ≥95%
+- Added regression tests `TestArmLearningRegression` (3 tests) locking learning + LwF activity
+- Two-task probe: 0.000 forgetting for ALL arms — protocol not capacity-limited
+- **Action:** re-test Phase 2 on verified arms with fresh pre-registration
+
+### Session 22 — COMPLETED (2026-08-27)
+**Continual Learning Arms Library Consolidation (Phase 3.5.6):**
+- Moved 6 arm factories + supporting classes to `system_trainer.py` as reusable library
+- All 34 unit tests pass; integration tests pass; CLI smoke tests work for all 6 arms
+- Known issue: LwF/SI need refinement (similar to backprop); deferred for Phase 3.5
+
+### Session 21 — COMPLETED (2026-08-27)
+**Phase 2 Continual Learning NULL RESULT — Kill criterion honored (later disputed):**
+- Found 2nd root cause: `InstantaneousDynamics` instead of `EnergyMinimizationDynamics` → zero ThermodynamicContrast gradients
+- Wrote 35 unit tests in `tests/unit/core/test_continual_learning.py` — all pass
+- Full E-1 re-run (5 seeds, paired): fast_weights WORSE on backward transfer (-0.062) and forgetting (+0.081)
+- Null result per protocol; stability rider: 0 kills across all arms/seeds
+
+### Session 20 — COMPLETED (2026-08-27)
+**Phase 2 training loop bug FIXED:**
+- Root cause: standard PyTorch `loss.backward()` + `optimizer.step()` bypassed joint system components
+- Refactored to single 10-class output with task masking; `run_continual_train_step()` using Phase 9 pipeline
+- Plastic state (ψ) management: maintained across steps, stepped via `FastWeightPlasticity.step()`, integrated in forward
+- Credit assignment differentiated: `ThermodynamicContrast` (fast_weights) vs `BackpropCredit` (backprop)
+
+### Session 19 — COMPLETED (2026-08-27)
+**Deprecation cleanup:** Migrated `@register_optimizer`→`@register_param_update`, `@register_constraint`→`@register_param_update`, `@register_sparsity`→`@register_hardware` across zoo modules; all integration tests pass.
+
+### Session 17 — COMPLETED (2026-08-26)
+**Phase 2 E-1 ladder verified:** Smoke + pilot + medium tests pass; stability guard integration fixed; all arms functional.
+
+### Session 16 — COMPLETED (2026-08-26)
+**Phase 2 started:** Split-MNIST implemented; 6 arms wired; two protocols; stability rider attached.
+
+### Session 15 — COMPLETED (2026-08-26)
+**Phase 1 complete:** All 5 execution queue items finished (DECISIONS.md, Z3 memo, computronium-stability v0.1, guard sweep, PR-8 parity).
+
+---
+
+## Low-Priority Refactoring (non-blocking — extract if/when file growth or team scaling warrants)
+
+*These are **not** on the critical path to any Phase deliverable. The current ~1530-line `system_trainer.py` is well-organized with clear sections. Extract only when maintainability payoff exceeds cost.*
 
 | Refactoring Target | Current Location | Proposed Location | Rationale |
 |---|---|---|---|
@@ -445,11 +445,11 @@ Writing begins only after the system is complete and tested. Candidate artifacts
 | Standard coordinate factories (`create_eqprop_system`, `create_backprop_system`, `create_fa_system`) | `system_trainer.py:514-740` | `computronium/core/factories.py` | Preset/coordinate definitions separate from composition |
 | Joint coordinate factories (`create_routing_eqprop_system`, `create_fast_weight_eqprop_system`) | `system_trainer.py:1309-1489` | `computronium/core/factories.py` | Same as above |
 
-> **Note:** These are **not** blockers for any Phase. The current ~1530-line `system_trainer.py` is well-organized with clear sections. Extract only if/when file growth or team scaling warrants it.
+---
 
-## Session Log
+## Full Session Log (reverse-chronological; all sessions 15+)
 
-*(reverse-chronological; append session 15+ below)*
+*(Sessions 1–14 covered in TODO4; this log starts at TODO5 inception)*
 
 ### Session 24 — COMPLETED (2026-08-27)
 **Refactor: Extract continual learning subsystem into dedicated module (Execution Queue item 0):**
@@ -500,7 +500,7 @@ Writing begins only after the system is complete and tested. Candidate artifacts
 ### Session 21 — COMPLETED (2026-08-27)
 **Phase 2 Continual Learning NULL RESULT — Kill criterion honored:**
 - ✅ **Second root cause found:** `create_fast_weight_arm` and `create_ewc_arm` used `InstantaneousDynamics` instead of `EnergyMinimizationDynamics`, causing `ThermodynamicContrast` credit assignment to produce zero pseudo-gradients (no free/nudged settling difference). Fixed both arms to use `EnergyMinimizationDynamics(max_steps=3, beta=0.5)`.
-- ✅ **Unit tests written:** Created `tests/unit/core/test_continual_learning.py` with 35 tests covering FastWeightPlasticity with EnergyMinimizationDynamics, joint system pipeline, task masking, all arms, CL metrics, stability guard, SplitMNIST, end-to-end smoke. All tests pass.
+- ✅ **Unit tests written:** Created `tests/unit/core/test_continual_learning.py` with 35 tests covering FastWeightPlasticity with EnergyMinimizationDynamics, joint system pipeline integration, task masking, all arm implementations, CL metrics, stability guard, SplitMNIST, and end-to-end integration smoke tests. All tests pass.
 - ✅ **Full E-1 re-run completed:** 5 seeds, paired, task_incremental, 5 epochs/task, 6 arms. Artifacts at `benchmark_results/continual_learning_full_rerun_v2/`.
 - ✅ **Pre-registration REJECTED (kill confirmed):** Paired comparison (fast_weights vs replay, n=5):
   - Backward transfer: mean_diff = -0.062, CI = [-0.082, -0.039], p = 0.0068. Fast weights WORSE by 0.062 (pre-reg required +0.1 superiority).
@@ -569,4 +569,3 @@ Writing begins only after the system is complete and tested. Candidate artifacts
 - ✅ `computronium-stability` v0.1 packaged at `libraries/computronium_stability/` — pip-installable, 23 tests passing, 20-line README example.
 - ✅ Guard family sweep regenerated at `benchmark_results/stability_guard_calibration/family_sweep.json` with absolute-error fields; τ=1.029 lossless (16/16 coordinates, windowed_growth=1.000, FKR=0%).
 - ✅ PR-8 export parity verified: ONNX round-trip max diff 5.96e-08 (≤ noise), ternary round-trip max diff 0.474 (expected for ternary quantization).
-
