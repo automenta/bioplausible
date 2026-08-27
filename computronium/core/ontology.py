@@ -5543,6 +5543,8 @@ class ElasticConsolidationUpdate:
         self.config = config or ParameterUpdateConfig.elastic_consolidation()
         self._importance: dict[str, Tensor] = {}
         self._old_params: dict[str, Tensor] = {}
+        self._fisher_accum: dict[str, Tensor] = {}
+        self._num_samples: int = 0
 
     def step(
         self,
@@ -5559,14 +5561,29 @@ class ElasticConsolidationUpdate:
                     * self._importance[name]
                     * (param - self._old_params[name])
                 )
+            # Accumulate Fisher (squared gradients) for consolidation
+            if self.config.ewc_lambda > 0:
+                if name not in self._fisher_accum:
+                    self._fisher_accum[name] = torch.zeros_like(param)
+                self._fisher_accum[name] += grad.detach() ** 2
+                self._num_samples += 1
             return param - self.config.step_size * (grad + ewc_penalty)
 
         return apply_pseudo_gradients(params, pseudo_grads, apply)
 
-    def consolidate(self, params: dict[str, Tensor], fisher: dict[str, Tensor]) -> None:
-        """Call after task completion to consolidate weights."""
+    def consolidate(self, params: dict[str, Tensor], fisher: dict[str, Tensor] | None = None) -> None:
+        """Call after task completion to consolidate weights.
+        
+        If fisher is None, uses internally accumulated Fisher estimate.
+        """
+        if fisher is None:
+            # Use accumulated Fisher (average over samples)
+            fisher = {k: v / max(self._num_samples, 1) for k, v in self._fisher_accum.items()}
         self._importance = fisher
         self._old_params = {k: v.clone() for k, v in params.items()}
+        # Reset accumulation for next task
+        self._fisher_accum = {}
+        self._num_samples = 0
 
 
 # ============================================================

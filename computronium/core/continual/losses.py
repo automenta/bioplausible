@@ -81,6 +81,7 @@ class SynapticIntelligence:
 
     Computes per-parameter importance (omega) online during training,
     then regularizes changes to important parameters.
+    Works with pseudo-gradients from local credit assignment.
     """
 
     def __init__(self, model: nn.Module, xi: float = 0.1, epsilon: float = 1e-3):
@@ -90,6 +91,7 @@ class SynapticIntelligence:
         self.omega: dict[int, Tensor] = {}  # Parameter importance
         self.prev_params: dict[int, Tensor] = {}  # Parameters at task boundary
         self.W: dict[int, Tensor] = {}  # Accumulated parameter-specific contribution
+        self._pseudo_grads_accum: dict[int, Tensor] = {}  # Accumulated pseudo-grads
 
     def start_task(self) -> None:
         """Call at the start of each new task."""
@@ -99,6 +101,20 @@ class SynapticIntelligence:
             self.prev_params[pid] = param.data.clone()
             if pid not in self.W:
                 self.W[pid] = torch.zeros_like(param.data)
+            if pid not in self._pseudo_grads_accum:
+                self._pseudo_grads_accum[pid] = torch.zeros_like(param.data)
+
+    def accumulate_pseudo_grads(self, pseudo_grads: list[Tensor], geometry) -> None:
+        """Accumulate pseudo-gradients for importance computation.
+        
+        Matches pseudo-gradients to parameters by learnable-weight order.
+        """
+        from computronium.core.ontology import _learnable_weight_names
+        param_dict = dict(self.model.named_parameters())
+        param_names = _learnable_weight_names(param_dict)
+        for name, grad in zip(param_names, pseudo_grads):
+            pid = id(param_dict[name])
+            self._pseudo_grads_accum[pid] += grad.detach()
 
     def update_importance(self) -> None:
         """Update parameter importance (omega) at task boundary."""
@@ -107,13 +123,14 @@ class SynapticIntelligence:
             if pid in self.prev_params:
                 # Delta from task start
                 delta = param.data - self.prev_params[pid]
-                # Accumulate contribution: path integral of gradients * delta
-                if param.grad is not None:
-                    self.W[pid] += -param.grad * delta
+                # Accumulate contribution: path integral of pseudo-gradients * delta
+                if pid in self._pseudo_grads_accum:
+                    self.W[pid] += -self._pseudo_grads_accum[pid] * delta
                 # Update omega (importance)
                 self.omega[pid] = self.W[pid] / (delta**2 + self.epsilon)
-                # Reset W for next task
+                # Reset for next task
                 self.W[pid].zero_()
+                self._pseudo_grads_accum[pid].zero_()
 
     def regularization_loss(self) -> Tensor:
         """Compute SI regularization loss."""

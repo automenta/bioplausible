@@ -27,18 +27,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+# Re-export constants from continual module
 # Re-export all public API from system_trainer for backward compatibility
 from computronium.core.system_trainer import (
     CLConfig,
     run_continual_learning_suite,
-)
-
-# Re-export constants from continual module
-from computronium.core.continual import (
-    CL_NUM_TASKS,
-    CL_CLASSES_PER_TASK,
-    CL_TOTAL_CLASSES,
-    SPLIT_MNIST_TASKS,
 )
 
 

@@ -15,9 +15,6 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 
-from computronium.core.stability import GuardDecision, StabilityGuard
-from computronium.domains.base import TaskSplit
-from computronium.domains.vision import SplitMNIST
 from computronium.core.continual import (
     CL_CLASSES_PER_TASK,
     CL_NUM_TASKS,
@@ -43,6 +40,9 @@ from computronium.core.continual import (
     run_continual_learning_suite,
     run_continual_train_step,
 )
+from computronium.core.stability import GuardDecision, StabilityGuard
+from computronium.domains.base import TaskSplit
+from computronium.domains.vision import SplitMNIST
 
 # ============================================================
 # Fixtures

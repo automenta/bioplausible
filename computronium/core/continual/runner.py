@@ -64,8 +64,8 @@ def run_continual_learning(
     if arm_name == "fast_weights":
         model = create_fast_weight_arm(config.input_dim, config.hidden_dim, config.output_dim, device_str)
     elif arm_name == "ewc":
-        model, si = create_ewc_arm(config.input_dim, config.hidden_dim, config.output_dim, device_str, config.ewc_lambda)
-        extra["si"] = si
+        model, update = create_ewc_arm(config.input_dim, config.hidden_dim, config.output_dim, device_str, config.ewc_lambda)
+        extra["update"] = update
     elif arm_name == "backprop":
         model = create_backprop_arm(config.input_dim, config.hidden_dim, config.output_dim, device_str)
     elif arm_name == "replay":
@@ -105,8 +105,8 @@ def run_continual_learning(
                 # Reset plastic state at task boundary (new episode)
                 model.reset_plastic_state()
             elif arm_name == "ewc":
-                si = extra["si"]
-                si.start_task()
+                update = extra["update"]
+                update.consolidate(model.geometry.params)
             elif arm_name == "lwf":
                 lwf_loss = extra["lwf_loss"]
                 # Save current model as previous for distillation
@@ -153,7 +153,10 @@ def run_continual_learning(
                         model.train_step(rx, ry, task_id=replay_task_id)
 
                 # End of task: update importance for EWC/SI
-                if arm_name == "ewc" or arm_name == "si":
+                if arm_name == "ewc":
+                    update = extra["update"]
+                    update.consolidate(model.geometry.params)
+                elif arm_name == "si":
                     si = extra["si"]
                     si.update_importance()
 

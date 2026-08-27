@@ -149,6 +149,7 @@ def _continual_step(
     y: Tensor,
     task_id: int,
     extra_loss_fn: Callable[[object, object, int], Tensor | None],
+    si_tracker=None,
 ) -> dict[str, float]:
     """Run the joint training pipeline, folding an extra loss term into the task loss.
 
@@ -156,6 +157,8 @@ def _continual_step(
     distillation term (or None). The combined loss drives credit assignment so the
     term actually influences ``theta`` (unlike a post-hoc ``.backward()`` with no
     optimizer step).
+
+    If si_tracker is provided, accumulates pseudo-gradients for SI importance computation.
     """
     substrate = model.substrate
     geometry = model.geometry
@@ -218,6 +221,11 @@ def _continual_step(
         total_loss = loss if extra is None else loss + extra
 
         pseudo_grads = credit.compute_pseudo_gradient(states, total_loss, geometry)
+
+        # Accumulate pseudo-gradients for SI if tracker provided
+        if si_tracker is not None:
+            si_tracker.accumulate_pseudo_grads(pseudo_grads, geometry)
+
         geometry.update_params(update.step(geometry.params, pseudo_grads, geometry))
 
         if psi is not None and hasattr(plasticity, "step") and plasticity is not None:
@@ -298,7 +306,7 @@ def _si_train_step(
     def extra_loss_fn(_model, _output, _tid):
         return si_tracker.regularization_loss()
 
-    return _continual_step(model, x, y, task_id, extra_loss_fn)
+    return _continual_step(model, x, y, task_id, extra_loss_fn, si_tracker=si_tracker)
 
 
 __all__ = [

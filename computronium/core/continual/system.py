@@ -89,20 +89,27 @@ class ContinualJointSystem(nn.Module):
 
     def copy(self):
         """Create a copy of this ContinualJointSystem (for LwF previous model)."""
-        # Create a new instance with the same components
+        # Create a new geometry with the same config (deep copy of parameters)
+        from computronium.core.ontology import FeedforwardGeometry
+        new_geometry = FeedforwardGeometry(self.geometry.config)
+        new_geometry.load_state_dict(self.geometry.state_dict())
+
+        # Create a new instance with copied geometry, shared other components
         new_model = self.__class__(
             substrate=self.substrate,
-            geometry=self.geometry,
+            geometry=new_geometry,
             dynamics=self.dynamics,
             credit=self.credit,
             update=self.update,
             plasticity=self.plasticity,
         )
-        # Copy parameters and state
-        new_model.load_state_dict(self.state_dict())
+        # Copy plastic state
         new_model.current_task = self.current_task
         if self._psi is not None:
             new_model._psi = {k: v.clone() for k, v in self._psi.items()}
+        # Ensure it's on the same device
+        device = next(self.parameters()).device
+        new_model.to(device)
         return new_model
 
     def __deepcopy__(self, memo):

@@ -84,7 +84,7 @@ def create_ewc_arm(
     output_dim: int = CL_TOTAL_CLASSES,
     device: str = "cpu",
     ewc_lambda: float = 1000.0,
-) -> tuple[ContinualJointSystem, SynapticIntelligence]:
+) -> tuple[ContinualJointSystem, ElasticConsolidationUpdate]:
     """Create ElasticConsolidationUpdate (EWC) arm.
 
     Uses EnergyMinimizationDynamics with ThermodynamicContrast for proper
@@ -123,9 +123,8 @@ def create_ewc_arm(
     )
     system = ContinualJointSystem.from_joint_system(joint).to(device)
 
-    # SI tracker for EWC arm
-    si = SynapticIntelligence(system, xi=ewc_lambda / 1000.0)
-    return system, si
+    # Return the update object for consolidation at task boundaries
+    return system, update
 
 
 def create_backprop_arm(

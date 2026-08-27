@@ -29,7 +29,6 @@ artifacts/
 reports/
 checkpoints/
 lightning_logs/
-scripts
 runs
 
 # Rocq/Coq build artifacts
