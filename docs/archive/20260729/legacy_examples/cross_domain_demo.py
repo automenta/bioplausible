@@ -8,7 +8,6 @@ warnings.filterwarnings("ignore")
 import pathlib
 
 from bioplausible.config.schema import RunConfig
-
 from bioplausible.core.trainer import run_from_runconfig as run_from_config
 
 

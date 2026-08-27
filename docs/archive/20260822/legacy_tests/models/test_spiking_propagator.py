@@ -6,7 +6,6 @@ correlated pre/post activity strengthens the corresponding weight.
 """
 
 import torch
-
 from bioplausible.core.local_learning.rules.spiking import STDPLearningRule
 from bioplausible.zoo.models.eqprop import BackpropMLP
 

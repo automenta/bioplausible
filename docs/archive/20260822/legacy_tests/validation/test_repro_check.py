@@ -13,7 +13,6 @@ import json
 
 import pytest
 import torch
-
 from bioplausible.cli.repro import main as repro_main
 from bioplausible.utils import capture_environment, deps_hash, seed_everything
 

@@ -19,7 +19,6 @@ Usage:
 """
 
 import torch
-
 from bioplausible.models import EquiTile, EquiTileEP
 
 

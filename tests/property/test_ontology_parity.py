@@ -8,6 +8,7 @@ Run: uv run pytest tests/property/test_ontology_parity.py -v
 """
 
 import logging
+
 import pytest
 import torch
 
@@ -24,16 +25,10 @@ from computronium.core.ontology import (
     InstantaneousDynamics,
     LocalGoodnessCredit,
     ParameterUpdateConfig,
-    PredictiveSettlingDynamics,
     RandomProjectionsCredit,
-    RecurrentGeometry,
-    SpikeIntegrationDynamics,
     StateDynamicsConfig,
     SubstrateConfig,
-    TargetInversionCredit,
     ThermodynamicContrast,
-    TileGeometry,
-    TemporalTraceCredit,
 )
 from computronium.core.system_trainer import (
     SystemTrainer,
@@ -531,7 +526,6 @@ class TestSNNParity:
         which doesn't work with the current SystemTrainer. This test uses a working
         configuration (InstantaneousDynamics + LocalGoodnessCredit) like the YAML preset.
         """
-        from computronium import create_snn_mlp
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)

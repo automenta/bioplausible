@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 
 from compat import apply_compat_shims
 

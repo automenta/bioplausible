@@ -65,6 +65,7 @@ class ResourceUsage:
     activation_memory_mb: float = 0.0
     gradient_memory_mb: float = 0.0
     peak_memory_mb: float = 0.0
+    peak_activation_bytes: int = 0
     activation_sparsity: float = 0.0
     weight_sparsity: float = 0.0
     wall_time_ms: float = 0.0
@@ -100,6 +101,9 @@ class ResourceUsage:
             ),
             gradient_memory_mb=max(self.gradient_memory_mb, other.gradient_memory_mb),
             peak_memory_mb=max(self.peak_memory_mb, other.peak_memory_mb),
+            peak_activation_bytes=max(
+                self.peak_activation_bytes, other.peak_activation_bytes
+            ),
             activation_sparsity=max(
                 self.activation_sparsity, other.activation_sparsity
             ),
@@ -131,6 +135,7 @@ class ResourceUsage:
             activation_memory_mb=self.activation_memory_mb / divisor,
             gradient_memory_mb=self.gradient_memory_mb / divisor,
             peak_memory_mb=self.peak_memory_mb / divisor,
+            peak_activation_bytes=int(self.peak_activation_bytes / divisor),
             activation_sparsity=self.activation_sparsity,
             weight_sparsity=self.weight_sparsity,
             wall_time_ms=self.wall_time_ms / divisor,
@@ -155,6 +160,7 @@ class ResourceUsage:
             "backward_flops": self.backward_flops,
             "param_count": self.param_count,
             "peak_memory_mb": self.peak_memory_mb,
+            "peak_activation_bytes": self.peak_activation_bytes,
             "wall_time_ms": self.wall_time_ms,
             "energy_proxy": self.energy_proxy,
             "substrate_overhead": self.substrate_overhead,
@@ -177,6 +183,7 @@ class ResourceUsage:
             # Legacy field name from pre-consolidation campaign records
             param_count=int(data.get("param_count", data.get("parameter_count", 0))),
             peak_memory_mb=float(data.get("peak_memory_mb", 0.0)),
+            peak_activation_bytes=int(data.get("peak_activation_bytes", 0)),
             wall_time_ms=float(data.get("wall_time_ms", 0.0)),
             energy_proxy=float(data.get("energy_proxy", 0.0)),
             substrate_overhead=float(data.get("substrate_overhead", 0.0)),

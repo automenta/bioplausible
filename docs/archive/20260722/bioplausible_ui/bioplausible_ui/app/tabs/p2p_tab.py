@@ -1,3 +1,5 @@
+from bioplausible.p2p import Worker
+from bioplausible.p2p.evolution import P2PEvolution
 from bioplausible_ui.core.base import BaseTab
 from PyQt6.QtCore import QObject, Qt, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -13,9 +15,6 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
 )
-
-from bioplausible.p2p import Worker
-from bioplausible.p2p.evolution import P2PEvolution
 
 
 class P2PWorkerBridge(QObject):

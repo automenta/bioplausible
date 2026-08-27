@@ -8,8 +8,8 @@ from computronium.execution._state import FailureTracker
 __all__ = [
     "FailureManifestoGenerator",
     "main",
-    "write_z3_boundary_memo",
     "write_continual_learning_null_memo",
+    "write_z3_boundary_memo",
 ]
 
 

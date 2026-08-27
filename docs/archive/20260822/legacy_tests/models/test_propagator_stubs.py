@@ -9,7 +9,6 @@ still resolve to their registered classes.
 
 import pytest
 import torch
-
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.zoo.models.forward_only import PEPITA, ForwardForwardNet
 from bioplausible.zoo.models.target_prop import DifferenceTargetProp

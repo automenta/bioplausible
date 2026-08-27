@@ -6,7 +6,6 @@ fallback anymore.
 """
 
 import torch
-
 from bioplausible.zoo.models.spiking import SpikingSTDP
 
 

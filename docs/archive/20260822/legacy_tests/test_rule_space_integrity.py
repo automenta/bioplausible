@@ -6,9 +6,6 @@ emitter, and the "no advertised dimension is a no-op" (R3) checks.
 
 import pytest
 import torch
-from hypothesis import given
-from hypothesis import strategies as st
-
 from bioplausible.core.exceptions import SpaceSignatureMismatchError
 from bioplausible.hyperopt.rule_frontier import RuleFrontierFinder
 from bioplausible.hyperopt.search_space import (
@@ -18,6 +15,8 @@ from bioplausible.hyperopt.search_space import (
     validate_all_rule_spaces,
     validate_rule_space,
 )
+from hypothesis import given
+from hypothesis import strategies as st
 
 
 class _FakeDriver:

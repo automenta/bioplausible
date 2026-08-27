@@ -8,7 +8,6 @@ from bioplausible.config.schema import (
     RunConfigOptimizer,
     RunConfigTrainer,
 )
-
 from bioplausible.core.trainer import run_from_runconfig as run_from_config
 
 

@@ -1,5 +1,4 @@
 import torch
-
 from bioplausible.zoo.models.eqprop import NeuralCube
 
 

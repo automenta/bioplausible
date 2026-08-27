@@ -11,7 +11,6 @@ These tests verify:
 """
 
 import torch
-
 from bioplausible.models import EquiTile, EquiTileEP
 
 

@@ -5,9 +5,8 @@ Covers: Backprop class in bioplausible.zoo.propagators.backprop.
 
 import pytest
 import torch
-from torch import nn
-
 from bioplausible.core.local_learning.rules.backprop import Backprop
+from torch import nn
 
 # =============================================================================
 # Fixtures

@@ -10,7 +10,6 @@ Target: <10s total.
 
 import pytest
 import torch
-
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.zoo import get_model_spec
 

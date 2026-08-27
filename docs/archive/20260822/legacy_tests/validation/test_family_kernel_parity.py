@@ -18,8 +18,6 @@ from collections.abc import Callable
 
 import pytest
 import torch
-from torch import nn
-
 from bioplausible.acceleration import (
     AlgorithmFamily,
     HardwareTarget,
@@ -27,6 +25,7 @@ from bioplausible.acceleration import (
     KernelRegistry,
     get_algorithm_kernels,
 )
+from torch import nn
 
 
 @pytest.fixture(scope="module", autouse=True)

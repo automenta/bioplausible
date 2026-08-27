@@ -795,7 +795,7 @@ def create_tile_mlp(
     substrate = _default_substrate(device)
     geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
     # Replace with TileGeometry
-    from computronium.core.ontology import TileGeometry, GeometryConfig
+    from computronium.core.ontology import GeometryConfig, TileGeometry
 
     tile_cfg = GeometryConfig(
         input_dim=input_dim,

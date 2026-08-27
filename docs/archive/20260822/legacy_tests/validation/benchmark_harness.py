@@ -24,10 +24,9 @@ import tracemalloc
 
 import pytest
 import torch
-from torch import nn, optim
-
 from bioplausible.core.profiling import count_flops
 from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
+from torch import nn, optim
 
 logger = logging.getLogger(__name__)
 

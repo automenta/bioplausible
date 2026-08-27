@@ -77,7 +77,7 @@ class TestThetaInvarianceAudit:
                 audit_holder.append(audit)
                 raise ValueError("boom")
 
-        with pytest.raises(ValueError):  # noqa: PT012
+        with pytest.raises(ValueError):
             _run()
         assert audit_holder[0].report is None
 

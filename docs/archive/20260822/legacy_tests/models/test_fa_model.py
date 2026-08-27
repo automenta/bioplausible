@@ -1,7 +1,6 @@
 """Tests for zoo/models/fa.py — Feedback Alignment model variants."""
 
 import torch
-
 from bioplausible.zoo.models.fa import (
     AdaptiveFeedbackAlignment,
     ContrastiveFeedbackAlignment,

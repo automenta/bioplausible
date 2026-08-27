@@ -9,7 +9,6 @@ import math
 
 import pytest
 import torch
-
 from bioplausible.acceleration.fa_kernels import FAKernelBackend
 from bioplausible.acceleration.kernel_backend import (
     AlgorithmFamily,

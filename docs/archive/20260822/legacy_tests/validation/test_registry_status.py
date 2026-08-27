@@ -6,7 +6,6 @@ results appropriately.
 """
 
 import pytest
-
 from bioplausible.core.model_status import STATUS_TAG_PREFIX, ModelStatus, status_tag
 from bioplausible.core.registry import ComponentCategory, Registry
 

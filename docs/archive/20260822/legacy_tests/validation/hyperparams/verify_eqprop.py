@@ -2,7 +2,6 @@
 """Verify eqprop_mlp passing config consistently."""
 
 import torch
-
 from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
 
 

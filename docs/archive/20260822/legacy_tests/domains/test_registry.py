@@ -8,7 +8,6 @@ resolves offline — covering all domains, not just vision.
 from __future__ import annotations
 
 import pytest
-
 from bioplausible.config.unified import DataConfig
 from bioplausible.domains.registry import (
     SUPPORTED_TASKS,

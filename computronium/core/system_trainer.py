@@ -10,12 +10,9 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Protocol, TypeVar
+from typing import TYPE_CHECKING, Protocol, TypeVar
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 from torch import Tensor
 
 from computronium.core.joint.context import SystemContext
@@ -1493,15 +1490,20 @@ def create_fast_weight_eqprop_system(
 # Re-export for backward compatibility
 from computronium.core.continual import (
     CL_CLASSES_PER_TASK,
-    CLMetrics,
-    CLConfig,
     CL_NUM_TASKS,
     CL_TOTAL_CLASSES,
-    ContinualJointSystem,
-    ReplayBuffer,
-    LwFLoss,
-    SynapticIntelligence,
     SPLIT_MNIST_TASKS,
+    CLConfig,
+    CLMetrics,
+    ContinualJointSystem,
+    LwFLoss,
+    ReplayBuffer,
+    SynapticIntelligence,
+    _continual_step,
+    _lwf_train_step,
+    _masked_task_loss,
+    _si_train_step,
+    check_stability,
     compute_cl_metrics,
     create_backprop_arm,
     create_ewc_arm,
@@ -1512,16 +1514,10 @@ from computronium.core.continual import (
     create_stability_guard,
     make_composite_state,
     make_transition_fn,
-    check_stability,
     run_continual_learning,
     run_continual_learning_suite,
     run_continual_train_step,
-    _continual_step,
-    _lwf_train_step,
-    _si_train_step,
-    _masked_task_loss,
 )
-
 
 __all__ = [
     "SystemTrainer",

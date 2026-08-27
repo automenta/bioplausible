@@ -11,8 +11,6 @@ import json
 
 import pytest
 import torch
-from torch import nn
-
 from bioplausible.acceleration.export import _TARGET_SPECS, export_kernel
 from bioplausible.acceleration.kernel_backend import (
     AlgorithmFamily,
@@ -20,6 +18,7 @@ from bioplausible.acceleration.kernel_backend import (
     KernelConfig,
     KernelRegistry,
 )
+from torch import nn
 
 
 @pytest.fixture(autouse=True)

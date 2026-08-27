@@ -6,7 +6,6 @@ cleanly without importing the heavy zoo/execution layer.
 """
 
 import pytest
-
 from bioplausible.cli.__main__ import _SUBCOMMANDS, main
 
 

@@ -13,11 +13,11 @@ from computronium.core.registry import (
     ComputeProfile,
     LocalityLevel,
     Registry,
+    register_hardware,
     register_metric,
     register_model,
     register_param_update,
     register_propagator,
-    register_hardware,
 )
 
 # Import submodules to trigger registration
@@ -163,10 +163,10 @@ __all__ = [
     "models",
     "optimizers",
     "propagators",
+    "register_hardware",
     "register_metric",
     "register_model",
     "register_param_update",
     "register_propagator",
-    "register_hardware",
     "sparsity",
 ]

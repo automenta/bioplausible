@@ -1,5 +1,6 @@
 import pathlib
 
+from bioplausible.analysis.ablation import AblationStudy
 from bioplausible.config.schema import (
     RunConfig,
     RunConfigData,
@@ -7,8 +8,6 @@ from bioplausible.config.schema import (
     RunConfigOptimizer,
     RunConfigTrainer,
 )
-
-from bioplausible.analysis.ablation import AblationStudy
 
 
 def main():

@@ -9,10 +9,9 @@ import pathlib
 
 import pytest
 import torch
-from torch import nn, optim
-
 from bioplausible.core.registry import ComponentCategory, Registry
 from bioplausible.zoo import get_model_spec
+from torch import nn, optim
 
 HYPERPARAM_DIR = pathlib.Path(__file__).parent / "hyperparams"
 
@@ -104,9 +103,8 @@ def _instantiate_model_tuned(
         return model.to(device)
 
     elif model_name == "directed_ep":
-        from bioplausible.zoo.models.eqprop.deep_ep import DirectedEP
-
         from bioplausible.config.unified import ModelConfig
+        from bioplausible.zoo.models.eqprop.deep_ep import DirectedEP
 
         model_config = ModelConfig(
             name="directed_ep",

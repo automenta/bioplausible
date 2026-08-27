@@ -11,9 +11,8 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import torch
-from torch import nn
-
 from bioplausible.core.profiling import EnergyTracker
+from torch import nn
 
 
 class _MLP(nn.Module):

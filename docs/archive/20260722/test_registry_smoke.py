@@ -3,7 +3,6 @@ import unittest
 import warnings
 
 import torch
-
 from bioplausible.execution.strategy import ExecutionStrategy
 from bioplausible.hyperopt.experiment import run_single_trial_task
 

@@ -90,9 +90,8 @@ def _eqprop_mlp_acc():
 def _directed_ep_acc():
     x, y, input_dim, n_classes = _synthetic_task()
     torch.manual_seed(456)
-    from bioplausible.zoo.models.eqprop.deep_ep import DirectedEP
-
     from bioplausible.config.unified import ModelConfig
+    from bioplausible.zoo.models.eqprop.deep_ep import DirectedEP
 
     m = DirectedEP(
         ModelConfig(
@@ -110,9 +109,8 @@ def _directed_ep_acc():
 
 def _mlp_gradient_losses():
     torch.manual_seed(42)
-    from torch import nn
-
     from bioplausible.zoo.models.eqprop.looped_mlp import LoopedMLP
+    from torch import nn
 
     input_dim, hidden_dim, output_dim, batch_size, max_steps = 10, 20, 5, 4, 100
     x = torch.randn(batch_size, input_dim)

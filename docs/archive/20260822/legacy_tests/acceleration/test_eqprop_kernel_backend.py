@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import pytest
 import torch
-from torch import nn
-
 from bioplausible.acceleration.eqprop_kernel_backend import EqPropKernelBackend
 from bioplausible.acceleration.kernel_backend import (
     AlgorithmFamily,
@@ -17,6 +15,7 @@ from bioplausible.acceleration.kernel_backend import (
     KernelConfig,
     KernelRegistry,
 )
+from torch import nn
 
 
 class TestEQPROPKernelBackendRegistration:

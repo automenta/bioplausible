@@ -18,11 +18,11 @@ import time
 from pathlib import Path
 
 import torch
+import torch.nn.functional as F
+from torch import Tensor, nn
 
 from computronium.core.profiling import measure_suite_resources
 from computronium.experiments.joint import CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED
-import torch.nn.functional as F
-from torch import Tensor, nn
 
 
 def create_moe_task(

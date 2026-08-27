@@ -16,6 +16,20 @@ from threading import Lock
 
 import torch
 
+from computronium import (
+    create_backprop_mlp,
+    create_eqprop_mlp,
+    create_fa_mlp,
+    create_fast_weight_mlp,
+    create_ff_mlp,
+    create_hebbian_mlp,
+    create_pc_mlp,
+    create_pepita_mlp,
+    create_routing_mlp,
+    create_snn_mlp,
+    create_tp_mlp,
+)
+
 # Ensure the full component registry is populated. `import computronium` is
 # lazy (Sprint 0.5), so model registration no longer happens as a side effect
 # of importing the top-level package. The demo's Registry lookups (and any
@@ -24,19 +38,6 @@ import torch
 # deployment models that used to live in the separate equitile package).
 from computronium.core.registry import ComponentCategory, Registry
 from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
-from computronium import (
-    create_backprop_mlp,
-    create_eqprop_mlp,
-    create_fa_mlp,
-    create_ff_mlp,
-    create_pepita_mlp,
-    create_tp_mlp,
-    create_pc_mlp,
-    create_hebbian_mlp,
-    create_snn_mlp,
-    create_routing_mlp,
-    create_fast_weight_mlp,
-)
 from computronium.domains.registry import resolve_task
 from computronium.execution.callbacks import BaseExecutionCallback
 from computronium.utils import seed_everything
@@ -377,7 +378,6 @@ def run_headless(panel: DemoPanel) -> None:
         # We need to extract model info from the panel - for now use a default
         # The actual model is determined by the UI selection
         # This is a simplified version - the UI should pass the model name
-        import sys
 
         model_name = getattr(panel, "_model_name", "backprop_mlp")
         task_name = getattr(panel, "_task_name", "mnist")

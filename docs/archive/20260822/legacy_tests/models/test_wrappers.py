@@ -2,7 +2,6 @@
 
 import pytest
 import torch
-
 from bioplausible.zoo.models.wrappers import (
     RecurrentWrapper,
     StackedRecurrentWrapper,

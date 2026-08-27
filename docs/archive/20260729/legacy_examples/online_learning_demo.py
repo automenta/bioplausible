@@ -8,10 +8,9 @@ datasets too large to fit in memory.
 
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.metrics import accuracy_score
-
 from bioplausible.data.vision import get_vision_dataset
 from bioplausible.sklearn_interface import EqPropClassifier
+from sklearn.metrics import accuracy_score
 
 
 def main():

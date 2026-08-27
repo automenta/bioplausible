@@ -7,8 +7,6 @@ feedback weights).
 
 import pytest
 import torch
-from torch import nn
-
 from bioplausible.core.local_learning.rules.fa import (
     AdaptiveFA,
     ContrastiveFA,
@@ -16,6 +14,7 @@ from bioplausible.core.local_learning.rules.fa import (
     FeedbackAlignment,
     StochasticFA,
 )
+from torch import nn
 
 
 class TinyMLP(nn.Module):

@@ -7,7 +7,6 @@ and inspect its convergence to equilibrium, a key property of Bio-Plausible mode
 
 import numpy as np
 import torch
-
 from bioplausible.analysis import DynamicsAnalyzer
 from bioplausible.data.vision import get_vision_dataset
 

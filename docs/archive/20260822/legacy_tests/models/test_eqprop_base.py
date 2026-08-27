@@ -1,9 +1,8 @@
 import unittest
 
 import torch
-from torch import nn
-
 from bioplausible.zoo.models.base import EqPropModel
+from torch import nn
 
 
 class MockEqPropModel(EqPropModel):

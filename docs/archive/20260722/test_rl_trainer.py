@@ -4,10 +4,9 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import torch
 from bioplausible.equitile.rl import RolloutBuffer
+from bioplausible.training.rl import RLTrainer
 from gymnasium.spaces import Box
 from torch import nn
-
-from bioplausible.training.rl import RLTrainer
 
 
 class TestRolloutBuffer(unittest.TestCase):

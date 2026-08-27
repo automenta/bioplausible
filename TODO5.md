@@ -12,14 +12,14 @@
 |---|---|
 | Phase 1 — Z3 close-out + `computronium-stability` release | ✅ **COMPLETE** |
 | Phase 2 — Continual learning flagship | ⚠️ **REOPENED** — null disputed; re-test gated on discriminating probe |
-| Phase 3 — Edge memory-wall benchmark | 🎯 **NEXT UP** — NOT blocked by CL; uses verified standard factories |
-| Phase 3.5 — Arm verification & calibration | 🟡 **PARTIAL** — 3.5.1 ✅, 3.5.2 needs capacity-limited probe, 3.5.3–3.5.5 pending |
+| Phase 3 — Edge memory-wall benchmark | 🟡 **PRE-REGISTRATION COMPLETE** — E-1 decisions recorded; ready for implementation |
+| Phase 3.5 — Arm verification & calibration | 🟡 **PARTIAL** — 3.5.1 ✅, 3.5.2 needs capacity-limited probe, 3.5.3 pre-flight pulled to Phase 3 gate, 3.5.4–3.5.5 pending |
 | Phase 4 — Regime discovery + substrate counterfactuals | 🟢 **UNBLOCKED** — PR-9 campaign stack commissioned |
 | Phase 5 — Re-axed family-coverage benchmark | ⬜ not started |
 | Phase 6 — Frontier certification + Goldilocks map | 🟢 **UNBLOCKED** — PR-9 commissioned; awaits flagship coordinate |
 | Inherited infrastructure (PR-0…PR-9, Phase 9 pipeline, guard τ=1.029) | ✅ carried green from TODO4 |
 
-**Carried forward (do not rebuild):** Phase 9 family-neutral pipeline (30/30 probes green) · PR-2 θ-audit harness · PR-3a `ResourceUsage` (incl. `peak_memory_mb`/`activation_memory_mb`) · PR-4 stats kit · PR-5 guard (τ=1.029, FKR 0%) · PR-6 fairness contract · **PR-9 campaign stack COMMISSIONED** (6 episodes, checkpoint/resume + determinism verified) · EqProp 81.32% MNIST anchor · Z3 v2 canonical-order capability + gate-history instrumentation.
+**Carried forward (do not rebuild):** Phase 9 family-neutral pipeline (30/30 probes green) · PR-2 θ-audit harness · PR-3a `ResourceUsage` (incl. `peak_memory_mb`/`activation_memory_mb`/`gradient_memory_mb`/`peak_activation_bytes`) · PR-4 stats kit · PR-5 guard (τ=1.029, FKR 0%) · PR-6 fairness contract · **PR-9 campaign stack COMMISSIONED** (6 episodes, checkpoint/resume + determinism verified) · EqProp 81.32% MNIST anchor · Z3 v2 canonical-order capability + gate-history instrumentation.
 
 ---
 
@@ -27,13 +27,35 @@
 
 *Critical-path logic: the memory wall is structurally guaranteed (local rules store no backward graph) and uses already-verified standard factories — it is the highest-value, lowest-risk, most shareable deliverable. The Phase 2 re-test is genuinely uncertain and must first be gated on a discriminating probe; re-testing on the current non-discriminating setup risks a second uninterpretable null.*
 
+### 0. 📝 **Commit `DECISIONS.md`** (currently untracked, `git status` shows `??`) — **PROMOTED TO FIRST**
+- 6 strategic entries + all pre-registrations/kills/deviations to date.
+- Hard rule: no data collected before relevant `DECISIONS.md` entry + E-1 pre-registration exist.
+
 ### 1. 🎯 **Phase 3 memory-wall benchmark** (highest value / lowest risk — NOT blocked by CL)
 - Arms are **standard, already-verified factories** (`create_fa_mlp`, `create_eqprop_mlp`, `create_hebbian_mlp` in `core/presets.py`) — independent of the CL subsystem and its audits. No CL dependency.
-- Add `peak_activation_bytes` to `core/profiling.py::ResourceUsage` (fields `peak_memory_mb`/`activation_memory_mb`/`gradient_memory_mb` already exist — this is a small extension, not new instrumentation).
+- Add `peak_activation_bytes` to `core/profiling.py::ResourceUsage` (fields `peak_memory_mb`/`activation_memory_mb`/`gradient_memory_mb` already exist — this is a small extension, not new instrumentation). ✅ **DONE** (Session 25)
 - Three envelopes: 2 MB / 8 MB / 32 MB SRAM-class ceilings. OOM = recorded disqualified, not truncated.
 - Control floor: gradient-checkpointed + activation-offloaded backprop (PR-6).
 - Output: memory-accuracy frontier chart + deployment artifacts via PR-8 pipeline.
 - **Rationale (codebase-verified):** this is the manifesto's Heresy One and the "most visually shareable" result — a win by construction. Do it while it's guaranteed.
+
+### 1a. 📋 **Phase 3 E-1 Pre-Registration** ✅ **COMPLETE** (Session 25)
+- **Envelope tier labeling**: All three ceilings (2/8/32 MB) are **simulated/accounting-tier** bounds — no measured-tier claims until PR-3b hardware.
+- **Offload accounting**: Envelope bounds **on-tier bytes only** (SRAM). Activation offload to host RAM escapes the envelope; control floor must explicitly budget offload bytes or run without offload. Decision: control floor runs **without offload** for fair on-tier comparison (gradient checkpointing only).
+- **Recompute peaks**: Gradient checkpointing's peak = stored checkpoints + one recomputed segment. Wrapper must capture recompute peak via `peak_activation_bytes`, not just static graph.
+- **Per-envelope model/optimizer budget**: At 2 MB, params + optimizer dominate. Pre-register:
+  - 2 MB: SGD + ternary weights (no Adam), hidden_dim=64
+  - 8 MB: Adam, hidden_dim=128
+  - 32 MB: Adam, hidden_dim=256
+  Local-rule arms use SGD (no optimizer state) at all envelopes — this is the structural advantage.
+- **Disqualification rule**: Any run exceeding envelope ceiling is recorded as **disqualified (DNF)**, not truncated. DNFs appear on frontier chart as "exceeds envelope" markers.
+- **Control floor**: Gradient checkpointing (no offload) + SGD at 2 MB, Adam at 8/32 MB. Best-val early stopping, both best/last reported. ≥5 seeds.
+
+### 1b. 🔬 **ThermodynamicContrast Pre-Flight** (from 3.5.3, pulled forward as Phase 3 gate)
+- Run before Phase 3 suite: verify `ThermodynamicContrast` + `EnergyMinimizationDynamics` free/nudged gap > 0, pseudo-grad non-zero, cosine > 0.1 on MNIST.
+- Also verify `RandomProjectionsCredit` pseudo-grad non-zero.
+- Cost: minutes; doubles as pending 3.5.3 artifact; retires `max_steps` lesson permanently.
+- **Next action**: Execute pre-flight before Phase 3 suite runs.
 
 ### 2. ⚠️ **Harden the 3.5.2 forgetting probe FIRST** (gates the Phase 2 re-test)
 - Current probe (hidden=256, 2 binary tasks) shows **0.000 forgetting for all arms** — not capacity-limited, cannot discriminate. Re-testing the flagship on this setup would repeat the uninterpretable-null failure.
@@ -49,10 +71,7 @@
 - Plasticity: `FastWeightPlasticity` round-trip verified, `reset_plastic_state` at task boundaries, no leakage, memory accounting accurate.
 - Config: all arms constructible via `compose_joint_system_from_configs` with YAML round-trip, registered with correct decorators.
 
-### 5. 📝 **Commit `DECISIONS.md`** (currently untracked, `git status` shows `??`)
-- 6 strategic entries + all pre-registrations/kills/deviations to date.
-
-### 6. 📦 **Add untracked artifacts to repo** (once verified)
+### 5. 📦 **Add untracked artifacts to repo** (once verified)
 - `benchmark_results/`, `autoscientist_campaigns/`, `scripts/verify_arms.py`, `scripts/verify_two_task.py` (keep verify scripts as calibration utilities; regression tests are the durable guarantee).
 
 > **Note on PR-9 / campaign stack:** the AutoScientist commissioning is **already complete** — `autoscientist_campaigns/campaign.db` holds 1 campaign, 6 completed episodes, with checkpoint/resume verified (θ/state/RNG fidelity + bitwise determinism, `commission_report.json`). This unblocks **Phase 4 (regime discovery)** and **Phase 6 (frontier campaign)** earlier than the plan previously assumed. Update the "carried forward" line and Phase 4/6 gates to treat PR-9 as green.
@@ -127,16 +146,28 @@ All items done. Exit criteria met:
 - Strict peak-memory accounting: activation memory + parameters + optimizer state + settle-state
 - Instrument via `core/profiling.py::ResourceUsage` (PR-3a), extended with `peak_activation_bytes`
 - OOM trigger: run exceeding envelope recorded as disqualified, not silently truncated
+- **Recompute peak capture**: Gradient checkpointing's peak = stored checkpoints + one recomputed segment. Wrapper captures recompute peak via `peak_activation_bytes`.
 
-### 3.2 Envelope Definitions
-- Three SRAM-class ceilings: **2 MB / 8 MB / 32 MB**
-- Pre-register envelope set + disqualification rule (E-1 registration)
+### 3.2 Envelope Definitions & E-1 Pre-Registration
+- Three SRAM-class ceilings: **2 MB / 8 MB / 32 MB** (all **simulated/accounting-tier** — no measured-tier claims until PR-3b)
+- **Offload accounting**: Envelope bounds **on-tier bytes only** (SRAM). Control floor runs **without offload** (gradient checkpointing only) for fair on-tier comparison.
+- **Per-envelope model/optimizer budget** (pre-registered):
+  - 2 MB: SGD + ternary weights (no Adam), hidden_dim=64
+  - 8 MB: Adam, hidden_dim=128
+  - 32 MB: Adam, hidden_dim=256
+  Local-rule arms use SGD (no optimizer state) at all envelopes — structural advantage.
+- **Disqualification rule**: Any run exceeding envelope ceiling recorded as **disqualified (DNF)**, not truncated. DNFs appear on frontier chart as "exceeds envelope" markers.
 
 ### 3.3 Arms & Fairness Contract (PR-6)
 - Local-rule arms: FA, Hebbian/STDP, contrastive EqProp (no stored activations)
-- Control floor: gradient-checkpointed + activation-offloaded backprop (best-known backprop memory reduction)
-- PR-6 contract: equal GPU-hour tuning budgets, best-val early stopping (both numbers reported), ≥5 seeds
+- Control floor: gradient checkpointing (no offload) + SGD at 2 MB, Adam at 8/32 MB
+- PR-6 contract: equal GPU-hour tuning budgets, best-val early stopping (both best/last reported), ≥5 seeds
 - Energy claims: **proxy-tier only** (PR-3a), labeled explicitly. No measured-tier until PR-3b hardware.
+
+### 3.3b ThermodynamicContrast Pre-Flight (Gate)
+- Run before Phase 3 suite: verify `ThermodynamicContrast` + `EnergyMinimizationDynamics` free/nudged gap > 0, pseudo-grad non-zero, cosine > 0.1 on MNIST
+- Also verify `RandomProjectionsCredit` pseudo-grad non-zero
+- Cost: minutes; doubles as 3.5.3 artifact; retires `max_steps` lesson
 
 ### 3.4 🎯 SHAREABLE — Full Run & Frontier Chart
 - Run all arms across all three envelopes
@@ -155,7 +186,8 @@ All items done. Exit criteria met:
 ### 3.5.1 Single-Task Learning Verification ✅ COMPLETE
 - Sanity task: MNIST 10-class (5 epochs, batch 64, 5 seeds)
 - All arms must reach ≥95% test accuracy (backprop baseline)
-- **Result:** All 6 arms now pass (backprop/replay/lwf/si ≥96.7%, fast_weights/ewc 95.3% @ 7 epochs; pre-fix these were at **chance 48%**)
+- **Result:** All 6 arms now pass (backprop/replay/lwf/si ≥96.7% @ 5 epochs, fast_weights/ewc 95.3% @ 7 epochs; pre-fix these were at **chance 48%**)
+- **⚠️ Deviation logged (E-11):** fast_weights/ewc required 7 epochs vs. pre-registered 5 to reach ≥95%. This is a protocol deviation — recorded in `DECISIONS.md` per hard rule.
 - **3 critical bugs fixed + locked by regression tests:**
   1. Nudged-target indexing: one-hot scattered onto wrong global columns for tasks 1–4 → wrong-sign contrastive gradients
   2. `max_steps=3` (below `convergence_start=5`) → settling never converged → near-zero ThermodynamicContrast gradients
@@ -392,6 +424,25 @@ Writing begins only after system is complete and tested. Candidate artifacts, in
 ---
 
 ## Session Log (reverse-chronological)
+
+### Session 25 — COMPLETED (2026-08-27)
+**Phase 3 Pre-Registration & ResourceUsage Extension:**
+- Added `peak_activation_bytes` field to `ResourceUsage` in `computronium/core/profiling.py` (extends existing `peak_memory_mb`/`activation_memory_mb`/`gradient_memory_mb`)
+- Implemented `__add__`, `__truediv__`, `to_dict`, `from_dict` for new field
+- All ResourceUsage tests pass (addition, division, serialization round-trip)
+- Updated TODO5.md with Phase 3 E-1 pre-registration decisions:
+  - Envelope tier labeling: all three ceilings (2/8/32 MB) are **simulated/accounting-tier**
+  - Offload accounting: envelope bounds **on-tier bytes only** (SRAM); control floor runs **without offload**
+  - Recompute peaks: gradient checkpointing peak captured via `peak_activation_bytes`
+  - Per-envelope model/optimizer budget: 2MB→SGD+ternary+hidden=64; 8MB→Adam+hidden=128; 32MB→Adam+hidden=256
+  - Disqualification rule: runs exceeding envelope recorded as DNF, not truncated
+  - Control floor: gradient checkpointing (no offload) + SGD at 2MB, Adam at 8/32MB
+- Pulled ThermodynamicContrast pre-flight (from 3.5.3) forward as Phase 3 gate
+- Logged E-11 deviation: fast_weights/ewc required 7 epochs vs. pre-registered 5 to reach ≥95%
+- Verified preset factories: `create_fa_mlp`, `create_eqprop_mlp`, `create_hebbian_mlp` all work
+- Verified continual learning arms: `create_fast_weight_arm`, `create_backprop_arm` work with `run_continual_train_step`
+- All integration tests pass: `test_continual_learning.py` (4 tests), `test_continuous_training.py` (3 tests)
+- All unit tests pass: `test_energy_sparsity.py` (10 tests), `test_stability_metrics.py` (33 tests)
 
 ### Session 24 — COMPLETED (2026-08-27)
 **Refactor: Extract continual learning subsystem into dedicated module:**

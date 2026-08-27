@@ -12,14 +12,13 @@ fallback). This suite verifies the two gates the plan sets:
 
 import pytest
 import torch
-from torch import nn
-
 from bioplausible.acceleration.kernel_backend import KernelRegistry
 from bioplausible.zoo.mep.optimizers.strategies.update import (
     DionUpdate,
     FisherUpdate,
     MuonUpdate,
 )
+from torch import nn
 
 
 @pytest.fixture(autouse=True)

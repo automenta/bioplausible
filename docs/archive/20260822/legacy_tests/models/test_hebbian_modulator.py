@@ -5,7 +5,6 @@ and that hidden layers receive error-modulated updates.
 """
 
 import torch
-
 from bioplausible.zoo.models.hebbian import ThreeFactorHebbian
 
 

@@ -7,8 +7,6 @@ works correctly and falls back to legacy exporter when needed.
 from __future__ import annotations
 
 import torch
-from torch import nn
-
 from bioplausible.acceleration.export import _TARGET_SPECS, _onnx_export, export_kernel
 from bioplausible.acceleration.kernel_backend import (
     AlgorithmFamily,
@@ -16,6 +14,7 @@ from bioplausible.acceleration.kernel_backend import (
     KernelConfig,
     KernelRegistry,
 )
+from torch import nn
 
 
 class TestOnnxExportTorchExport:

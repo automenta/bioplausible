@@ -5,7 +5,6 @@ Verifies that error backprojection modulates hidden layer weight updates
 """
 
 import torch
-
 from bioplausible.zoo.models.spiking import SpikingSTDP
 
 

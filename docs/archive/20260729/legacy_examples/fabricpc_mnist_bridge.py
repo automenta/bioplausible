@@ -16,9 +16,6 @@ Usage:
 import time
 
 import torch
-from torch.utils.data import DataLoader, Subset
-from torchvision import datasets, transforms
-
 from bioplausible.graph import (
     Edge,
     InferenceSGD,
@@ -30,6 +27,8 @@ from bioplausible.graph import (
     train_backprop,
     train_pcn,
 )
+from torch.utils.data import DataLoader, Subset
+from torchvision import datasets, transforms
 
 
 def get_mnist_loaders(batch_size: int = 64, train_limit: int = 0, test_limit: int = 0):

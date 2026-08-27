@@ -7,7 +7,6 @@ from typing import Any
 import gymnasium as gym
 import numpy as np
 import torch
-
 from bioplausible.models import BackpropMLP, LoopedMLP
 from bioplausible.training.rl import RLTrainer
 

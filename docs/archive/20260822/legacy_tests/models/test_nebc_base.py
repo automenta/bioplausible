@@ -7,7 +7,6 @@ from abc import ABC
 
 import pytest
 import torch
-
 from bioplausible.zoo.models.hebbian import DeepHebbianChain
 from bioplausible.zoo.nebc_base import (
     NEBCBase,

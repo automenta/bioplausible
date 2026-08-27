@@ -288,7 +288,7 @@ def _maybe_checkpoint(
     iteration: int,
     coordinate: str,
     task_name: str,
-    joint: JointSystem,  # noqa: PLR0913 - mirrors create_checkpoint's own signature
+    joint: JointSystem,
 ) -> bool:
     """Snapshot the system ENTERING this episode; resume replays bit-exact."""
     from computronium.core.campaign.evaluation import episode_batch

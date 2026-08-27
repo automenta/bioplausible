@@ -3,9 +3,8 @@ import pathlib
 from itertools import product
 
 from bioplausible.config.schema import RunConfig
-from omegaconf import OmegaConf
-
 from bioplausible.core.trainer import run_from_runconfig as run_from_config
+from omegaconf import OmegaConf
 
 
 def run_reduced_sweep():

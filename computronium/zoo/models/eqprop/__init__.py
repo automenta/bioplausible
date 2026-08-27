@@ -2,6 +2,9 @@
 
 import types
 
+# Learning rules for validation tracks
+from computronium.core.local_learning.rules.eqprop import LazyEqProp
+
 from ..backprop import BackpropMLP
 from .causal_transformer_eqprop import (
     CausalEqPropAttention,
@@ -42,9 +45,6 @@ from .temporal_resonance import TemporalResonanceEqProp
 from .ternary import TernaryEqProp, TernaryLinear, TernaryQuantize
 from .ternary_native import native_ternary_eqprop
 from .transformer_eqprop import EqPropAttention, TransformerEqProp
-
-# Learning rules for validation tracks
-from computronium.core.local_learning.rules.eqprop import LazyEqProp
 
 # Alias for backward compatibility with validation tracks
 LoopedMLP = LoopedMLPForLM

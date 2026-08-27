@@ -21,8 +21,8 @@ from computronium.domains.base import (
 )
 
 __all__ = [
-    "VisionTask",
     "SplitMNIST",
+    "VisionTask",
 ]
 
 
@@ -281,7 +281,7 @@ class SplitMNIST(DomainTask):
         return DomainSpec(
             name=self.name,
             domain_type=DomainType.VISION,
-            description=f"Split-MNIST continual learning (5 binary tasks)",
+            description="Split-MNIST continual learning (5 binary tasks)",
             default_metrics=["accuracy", "loss", "backward_transfer", "forgetting"],
             supported_tasks=["continual_learning", "classification"],
             default_batch_size=64,
@@ -313,7 +313,7 @@ class SplitMNIST(DomainTask):
 
     def setup(self) -> None:
         """Load full MNIST and create task-specific splits."""
-        import torchvision.datasets as datasets
+        from torchvision import datasets
 
         # Load full MNIST datasets
         self._full_train_ds = datasets.MNIST(

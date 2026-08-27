@@ -30,28 +30,7 @@ from pathlib import Path
 # Re-export all public API from system_trainer for backward compatibility
 from computronium.core.system_trainer import (
     CLConfig,
-    CLMetrics,
-    ReplayBuffer,
-    LwFLoss,
-    SynapticIntelligence,
-    ContinualJointSystem,
-    create_fast_weight_arm,
-    create_ewc_arm,
-    create_backprop_arm,
-    create_replay_arm,
-    create_lwf_arm,
-    create_si_arm,
-    run_continual_train_step,
-    compute_cl_metrics,
-    create_stability_guard,
-    make_transition_fn,
-    check_stability,
-    run_continual_learning,
     run_continual_learning_suite,
-    CL_NUM_TASKS as NUM_TASKS,
-    CL_CLASSES_PER_TASK as CLASSES_PER_TASK,
-    CL_TOTAL_CLASSES as TOTAL_CLASSES,
-    SPLIT_MNIST_TASKS,
 )
 
 

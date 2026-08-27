@@ -7,11 +7,10 @@ from unittest.mock import patch
 
 import torch
 from bioplausible.execution.report.orchestrator import ReportOrchestrator
-from bioplausible.zoo.base import BioModel
-from torch import nn
-
 from bioplausible.execution.task import ExperimentTask
 from bioplausible.hyperopt import PatientLevel
+from bioplausible.zoo.base import BioModel
+from torch import nn
 
 
 class BaseMockModel(BioModel):

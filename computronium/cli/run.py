@@ -820,23 +820,20 @@ def _build_system_from_flat_config(
         InstantaneousDynamics,
         LocalGoodnessCredit,
         ParameterUpdateConfig,
-        PredictiveSettlingDynamics,
         RandomProjectionsCredit,
         RecurrentGeometry,
         SpikeIntegrationDynamics,
         StateDynamicsConfig,
         SubstrateConfig,
         TargetInversionCredit,
+        TemporalTraceCredit,
         ThermodynamicContrast,
         TileGeometry,
-        TemporalTraceCredit,
     )
     from computronium.core.plasticity import (
         FastWeightPlasticity,
-        FastWeightPlasticityConfig,
         NullPlasticity,
         RoutingPlasticity,
-        RoutingPlasticityConfig,
     )
     from computronium.core.system_trainer import compose_joint_system, compose_system
 

@@ -5,11 +5,10 @@ This script demonstrates how to use the EqPropClassifier with the standard
 Scikit-Learn API (fit/predict) on a simple dataset.
 """
 
+from bioplausible.sklearn_interface import EqPropClassifier
 from sklearn.datasets import load_digits
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
-
-from bioplausible.sklearn_interface import EqPropClassifier
 
 
 def main():

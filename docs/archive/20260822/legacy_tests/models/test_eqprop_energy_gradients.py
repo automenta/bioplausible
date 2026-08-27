@@ -7,7 +7,6 @@ self-recurrent ``W_rec`` layers are exercised too). W_out is excluded from the
 """
 
 import torch
-
 from bioplausible.config.unified import ModelConfig
 from bioplausible.zoo.models.eqprop._energy import EquilibriumMLP
 

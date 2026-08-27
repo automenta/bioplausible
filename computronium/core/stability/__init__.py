@@ -10,6 +10,10 @@ from computronium.core.stability.basin import (
     estimate_basin_stability,
     estimate_basin_stability_multistart,
 )
+from computronium.core.stability.frontier import (
+    FrontierAggregator,
+    FrontierRecord,
+)
 from computronium.core.stability.guard import (
     CalibrationReport,
     DisagreementReport,
@@ -18,10 +22,6 @@ from computronium.core.stability.guard import (
     calibrate_threshold,
     measure_guard_overhead,
     quantify_proxy_disagreement,
-)
-from computronium.core.stability.frontier import (
-    FrontierAggregator,
-    FrontierRecord,
 )
 from computronium.core.stability.lyapunov import (
     LyapunovEstimator,

@@ -10,8 +10,6 @@ Accuracy parity gates (REFACTOR8 Phase 2):
 
 import pytest
 import torch
-from torch import nn
-
 from bioplausible.acceleration import get_algorithm_kernels
 from bioplausible.acceleration.kernel_backend import (
     AlgorithmFamily,
@@ -20,6 +18,7 @@ from bioplausible.acceleration.kernel_backend import (
     KernelRegistry,
 )
 from bioplausible.core.registry import ComponentCategory, Registry
+from torch import nn
 
 # Import zoo models to trigger registration
 

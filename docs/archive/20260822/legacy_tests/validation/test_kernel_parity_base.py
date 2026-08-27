@@ -19,8 +19,6 @@ from dataclasses import dataclass
 
 import pytest
 import torch
-from torch import nn
-
 from bioplausible.acceleration import (
     AlgorithmFamily,
     HardwareTarget,
@@ -29,6 +27,7 @@ from bioplausible.acceleration import (
     get_algorithm_kernels,
 )
 from bioplausible.acceleration.backprop_kernels import BackpropKernelBackend
+from torch import nn
 
 
 @pytest.fixture(scope="module", autouse=True)

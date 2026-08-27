@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any
 
 from bioplausible.analysis.legacy_report.composer import ReportComposer
-
 from bioplausible.execution.synthesizer import ResearchSynthesizer
 
 logger = logging.getLogger("ReportOrchestrator")

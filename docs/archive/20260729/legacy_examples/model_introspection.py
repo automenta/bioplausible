@@ -6,7 +6,6 @@ internal convergence dynamics of Equilibrium Propagation models.
 """
 
 import torch
-
 from bioplausible.zoo.models.eqprop import DirectedEP, StandardEqProp
 
 

@@ -7,8 +7,6 @@ plumbing through ``create_strategy_optimizer``.
 
 import pytest
 import torch
-from torch import nn
-
 from bioplausible.core.optimization import (
     StrategyConfig,
     StrategyOptimizerConfig,
@@ -16,6 +14,7 @@ from bioplausible.core.optimization import (
 )
 from bioplausible.zoo.models.fa import StandardFA
 from bioplausible.zoo.models.target_prop import DifferenceTargetProp
+from torch import nn
 
 
 class TestTargetPropWiring:

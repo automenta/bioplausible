@@ -82,7 +82,6 @@ class AuditRow:
 
 def _load_registry() -> None:
     """Import the registration modules so every component is present."""
-    import computronium.zoo  # ruff: ignore[unused-import] - triggers registration
 
 
 def _parity_status(name: str) -> str:

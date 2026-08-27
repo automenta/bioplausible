@@ -1,9 +1,8 @@
 import unittest
 
 import torch
-from torch.utils.data import DataLoader, TensorDataset
-
 from bioplausible import EqPropTrainer, LoopedMLP
+from torch.utils.data import DataLoader, TensorDataset
 
 
 class TestCoreTrainer(unittest.TestCase):

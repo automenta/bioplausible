@@ -20,7 +20,6 @@ from typing import Protocol
 from torch.utils.data import DataLoader
 
 # Import zoo models to trigger registration
-import computronium.zoo  # ruff: ignore[unused-import]  # triggers model registration
 from computronium.core.logging import get_logger
 from computronium.core.system_trainer import (
     SystemTrainer,
