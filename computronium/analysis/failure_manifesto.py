@@ -9,6 +9,7 @@ __all__ = [
     "FailureManifestoGenerator",
     "main",
     "write_z3_boundary_memo",
+    "write_continual_learning_null_memo",
 ]
 
 
@@ -69,17 +70,25 @@ class FailureManifestoGenerator:
 
         return output_path
 
-    def generate_with_z3_memo(
+    def generate_with_memos(
         self,
         output_path: str = "reports/failure_manifesto.md",
         model: str | None = None,
+        z3: bool = False,
+        continual_learning: bool = False,
     ):
-        """Generate the standard manifesto plus the Z3 boundary memo appendix."""
+        """Generate the standard manifesto plus the requested memo appendices."""
         self.generate(output_path, model)
-        # Append the Z3 boundary memo
+        if not (z3 or continual_learning):
+            return output_path
         with Path(output_path).open("a") as f:
-            f.write("\n\n")
-            f.write(write_z3_boundary_memo())
+            if z3:
+                f.write("\n\n")
+                f.write(write_z3_boundary_memo())
+            if continual_learning:
+                f.write("\n\n")
+                f.write(write_continual_learning_null_memo())
+        return output_path
 
 
 def write_z3_boundary_memo() -> str:
@@ -173,6 +182,82 @@ Z3 is closed as a research line. The operator library, audit harness, and gate-h
 """
 
 
+def write_continual_learning_null_memo() -> str:
+    """Return the Phase 2 continual-learning null result memo.
+
+    Documents the E-7 kill of the pre-registered claim that FastWeightPlasticity
+    (psi/theta decoupling) beats replay at matched memory on Split-MNIST. Includes
+    the arm-calibration caveat that motivated Phase 3.5.
+    """
+    return """# Appendix: Phase 2 Continual-Learning Null Memo
+
+## Executive Summary
+
+The pre-registered claim — *psi/theta decoupling prevents catastrophic forgetting
+better than replay at matched total memory* — was **REJECTED (E-7 null, kill
+confirmed)** on Split-MNIST task-incremental, 5 seeds, paired. This memo records
+the result, the arm-calibration caveat that tempers its interpretation, and the
+deferred follow-ups.
+
+---
+
+## Design (Pre-registered via PR-4, prior to the full run)
+
+- **Task:** Split-MNIST, 5 binary tasks (0/1, 2/3, 4/5, 6/7, 8/9), single 10-class
+  output with task masking, task-incremental protocol (boundaries signaled).
+- **Comparison:** FastWeightPlasticity (psi/theta decoupling, state memory) vs.
+  matched-total-memory replay buffer. n=5 seeds, paired.
+- **Endpoint:** backward transfer at matched memory; required superiority margin
+  +0.10 (pre-registered) for the claim to survive.
+- **Second comparator (informative, not pre-registered):** per-boundary forgetting.
+
+## Result (E-7 Triage)
+
+| Endpoint | mean_diff (fast_weights − replay) | 95% CI | p | Verdict |
+|---|---|---|---|---|
+| Backward transfer | **−0.062** | [−0.082, −0.039] | 0.0068 | fast_weights WORSE |
+| Forgetting | **+0.081** | [0.073, 0.089] | 0.0034 | fast_weights forgets MORE |
+
+Pre-registration required +0.10 superiority; the CI excludes the margin **in the
+wrong direction**. Kill criterion honored; the claim is REJECTED.
+
+## Arm-Calibration Caveat (drives Phase 3.5)
+
+Inspection of `benchmark_results/continual_learning_full_rerun_v2/` shows the
+non-replay arms were **not correctly calibrated** at the time of this run:
+
+- **fast_weights:** final per-task accuracy ≈ 0.45–0.60 on the 10-class head —
+  chance-level on every task after task 0. It was not learning subsequent tasks,
+  so its high measured forgetting is confounded by failed acquisition, not a
+  clean forgetting signature.
+- **ewc:** tasks 1–4 also sit at chance (~0.31–0.62); only task 0 is learned.
+- **backprop / lwf / si:** produce **bit-identical** accuracy matrices and
+  forgetting curves — the LwF distillation and SI regularization paths were not
+  taking effect (they collapse to the plain backprop loop).
+
+**Interpretation:** the paired null reflects a broken fast_weights arm against a
+working replay arm. It is a valid *negative result about the as-built pipeline*,
+but it is **not** a clean test of the psi/theta-decoupling hypothesis. Phase 3.5
+(single-task MNIST >=95%, two-task forgetting probe, credit-correctness, and
+plasticity-state audit) is the gate that must pass before any scaling or any
+re-tested CL comparison is trusted. See TODO5 §3.5.
+
+## Artifacts
+
+- `benchmark_results/continual_learning_full_rerun_v2/continual_learning_results.json`
+  (5 seeds × 6 arms × task_incremental; accuracy matrix, BWT, forgetting,
+  spectral-radius rider, stability kills).
+- Pre-registration + kill decision logged in `DECISIONS.md`.
+
+## Follow-ups (deferred / blocked)
+
+- Permuted-MNIST 50-task stretch: **deferred** until Phase 3.5 arm verification
+  passes (TODO5 §2.5).
+- Re-test of the psi/theta hypothesis on verified arms: only legitimate after the
+  Phase 3.5 gate, and only with a re-registration.
+"""
+
+
 def _write_distribution(f, df: pd.DataFrame) -> None:
     """Write the overall failure-type distribution table."""
     f.write("## Overall Failure Distribution\n\n")
@@ -253,12 +338,19 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Append the Z3 boundary memo to the manifesto.",
     )
+    parser.add_argument(
+        "--cl-memo",
+        action="store_true",
+        help="Append the Phase 2 continual-learning null memo to the manifesto.",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO)
     generator = FailureManifestoGenerator(args.db)
-    if args.z3_memo:
-        out = generator.generate_with_z3_memo(args.output, model=args.model)
+    if args.z3_memo or args.cl_memo:
+        out = generator.generate_with_memos(
+            args.output, model=args.model, z3=args.z3_memo, continual_learning=args.cl_memo
+        )
     else:
         out = generator.generate(args.output, model=args.model)
     logging.info("wrote failure manifesto to %s", out)

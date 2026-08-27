@@ -10,46 +10,38 @@ Tests verify:
 
 from __future__ import annotations
 
+import pytest
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from torch import Tensor
 from torch.utils.data import DataLoader, TensorDataset
 
-import pytest
-
-from computronium.core.joint.transition import NullPlasticity, PlasticityConfig
-from computronium.core.pipeline import run_train_step
-from computronium.core.plasticity import create_fast_weight_plasticity
-from computronium.core.profiling import ResourceUsage, measure_suite_resources
-from computronium.core.stability import StabilityGuard, GuardDecision
-from computronium.core.stability.spectral_radius import SpectralRadiusEstimator
+from computronium.core.stability import GuardDecision, StabilityGuard
 from computronium.domains.base import TaskSplit
 from computronium.domains.vision import SplitMNIST
 from computronium.experiments.joint.continual_learning import (
+    CLASSES_PER_TASK,
+    NUM_TASKS,
+    SPLIT_MNIST_TASKS,
+    TOTAL_CLASSES,
     CLConfig,
     CLMetrics,
-    ReplayBuffer,
-    LwFLoss,
-    SynapticIntelligence,
     ContinualJointSystem,
-    create_fast_weight_arm,
-    create_ewc_arm,
-    create_backprop_arm,
-    create_replay_arm,
-    create_lwf_arm,
-    create_si_arm,
-    run_continual_train_step,
+    LwFLoss,
+    ReplayBuffer,
+    SynapticIntelligence,
+    check_stability,
     compute_cl_metrics,
+    create_backprop_arm,
+    create_ewc_arm,
+    create_fast_weight_arm,
+    create_lwf_arm,
+    create_replay_arm,
+    create_si_arm,
     create_stability_guard,
     make_transition_fn,
-    check_stability,
     run_continual_learning,
     run_continual_learning_suite,
-    SPLIT_MNIST_TASKS,
-    NUM_TASKS,
-    CLASSES_PER_TASK,
-    TOTAL_CLASSES,
+    run_continual_train_step,
 )
 
 # ============================================================
@@ -123,8 +115,8 @@ class TestFastWeightPlasticityLearning:
 
     def test_energy_minimization_dynamics_produces_different_states(self, fast_weight_model, mnist_batch):
         """Verify EnergyMinimizationDynamics produces different free vs nudged states."""
-        from computronium.core.ontology import Phase, SystemState
-        from computronium.core.pipeline import forward_pass, phase_states
+        from computronium.core.ontology import SystemState
+        from computronium.core.pipeline import forward_pass
 
         x, y = mnist_batch
         js = fast_weight_model.joint_system
@@ -179,7 +171,7 @@ class TestFastWeightPlasticityLearning:
         # Should have gradients for each learnable layer (3 Linear layers)
         assert len(pseudo_grads) == 3
         for i, grad in enumerate(pseudo_grads):
-            assert grad.shape == js.geometry.params[f"{i*2}.weight"].shape
+            assert grad.shape == js.geometry.params[f"{i * 2}.weight"].shape
             assert not torch.allclose(grad, torch.zeros_like(grad)), (
                 f"Gradient {i} should be non-zero"
             )
@@ -702,6 +694,88 @@ class TestSuiteRunner:
         # Check results file saved
         results_file = tmp_path / "continual_learning_results.json"
         assert results_file.exists()
+
+
+# ============================================================
+# Test: Arm Learning Regression (Phase 3.5)
+# ============================================================
+
+
+def _train_single_task(arm_factory, task_id: int, device, epochs: int = 2) -> float:
+    """Train an arm on a single binary task and return test accuracy.
+
+    Uses task 1 (digits 2/3) by default, which requires real feature learning
+    (task 0's 0-vs-1 is separable from random init and masked the pre-fix bug).
+    """
+    import random
+
+    random.seed(42)
+    torch.manual_seed(42)
+
+    model, extra = arm_factory(
+        CLConfig.input_dim, CLConfig.hidden_dim, CLConfig.output_dim, str(device)
+    )
+    task = SplitMNIST(task_id=task_id, batch_size=64, device=str(device), num_workers=0)
+    task.setup()
+    loader = task.get_dataloader(TaskSplit.TRAIN)
+    test_loader = task.get_dataloader(TaskSplit.TEST)
+
+    model.set_task(task_id)
+    model.train()
+    for _ in range(epochs):
+        for x, y in loader:
+            x = x.view(x.shape[0], -1).to(device)
+            y = y.to(device)
+            model.train_step(x, y, task_id=task_id)
+
+    model.eval()
+    correct = total = 0
+    with torch.no_grad():
+        for x, y in test_loader:
+            x = x.view(x.shape[0], -1).to(device)
+            y = y.to(device)
+            logits = model(x, task_id=task_id)
+            task_logits = logits[:, task_id * 2 : task_id * 2 + 2]
+            correct += (task_logits.argmax(dim=1) == y).sum().item()
+            total += y.shape[0]
+    return correct / total if total else 0.0
+
+
+class TestArmLearningRegression:
+    """Regression tests locking the Phase 3.5 arm-calibration fixes.
+
+    Pre-fix, fast_weights/ewc sat at chance (~0.5) on task 1 because (a) the
+    nudged-settle target was one-hot onto the wrong global output columns and
+    (b) settling used max_steps=3 (never converged). SI regularization was a
+    no-op (gradients never applied). These tests assert real learning so the
+    Phase 2 null result cannot be silently trusted again.
+    """
+
+    def test_fast_weights_learns_discriminating_task(self, device):
+        """fast_weights must learn task 1 (2/3) well above chance."""
+        acc = _train_single_task(
+            lambda *a: (create_fast_weight_arm(*a), {}), task_id=1, device=device
+        )
+        assert acc > 0.75, f"fast_weights task1 accuracy {acc:.3f} ~ chance"
+
+    def test_ewc_learns_discriminating_task(self, device):
+        """EWC must learn task 1 (2/3) well above chance."""
+        acc = _train_single_task(create_ewc_arm, task_id=1, device=device)
+        assert acc > 0.75, f"ewc task1 accuracy {acc:.3f} ~ chance"
+
+    def test_lwf_distillation_is_active(self, device):
+        """LwF distillation must produce a non-trivial penalty on task > 0."""
+        model, lwf = create_lwf_arm(
+            CLConfig.input_dim, CLConfig.hidden_dim, CLConfig.output_dim, str(device)
+        )
+        import copy
+
+        lwf.set_prev_model(copy.deepcopy(model))
+        logits = torch.randn(8, TOTAL_CLASSES, device=device)
+        prev_logits = torch.randn(8, TOTAL_CLASSES, device=device)
+        distill = lwf.distill_only(logits, task_id=1, prev_logits=prev_logits)
+        assert distill is not None
+        assert distill.item() > 0.0
 
 
 if __name__ == "__main__":
