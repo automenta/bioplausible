@@ -33,6 +33,14 @@ from computronium.core.system_trainer import (
     run_continual_learning_suite,
 )
 
+# Re-export constants from continual module
+from computronium.core.continual import (
+    CL_NUM_TASKS,
+    CL_CLASSES_PER_TASK,
+    CL_TOTAL_CLASSES,
+    SPLIT_MNIST_TASKS,
+)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Continual Learning Flagship (Phase 2)")

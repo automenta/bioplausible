@@ -18,11 +18,11 @@ from torch.utils.data import DataLoader, TensorDataset
 from computronium.core.stability import GuardDecision, StabilityGuard
 from computronium.domains.base import TaskSplit
 from computronium.domains.vision import SplitMNIST
-from computronium.experiments.joint.continual_learning import (
-    CLASSES_PER_TASK,
-    NUM_TASKS,
+from computronium.core.continual import (
+    CL_CLASSES_PER_TASK,
+    CL_NUM_TASKS,
+    CL_TOTAL_CLASSES,
     SPLIT_MNIST_TASKS,
-    TOTAL_CLASSES,
     CLConfig,
     CLMetrics,
     ContinualJointSystem,
@@ -416,7 +416,7 @@ class TestCLMetrics:
         """Test basic CL metrics computation."""
         # Create dummy task loaders
         task_loaders = []
-        for task_id in range(NUM_TASKS):
+        for task_id in range(CL_NUM_TASKS):
             dataset = TensorDataset(
                 torch.randn(20, 784), torch.randint(0, 2, (20,))
             )
@@ -424,17 +424,17 @@ class TestCLMetrics:
 
         fast_weight_model.set_task(0)
         # Pass a dummy accuracy matrix for proper testing
-        accuracy_matrix = [[0.0 for _ in range(NUM_TASKS)] for _ in range(NUM_TASKS)]
+        accuracy_matrix = [[0.0 for _ in range(CL_NUM_TASKS)] for _ in range(CL_NUM_TASKS)]
         metrics = compute_cl_metrics(fast_weight_model, task_loaders, 0, accuracy_matrix)
 
         assert isinstance(metrics, CLMetrics)
-        assert len(metrics.final_accuracies) == NUM_TASKS
-        assert len(metrics.accuracy_matrix) == NUM_TASKS
+        assert len(metrics.final_accuracies) == CL_NUM_TASKS
+        assert len(metrics.accuracy_matrix) == CL_NUM_TASKS
 
     def test_compute_cl_metrics_forgetting(self, fast_weight_model, device):
         """Test forgetting computation."""
         task_loaders = []
-        for task_id in range(NUM_TASKS):
+        for task_id in range(CL_NUM_TASKS):
             dataset = TensorDataset(
                 torch.randn(20, 784), torch.randint(0, 2, (20,))
             )
@@ -466,7 +466,7 @@ class TestCLMetrics:
     def test_compute_cl_metrics_backward_transfer(self, fast_weight_model, device):
         """Test backward transfer computation."""
         task_loaders = []
-        for task_id in range(NUM_TASKS):
+        for task_id in range(CL_NUM_TASKS):
             dataset = TensorDataset(
                 torch.randn(20, 784), torch.randint(0, 2, (20,))
             )
@@ -533,9 +533,9 @@ class TestSplitMNIST:
         """Verify SPLIT_MNIST_TASKS definition."""
         assert len(SPLIT_MNIST_TASKS) == 5
         assert SPLIT_MNIST_TASKS == [(0, 1), (2, 3), (4, 5), (6, 7), (8, 9)]
-        assert NUM_TASKS == 5
-        assert CLASSES_PER_TASK == 2
-        assert TOTAL_CLASSES == 10
+        assert CL_NUM_TASKS == 5
+        assert CL_CLASSES_PER_TASK == 2
+        assert CL_TOTAL_CLASSES == 10
 
     def test_split_mnist_loader(self, device):
         """Test SplitMNIST dataloader creation."""
@@ -578,7 +578,7 @@ class TestContinualLearningIntegration:
 
         # Should complete without error
         assert metrics.total_time_s > 0
-        assert len(metrics.final_accuracies) == NUM_TASKS
+        assert len(metrics.final_accuracies) == CL_NUM_TASKS
         assert len(metrics.stability_verdicts) > 0
 
     def test_replay_single_task_learning(self, device):
@@ -771,8 +771,8 @@ class TestArmLearningRegression:
         import copy
 
         lwf.set_prev_model(copy.deepcopy(model))
-        logits = torch.randn(8, TOTAL_CLASSES, device=device)
-        prev_logits = torch.randn(8, TOTAL_CLASSES, device=device)
+        logits = torch.randn(8, CL_TOTAL_CLASSES, device=device)
+        prev_logits = torch.randn(8, CL_TOTAL_CLASSES, device=device)
         distill = lwf.distill_only(logits, task_id=1, prev_logits=prev_logits)
         assert distill is not None
         assert distill.item() > 0.0
