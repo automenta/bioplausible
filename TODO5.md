@@ -181,6 +181,18 @@ TODO4 walked Z3 to its honest endpoint across sessions 9–14: the capability is
 - [ ] Config round-trip: arm → config dict → arm produces identical initialization.
 - [ ] All arms registered in `zoo/` with correct decorator (`@register_param_update`, `@register_hardware`, etc.).
 
+### 3.5.6 Continual Learning Arms Library Consolidation (Session 22)
+- [x] Moved 6 continual learning arm factories from `computronium/experiments/joint/continual_learning.py` to `computronium/core/system_trainer.py` as reusable library functions.
+- [x] Added factory functions: `create_fast_weight_arm`, `create_ewc_arm`, `create_backprop_arm`, `create_replay_arm`, `create_lwf_arm`, `create_si_arm`.
+- [x] Added supporting classes: `ContinualJointSystem`, `ReplayBuffer`, `LwFLoss`, `SynapticIntelligence`.
+- [x] Added training step helpers: `run_continual_train_step`, `_masked_task_loss`, `_lwf_train_step`, `_si_train_step`.
+- [x] Added config and metrics: `CLConfig`, `CLMetrics`, `compute_cl_metrics`.
+- [x] Added stability helpers: `create_stability_guard`, `make_transition_fn`, `make_composite_state`, `check_stability`.
+- [x] Added runner: `run_continual_learning`, `run_continual_learning_suite`.
+- [x] Updated `continual_learning.py` to import from library (backward-compatible re-exports).
+- [x] All 34 unit tests pass (excluding slow suite runner test).
+- [x] Integration tests pass: `test_continual_learning.py` (4 tests), `test_continuous_training.py` (3 tests).
+
 **Phase 3.5 exit:** All 6 arms pass single-task MNIST ≥95%, two-task forgetting within expected ranges, credit assignment unit tests pass, plasticity state management audited. If any arm fails → debug, fix, re-verify before proceeding to Phase 4/Leviathan.
 
 ---
@@ -411,6 +423,21 @@ Writing begins only after the system is complete and tested. Candidate artifacts
 ## Session Log
 
 *(reverse-chronological; append session 15+ below)*
+
+### Session 22 — COMPLETED (2026-08-27)
+**Continual Learning Arms Library Consolidation (Phase 3.5.6):**
+- ✅ Moved 6 continual learning arm factories from `computronium/experiments/joint/continual_learning.py` to `computronium/core/system_trainer.py` as reusable library functions.
+- ✅ Added factory functions: `create_fast_weight_arm`, `create_ewc_arm`, `create_backprop_arm`, `create_replay_arm`, `create_lwf_arm`, `create_si_arm`.
+- ✅ Added supporting classes: `ContinualJointSystem`, `ReplayBuffer`, `LwFLoss`, `SynapticIntelligence`.
+- ✅ Added training step helpers: `run_continual_train_step`, `_masked_task_loss`, `_lwf_train_step`, `_si_train_step`.
+- ✅ Added config and metrics: `CLConfig`, `CLMetrics`, `compute_cl_metrics`.
+- ✅ Added stability helpers: `create_stability_guard`, `make_transition_fn`, `make_composite_state`, `check_stability`.
+- ✅ Added runner: `run_continual_learning`, `run_continual_learning_suite`.
+- ✅ Updated `continual_learning.py` to import from library (backward-compatible re-exports).
+- ✅ All 34 unit tests pass (excluding slow suite runner test).
+- ✅ Integration tests pass: `test_continual_learning.py` (4 tests), `test_continuous_training.py` (3 tests).
+- ✅ CLI smoke tests work for all 6 arms (fast_weights, ewc, backprop, replay, lwf, si).
+- **Known issue:** LwF and SI training steps need refinement — they currently show similar results to backprop (distillation/regularization not fully effective). Deferred for Phase 3.5 verification.
 
 ### Session 21 — COMPLETED (2026-08-27)
 **Phase 2 Continual Learning NULL RESULT — Kill criterion honored:**
