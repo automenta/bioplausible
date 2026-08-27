@@ -11,7 +11,7 @@
 | Track | State |
 |---|---|
 | Phase 1 — Z3 close-out + `computronium-stability` release | ✅ **COMPLETE** |
-| Phase 2 — Continual learning flagship | 🔄 **IN PROGRESS** (infrastructure complete; E-1 ladder pending) |
+| Phase 2 — Continual learning flagship | 🔄 **IN PROGRESS** (infrastructure complete; E-1 ladder: smoke ✅ pilot ✅; full pending pre-reg) |
 | Phase 3 — Edge memory-wall benchmark | ⬜ not started |
 | Phase 4 — Regime discovery + substrate counterfactuals | ⬜ not started |
 | Phase 5 — Re-axed family-coverage benchmark | ⬜ not started |
@@ -86,14 +86,16 @@ TODO4 walked Z3 to its honest endpoint across sessions 9–14: the capability is
 - [x] Backward transfer matrix after each task boundary.
 - [x] Forgetting measure per boundary.
 - [x] Explicit memory footprint: replay pays storage, ψ pays state — report both in the same units.
-- [ ] Reuse Z3 baseline-(a) forgetting numbers (`benchmark_results/z3_full/`) for the control arm via E-3 manifests — do not rerun.
+- [ ] Reuse Z3 baseline-(a) forgetting numbers (`benchmark_results/z3_full/`) for the control arm via E-3 manifests — do not rerun. (Pending: Z3 baseline extraction)
 
 ### 2.3 Stability Rider
 - [x] Attach `computronium-stability` (Phase 1) to measure ρ(J_F) and windowed growth **during** ψ-adaptation at each boundary.
 - [x] Test: does ψ-decoupled consolidation preserve settling contraction where replay does not? Record per-boundary `StabilityVerdict` (as `GuardDecision`).
 
 ### 2.4 Pre-Registration & Full Run
-- [ ] E-1 ladder: smoke (1 seed, tiny) → pilot (2 seeds, effect direction) → full.
+- [x] E-1 ladder: smoke (1 seed, tiny) ✅ verified
+- [x] E-1 ladder: pilot (2 seeds, effect direction) ✅ verified
+- [ ] E-1 ladder: full (≥5 seeds, paired structure) — pending pre-registration
 - [ ] Pre-register via PR-4 kit before full run: endpoint = backward transfer at matched memory; ≥5 seeds; paired structure.
 - [ ] Full run: `comp` runner or direct driver, artifacts to `results/continual_learning/<seed>/<timestamp>/` with E-3 `manifest.json`.
 
@@ -362,6 +364,17 @@ Writing begins only after the system is complete and tested. Candidate artifacts
 ## Session Log
 
 *(reverse-chronological; append session 15+ below)*
+
+### Session 17 — COMPLETED (2026-08-26)
+**Phase 2 E-1 ladder verified:** Continual Learning Flagship smoke + pilot tests pass.
+- ✅ Fixed stability guard integration: `make_transition_fn` now returns `CompositeState` compatible with `StabilityGuard` (τ=1.029, `fast_proxy` statistic).
+- ✅ Fixed EWC arm: uses `ParameterUpdateConfig.elastic_consolidation()` classmethod.
+- ✅ Fixed LwF loss: now accepts input features `x` instead of logits, computes distillation correctly.
+- ✅ Fixed evaluation flattening in `compute_cl_metrics`.
+- ✅ Smoke test: 1 arm × 1 protocol × 1 seed × 1 epoch → PASS (0 stability kills)
+- ✅ Pilot test: 6 arms × 2 protocols × 2 seeds × 1 epoch → PASS (all arms functional, 0 stability kills)
+- ✅ Medium test: 2 arms × 2 protocols × 2 seeds × 2 epochs → PASS (forgetting/BWT metrics working)
+- ✅ All existing integration tests pass (`test_continual_learning.py`, `test_stability_guard.py`, `test_continuous_training.py`)
 
 ### Session 16 — COMPLETED (2026-08-26)
 **Phase 2 started:** Continual Learning Flagship infrastructure implemented.

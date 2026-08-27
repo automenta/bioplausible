@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 from computronium.core.joint.transition import NullPlasticity, PlasticityConfig
+from computronium.core.joint.state import CompositeState
 from computronium.core.pipeline import run_train_step
 from computronium.core.plasticity import (
     create_fast_weight_plasticity,
@@ -159,16 +160,27 @@ class LwFLoss(nn.Module):
             p.requires_grad_(False)
         self.prev_model.eval()
 
-    def forward(self, logits: Tensor, targets: Tensor, task_id: int) -> Tensor:
+    def forward(self, x: Tensor, targets: Tensor, task_id: int, current_model: nn.Module) -> Tensor:
+        """Compute loss: CE on current model + distillation from previous model.
+        
+        Args:
+            x: Input features [batch, input_dim]
+            targets: Target labels
+            task_id: Current task ID
+            current_model: Current model to compute logits from
+        """
+        # Current model logits
+        logits = current_model(x, task_id=task_id)
         ce_loss = F.cross_entropy(logits, targets)
+        
         if self.prev_model is None or task_id == 0:
             return ce_loss
 
         with torch.no_grad():
-            prev_logits = self.prev_model(logits.detach())
+            # Previous model logits on same input
+            prev_logits = self.prev_model(x, task_id=task_id)
 
         # Distillation loss on old task logits
-        # Only compute on the classes seen so far
         num_old_classes = task_id * CLASSES_PER_TASK
         if num_old_classes > 0:
             soft_targets = F.softmax(prev_logits[:, :num_old_classes] / self.temperature, dim=1)
@@ -397,11 +409,7 @@ def create_ewc_arm(
     )
 
     update = ElasticConsolidationUpdate(
-        ParameterUpdateConfig(
-            update_type="elastic_consolidation",
-            step_size=0.001,
-            ewc_lambda=ewc_lambda,
-        )
+        ParameterUpdateConfig.elastic_consolidation(step_size=0.001, ewc_lambda=ewc_lambda)
     )
 
     joint = compose_joint_system(
@@ -549,6 +557,7 @@ def compute_cl_metrics(
 
     # Evaluate on all tasks up to current_task
     final_accs = []
+    device = next(model.parameters()).device
     for i, loader in enumerate(task_loaders):
         if i > current_task:
             final_accs.append(0.0)
@@ -559,7 +568,8 @@ def compute_cl_metrics(
         model.eval()
         with torch.no_grad():
             for x, y in loader:
-                x, y = x.to(next(model.parameters()).device), y.to(next(model.parameters()).device)
+                x = x.view(x.shape[0], -1).to(device)
+                y = y.to(device)
                 logits = model(x, task_id=i)
                 pred = logits.argmax(dim=1)
                 correct += (pred == y).sum().item()
@@ -602,7 +612,7 @@ def compute_cl_metrics(
 
 def create_stability_guard(
     threshold: float = 1.029,
-    statistic: str = "windowed_growth",
+    statistic: str = "fast_proxy",
     window: int = 10,
 ) -> StabilityGuard:
     """Create stability guard."""
@@ -616,20 +626,33 @@ def create_stability_guard(
 
 
 def make_transition_fn(model: nn.Module):
-    """Create a simple transition function for stability checking."""
-    def transition_fn(state: dict, context=None):
-        x = state.get("x")
+    """Create a simple transition function for stability checking.
+    
+    Returns a CompositeState with activity, plastic, and substrate.
+    """
+    def transition_fn(state: CompositeState, context=None):
+        """Transition function that takes a CompositeState and returns CompositeState."""
+        x = state.activity.get("x")
         if x is None:
-            return state
+            return CompositeState.empty()
         with torch.no_grad():
             y = model(x)
-        return {**state, "y": y, "x": y}
+        # Return CompositeState: activity contains x and y, plastic is empty, substrate is empty
+        return CompositeState(
+            activity={"x": y, "y": y},
+            plastic={},
+            substrate={},
+        )
     return transition_fn
 
 
-def make_composite_state(x: Tensor) -> dict:
-    """Create a simple state dict for stability checking."""
-    return {"x": x}
+def make_composite_state(x: Tensor) -> CompositeState:
+    """Create a simple CompositeState for stability checking."""
+    return CompositeState(
+        activity={"x": x},
+        plastic={},
+        substrate={},
+    )
 
 
 def check_stability(
@@ -734,7 +757,7 @@ def run_continual_learning(
     # Stability guard
     guard = create_stability_guard(
         threshold=config.stability_threshold,
-        statistic="windowed_growth",
+        statistic="fast_proxy",
         window=config.stability_window,
     )
     transition_fn = make_transition_fn(model)
@@ -776,7 +799,7 @@ def run_continual_learning(
                     logits = model(x, task_id=task_id)
 
                     if arm_name == "lwf" and "lwf_loss" in extra:
-                        loss = extra["lwf_loss"](logits, y, task_id)
+                        loss = extra["lwf_loss"](x, y, task_id, model)
                     elif arm_name == "si" and "si" in extra:
                         loss = F.cross_entropy(logits, y) + extra["si"].regularization_loss()
                     else:
@@ -853,7 +876,7 @@ def run_continual_learning(
             stability_verdicts.append(verdict)
 
             if arm_name == "replay" and "buffer" in extra:
-                extra["buffer"].add(x, y, task_id)
+                extra["buffer"].add(x, y, task_id)  # type: ignore[attr-defined]
 
             # Periodic evaluation
             if batch_idx % (total_batches // NUM_TASKS) == 0:
@@ -883,10 +906,10 @@ def run_continual_learning(
     final_metrics.max_spectral_radius = max(v.statistic for v in stability_verdicts) if stability_verdicts else 0.0
 
     # Memory footprint
-    if hasattr(model.joint_system, "plasticity") and hasattr(model.joint_system.plasticity, "fast_weight_dim"):
-        final_metrics.plastic_state_bytes = model.joint_system.plasticity.fast_weight_dim * 4 * config.batch_size
+    if hasattr(model.joint_system, "plasticity") and hasattr(model.joint_system.plasticity, "fast_weight_dim"):  # type: ignore[attr-defined]
+        final_metrics.plastic_state_bytes = model.joint_system.plasticity.fast_weight_dim * 4 * config.batch_size  # type: ignore[attr-defined]
     if arm_name == "replay" and "buffer" in extra:
-        final_metrics.replay_buffer_bytes = extra["buffer"].memory_bytes()
+        final_metrics.replay_buffer_bytes = extra["buffer"].memory_bytes()  # type: ignore[attr-defined]
 
     return final_metrics
 
@@ -899,29 +922,30 @@ def run_continual_learning(
 def run_continual_learning_suite(
     arms: list[str],
     protocols: list[str],
-    output_dir: Path,
+    output_dir: str | Path,
     config: CLConfig | None = None,
     seeds: int = 3,
-) -> dict:
+) -> dict[str, dict[str, dict[str, object]]]:
     """Run continual learning benchmark suite."""
     config = config or CLConfig()
+    output_dir = Path(output_dir)
 
     device = "cuda" if config.device == "auto" and torch.cuda.is_available() else config.device
     config.device = device
 
-    all_results = {}
+    all_results: dict[str, dict[str, dict[str, object]]] = {}
 
     for arm in arms:
         all_results[arm] = {}
         for protocol in protocols:
             print(f"\n=== {arm} / {protocol} ===")
-            arm_results = {"seeds": []}
+            arm_results: dict[str, object] = {"seeds": []}
 
             for seed in range(seeds):
                 print(f"  Seed {seed}...")
                 config.seed = seed
                 metrics = run_continual_learning(arm, config, protocol)
-                arm_results["seeds"].append({
+                arm_results["seeds"].append({  # type: ignore[attr-defined]
                     "final_accuracies": metrics.final_accuracies,
                     "accuracy_matrix": metrics.accuracy_matrix,
                     "backward_transfer": metrics.backward_transfer,
@@ -938,11 +962,13 @@ def run_continual_learning_suite(
                 print(f"    Avg forgetting: {metrics.avg_forgetting:.4f}, BWT: {metrics.backward_transfer:.4f}")
 
             # Aggregate across seeds
-            if arm_results["seeds"]:
+            seeds_list = arm_results["seeds"]
+            if seeds_list:
                 for key in ["avg_forgetting", "backward_transfer", "forward_transfer", "max_spectral_radius", "total_time_s"]:
-                    vals = [s[key] for s in arm_results["seeds"]]
-                    arm_results[f"mean_{key}"] = sum(vals) / len(vals)
-                    arm_results[f"std_{key}"] = (sum((v - arm_results[f"mean_{key}"])**2 for v in vals) / len(vals))**0.5 if len(vals) > 1 else 0.0
+                    vals = [float(s[key]) for s in seeds_list]  # type: ignore[index]
+                    mean_val = sum(vals) / len(vals)
+                    arm_results[f"mean_{key}"] = mean_val
+                    arm_results[f"std_{key}"] = (sum((v - mean_val)**2 for v in vals) / len(vals))**0.5 if len(vals) > 1 else 0.0
 
             all_results[arm][protocol] = arm_results
 
