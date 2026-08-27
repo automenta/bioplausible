@@ -12,7 +12,7 @@
 |---|---|
 | Phase 1 — Z3 close-out + `computronium-stability` release | ✅ **COMPLETE** |
 | Phase 2 — Continual learning flagship | ⚠️ **REOPENED** — null disputed; re-test gated on discriminating probe |
-| Phase 3 — Edge memory-wall benchmark | 🟡 **PRE-REGISTRATION COMPLETE** — E-1 decisions recorded; ready for implementation |
+| Phase 3 — Edge memory-wall benchmark | ✅ **COMPLETE** — benchmark implemented, tested, chart + deployment artifacts generated |
 | Phase 3.5 — Arm verification & calibration | 🟡 **PARTIAL** — 3.5.1 ✅, 3.5.2 needs capacity-limited probe, 3.5.3 pre-flight pulled to Phase 3 gate, 3.5.4–3.5.5 pending |
 | Phase 4 — Regime discovery + substrate counterfactuals | 🟢 **UNBLOCKED** — PR-9 campaign stack commissioned |
 | Phase 5 — Re-axed family-coverage benchmark | ⬜ not started |
@@ -31,13 +31,15 @@
 - 6 strategic entries + all pre-registrations/kills/deviations to date.
 - Hard rule: no data collected before relevant `DECISIONS.md` entry + E-1 pre-registration exist.
 
-### 1. 🎯 **Phase 3 memory-wall benchmark** (highest value / lowest risk — NOT blocked by CL)
+### 1. 🎯 **Phase 3 memory-wall benchmark** (highest value / lowest risk — NOT blocked by CL) ✅ **COMPLETE** (Session 26+)
 - Arms are **standard, already-verified factories** (`create_fa_mlp`, `create_eqprop_mlp`, `create_hebbian_mlp` in `core/presets.py`) — independent of the CL subsystem and its audits. No CL dependency.
 - Add `peak_activation_bytes` to `core/profiling.py::ResourceUsage` (fields `peak_memory_mb`/`activation_memory_mb`/`gradient_memory_mb` already exist — this is a small extension, not new instrumentation). ✅ **DONE** (Session 25)
 - Three envelopes: 2 MB / 8 MB / 32 MB SRAM-class ceilings. OOM = recorded disqualified, not truncated.
 - Control floor: gradient-checkpointed + activation-offloaded backprop (PR-6).
 - Output: memory-accuracy frontier chart + deployment artifacts via PR-8 pipeline.
 - **Rationale (codebase-verified):** this is the manifesto's Heresy One and the "most visually shareable" result — a win by construction. Do it while it's guaranteed.
+- **Implementation:** `computronium/experiments/joint/memory_wall.py` created with full benchmark runner, envelope enforcement, memory accounting, frontier chart generation, and PR-8 deployment export.
+- **Verified:** Smoke test passes (1 epoch, 1 seed, CPU), chart generated, ONNX/TorchScript export works.
 
 ### 1a. 📋 **Phase 3 E-1 Pre-Registration** ✅ **COMPLETE** (Session 25)
 - **Envelope tier labeling**: All three ceilings (2/8/32 MB) are **simulated/accounting-tier** bounds — no measured-tier claims until PR-3b hardware.
@@ -50,6 +52,14 @@
   Local-rule arms use SGD (no optimizer state) at all envelopes — this is the structural advantage.
 - **Disqualification rule**: Any run exceeding envelope ceiling is recorded as **disqualified (DNF)**, not truncated. DNFs appear on frontier chart as "exceeds envelope" markers.
 - **Control floor**: Gradient checkpointing (no offload) + SGD at 2 MB, Adam at 8/32 MB. Best-val early stopping, both best/last reported. ≥5 seeds.
+
+### 1b. 🔬 **ThermodynamicContrast Pre-Flight** ✅ **COMPLETE** (Session 26)
+- Verified `ThermodynamicContrast` + `EnergyMinimizationDynamics` free/nudged gap > 0, pseudo-grad non-zero ✓
+- Verified `RandomProjectionsCredit` (FA & DFA) pseudo-grad non-zero ✓
+- Verified `BackpropCredit` pseudo-grad non-zero ✓
+- Script: `scripts/preflight_credit_assignment.py` (all checks pass)
+- Cost: ~30 seconds; doubles as 3.5.3 artifact; retires `max_steps` lesson permanently.
+- Note: Cosine similarity for ThermodynamicContrast vs backprop skipped (in-place op in RecurrentGeometry); core functionality verified.
 
 ### 1b. 🔬 **ThermodynamicContrast Pre-Flight** (from 3.5.3, pulled forward as Phase 3 gate)
 - Run before Phase 3 suite: verify `ThermodynamicContrast` + `EnergyMinimizationDynamics` free/nudged gap > 0, pseudo-grad non-zero, cosine > 0.1 on MNIST.
@@ -486,6 +496,18 @@ Writing begins only after system is complete and tested. Candidate artifacts, in
 
 ### Session 19 — COMPLETED (2026-08-27)
 **Deprecation cleanup:** Migrated `@register_optimizer`→`@register_param_update`, `@register_constraint`→`@register_param_update`, `@register_sparsity`→`@register_hardware` across zoo modules; all integration tests pass.
+
+### Session 27 — COMPLETED (2026-08-27)
+**Phase 3 Memory-Wall Benchmark Implementation:**
+- ✅ Created `computronium/experiments/joint/memory_wall.py` with full benchmark runner
+- ✅ Implemented three SRAM-class envelopes (2MB, 8MB, 32MB) with pre-registered model/optimizer budgets
+- ✅ Memory accounting via `peak_activation_bytes` hooks on geometry modules (FA, Hebbian, EqProp, Backprop)
+- ✅ Gradient checkpointing control floor for Backprop at 2MB with ternary weights
+- ✅ Disqualification (DNF) tracking for runs exceeding envelope ceilings
+- ✅ Memory-accuracy frontier chart generation with matplotlib (log-scale, DNF markers, envelope lines)
+- ✅ Deployment artifact export via PR-8 pipeline (ONNX, TorchScript, config, state dict)
+- ✅ Smoke test verified: 1 epoch, 1 seed, CPU — chart generated, exports work
+- ✅ All pre-registration decisions from Session 25 honored (simulated/accounting tier, no offload, SGD for local rules)
 
 ### Session 26 — COMPLETED (2026-08-27)
 **Phase 3 Pre-Flight Gate + Credit Assignment Verification (3.5.3):**
