@@ -11,46 +11,56 @@
 | Track | State |
 |---|---|
 | Phase 1 — Z3 close-out + `computronium-stability` release | ✅ **COMPLETE** |
-| Phase 2 — Continual learning flagship | ⚠️ **REOPENED** — null result disputed; re-test on verified arms |
-| Phase 3 — Edge memory-wall benchmark | ⬜ not started (depends on Phase 3.5) |
+| Phase 2 — Continual learning flagship | ⚠️ **REOPENED** — null disputed; re-test gated on discriminating probe |
+| Phase 3 — Edge memory-wall benchmark | 🎯 **NEXT UP** — NOT blocked by CL; uses verified standard factories |
 | Phase 3.5 — Arm verification & calibration | 🟡 **PARTIAL** — 3.5.1 ✅, 3.5.2 needs capacity-limited probe, 3.5.3–3.5.5 pending |
-| Phase 4 — Regime discovery + substrate counterfactuals | ⬜ not started |
+| Phase 4 — Regime discovery + substrate counterfactuals | 🟢 **UNBLOCKED** — PR-9 campaign stack commissioned |
 | Phase 5 — Re-axed family-coverage benchmark | ⬜ not started |
-| Phase 6 — Frontier certification + Goldilocks map | ⬜ not started |
+| Phase 6 — Frontier certification + Goldilocks map | 🟢 **UNBLOCKED** — PR-9 commissioned; awaits flagship coordinate |
 | Inherited infrastructure (PR-0…PR-9, Phase 9 pipeline, guard τ=1.029) | ✅ carried green from TODO4 |
 
-**Carried forward (do not rebuild):** Phase 9 family-neutral pipeline (30/30 probes green) · PR-2 θ-audit harness · PR-3a `ResourceUsage` · PR-4 stats kit · PR-5 guard (τ=1.029, FKR 0%) · PR-6 fairness contract · PR-9 commissioned campaign stack · EqProp 81.32% MNIST anchor · Z3 v2 canonical-order capability + gate-history instrumentation.
+**Carried forward (do not rebuild):** Phase 9 family-neutral pipeline (30/30 probes green) · PR-2 θ-audit harness · PR-3a `ResourceUsage` (incl. `peak_memory_mb`/`activation_memory_mb`) · PR-4 stats kit · PR-5 guard (τ=1.029, FKR 0%) · PR-6 fairness contract · **PR-9 campaign stack COMMISSIONED** (6 episodes, checkpoint/resume + determinism verified) · EqProp 81.32% MNIST anchor · Z3 v2 canonical-order capability + gate-history instrumentation.
 
 ---
 
 ## Immediate Execution Queue (next sessions, in priority order)
 
-### 0. 🔬 **Re-test Phase 2 on verified arms** (highest priority)
+*Critical-path logic: the memory wall is structurally guaranteed (local rules store no backward graph) and uses already-verified standard factories — it is the highest-value, lowest-risk, most shareable deliverable. The Phase 2 re-test is genuinely uncertain and must first be gated on a discriminating probe; re-testing on the current non-discriminating setup risks a second uninterpretable null.*
+
+### 1. 🎯 **Phase 3 memory-wall benchmark** (highest value / lowest risk — NOT blocked by CL)
+- Arms are **standard, already-verified factories** (`create_fa_mlp`, `create_eqprop_mlp`, `create_hebbian_mlp` in `core/presets.py`) — independent of the CL subsystem and its audits. No CL dependency.
+- Add `peak_activation_bytes` to `core/profiling.py::ResourceUsage` (fields `peak_memory_mb`/`activation_memory_mb`/`gradient_memory_mb` already exist — this is a small extension, not new instrumentation).
+- Three envelopes: 2 MB / 8 MB / 32 MB SRAM-class ceilings. OOM = recorded disqualified, not truncated.
+- Control floor: gradient-checkpointed + activation-offloaded backprop (PR-6).
+- Output: memory-accuracy frontier chart + deployment artifacts via PR-8 pipeline.
+- **Rationale (codebase-verified):** this is the manifesto's Heresy One and the "most visually shareable" result — a win by construction. Do it while it's guaranteed.
+
+### 2. ⚠️ **Harden the 3.5.2 forgetting probe FIRST** (gates the Phase 2 re-test)
+- Current probe (hidden=256, 2 binary tasks) shows **0.000 forgetting for all arms** — not capacity-limited, cannot discriminate. Re-testing the flagship on this setup would repeat the uninterpretable-null failure.
+- **Required before any Phase 2 re-test:** shrink `hidden_dim` to 32–64, or permuted-MNIST, or record full accuracy matrix + compare BWT/forgetting distributions across arms. Do not use 0.000 to claim "no arm forgets".
+
+### 3. 🔬 **Re-test Phase 2 on verified arms** (only after probe discriminates)
 - Fresh E-1 pre-registration required (fast_weights now learns tasks 1–4; the prior null compared broken-vs-working arms).
-- The ψ/θ hypothesis is **NOT settled** — Session 23 fixed 3 critical arm bugs (nudged-target indexing, `max_steps=3`→30, SI/LwF no-op). All 6 arms now reach ≥95% on single-task MNIST.
-- Run: paired 5-seed Split-MNIST task-incremental, same protocol as before.
+- ψ/θ hypothesis **NOT settled** — Session 23 fixed 3 critical arm bugs (nudged-target indexing, `max_steps=3`→30, SI/LwF no-op). All 6 arms reach ≥95% on single-task MNIST.
+- Run the paired 5-seed comparison on the **discriminating probe** from item 2, not the saturated setup.
 
-### 1. ⚠️ **Harden the 3.5.2 forgetting probe** (blocks Phase 3 memory-wall trust)
-- Current probe (hidden=256, 2 binary tasks) shows 0.000 forgetting for **all** arms — not capacity-limited, cannot discriminate.
-- **Fix:** shrink hidden_dim to 32–64, or use permuted-MNIST, or record full accuracy matrix and compare BWT/forgetting distributions across arms.
-- Do not use 0.000 result to claim "no arm forgets".
-
-### 2. 🔍 **Complete 3.5.3–3.5.5 arm audits** (credit correctness, plasticity state, config sanity)
+### 4. 🔍 **Complete 3.5.3–3.5.5 arm audits** (parallel / non-blocking to items 1–3)
 - Credit: `ThermodynamicContrast` free/nudged gap > 0, cosine > 0.1; `BackpropCredit` cosine > 0.95; `RandomProjectionsCredit` non-zero.
 - Plasticity: `FastWeightPlasticity` round-trip verified, `reset_plastic_state` at task boundaries, no leakage, memory accounting accurate.
 - Config: all arms constructible via `compose_joint_system_from_configs` with YAML round-trip, registered with correct decorators.
 
-### 3. → **Phase 3 memory-wall benchmark** (depends on 0–2 above)
-- Implement strict peak-memory accounting (PR-3a `ResourceUsage` + `peak_activation_bytes`).
-- Three envelopes: 2 MB / 8 MB / 32 MB SRAM-class ceilings.
-- Arms: FA, Hebbian/STDP, contrastive EqProp vs. gradient-checkpointed + offloaded backprop (PR-6 floor).
-- Output: memory-accuracy frontier chart + deployment artifacts via PR-8 pipeline.
-
-### 4. 📝 **Commit `DECISIONS.md`** (currently untracked, `git status` shows `??`)
+### 5. 📝 **Commit `DECISIONS.md`** (currently untracked, `git status` shows `??`)
 - 6 strategic entries + all pre-registrations/kills/deviations to date.
 
-### 5. 📦 **Add untracked artifacts to repo** (once verified)
+### 6. 📦 **Add untracked artifacts to repo** (once verified)
 - `benchmark_results/`, `autoscientist_campaigns/`, `scripts/verify_arms.py`, `scripts/verify_two_task.py` (keep verify scripts as calibration utilities; regression tests are the durable guarantee).
+
+> **Note on PR-9 / campaign stack:** the AutoScientist commissioning is **already complete** — `autoscientist_campaigns/campaign.db` holds 1 campaign, 6 completed episodes, with checkpoint/resume verified (θ/state/RNG fidelity + bitwise determinism, `commission_report.json`). This unblocks **Phase 4 (regime discovery)** and **Phase 6 (frontier campaign)** earlier than the plan previously assumed. Update the "carried forward" line and Phase 4/6 gates to treat PR-9 as green.
+
+**Additional work the reference docs suggest (codebase-verified as already-instrumented, pull in opportunistically):**
+- **L2 effective-FLOPs → 𝒞 vector (ready now):** `computronium/experiments/joint/compute_efficiency.py` already computes `effective_flops` via gate-entropy-aware route counting (RESEARCH3 L2). Its effective-FLOPs metric is the sanctioned feed into the 𝒞 resource vector (README §stability-plasticity) and should be wired into the Phase 5 runner rather than re-derived.
+- **Algorithm Migration (L3.5) as ψ-switching validation:** `algorithm_migration.py` is the cheapest end-to-end validation of ψ-switching machinery (Δθ=0 audit, two-strategy swap). Run it as the pre-flight sanity check before the Phase 2 re-test and Phase 3 — it de-risks both for ~minutes of compute.
+- **Edge/Green export path (PR-8):** the deployment suite (`deployment.py` + `acceleration/export.py`) is verified for ONNX/ternary round-trip. The memory-wall frontier chart plugs directly into the Edge/Green AI narrative; reuse the same export pipeline for the Phase 3 artifact suite.
 
 ---
 
@@ -109,7 +119,7 @@ All items done. Exit criteria met:
 
 ---
 
-## Phase 3 — Edge Memory-Wall Benchmark ⬜ NOT STARTED (depends on Phase 3.5)
+## Phase 3 — Edge Memory-Wall Benchmark 🎯 NEXT UP (not blocked by CL)
 
 *The most visually shareable result: local rules train under activation-memory ceilings where backprop cannot.*
 
@@ -182,11 +192,11 @@ All items done. Exit criteria met:
 - `system_trainer.py` reduced from ~2805 to ~1530 lines
 - All 31 unit + 7 integration tests pass
 
-**Phase 3.5 exit:** 3.5.1 passes (arms verified functional), 3.5.2 hardened with capacity-limited probe, 3.5.3–3.5.5 complete. Proceed to Phase 3 only with verified arms.
+**Phase 3.5 exit:** 3.5.1 passes (arms verified functional), 3.5.2 hardened with capacity-limited probe, 3.5.3–3.5.5 complete. **Note:** Phase 3 memory-wall does NOT depend on these CL audits (it uses standard verified factories); Phase 3.5 work gates the Phase 2 re-test only.
 
 ---
 
-## Phase 4 — Regime Discovery & Substrate Counterfactuals ⬜ NOT STARTED
+## Phase 4 — Regime Discovery & Substrate Counterfactuals 🟢 UNBLOCKED (PR-9 commissioned)
 
 *Replace open-ended LLM algorithm generation with constrained regime search over PR-9 campaign stack.*
 
@@ -246,7 +256,7 @@ All items done. Exit criteria met:
 
 ---
 
-## Phase 6 — Frontier Certification & Goldilocks Map ⬜ NOT STARTED
+## Phase 6 — Frontier Certification & Goldilocks Map 🟢 UNBLOCKED (PR-9 commissioned; awaits flagship coordinate)
 
 ### 6.1 M-Axis Frontier Campaign
 - Pin S/G/D/C/U at flagship coordinate; sweep M ∈ {`NullPlasticity`, `RoutingPlasticity`, `FastWeightPlasticity`, `RuleStatePlasticity`}. One axis at a time — ablation, not search.
