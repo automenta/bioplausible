@@ -5,11 +5,9 @@ from __future__ import annotations
 import pytest
 import torch
 import torch.nn.functional as F
-from torch import Tensor
 
-from computronium.core.continual.arms import create_fast_weight_arm, create_backprop_arm
+from computronium.core.continual.arms import create_fast_weight_arm
 from computronium.core.continual.training import run_continual_train_step
-from computronium.core.continual.constants import CL_CLASSES_PER_TASK
 
 
 @pytest.fixture
@@ -139,9 +137,9 @@ class TestStabilityGuardIntegration:
     def test_guard_called_per_step(self, fast_weight_model, device):
         """Stability guard returns verdict per step."""
         from computronium.core.continual.stability import (
+            check_stability,
             create_stability_guard,
             make_transition_fn,
-            check_stability,
         )
 
         guard = create_stability_guard(

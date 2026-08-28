@@ -20,7 +20,8 @@ from computronium.core.distributed_trainer import (
     DistributedSystemTrainer,
     DistributedTrainingError,
 )
-from computronium.core.ontology import (
+from computronium.core.system_trainer import compose_system
+from computronium.ontology import (
     DigitalSubstrate,
     EnergyMinimizationDynamics,
     EuclideanUpdate,
@@ -29,7 +30,6 @@ from computronium.core.ontology import (
     TargetInversionCredit,
     TileGeometry,
 )
-from computronium.core.system_trainer import compose_system
 from computronium.p2p.grpc_service import GRPCClient
 from tests.integration._grpc_worker import run_grpc_worker
 
@@ -63,7 +63,7 @@ def _create_test_system(device: torch.device):
     ).to(device)
 
     substrate = DigitalSubstrate()
-    from computronium.core.ontology import ParameterUpdateConfig, StateDynamicsConfig
+    from computronium.ontology import ParameterUpdateConfig, StateDynamicsConfig
 
     dynamics = EnergyMinimizationDynamics(
         StateDynamicsConfig(
@@ -286,7 +286,7 @@ class TestGRPCSeamSubprocess:
             tiles_per_layer=TILES_PER_LAYER,
         ).to(device)
         substrate = DigitalSubstrate()
-        from computronium.core.ontology import (
+        from computronium.ontology import (
             ParameterUpdateConfig,
             StateDynamicsConfig,
         )

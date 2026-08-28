@@ -4,7 +4,6 @@ Provides stability monitors, resource accounting, and frontier record
 aggregation for the joint architecture.
 """
 
-from computronium.core.profiling import ResourceUsage
 from computronium.core.stability.basin import (
     BasinStabilityEstimator,
     estimate_basin_stability,
@@ -38,6 +37,7 @@ from computronium.core.stability.spectral_radius import (
     estimate_spectral_radius,
     estimate_spectral_radius_full_jacobian,
 )
+from computronium.resources import ResourceUsage
 
 __all__ = [
     # Core types

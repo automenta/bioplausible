@@ -12,20 +12,17 @@ Where M is the plasticity/meta-dynamics primitive.
 from __future__ import annotations
 
 from computronium.core.joint.consolidation import ConsolidationConfig, consolidate
-from computronium.core.joint.context import SystemContext
-from computronium.core.joint.state import (
-    CompositeState,
-    JointTrajectoryRecorder,
-    StateRegistry,
-    StateVariable,
-)
-from computronium.core.joint.trajectory import JointTrajectory
 from computronium.core.joint.transition import (
     CoupledTransition,
-    LegacyDynamicsAsCoupledTransition,
     NullPlasticity,
     PlasticityConfig,
     PlasticityPrimitive,
+)
+from computronium.state import (
+    CompositeState,
+    StateRegistry,
+    StateVariable,
+    SystemContext,
 )
 
 __all__ = [
@@ -33,7 +30,6 @@ __all__ = [
     "StateVariable",
     "StateRegistry",
     "CompositeState",
-    "JointTrajectoryRecorder",
     # Context
     "SystemContext",
     # Transition
@@ -41,9 +37,6 @@ __all__ = [
     "PlasticityPrimitive",
     "PlasticityConfig",
     "NullPlasticity",
-    "LegacyDynamicsAsCoupledTransition",
-    # Trajectory
-    "JointTrajectory",
     # Consolidation
     "ConsolidationConfig",
     "consolidate",

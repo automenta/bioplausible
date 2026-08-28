@@ -292,7 +292,7 @@ def _maybe_checkpoint(
 ) -> bool:
     """Snapshot the system ENTERING this episode; resume replays bit-exact."""
     from computronium.core.campaign.evaluation import episode_batch
-    from computronium.core.joint.state import CompositeState
+    from computronium.state import CompositeState
 
     campaign_snapshot = store.get_campaign(campaign_id)
     if campaign_snapshot is None:

@@ -13,7 +13,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from computronium.core.ontology import (
+from computronium.core.plasticity import (
+    FastWeightPlasticity,
+    RoutingPlasticity,
+)
+from computronium.core.system_trainer import (
+    compose_joint_system,
+    compose_system,
+)
+from computronium.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
     DigitalSubstrate,
@@ -34,18 +42,10 @@ from computronium.core.ontology import (
     TemporalTraceCredit,
     ThermodynamicContrast,
 )
-from computronium.core.plasticity import (
-    FastWeightPlasticity,
-    RoutingPlasticity,
-)
-from computronium.core.system_trainer import (
-    compose_joint_system,
-    compose_system,
-)
 
 if TYPE_CHECKING:
-    from computronium.core.ontology import System
     from computronium.core.system_trainer import JointSystem
+    from computronium.ontology import System
 
 
 def _default_substrate(device: str = "cpu") -> DigitalSubstrate:
@@ -795,7 +795,7 @@ def create_tile_mlp(
     substrate = _default_substrate(device)
     geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
     # Replace with TileGeometry
-    from computronium.core.ontology import GeometryConfig, TileGeometry
+    from computronium.ontology import GeometryConfig, TileGeometry
 
     tile_cfg = GeometryConfig(
         input_dim=input_dim,

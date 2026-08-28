@@ -14,8 +14,8 @@ import pytest
 import torch
 
 from computronium.core.campaign.evaluation import build_coordinate_system
-from computronium.core.ontology import BackpropCredit, LocalGoodnessCredit, Phase
 from computronium.core.pipeline import run_train_step
+from computronium.ontology import BackpropCredit, LocalGoodnessCredit, Phase
 
 INPUT_DIM = 8
 OUTPUT_DIM = 8

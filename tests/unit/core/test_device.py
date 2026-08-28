@@ -7,31 +7,29 @@ from __future__ import annotations
 
 import pytest
 import torch
-from torch import Tensor
 
-from computronium.core.ontology import (
+from computronium.core.continual.system import ContinualJointSystem
+from computronium.core.plasticity import (
+    FastWeightPlasticity,
+    NullPlasticity,
+    RoutingPlasticity,
+    RuleStatePlasticity,
+)
+from computronium.core.system_trainer import compose_joint_system
+from computronium.ontology import (
+    BackpropCredit,
+    CreditAssignmentConfig,
     DigitalSubstrate,
-    SubstrateConfig,
+    EnergyMinimizationDynamics,
+    EuclideanUpdate,
     FeedforwardGeometry,
     GeometryConfig,
     InstantaneousDynamics,
-    StateDynamicsConfig,
-    BackpropCredit,
-    CreditAssignmentConfig,
-    EuclideanUpdate,
     ParameterUpdateConfig,
+    StateDynamicsConfig,
+    SubstrateConfig,
     ThermodynamicContrast,
-    EnergyMinimizationDynamics,
 )
-from computronium.core.plasticity import (
-    FastWeightPlasticity,
-    RoutingPlasticity,
-    RuleStatePlasticity,
-    NullPlasticity,
-)
-from computronium.core.system_trainer import compose_joint_system
-from computronium.core.continual.system import ContinualJointSystem
-
 
 # ============================================================
 # Fixtures

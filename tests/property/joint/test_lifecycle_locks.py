@@ -29,7 +29,10 @@ from computronium.core.joint import (
     SystemContext,
     consolidate,
 )
-from computronium.core.ontology import (
+from computronium.core.substrates.adapters import DigitalToTernaryAdapter
+from computronium.core.substrates.ternary_substrate import TernarySubstrate
+from computronium.core.system_trainer import compose_system
+from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
@@ -43,9 +46,6 @@ from computronium.core.ontology import (
     SystemState,
     ThermodynamicContrast,
 )
-from computronium.core.substrates.adapters import DigitalToTernaryAdapter
-from computronium.core.substrates.ternary_substrate import TernarySubstrate
-from computronium.core.system_trainer import compose_system
 
 
 def _create_test_system():

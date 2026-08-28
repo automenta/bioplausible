@@ -13,11 +13,9 @@ from __future__ import annotations
 import argparse
 import inspect
 import json
-import sys
-from dataclasses import dataclass, fields
+from dataclasses import fields
 from pathlib import Path
 from typing import Any, get_type_hints
-
 
 # Modules to scan for public API
 PUBLIC_MODULES = [

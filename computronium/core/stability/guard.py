@@ -21,8 +21,7 @@ from computronium.core.stability.spectral_radius import (
 )
 
 if TYPE_CHECKING:
-    from computronium.core.joint.context import SystemContext
-    from computronium.core.joint.state import CompositeState
+    from computronium.state import CompositeState, SystemContext
 
 TransitionFn = Callable[["CompositeState", "SystemContext"], "CompositeState"]
 StatisticKind = Literal["fast_proxy", "windowed_growth"]

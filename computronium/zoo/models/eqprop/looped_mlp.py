@@ -6,9 +6,9 @@ This replaces the legacy ``LoopedMLP`` facade and ``EquilibriumMLP`` engine.
 """
 
 from computronium.core.model_status import status_tag
-from computronium.core.ontology import System
 from computronium.core.registry import LocalityLevel, register_model
 from computronium.models.native.eqprop_native import native_eqprop_mlp
+from computronium.ontology import System
 
 __all__ = []
 

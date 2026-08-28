@@ -38,6 +38,7 @@ PARALLEL WORKSTREAMS (can overlap):
 | Phase 5 (Family-Coverage) | 🟢 **UNBLOCKED** — Awaits coordinate lock |
 | Phase 6 (Frontier Cert) | 🟢 **UNBLOCKED** — Awaits flagship coordinate |
 | **Phase 2 CL Re-verification** | 🔴 **REQUIRED** — Post-3.6 fixes may have changed behavior; must re-run before design deps |
+| **Phase 2 Modularization** | ✅ **COMPLETE** — `computronium/state/`, `computronium/ontology/` extracted; import sweep done |
 
 ---
 
@@ -286,8 +287,8 @@ class BenchmarkRunner:  # base class enforcing contract
 - ✅ `computronium[stability]` installs via `pip install -e .[stability]`; `import computronium_stability` works
 - ✅ `computronium/stability/` public API complete; tests match `computronium/nn` quality (55 tests, coverage ≥85%)
 - 🔄 `libraries/` directory **to be deleted** after Phase 2
-- 🔄 `computronium/state/`, `computronium/ontology/` extracted; all imports updated (~100 sites) — **Phase 2**
-- 🔄 `computronium/core/joint/` facade exports only composition API — **Phase 2**
+- ✅ `computronium/state/`, `computronium/ontology/` extracted; all imports updated (~100 sites) — **Phase 2**
+- ✅ `computronium/core/joint/` facade exports only composition API — **Phase 2**
 - ✅ All existing tests pass; no import regressions
 - ✅ `ruff format --check . && ruff check . && pyright . && pytest --cov` green
 - 🔄 `DECISIONS.md` updated: coordinate lock, fairness contract, prior-art gate, CL re-verification outcome — **Phase 3+**
@@ -296,7 +297,7 @@ class BenchmarkRunner:  # base class enforcing contract
 
 ## Progress Summary (as of 2026-08-28)
 
-### ✅ COMPLETED (Phase 0 + Phase 1)
+### ✅ COMPLETED (Phase 0 + Phase 1 + Phase 2)
 - **Phase 0.1**: Cleaned up fractured `libraries/computronium_stability/` (removed `.venv/`, `build/`, cache dirs)
 - **Phase 0.2**: Moved `computronium/core/stability/` → `computronium/stability/` (single canonical location)
 - **Phase 0.3**: Created standalone test suite `tests/unit/core/test_stability_standalone.py` (55 tests) — runs against built wheel
@@ -305,6 +306,10 @@ class BenchmarkRunner:  # base class enforcing contract
 - **Phase 1.6**: Created comprehensive test suite `tests/unit/stability/test_stability_api.py` (55 tests)
 - **Phase 1.7**: Verified CI quality gates (ruff, pyright, pytest all pass)
 - **Publishing**: `uv pip install -e .[stability]` → `import computronium_stability` works ✅
+- **Phase 2.1**: Extracted state types to `computronium/state/` (CompositeState, SystemContext, StateRegistry, StateVariable, NullPlasticity, PlasticityConfig, PlasticityPrimitive, CoupledTransition)
+- **Phase 2.2**: Extracted ontology primitives to `computronium/ontology/` (all 5 axes: substrate, geometry, dynamics, credit, update + SystemConfig, System, ModelAdapter)
+- **Phase 2.3**: Created joint system facade at `computronium/core/joint/__init__.py` (exports composition API only)
+- **Phase 2.4**: Import sweep (~100 sites) automated via sed + libcst script; ResourceUsage moved to `computronium/resources.py` (neutral home)
 
 ### 🔧 FIXED FROM REVIEW (Pre-S1)
 - **Phase 0.0 rewritten**: Split into 0.0a (Reconcile), 0.0b (Pre-flight), 0.0c (Retest with correct paired protocol + co-primary metrics + power calc)
@@ -319,11 +324,12 @@ class BenchmarkRunner:  # base class enforcing contract
 - Authoritative artifact: `continual_learning_retest_fixed2/` (+0.100, p=0.0076)
 - Action: Update §2.5 numbers/artifact path; log in `DECISIONS.md`
 
-### 🔄 NEXT STEPS (Phase 2)
-1. **Phase 2.1**: Extract state types to `computronium/state/`
-2. **Phase 2.2**: Extract ontology primitives to `computronium/ontology/`
-3. **Phase 2.3**: Create joint system facade
-4. **Phase 2.4**: Import sweep (~100 sites) using per-module commits with automation scripts
+### 🔄 NEXT STEPS (Post-Phase 2)
+1. **Cleanup**: Remove `computronium/core/stability/` directory (old location)
+2. **Cleanup**: Remove `libraries/computronium_stability/` directory
+3. **Fix ModelAdapter tests**: Legacy model registration issues in test suite
+4. **Phase 3**: RESEARCH3 infrastructure (fairness, campaign, L2/𝒞, algorithm migration, export)
+5. **Phase 4**: Regime discovery, family-coverage benchmark, frontier certification
 
 ### 📋 PHASE 3-4 (Future)
 - Phase 3: RESEARCH3 infrastructure (fairness, campaign, L2/𝒞, algorithm migration, export)

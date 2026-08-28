@@ -21,14 +21,14 @@ from torch import Tensor
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-from computronium.core.ontology import (
+from computronium.core.pipeline import phase_states
+from computronium.ontology import (
     Geometry,
     Substrate,
     System,
     SystemState,
     TileGeometry,
 )
-from computronium.core.pipeline import phase_states
 from computronium.p2p.grpc_service import GRPCConnectionPool
 
 

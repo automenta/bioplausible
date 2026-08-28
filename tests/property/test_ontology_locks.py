@@ -11,7 +11,14 @@ import pytest
 import torch
 from torch import Tensor
 
-from computronium.core.ontology import (
+from computronium.core.pipeline import phase_states, task_loss
+from computronium.core.registry import Registry
+from computronium.core.system_trainer import (
+    SystemTrainer,
+    SystemTrainerConfig,
+    compose_system,
+)
+from computronium.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
     DigitalSubstrate,
@@ -35,13 +42,6 @@ from computronium.core.ontology import (
     SystemState,
     ThermodynamicContrast,
     TileGeometry,
-)
-from computronium.core.pipeline import phase_states, task_loss
-from computronium.core.registry import Registry
-from computronium.core.system_trainer import (
-    SystemTrainer,
-    SystemTrainerConfig,
-    compose_system,
 )
 from tests.property._support import (
     BATCH,
@@ -958,7 +958,7 @@ class TestC_TemporalTraceSTDP:
     )
     def test_stdp_causal_potentiation(self, pre_time, post_time, expected_sign) -> None:
         """STDP window sign matches causal/anti-causal timing."""
-        from computronium.core.ontology import TemporalTraceCredit
+        from computronium.ontology import TemporalTraceCredit
 
         credit = TemporalTraceCredit()
         pre_spikes = torch.tensor([[pre_time]])
@@ -979,7 +979,7 @@ class TestC_TemporalTraceSTDP:
 
     def test_stdp_antisymmetry(self) -> None:
         """STDP window is antisymmetric: W(Δt) = -W(-Δt)."""
-        from computronium.core.ontology import TemporalTraceCredit
+        from computronium.ontology import TemporalTraceCredit
 
         credit = TemporalTraceCredit()
         pre_spikes = torch.tensor([[0.0]])
@@ -997,7 +997,7 @@ class TestC_TemporalTraceSTDP:
 
     def test_stdp_exponential_decay(self) -> None:
         """STDP window magnitude decays exponentially with |Δt|."""
-        from computronium.core.ontology import TemporalTraceCredit
+        from computronium.ontology import TemporalTraceCredit
 
         credit = TemporalTraceCredit()
 
@@ -1063,7 +1063,7 @@ class TestU_StepProperties:
         if device.type == "cuda":
             enable_deterministic_cuda()
 
-        from computronium.core.ontology import NaturalGradientUpdate
+        from computronium.ontology import NaturalGradientUpdate
 
         with seeded(42):
             update = NaturalGradientUpdate(
@@ -1111,14 +1111,14 @@ def test_d_spike_integration_lyapunov() -> None:
     if device.type == "cuda":
         enable_deterministic_cuda()
 
-    from computronium.core.ontology import (
+    from computronium.core.system_trainer import compose_system
+    from computronium.ontology import (
         DigitalSubstrate,
         FeedforwardGeometry,
         GeometryConfig,
         SpikeIntegrationDynamics,
         StateDynamicsConfig,
     )
-    from computronium.core.system_trainer import compose_system
 
     with seeded(42):
         # Use a simple geometry without hidden layers for testing spike dynamics

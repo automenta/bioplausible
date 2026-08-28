@@ -10,7 +10,7 @@ from __future__ import annotations
 import torch
 from torch import Tensor
 
-from computronium.core.ontology import (
+from computronium.ontology import (
     EnergyMinimizationDynamics,
     Geometry,
     InstantaneousDynamics,

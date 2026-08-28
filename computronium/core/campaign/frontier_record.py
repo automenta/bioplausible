@@ -90,7 +90,7 @@ class FrontierRecord:
     @classmethod
     def from_dict(cls, data: dict) -> FrontierRecord:
         """Create from dictionary."""
-        from computronium.core.profiling import ResourceUsage
+        from computronium.resources import ResourceUsage
 
         return cls(
             coordinate=data["coordinate"],

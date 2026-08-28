@@ -12,7 +12,8 @@ from computronium.core.joint import (
     StateVariable,
     SystemContext,
 )
-from computronium.core.ontology import (
+from computronium.core.system_trainer import compose_system
+from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
@@ -25,7 +26,6 @@ from computronium.core.ontology import (
     SystemConfig,
     ThermodynamicContrast,
 )
-from computronium.core.system_trainer import compose_system
 
 
 def _create_5d_system() -> tuple:

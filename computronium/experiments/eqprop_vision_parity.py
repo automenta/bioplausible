@@ -41,7 +41,7 @@ from computronium.validation.statistics import (
 if TYPE_CHECKING:
     import pandas as pd
 
-    from computronium.core.ontology import System
+    from computronium.ontology import System
 
 logger = logging.getLogger(__name__)
 

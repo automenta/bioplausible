@@ -14,7 +14,10 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
-from computronium.core.ontology import (
+from computronium.core.substrates.complex_substrate import ComplexSubstrate
+from computronium.core.substrates.sparse_substrate import SparseSubstrate
+from computronium.core.substrates.ternary_substrate import TernarySubstrate
+from computronium.ontology import (
     AnalogSubstrate,
     DigitalSubstrate,
     MemristiveSubstrate,
@@ -24,9 +27,6 @@ from computronium.core.ontology import (
     Substrate,
     SubstrateConfig,
 )
-from computronium.core.substrates.complex_substrate import ComplexSubstrate
-from computronium.core.substrates.sparse_substrate import SparseSubstrate
-from computronium.core.substrates.ternary_substrate import TernarySubstrate
 
 if TYPE_CHECKING:
     from collections.abc import Callable

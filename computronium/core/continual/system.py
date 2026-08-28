@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from torch import Tensor, nn
 
-from computronium.core.joint.context import SystemContext
 from computronium.core.joint.transition import PlasticityPrimitive
-from computronium.core.ontology import (
+from computronium.ontology import (
     CreditAssignment,
     Geometry,
     ParameterUpdate,
     StateDynamics,
     Substrate,
 )
+from computronium.state import SystemContext
 
 
 class ContinualJointSystem(nn.Module):
@@ -91,7 +91,7 @@ class ContinualJointSystem(nn.Module):
     def copy(self):
         """Create a copy of this ContinualJointSystem (for LwF previous model)."""
         # Create a new geometry with the same config (deep copy of parameters)
-        from computronium.core.ontology import FeedforwardGeometry
+        from computronium.ontology import FeedforwardGeometry
 
         new_geometry = FeedforwardGeometry(self.geometry.config)
         new_geometry.load_state_dict(self.geometry.state_dict())
@@ -142,9 +142,8 @@ class ContinualJointSystem(nn.Module):
 
     def _make_context(self) -> SystemContext:
         """Create SystemContext from this joint system."""
-        from computronium.core.joint.context import SystemContext
-        from computronium.core.joint.state import StateRegistry, StateVariable
         from computronium.core.joint.transition import PlasticityConfig
+        from computronium.state import StateRegistry, StateVariable, SystemContext
 
         # Build registry from all components
         registry = StateRegistry()

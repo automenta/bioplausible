@@ -9,6 +9,7 @@ Checks:
 
 import torch
 from torch import nn
+
 from computronium.zoo.models.target_prop import DifferenceTargetProp
 
 

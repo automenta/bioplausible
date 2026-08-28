@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from computronium.core.profiling import ResourceUsage
+from computronium.resources import ResourceUsage
 
 __all__ = ["FrontierAggregator", "FrontierRecord", "ResourceUsage"]
 

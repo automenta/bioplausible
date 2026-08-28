@@ -15,7 +15,7 @@ import torch
 from computronium.core.logging import get_logger
 
 if TYPE_CHECKING:
-    from computronium.core.ontology import TileGeometry
+    from computronium.ontology import TileGeometry
     from computronium.p2p.proto import tile_mesh_pb2, tile_mesh_pb2_grpc
 
     class _TensorProto(Protocol):

@@ -8,6 +8,7 @@ The train_step uses manual updates (p -= ...), so we check:
 """
 
 import torch
+
 from computronium.config.unified import ModelConfig
 from computronium.zoo.models.eqprop._energy import EquilibriumMLP
 

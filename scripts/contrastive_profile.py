@@ -37,7 +37,6 @@ from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
 
-import computronium.zoo  # ruff: ignore[unused-import]  (registration side effect)
 from computronium.config.unified import ModelConfig, compute_hidden_dims
 from computronium.core.registry import ComponentCategory, Registry
 from computronium.data.vision import get_vision_dataset

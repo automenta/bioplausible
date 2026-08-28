@@ -5,9 +5,9 @@ The native ``ternary_eqprop`` factory (registered as ``ternary_eqprop``) returns
 """
 
 from computronium.core.model_status import status_tag
-from computronium.core.ontology import System
 from computronium.core.registry import LocalityLevel, register_model
 from computronium.models.native.ternary_eqprop_native import native_ternary_eqprop
+from computronium.ontology import System
 
 __all__ = []
 

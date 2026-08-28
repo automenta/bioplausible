@@ -11,7 +11,8 @@ Each test uses PyTorch autograd to verify mathematical properties numerically.
 import pytest
 import torch
 
-from computronium.core.ontology import (
+from computronium.core.system_trainer import compose_system
+from computronium.ontology import (
     DigitalSubstrate,
     EnergyMinimizationDynamics,
     FeedforwardGeometry,
@@ -25,7 +26,6 @@ from computronium.core.ontology import (
     SubstrateConfig,
     SystemState,
 )
-from computronium.core.system_trainer import compose_system
 
 
 class TestLyapunovStability:
@@ -481,7 +481,7 @@ class TestGradientEquivalence:
 
     def test_thermodynamic_contrast_limit(self):
         """ThermodynamicContrast approaches backprop as β→∞."""
-        from computronium.core.ontology import (
+        from computronium.ontology import (
             BackpropCredit,
             CreditAssignmentConfig,
             EuclideanUpdate,
@@ -593,7 +593,7 @@ class TestEnergyInvariantComposition:
 
 
 # Import needed classes
-from computronium.core.ontology import (
+from computronium.ontology import (
     EuclideanUpdate,
     ParameterUpdateConfig,
     ThermodynamicContrast,

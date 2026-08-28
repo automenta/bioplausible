@@ -21,8 +21,7 @@ if TYPE_CHECKING:
     from computronium.core.campaign.campaign_store import (
         CampaignState as StoredCampaignState,
     )
-    from computronium.core.joint.context import SystemContext
-    from computronium.core.joint.state import CompositeState
+    from computronium.state import CompositeState, SystemContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,7 +200,7 @@ class CheckpointManager:
         device: str | torch.device = "cpu",
     ) -> CompositeState:
         """Restore CompositeState from checkpoint."""
-        from computronium.core.joint.state import CompositeState
+        from computronium.state import CompositeState
 
         activity = {
             k: torch.from_numpy(v).to(device)

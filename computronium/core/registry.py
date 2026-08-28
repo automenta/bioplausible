@@ -12,7 +12,7 @@ from enum import Enum, StrEnum
 from typing import TYPE_CHECKING, Literal, Protocol, TypeVar, cast
 
 if TYPE_CHECKING:
-    from computronium.core.ontology import System
+    from computronium.ontology import System
 
 from computronium.core.exceptions import IncompatibilityError as _IncompatibilityError
 from computronium.core.logging import get_logger
@@ -554,7 +554,7 @@ class Registry:
         Returns:
             A System instance composed of the inferred 5 layers.
         """
-        from computronium.core.ontology import ModelAdapter
+        from computronium.ontology import ModelAdapter
 
         # Resolve the canonical model name (handles aliases like "ff" -> "forward_forward")
         cat, name = cls.resolve_alias(ComponentCategory.MODEL, model_name)
@@ -575,7 +575,7 @@ class Registry:
 
         # Check if the factory returned a native System directly
         # (bypasses ModelAdapter for native 5-D compositions)
-        from computronium.core.ontology import System
+        from computronium.ontology import System
 
         if isinstance(model, System):
             return model
@@ -594,7 +594,8 @@ class Registry:
         (propagators, optimizers, etc.), it creates a minimal System with
         the component mapped to its corresponding layer.
         """
-        from computronium.core.ontology import (
+        from computronium.core.system_trainer import compose_system
+        from computronium.ontology import (
             DigitalSubstrate,
             EuclideanUpdate,
             FeedforwardGeometry,
@@ -603,7 +604,6 @@ class Registry:
             ModelAdapter,
             ThermodynamicContrast,
         )
-        from computronium.core.system_trainer import compose_system
 
         cat = cls._resolve_category(category)
         component = cls.get(cat, name)

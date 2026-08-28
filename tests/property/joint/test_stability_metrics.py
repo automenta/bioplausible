@@ -6,10 +6,8 @@ import pytest
 import torch
 from torch import Tensor
 
-from computronium.core.joint.context import SystemContext
-from computronium.core.joint.state import CompositeState
 from computronium.core.joint.transition import NullPlasticity, PlasticityConfig
-from computronium.core.stability import (
+from computronium.stability import (
     BasinStabilityEstimator,
     FrontierAggregator,
     FrontierRecord,
@@ -23,6 +21,7 @@ from computronium.core.stability import (
     estimate_spectral_radius,
     measure_settling_time,
 )
+from computronium.state import CompositeState, SystemContext
 
 # ============================================================
 # Test Fixtures
@@ -77,7 +76,7 @@ class MockContractingTransition:
 @pytest.fixture
 def mock_context():
     """Create a minimal SystemContext for testing."""
-    from computronium.core.joint.state import StateRegistry, StateVariable
+    from computronium.state import StateRegistry, StateVariable
 
     registry = StateRegistry()
     registry.register(StateVariable(name="x", persistent=True))

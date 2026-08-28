@@ -17,7 +17,9 @@ from computronium.core.joint import (
     StateVariable,
     SystemContext,
 )
-from computronium.core.ontology import (
+from computronium.core.substrates.adapters import create_substrate_adapter
+from computronium.core.system_trainer import compose_system
+from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
@@ -34,8 +36,6 @@ from computronium.core.ontology import (
     SystemConfig,
     ThermodynamicContrast,
 )
-from computronium.core.substrates.adapters import create_substrate_adapter
-from computronium.core.system_trainer import compose_system
 
 # ============================================================
 # Valid coordinate factories for each axis (using actual API)

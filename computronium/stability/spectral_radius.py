@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
-from computronium.core.joint.state import CompositeState
+from computronium.state import CompositeState
 
 if TYPE_CHECKING:
-    from computronium.core.joint.context import SystemContext
+    from computronium.state import SystemContext
 
 
 def estimate_spectral_radius(

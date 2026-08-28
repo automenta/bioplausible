@@ -20,8 +20,11 @@ from computronium.core.campaign.campaign_store import (
     compute_registry_signature,
 )
 from computronium.core.campaign.frontier_record import FrontierRecord
-from computronium.core.joint.state import CompositeState
-from computronium.core.ontology import (
+from computronium.core.system_trainer import (
+    JointSystem,
+    compose_joint_system_from_configs,
+)
+from computronium.ontology import (
     CreditAssignmentConfig,
     GeometryConfig,
     ParameterUpdateConfig,
@@ -29,17 +32,14 @@ from computronium.core.ontology import (
     StateDynamicsConfig,
     SubstrateConfig,
 )
-from computronium.core.profiling import ResourceUsage
-from computronium.core.stability import StabilityGuard
-from computronium.core.system_trainer import (
-    JointSystem,
-    compose_joint_system_from_configs,
-)
+from computronium.resources import ResourceUsage
+from computronium.stability import StabilityGuard
+from computronium.state import CompositeState
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from computronium.core.joint.context import SystemContext
+    from computronium.state import SystemContext
 
 logger = logging.getLogger(__name__)
 

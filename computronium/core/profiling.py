@@ -636,10 +636,10 @@ def _activity_spectral_radius(
         return None
     try:
         from computronium.core.campaign.evaluation import activity_transition
-        from computronium.core.joint.state import CompositeState
         from computronium.core.stability.spectral_radius import (
             estimate_spectral_radius,
         )
+        from computronium.state import CompositeState
 
         z = CompositeState(activity={"x": x}, plastic={}, substrate={})
         return estimate_spectral_radius(activity_transition(system), z, system.context)
@@ -802,7 +802,7 @@ def analyze_joint_system(
         if hasattr(system.plasticity, "initial_psi"):
             # Estimate plastic state size using a simple context
             try:
-                from computronium.core.joint.context import SystemContext
+                from computronium.state import SystemContext
 
                 # Build minimal context with required config objects
                 context = SystemContext(
@@ -857,7 +857,10 @@ def _create_joint_system_from_parts(
 ) -> JointSystem:
     """Create a JointSystem from parsed coordinate parts."""
     from computronium.core.joint.transition import NullPlasticity, PlasticityConfig
-    from computronium.core.ontology import (
+    from computronium.core.plasticity.fast_weights import create_fast_weight_plasticity
+    from computronium.core.plasticity.routing import create_routing_plasticity
+    from computronium.core.system_trainer import compose_joint_system
+    from computronium.ontology import (
         BackpropCredit,
         CreditAssignmentConfig,
         DigitalSubstrate,
@@ -873,9 +876,6 @@ def _create_joint_system_from_parts(
         SubstrateConfig,
         ThermodynamicContrast,
     )
-    from computronium.core.plasticity.fast_weights import create_fast_weight_plasticity
-    from computronium.core.plasticity.routing import create_routing_plasticity
-    from computronium.core.system_trainer import compose_joint_system
 
     # Substrate
     if substrate_type == "digital":
@@ -916,7 +916,7 @@ def _create_joint_system_from_parts(
     elif dynamics_type == "instantaneous":
         dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     elif dynamics_type == "predictive_settling":
-        from computronium.core.ontology import PredictiveSettlingDynamics
+        from computronium.ontology import PredictiveSettlingDynamics
 
         dynamics = PredictiveSettlingDynamics(
             StateDynamicsConfig.predictive_settling(max_steps=10, step_size=0.1)

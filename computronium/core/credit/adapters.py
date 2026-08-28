@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, ClassVar
 import torch
 from torch import Tensor
 
-from computronium.core.ontology import (
+from computronium.ontology import (
     BackpropCredit,
     CreditAssignment,
     CreditAssignmentConfig,

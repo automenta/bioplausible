@@ -22,9 +22,12 @@ if TYPE_CHECKING:
 import torch
 
 from computronium.core.joint.transition import PlasticityConfig
+from computronium.core.plasticity.fast_weights import create_fast_weight_plasticity
+from computronium.core.plasticity.routing import create_routing_plasticity
+from computronium.core.system_trainer import compose_joint_system
 
 # Import computronium components
-from computronium.core.ontology import (
+from computronium.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
     DigitalSubstrate,
@@ -39,9 +42,6 @@ from computronium.core.ontology import (
     SubstrateConfig,
     ThermodynamicContrast,
 )
-from computronium.core.plasticity.fast_weights import create_fast_weight_plasticity
-from computronium.core.plasticity.routing import create_routing_plasticity
-from computronium.core.system_trainer import compose_joint_system
 
 
 @dataclass(frozen=True, slots=True)
@@ -270,7 +270,7 @@ def _profile_coordinate(
         # Profile plasticity step if applicable
         if hasattr(system, "plasticity") and system.plasticity is not None:
             # Create dummy plastic state and joint state
-            from computronium.core.joint.state import CompositeState
+            from computronium.state import CompositeState
 
             z = CompositeState.empty()
             z.activity["x"] = x
@@ -332,7 +332,7 @@ def _profile_coordinate(
 
         # Profile dynamics settle
         if hasattr(system.dynamics, "settle"):
-            from computronium.core.ontology import SystemState
+            from computronium.ontology import SystemState
 
             def dynamics_settle_fn(x_input, substrate, geometry):
                 state = SystemState(x=x_input)

@@ -18,20 +18,20 @@ from pathlib import Path
 
 import torch
 
+from computronium.core.plasticity.theta_audit import ThetaInvarianceAudit
 from computronium.experiments.joint.z3_fixed_weights import (
     MetaRecipe,
     TaskShape,
     Z3Model,
     _adapt_all_tasks,
+    _fixed_probe,
     _is_theta_param,
     _meta_train_phases,
     _run_adaptation,
-    _fixed_probe,
     create_last_symbol_task,
     create_parity_task,
     create_threshold_task,
 )
-from computronium.core.plasticity.theta_audit import ThetaInvarianceAudit
 
 TASKS = [
     ("parity", create_parity_task),

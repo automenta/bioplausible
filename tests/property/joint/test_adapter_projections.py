@@ -34,7 +34,16 @@ from computronium.core.joint import (
     StateVariable,
     SystemContext,
 )
-from computronium.core.ontology import (
+from computronium.core.substrates.adapters import (
+    DigitalToAnalogAdapter,
+    DigitalToQuantumAdapter,
+    DigitalToSparseAdapter,
+    DigitalToTernaryAdapter,
+    SubstrateAdapter,
+    create_substrate_adapter,
+)
+from computronium.core.system_trainer import compose_system
+from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
@@ -46,15 +55,6 @@ from computronium.core.ontology import (
     SubstrateConfig,
     ThermodynamicContrast,
 )
-from computronium.core.substrates.adapters import (
-    DigitalToAnalogAdapter,
-    DigitalToQuantumAdapter,
-    DigitalToSparseAdapter,
-    DigitalToTernaryAdapter,
-    SubstrateAdapter,
-    create_substrate_adapter,
-)
-from computronium.core.system_trainer import compose_system
 
 # ============================================================
 # Test Fixtures
@@ -214,7 +214,7 @@ def test_dynamics_adapter_preserves_composite_state_activity(
     source_type, target_type, adapter_class
 ):
     """Dynamics adapter should preserve activity component of CompositeState."""
-    from computronium.core.ontology import SystemState
+    from computronium.ontology import SystemState
 
     geometry = _create_base_geometry()
     substrate = DigitalSubstrate(SubstrateConfig.digital())
@@ -225,7 +225,7 @@ def test_dynamics_adapter_preserves_composite_state_activity(
             StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
         )
     elif source_type == "instantaneous":
-        from computronium.core.ontology import InstantaneousDynamics
+        from computronium.ontology import InstantaneousDynamics
 
         source_dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     else:
@@ -259,7 +259,7 @@ def test_dynamics_adapter_factory_creates_correct_types():
     assert isinstance(adapter, EnergyToInstantaneousAdapter)
 
     # Instantaneous -> Energy
-    from computronium.core.ontology import InstantaneousDynamics
+    from computronium.ontology import InstantaneousDynamics
 
     instant_dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     adapter = create_dynamics_adapter(
@@ -392,7 +392,7 @@ def test_substrate_then_dynamics_adapter_composition():
     assert y.shape == (4, 2)
 
     # Apply dynamics adapter (via settle)
-    from computronium.core.ontology import SystemState
+    from computronium.ontology import SystemState
 
     state = SystemState(x=z.activity["x"])
     state.activations = geometry.forward(state.x, substrate)
@@ -428,7 +428,7 @@ def test_adapter_stack_preserves_registry():
     # Apply adapters
     _ = geometry.forward(z.activity["x"], substrate)
 
-    from computronium.core.ontology import SystemState
+    from computronium.ontology import SystemState
 
     state = SystemState(x=z.activity["x"])
     state.activations = geometry.forward(state.x, substrate)
@@ -530,7 +530,7 @@ def test_dynamics_adapter_projection_preserves_energy_descent():
         "energy_minimization", "instantaneous", source_dynamics
     )
 
-    from computronium.core.ontology import SystemState
+    from computronium.ontology import SystemState
 
     state = SystemState(x=torch.randn(4, 10))
     state.activations = geometry.forward(state.x, substrate)

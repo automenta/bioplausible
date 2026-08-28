@@ -18,7 +18,7 @@ from typing import Literal
 import torch
 from torch import Tensor, nn
 
-from computronium.core.ontology import DigitalSubstrate, SubstrateConfig
+from computronium.ontology import DigitalSubstrate, SubstrateConfig
 
 
 class TernaryQuantize(torch.autograd.Function):

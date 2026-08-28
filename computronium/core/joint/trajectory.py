@@ -9,7 +9,7 @@ import torch
 from torch import Tensor
 
 if TYPE_CHECKING:
-    from computronium.core.joint.state import CompositeState
+    from computronium.state import CompositeState
 
 __all__ = ["JointTrajectory"]
 
@@ -38,7 +38,7 @@ class JointTrajectory:
 
     def get_step(self, t: int) -> CompositeState:
         """Reconstruct CompositeState at step t."""
-        from computronium.core.joint.state import CompositeState
+        from computronium.state import CompositeState
 
         return CompositeState(
             activity=self.activity[t],

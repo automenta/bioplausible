@@ -28,13 +28,13 @@ from computronium.core.campaign.evaluation import (
     build_coordinate_system,
     episode_batch,
 )
-from computronium.core.joint.state import CompositeState
 from computronium.core.stability.guard import (
     ProbeSpec,
     StabilityGuard,
     measure_guard_overhead,
     quantify_proxy_disagreement,
 )
+from computronium.state import CompositeState
 
 logger = logging.getLogger(__name__)
 

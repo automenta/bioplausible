@@ -11,29 +11,28 @@ Verifies pseudo-grad correctness against ground truth:
 
 import json
 import sys
+from typing import Any, Dict, List
+
+import numpy as np
 import torch
 import torch.nn.functional as F
-from torch import nn
-from typing import Dict, List, Tuple, Any
-import numpy as np
 
-from computronium.core.ontology import (
+from computronium.ontology import (
+    BackpropCredit,
+    CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
     FeedforwardGeometry,
-    RecurrentGeometry,
     GeometryConfig,
+    Phase,
+    RandomProjectionsCredit,
+    RecurrentGeometry,
     StateDynamicsConfig,
     SubstrateConfig,
-    ThermodynamicContrast,
-    RandomProjectionsCredit,
-    BackpropCredit,
     SystemState,
-    Phase,
-    CreditAssignmentConfig,
+    ThermodynamicContrast,
     _learnable_weight_names,
 )
-from computronium.core.pipeline import forward_pass
 
 
 def get_activations(geometry, substrate, x):

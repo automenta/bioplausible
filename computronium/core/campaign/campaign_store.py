@@ -22,8 +22,7 @@ import yaml
 
 if TYPE_CHECKING:
     from computronium.core.campaign.frontier_record import FrontierRecord
-    from computronium.core.joint.context import SystemContext
-    from computronium.core.joint.state import StateRegistry
+    from computronium.state import StateRegistry, SystemContext
 
 
 @dataclass(frozen=True, slots=True)

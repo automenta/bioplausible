@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
-from computronium.core.ontology import (
+from computronium.ontology import (
     Geometry,
     ParameterUpdate,
     Phase,
@@ -27,7 +27,7 @@ from computronium.core.ontology import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from computronium.core.ontology import CreditAssignment
+    from computronium.ontology import CreditAssignment
 
 type PhaseStates = Mapping[Phase, SystemState]
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 from torch import Tensor
 
-from computronium.core.joint.state import CompositeState
+from computronium.state import CompositeState
 
 
 def create_stability_guard(
@@ -14,8 +14,8 @@ def create_stability_guard(
     window: int = 10,
 ):
     """Create stability guard."""
-    from computronium.core.stability import StabilityGuard
     from computronium.core.stability.spectral_radius import SpectralRadiusEstimator
+    from computronium.stability import StabilityGuard
 
     estimator = SpectralRadiusEstimator(fast_mode=True)
     return StabilityGuard(

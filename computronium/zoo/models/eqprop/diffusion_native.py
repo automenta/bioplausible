@@ -5,9 +5,9 @@ The native ``diffusion_eqprop`` factory (registered as ``diffusion_eqprop``) ret
 """
 
 from computronium.core.model_status import status_tag
-from computronium.core.ontology import System
 from computronium.core.registry import LocalityLevel, register_model
 from computronium.models.native.diffusion_eqprop_native import native_diffusion_eqprop
+from computronium.ontology import System
 
 __all__ = []
 

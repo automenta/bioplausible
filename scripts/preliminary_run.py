@@ -33,7 +33,6 @@ import logging
 import time
 from pathlib import Path
 
-import computronium.zoo  # ruff: ignore[unused-import]  (registration side effect)
 from computronium.hyperopt.comparator import compare_frontiers
 from computronium.hyperopt.ideal_backprop import IdealBackpropFinder
 from computronium.hyperopt.rule_frontier import RuleFrontierFinder

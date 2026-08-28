@@ -22,7 +22,7 @@ import json
 import sys
 import time
 
-from computronium.core.continual.runner import run_continual_learning_suite, CLConfig
+from computronium.core.continual.runner import CLConfig, run_continual_learning_suite
 
 
 def main(argv: list[str] | None = None) -> int:

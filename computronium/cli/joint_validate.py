@@ -128,7 +128,7 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:
         SystemContext,
         consolidate,
     )
-    from computronium.core.ontology import (
+    from computronium.ontology import (
         CreditAssignmentConfig,
         DigitalSubstrate,
         EnergyMinimizationDynamics,

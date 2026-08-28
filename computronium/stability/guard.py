@@ -21,8 +21,7 @@ from computronium.stability.spectral_radius import (
 )
 
 if TYPE_CHECKING:
-    from computronium.core.joint.context import SystemContext
-    from computronium.core.joint.state import CompositeState
+    from computronium.state import CompositeState, SystemContext
 
 # Type aliases for internal API
 TransitionFn = Callable[["CompositeState", "SystemContext"], "CompositeState"]

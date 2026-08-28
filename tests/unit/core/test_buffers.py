@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 import torch
-from torch import Tensor
 
 from computronium.core.continual.buffers import ReplayBuffer
 

@@ -8,25 +8,22 @@ Verifies:
 
 import torch
 import torch.nn.functional as F
-from torch import nn
 
-from computronium.core.ontology import (
+from computronium.ontology import (
+    BackpropCredit,
+    CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
     FeedforwardGeometry,
     GeometryConfig,
+    Phase,
+    RandomProjectionsCredit,
     RecurrentGeometry,
     StateDynamicsConfig,
     SubstrateConfig,
-    ThermodynamicContrast,
-    RandomProjectionsCredit,
     SystemState,
-    Phase,
-    CreditAssignmentConfig,
-    BackpropCredit,
-    InstantaneousDynamics,
+    ThermodynamicContrast,
 )
-from computronium.core.pipeline import forward_pass
 
 
 def get_activations(geometry, substrate, x):

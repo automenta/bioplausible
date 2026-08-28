@@ -7,13 +7,12 @@ their 5-D ontology projection against legacy behavior.
 
 from __future__ import annotations
 
-import torch
-from computronium.core.registry import Registry, ComponentCategory
-from computronium.core.ontology import ModelAdapter
+import computronium.zoo.models  # noqa: F401
 
 # Import all model modules to populate registry
 import computronium.zoo.models.eqprop  # noqa: F401
-import computronium.zoo.models  # noqa: F401
+from computronium.core.registry import ComponentCategory, Registry
+from computronium.ontology import ModelAdapter
 
 
 def _instantiate_model(model_cls, name: str):

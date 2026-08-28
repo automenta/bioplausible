@@ -5,9 +5,9 @@ The native ``sparse_eqprop`` factory (registered as ``sparse_eqprop``) returns a
 """
 
 from computronium.core.model_status import status_tag
-from computronium.core.ontology import System
 from computronium.core.registry import LocalityLevel, register_model
 from computronium.models.native.sparse_eqprop_native import native_sparse_eqprop
+from computronium.ontology import System
 
 __all__ = []
 

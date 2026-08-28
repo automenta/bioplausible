@@ -11,7 +11,7 @@ from collections.abc import Callable
 import torch
 from torch import Tensor
 
-from computronium.core.ontology import DigitalSubstrate, SubstrateConfig
+from computronium.ontology import DigitalSubstrate, SubstrateConfig
 
 
 class ComplexSubstrate(DigitalSubstrate):

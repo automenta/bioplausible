@@ -40,9 +40,9 @@ from computronium.core.continual import (
     run_continual_learning_suite,
     run_continual_train_step,
 )
-from computronium.core.stability import GuardDecision, StabilityGuard
 from computronium.domains.base import TaskSplit
 from computronium.domains.vision import SplitMNIST
+from computronium.stability import GuardDecision, StabilityGuard
 
 # ============================================================
 # Fixtures
@@ -84,7 +84,7 @@ class TestFastWeightPlasticityLearning:
 
     def test_fast_weight_arm_uses_correct_dynamics(self, fast_weight_model):
         """Verify the arm uses EnergyMinimizationDynamics (not InstantaneousDynamics)."""
-        from computronium.core.ontology import EnergyMinimizationDynamics
+        from computronium.ontology import EnergyMinimizationDynamics
 
         dynamics = fast_weight_model.joint_system.dynamics
         assert isinstance(dynamics, EnergyMinimizationDynamics), (
@@ -95,7 +95,7 @@ class TestFastWeightPlasticityLearning:
 
     def test_fast_weight_arm_uses_thermodynamic_contrast(self, fast_weight_model):
         """Verify the arm uses ThermodynamicContrast credit assignment."""
-        from computronium.core.ontology import ThermodynamicContrast
+        from computronium.ontology import ThermodynamicContrast
 
         credit = fast_weight_model.joint_system.credit
         assert isinstance(credit, ThermodynamicContrast), (
@@ -117,8 +117,8 @@ class TestFastWeightPlasticityLearning:
         self, fast_weight_model, mnist_batch
     ):
         """Verify EnergyMinimizationDynamics produces different free vs nudged states."""
-        from computronium.core.ontology import SystemState
         from computronium.core.pipeline import forward_pass
+        from computronium.ontology import SystemState
 
         x, y = mnist_batch
         js = fast_weight_model.joint_system
@@ -155,8 +155,8 @@ class TestFastWeightPlasticityLearning:
         x, y = mnist_batch
         js = fast_weight_model.joint_system
 
-        from computronium.core.ontology import Phase, SystemState
         from computronium.core.pipeline import forward_pass
+        from computronium.ontology import Phase, SystemState
 
         initial_acts = forward_pass(js.substrate, js.geometry, x)
 
@@ -333,7 +333,7 @@ class TestOtherArms:
         """Test EWC arm creates correctly with ElasticConsolidationUpdate."""
         model, update = create_ewc_arm(device=str(device))
         assert isinstance(model, ContinualJointSystem)
-        from computronium.core.ontology import ElasticConsolidationUpdate
+        from computronium.ontology import ElasticConsolidationUpdate
 
         assert isinstance(update, ElasticConsolidationUpdate)
 
@@ -341,7 +341,7 @@ class TestOtherArms:
         """Test backprop arm creation."""
         model = create_backprop_arm(device=str(device))
         assert isinstance(model, ContinualJointSystem)
-        from computronium.core.ontology import BackpropCredit
+        from computronium.ontology import BackpropCredit
 
         assert isinstance(model.joint_system.credit, BackpropCredit)
         assert model.joint_system.credit.requires_autograd is True

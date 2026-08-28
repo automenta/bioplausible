@@ -11,28 +11,25 @@ Verifies:
 
 import json
 import sys
+from typing import Any, Dict, List, Tuple
+
 import torch
 import torch.nn as nn
 from torch import autograd
-from typing import Dict, List, Any, Tuple
-import numpy as np
 
-from computronium.core.ontology import (
+from computronium.core.utils.device import get_device
+from computronium.ontology import (
     DigitalSubstrate,
     EnergyMinimizationDynamics,
+    FeedforwardGeometry,
+    GeometryConfig,
     InstantaneousDynamics,
     PredictiveSettlingDynamics,
-    FeedforwardGeometry,
     RecurrentGeometry,
-    GeometryConfig,
     StateDynamicsConfig,
     SubstrateConfig,
     SystemState,
-    Phase,
-    _layer_stack,
-    _recurrent_weight,
 )
-from computronium.core.utils.device import get_device
 
 
 def get_activations(geometry, substrate, x):
@@ -410,7 +407,7 @@ def test_inplace_op_audit() -> Dict[str, Any]:
         pass
 
     # Check SpikeIntegrationDynamics settle
-    from computronium.core.ontology import SpikeIntegrationDynamics
+    from computronium.ontology import SpikeIntegrationDynamics
 
     spike_dynamics = SpikeIntegrationDynamics(StateDynamicsConfig.spike_integration())
     try:
@@ -444,7 +441,7 @@ def test_inplace_op_audit() -> Dict[str, Any]:
         pass
 
     # Check LazyStateDynamics settle
-    from computronium.core.ontology import LazyStateDynamics
+    from computronium.ontology import LazyStateDynamics
 
     lazy_dynamics = LazyStateDynamics(StateDynamicsConfig.energy_minimization())
     try:
@@ -478,7 +475,7 @@ def test_inplace_op_audit() -> Dict[str, Any]:
         pass
 
     # Check DiffusionDynamics settle
-    from computronium.core.ontology import DiffusionDynamics
+    from computronium.ontology import DiffusionDynamics
 
     diff_dynamics = DiffusionDynamics(StateDynamicsConfig.diffusion())
     try:

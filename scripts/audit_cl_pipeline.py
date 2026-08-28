@@ -11,39 +11,31 @@ Verifies:
 7. Stability guard integration: guard called per step; windowed_growth computed; kill triggers on divergence
 """
 
+import copy
 import json
 import sys
-import copy
+from typing import Any, Dict
+
 import torch
 import torch.nn.functional as F
-from torch import Tensor
-from typing import Dict, List, Any
-import numpy as np
 
-from computronium.core.continual.system import ContinualJointSystem
-from computronium.core.continual.buffers import ReplayBuffer
-from computronium.core.continual.losses import LwFLoss, SynapticIntelligence
 from computronium.core.continual.arms import (
-    create_fast_weight_arm,
-    create_backprop_arm,
     create_ewc_arm,
-    create_replay_arm,
+    create_fast_weight_arm,
     create_lwf_arm,
+    create_replay_arm,
     create_si_arm,
 )
+from computronium.core.continual.buffers import ReplayBuffer
+from computronium.core.continual.stability import (
+    check_stability,
+    create_stability_guard,
+    make_transition_fn,
+)
 from computronium.core.continual.training import (
-    run_continual_train_step,
     _lwf_train_step,
     _si_train_step,
 )
-from computronium.core.continual.constants import CL_CLASSES_PER_TASK, CL_NUM_TASKS
-from computronium.core.continual.stability import (
-    create_stability_guard,
-    make_transition_fn,
-    check_stability,
-)
-from computronium.domains.base import TaskSplit
-from computronium.domains.vision import SplitMNIST
 
 
 def test_task_masking() -> Dict[str, Any]:

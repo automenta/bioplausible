@@ -16,7 +16,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from torch import Tensor
 
-from computronium.core.ontology import (
+from computronium.core.pipeline import phase_states
+from computronium.core.system_trainer import compose_system
+from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
@@ -29,8 +31,6 @@ from computronium.core.ontology import (
     SystemState,
     ThermodynamicContrast,
 )
-from computronium.core.pipeline import phase_states
-from computronium.core.system_trainer import compose_system
 
 # Tolerances
 TIGHT = {"rtol": 1e-5, "atol": 1e-6, "equal_nan": False}

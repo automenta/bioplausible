@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
-    from computronium.core.ontology import (
+    from computronium.ontology import (
         SystemConfig,
     )
 
@@ -237,7 +237,7 @@ class DataConfig:
 
 
 # Re-export SystemConfig from ontology as the unified 5-D config
-from computronium.core.ontology import SystemConfig
+from computronium.ontology import SystemConfig
 
 # ──────────────────────────────────────────────
 # Top-Level Experiment Configuration (ALL FIELDS REQUIRED)
@@ -553,7 +553,7 @@ def _base_data(domain: str, task: str) -> DataConfig:
 
 
 def _base_system() -> SystemConfig:
-    from computronium.core.ontology import (
+    from computronium.ontology import (
         CreditAssignmentConfig,
         GeometryConfig,
         ParameterUpdateConfig,

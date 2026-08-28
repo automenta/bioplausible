@@ -10,9 +10,9 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from computronium.core.continual.constants import CL_CLASSES_PER_TASK
-from computronium.core.joint.state import CompositeState
-from computronium.core.ontology import Phase, SystemState
 from computronium.core.pipeline import forward_pass
+from computronium.ontology import Phase, SystemState
+from computronium.state import CompositeState
 
 
 def _masked_task_loss(state, local_y: Tensor, task_start: int, task_end: int) -> Tensor:

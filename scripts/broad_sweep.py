@@ -32,8 +32,8 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import computronium.zoo  # ruff: ignore[unused-import]  (registration side effect)
 import torch
+
 from computronium.core.registry import ComponentCategory, Domain, Registry
 from computronium.hyperopt.search_space import get_rule_space, get_search_space
 
@@ -194,7 +194,6 @@ def _match_param_budget(
     Returns:
         A copy of ``config`` with the width matched toward ``budget``.
     """
-    import computronium.zoo  # ruff: ignore[unused-import]  (registration side effect)
     from computronium.core.construction import resolve_consumption
     from computronium.core.registry import ComponentCategory, Registry
     from computronium.experiment.param_estimator import estimate_param_count
@@ -509,7 +508,6 @@ def _prune_phantom_knobs(
     space and phantom-knob noise disappears. ``learning_rate`` is retained
     because the trainer consumes it for trainer-driven (BPTT) models.
     """
-    import computronium.zoo  # ruff: ignore[unused-import]  (registration side effect)
     from computronium.core.construction import phantom_knobs
     from computronium.core.registry import ComponentCategory, Registry
 
@@ -564,7 +562,7 @@ def _forward_probe_ok(
         succeed on probe dummies.
     """
     import torch  # ruff: ignore[unused-import]  (device construction)
-    import computronium.zoo  # ruff: ignore[unused-import]  (registration side effect)
+
     from computronium.core.construction import construct_model
     from computronium.core.profiling import _build_spatial_dummy
     from computronium.core.registry import ComponentCategory, Registry

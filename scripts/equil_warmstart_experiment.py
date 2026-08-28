@@ -23,8 +23,6 @@ import argparse
 import time
 
 import torch
-
-import computronium.zoo  # ruff: ignore[unused-import]  (registration side effect)
 from computronium.zoo.models.eqprop.standard_eqprop import StandardEqProp
 
 _DEFAULT_MAX_STEPS = 20

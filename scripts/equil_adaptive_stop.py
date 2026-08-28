@@ -18,8 +18,6 @@ import itertools
 import time
 
 import torch
-
-import computronium.zoo  # ruff: ignore[unused-import]
 from computronium.zoo.models.eqprop.standard_eqprop import StandardEqProp
 
 # Test grid: (threshold, start) pairs

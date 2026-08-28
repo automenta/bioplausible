@@ -22,7 +22,7 @@ from computronium.core.joint import (
     StateVariable,
     SystemContext,
 )
-from computronium.core.ontology import (
+from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,

@@ -114,7 +114,7 @@ class SynapticIntelligence:
 
         Matches pseudo-gradients to parameters by learnable-weight order.
         """
-        from computronium.core.ontology import _learnable_weight_names
+        from computronium.ontology import _learnable_weight_names
 
         param_dict = dict(self.model.named_parameters())
         param_names = _learnable_weight_names(param_dict)

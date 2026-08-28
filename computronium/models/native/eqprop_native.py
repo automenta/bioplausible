@@ -6,7 +6,8 @@ composition of the 5 Protocols, bypassing ModelAdapter.
 
 from __future__ import annotations
 
-from computronium.core.ontology import (
+from computronium.core.system_trainer import compose_system
+from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
@@ -18,7 +19,6 @@ from computronium.core.ontology import (
     System,
     ThermodynamicContrast,
 )
-from computronium.core.system_trainer import compose_system
 
 
 def create_native_eqprop_mlp(

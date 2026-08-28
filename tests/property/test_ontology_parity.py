@@ -15,7 +15,13 @@ import torch
 # Configure logging to prevent hangs in SystemTrainer
 logging.basicConfig(level=logging.INFO, force=True)
 
-from computronium.core.ontology import (
+from computronium.core.system_trainer import (
+    SystemTrainer,
+    SystemTrainerConfig,
+    compose_system,
+)
+from computronium.domains.factory import create_task
+from computronium.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
     DigitalSubstrate,
@@ -30,12 +36,6 @@ from computronium.core.ontology import (
     SubstrateConfig,
     ThermodynamicContrast,
 )
-from computronium.core.system_trainer import (
-    SystemTrainer,
-    SystemTrainerConfig,
-    compose_system,
-)
-from computronium.domains.factory import create_task
 
 # Skip if native models not available
 try:
@@ -385,7 +385,7 @@ class TestSubstrateVariants:
     )
     def test_substrate_composition(self, substrate_type):
         """Each substrate should compose and run forward pass."""
-        from computronium.core.ontology import (
+        from computronium.ontology import (
             AnalogSubstrate,
             BackpropCredit,
             MemristiveSubstrate,

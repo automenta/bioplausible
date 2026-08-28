@@ -15,7 +15,7 @@ from typing import Literal
 import torch
 from torch import Tensor
 
-from computronium.core.ontology import DigitalSubstrate, SubstrateConfig
+from computronium.ontology import DigitalSubstrate, SubstrateConfig
 
 
 class SparseSubstrate(DigitalSubstrate):

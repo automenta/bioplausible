@@ -20,7 +20,11 @@ from hypothesis import strategies as st
 from torch import Tensor
 
 from computronium.core.joint import CompositeState, NullPlasticity, SystemContext
-from computronium.core.ontology import (
+from computronium.core.plasticity.fast_weights import FastWeightPlasticity
+from computronium.core.plasticity.routing import RoutingPlasticity
+from computronium.core.plasticity.rule_state import RuleStatePlasticity
+from computronium.core.plasticity.substrate_coupled import SubstrateCoupledPlasticity
+from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
@@ -30,14 +34,9 @@ from computronium.core.ontology import (
     StateDynamicsConfig,
     SubstrateConfig,
 )
-from computronium.core.plasticity.fast_weights import FastWeightPlasticity
-from computronium.core.plasticity.routing import RoutingPlasticity
-from computronium.core.plasticity.rule_state import RuleStatePlasticity
-from computronium.core.plasticity.substrate_coupled import SubstrateCoupledPlasticity
 
 if TYPE_CHECKING:
-    from computronium.core.joint.context import SystemContext
-    from computronium.core.joint.state import CompositeState
+    from computronium.state import CompositeState, SystemContext
 
 # Tolerances
 TIGHT = {"rtol": 1e-5, "atol": 1e-6, "equal_nan": False}

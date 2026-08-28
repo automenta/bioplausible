@@ -14,16 +14,12 @@ Features:
 
 from __future__ import annotations
 
-import json
-import yaml
 from pathlib import Path
-from typing import Any
 
+import yaml
 from nicegui import ui
 
 # Import computronium components for validation
-from computronium.core.ontology import SystemConfig
-from computronium.core.joint.transition import PlasticityConfig
 
 
 # ----------------------------------------------------------------------
@@ -386,7 +382,7 @@ Coordinate: {coord_str}
 """
 
 import torch
-from computronium.core.ontology import (
+from computronium.ontology import (
     DigitalSubstrate, SubstrateConfig,
     FeedforwardGeometry, RecurrentGeometry, GeometryConfig,
     InstantaneousDynamics, EnergyMinimizationDynamics, PredictiveSettlingDynamics, StateDynamicsConfig,

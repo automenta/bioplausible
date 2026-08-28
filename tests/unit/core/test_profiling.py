@@ -6,7 +6,7 @@ import pytest
 import torch
 from torch import nn
 
-from computronium.core.profiling import ResourceUsage
+from computronium.resources import ResourceUsage
 
 
 class TestResourceUsage:

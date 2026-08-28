@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from compat import apply_compat_shims
 
-from computronium.core.ontology import System
+from computronium.ontology import System
 
 apply_compat_shims()  # must run before `import nicegui`
 
@@ -157,7 +157,8 @@ def _meta_text(name: str) -> str:
 
 def _build_ontology_system(layer_choices: dict[str, str]) -> System:
     """Build a System from 5 layer choices."""
-    from computronium.core.ontology import (
+    from computronium.core.system_trainer import compose_system
+    from computronium.ontology import (
         BackpropCredit,
         CreditAssignmentConfig,
         DigitalSubstrate,
@@ -187,7 +188,6 @@ def _build_ontology_system(layer_choices: dict[str, str]) -> System:
         TemporalTraceCredit,
         ThermodynamicContrast,
     )
-    from computronium.core.system_trainer import compose_system
 
     # Map layer names to instances
     substrate_map = {

@@ -3,7 +3,15 @@
 import pytest
 import torch
 
-from computronium.core.ontology import (
+from computronium.core.pipeline import phase_states
+from computronium.core.system_trainer import (
+    SystemTrainer,
+    SystemTrainerConfig,
+    create_backprop_system,
+    create_eqprop_system,
+    create_fa_system,
+)
+from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EuclideanUpdate,
@@ -19,14 +27,6 @@ from computronium.core.ontology import (
     SystemState,
     ThermodynamicContrast,
     TileGeometry,
-)
-from computronium.core.pipeline import phase_states
-from computronium.core.system_trainer import (
-    SystemTrainer,
-    SystemTrainerConfig,
-    create_backprop_system,
-    create_eqprop_system,
-    create_fa_system,
 )
 
 
@@ -107,7 +107,7 @@ class TestSubstrate:
         assert torch.equal(state, x)
 
     def test_noisy_substrate_injects_noise(self):
-        from computronium.core.ontology import NoisySubstrate
+        from computronium.ontology import NoisySubstrate
 
         substrate = NoisySubstrate(
             SubstrateConfig(

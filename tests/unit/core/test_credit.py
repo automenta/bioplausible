@@ -5,26 +5,27 @@ These tests lock in the credit assignment audit checks to prevent regressions.
 
 from __future__ import annotations
 
+from typing import List
+
 import pytest
 import torch
 import torch.nn.functional as F
 from torch import Tensor
-from typing import List
 
-from computronium.core.ontology import (
-    DigitalSubstrate,
-    SubstrateConfig,
-    FeedforwardGeometry,
-    RecurrentGeometry,
-    GeometryConfig,
-    EnergyMinimizationDynamics,
-    StateDynamicsConfig,
-    ThermodynamicContrast,
+from computronium.ontology import (
     BackpropCredit,
-    RandomProjectionsCredit,
     CreditAssignmentConfig,
-    SystemState,
+    DigitalSubstrate,
+    EnergyMinimizationDynamics,
+    FeedforwardGeometry,
+    GeometryConfig,
     Phase,
+    RandomProjectionsCredit,
+    RecurrentGeometry,
+    StateDynamicsConfig,
+    SubstrateConfig,
+    SystemState,
+    ThermodynamicContrast,
     _learnable_weight_names,
 )
 

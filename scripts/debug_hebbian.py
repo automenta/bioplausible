@@ -8,6 +8,7 @@ Checks:
 """
 
 import torch
+
 from computronium.zoo.models.hebbian import ThreeFactorHebbian
 
 

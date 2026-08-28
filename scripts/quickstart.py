@@ -14,18 +14,18 @@ import multiprocessing
 import signal
 import sys
 import time
+
 import torch
 
 # Use spawn to avoid semaphore leaks from forked processes
 multiprocessing.set_start_method("spawn", force=True)
 
+from computronium import create_backprop_mlp, create_ff_mlp
 from computronium.core.system_trainer import (
     SystemTrainer,
     SystemTrainerConfig,
 )
-from computronium import create_backprop_mlp, create_ff_mlp
 from computronium.domains.factory import create_task
-
 
 # Global trainer reference for signal handler cleanup
 _current_trainer: SystemTrainer | None = None

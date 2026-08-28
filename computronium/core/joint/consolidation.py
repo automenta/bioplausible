@@ -6,8 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from computronium.core.joint.context import SystemContext
-    from computronium.core.joint.state import CompositeState
+    from computronium.state import CompositeState, SystemContext
 
 __all__ = ["ConsolidationConfig", "consolidate"]
 

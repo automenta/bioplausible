@@ -4,22 +4,20 @@ from __future__ import annotations
 
 import pytest
 import torch
-from torch import Tensor
 
-from computronium.core.ontology import (
+from computronium.core.pipeline import forward_pass
+from computronium.ontology import (
     DigitalSubstrate,
-    SubstrateConfig,
-    FeedforwardGeometry,
-    RecurrentGeometry,
-    GeometryConfig,
     EnergyMinimizationDynamics,
+    FeedforwardGeometry,
+    GeometryConfig,
     InstantaneousDynamics,
     PredictiveSettlingDynamics,
+    RecurrentGeometry,
     StateDynamicsConfig,
+    SubstrateConfig,
     SystemState,
-    Phase,
 )
-from computronium.core.pipeline import forward_pass
 
 
 @pytest.fixture

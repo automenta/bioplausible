@@ -10,55 +10,41 @@ import torch
 from torch import Tensor
 
 from computronium.stability import (
-    # Guard API
-    attach,
-    StabilityGuard,
-    StabilityVerdict,
-    GuardHandle,
-    GuardDecision,
-    DEFAULT_TAU,
-    calibrate_threshold,
-    quantify_proxy_disagreement,
-    measure_guard_overhead,
-    StepState,
-    ExternalTransitionFn,
-    StatisticKind,
-    # Spectral radius
-    SpectralRadiusEstimator,
-    estimate_spectral_radius,
-    estimate_spectral_radius_full_jacobian,
-    # Lyapunov
-    LyapunovEstimator,
-    estimate_lyapunov_exponent,
-    estimate_lyapunov_spectrum,
-    # Settling
-    SettlingMonitor,
-    measure_settling_time,
-    measure_settling_time_full_state,
-    # Basin stability
+    BasinConfig,
     BasinStabilityEstimator,
-    estimate_basin_stability,
-    estimate_basin_stability_multistart,
+    FrontierAggregator,
     # Frontier
     FrontierRecord,
-    FrontierAggregator,
+    GuardConfig,
+    GuardDecision,
+    GuardHandle,
+    LyapunovConfig,
+    LyapunovEstimator,
     # Resources
     ResourceUsage,
+    SettlingConfig,
+    SettlingMonitor,
     # Config + Factories
     SpectralRadiusConfig,
-    LyapunovConfig,
-    SettlingConfig,
-    BasinConfig,
-    GuardConfig,
-    create_spectral_radius_estimator,
-    create_lyapunov_estimator,
-    create_settling_monitor,
+    SpectralRadiusEstimator,
+    StabilityGuard,
+    StabilityVerdict,
+    StepState,
+    # Guard API
+    attach,
+    calibrate_threshold,
     create_basin_estimator,
     create_guard,
+    create_lyapunov_estimator,
+    create_settling_monitor,
+    create_spectral_radius_estimator,
+    estimate_basin_stability,
+    estimate_basin_stability_multistart,
+    estimate_lyapunov_exponent,
+    estimate_spectral_radius,
+    measure_settling_time,
 )
-
-from computronium.core.joint.state import CompositeState
-
+from computronium.state import CompositeState
 
 # ============================================================
 # Test Fixtures
@@ -105,7 +91,7 @@ class MockContractingTransition:
 @pytest.fixture
 def mock_context():
     """Create a minimal SystemContext for testing."""
-    from computronium.core.joint.state import StateRegistry, StateVariable
+    from computronium.state import StateRegistry, StateVariable
 
     registry = StateRegistry()
     registry.register(StateVariable(name="x", persistent=True))
@@ -122,7 +108,7 @@ def mock_context():
 
     plasticity_config = PlasticityConfig.null()
 
-    from computronium.core.joint.context import SystemContext
+    from computronium.state import SystemContext
 
     return SystemContext(
         theta=theta,
@@ -141,7 +127,7 @@ def mock_context():
 @pytest.fixture
 def initial_state():
     """Create initial CompositeState."""
-    from computronium.core.joint.state import CompositeState
+    from computronium.state import CompositeState
 
     return CompositeState(
         activity={"x": torch.randn(4, 32)},
@@ -828,9 +814,13 @@ class TestDeviceManagement:
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_cuda_consistency(self):
         """All estimators should work on CUDA if available."""
-        from computronium.core.joint.state import CompositeState, StateRegistry, StateVariable
-        from computronium.core.joint.context import SystemContext
         from computronium.core.joint.transition import PlasticityConfig
+        from computronium.state import (
+            CompositeState,
+            StateRegistry,
+            StateVariable,
+            SystemContext,
+        )
 
         registry = StateRegistry()
         registry.register(StateVariable(name="x", persistent=True))

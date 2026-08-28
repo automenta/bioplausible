@@ -34,7 +34,7 @@ from computronium.core.campaign.kernel_cache import (
     set_kernel_cache,
 )
 from computronium.core.campaign.pareto import ParetoFrontier, pareto_frontier
-from computronium.core.profiling import ResourceUsage
+from computronium.resources import ResourceUsage
 
 __all__ = [
     "DEFAULT_BATCH_SIZE",

@@ -14,7 +14,7 @@ from computronium.core.joint import (
     SystemContext,
     consolidate,
 )
-from computronium.core.ontology import (
+from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     GeometryConfig,

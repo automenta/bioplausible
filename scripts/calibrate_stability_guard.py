@@ -19,16 +19,15 @@ from typing import TYPE_CHECKING
 import numpy as np
 import torch
 
-from computronium.core.joint.context import SystemContext
-from computronium.core.joint.state import CompositeState
 from computronium.core.joint.transition import PlasticityConfig
-from computronium.core.stability import (
+from computronium.core.stability.guard import ProbeSpec
+from computronium.stability import (
     StabilityGuard,
     calibrate_threshold,
     measure_guard_overhead,
     quantify_proxy_disagreement,
 )
-from computronium.core.stability.guard import ProbeSpec
+from computronium.state import CompositeState, SystemContext
 
 if TYPE_CHECKING:
     from computronium.core.stability.guard import StatisticKind
@@ -43,8 +42,7 @@ STATISTIC_KINDS: tuple[StatisticKind, ...] = ("fast_proxy", "windowed_growth")
 
 
 def _synthetic_context(dim: int) -> SystemContext:
-    from computronium.core.joint.state import StateRegistry, StateVariable
-    from computronium.core.ontology import (
+    from computronium.ontology import (
         CreditAssignmentConfig,
         DigitalSubstrate,
         GeometryConfig,
@@ -53,6 +51,7 @@ def _synthetic_context(dim: int) -> SystemContext:
         StateDynamicsConfig,
         SubstrateConfig,
     )
+    from computronium.state import StateRegistry, StateVariable
 
     geometry_config = GeometryConfig.feedforward(
         input_dim=dim, output_dim=2, hidden_dims=(dim,)

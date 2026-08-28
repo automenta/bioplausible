@@ -11,8 +11,8 @@ from collections.abc import Generator
 import torch
 from torch import Tensor
 
-from computronium.core.ontology import System, SystemState
 from computronium.core.pipeline import task_loss
+from computronium.ontology import System, SystemState
 
 # ----------------------------------------------------------------------
 # Constants (do not inline shapes)
@@ -183,7 +183,7 @@ def _round_trip_configs(system: System) -> System:
     update_cfg = system.update.config
 
     # Reconstruct from configs
-    from computronium.core.ontology import (
+    from computronium.ontology import (
         BackpropCredit,
         DigitalSubstrate,
         ElasticConsolidationUpdate,
@@ -218,7 +218,7 @@ def _round_trip_configs(system: System) -> System:
     if geometry_cfg.topology_type == "recurrent":
         geometry = RecurrentGeometry(geometry_cfg)
     elif geometry_cfg.topology_type == "tile_mesh":
-        from computronium.core.ontology import TileGeometry
+        from computronium.ontology import TileGeometry
 
         geometry = TileGeometry(geometry_cfg)
     else:

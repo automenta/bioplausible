@@ -11,7 +11,8 @@ import json
 import pytest
 import torch
 
-from computronium.core.ontology import (
+from computronium.core.system_trainer import compose_system
+from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     ElasticConsolidationUpdate,
@@ -31,7 +32,6 @@ from computronium.core.ontology import (
     TargetInversionCredit,
     ThermodynamicContrast,
 )
-from computronium.core.system_trainer import compose_system
 from tests.property._support import (
     DEPTH,
     WIDTH,

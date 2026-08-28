@@ -11,8 +11,7 @@ from torch import Tensor
 from computronium.core.joint.transition import PlasticityConfig
 
 if TYPE_CHECKING:
-    from computronium.core.joint.context import SystemContext
-    from computronium.core.joint.state import CompositeState
+    from computronium.state import CompositeState, SystemContext
 
 
 @dataclass(frozen=True, slots=True)

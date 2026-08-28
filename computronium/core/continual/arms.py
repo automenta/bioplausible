@@ -9,7 +9,8 @@ from computronium.core.continual.constants import CL_TOTAL_CLASSES
 from computronium.core.continual.losses import LwFLoss, SynapticIntelligence
 from computronium.core.continual.system import ContinualJointSystem
 from computronium.core.joint.transition import NullPlasticity, PlasticityConfig
-from computronium.core.ontology import (
+from computronium.core.plasticity import create_fast_weight_plasticity
+from computronium.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
     DigitalSubstrate,
@@ -24,7 +25,6 @@ from computronium.core.ontology import (
     SubstrateConfig,
     ThermodynamicContrast,
 )
-from computronium.core.plasticity import create_fast_weight_plasticity
 
 
 def _get_compose_joint_system():

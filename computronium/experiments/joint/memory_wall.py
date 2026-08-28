@@ -33,8 +33,8 @@ from computronium.core.presets import (
     create_fa_mlp,
     create_hebbian_mlp,
 )
-from computronium.core.profiling import ResourceUsage
 from computronium.data.vision import create_data_loaders
+from computronium.resources import ResourceUsage
 
 __all__ = [
     "ArmConfig",

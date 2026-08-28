@@ -71,7 +71,7 @@ def inspect_model(args):
             # System.forward signature depends on whether it's a native System (requires substrate)
             # or an _AdaptedSystem (delegates to model.forward without substrate).
             # Try with substrate first (native 5-D System), fall back to no substrate (adapted).
-            from computronium.core.ontology import DigitalSubstrate
+            from computronium.ontology import DigitalSubstrate
 
             substrate = DigitalSubstrate()
             try:
@@ -107,7 +107,10 @@ def _create_joint_system_from_coordinate(
 ):
     """Create a JointSystem from a parsed 6-D coordinate."""
     from computronium.core.joint.transition import PlasticityConfig
-    from computronium.core.ontology import (
+    from computronium.core.plasticity.fast_weights import create_fast_weight_plasticity
+    from computronium.core.plasticity.routing import create_routing_plasticity
+    from computronium.core.system_trainer import compose_joint_system
+    from computronium.ontology import (
         BackpropCredit,
         CreditAssignmentConfig,
         DigitalSubstrate,
@@ -122,9 +125,6 @@ def _create_joint_system_from_coordinate(
         SubstrateConfig,
         ThermodynamicContrast,
     )
-    from computronium.core.plasticity.fast_weights import create_fast_weight_plasticity
-    from computronium.core.plasticity.routing import create_routing_plasticity
-    from computronium.core.system_trainer import compose_joint_system
 
     # Substrate
     if coord["substrate"] == "digital":
@@ -203,7 +203,7 @@ def _create_joint_system_from_coordinate(
 
 def _run_state_inspection(system, task, steps: int, device: str) -> dict:
     """Run joint state inspection and return trajectory data."""
-    from computronium.core.joint.state import CompositeState
+    from computronium.state import CompositeState
 
     trajectory = {
         "activity": [],
@@ -256,7 +256,7 @@ def _run_state_inspection(system, task, steps: int, device: str) -> dict:
         # Run one step of joint transition
         if hasattr(system, "dynamics") and hasattr(system.dynamics, "settle"):
             # Use the 5-D settling for now
-            from computronium.core.ontology import SystemState
+            from computronium.ontology import SystemState
 
             state = SystemState(x=x, y=y)
             state.activations = system.geometry.forward(x, system.substrate)

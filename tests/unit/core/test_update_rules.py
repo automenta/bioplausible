@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from computronium.core.ontology import (
+from computronium.ontology import (
     ElasticConsolidationUpdate,
     EuclideanUpdate,
     NaturalGradientUpdate,

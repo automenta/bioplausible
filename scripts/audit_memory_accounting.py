@@ -11,21 +11,20 @@ Verifies:
 
 import json
 import sys
+from typing import Any, Dict
+
 import torch
 from torch import nn
-from typing import Dict, Any
-import numpy as np
 
-from computronium.core.profiling import ResourceUsage
-from computronium.core.continual.arms import create_fast_weight_arm, create_replay_arm
+from computronium.core.continual.arms import create_fast_weight_arm
 from computronium.core.continual.buffers import ReplayBuffer
 from computronium.experiments.joint.memory_wall import (
-    MemoryAccountedModel,
-    GradientCheckpointedModel,
     ENVELOPES,
     ArmConfig,
-    run_single_benchmark,
+    GradientCheckpointedModel,
+    MemoryAccountedModel,
 )
+from computronium.resources import ResourceUsage
 
 
 def test_resourceusage_peak_activation_bytes() -> Dict[str, Any]:

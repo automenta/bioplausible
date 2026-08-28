@@ -7,7 +7,9 @@ efficient sparse matrix multiplication.
 
 from __future__ import annotations
 
-from computronium.core.ontology import (
+from computronium.core.substrates.sparse_substrate import SparseSubstrate
+from computronium.core.system_trainer import compose_system
+from computronium.ontology import (
     CreditAssignmentConfig,
     EnergyMinimizationDynamics,
     EuclideanUpdate,
@@ -18,8 +20,6 @@ from computronium.core.ontology import (
     System,
     ThermodynamicContrast,
 )
-from computronium.core.substrates.sparse_substrate import SparseSubstrate
-from computronium.core.system_trainer import compose_system
 
 
 def create_native_sparse_eqprop(

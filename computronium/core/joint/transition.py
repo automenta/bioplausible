@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from torch import Tensor
 
-from computronium.core.joint.state import CompositeState
+from computronium.state import CompositeState
 
 if TYPE_CHECKING:
-    from computronium.core.joint.context import SystemContext
+    from computronium.state import SystemContext
 
 __all__ = [
     "CoupledTransition",
@@ -248,4 +248,4 @@ class LegacyDynamicsAsCoupledTransition:
 
 # Import System for type annotation (at bottom to avoid circular)
 if TYPE_CHECKING:
-    from computronium.core.ontology import System
+    from computronium.ontology import System

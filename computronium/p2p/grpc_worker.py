@@ -15,7 +15,7 @@ import signal
 import torch
 
 from computronium.core.logging import get_logger
-from computronium.core.ontology import GeometryConfig, TileGeometry
+from computronium.ontology import GeometryConfig, TileGeometry
 from computronium.p2p.grpc_service import GRPCServer
 
 # Configure logging

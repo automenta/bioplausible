@@ -14,7 +14,12 @@ import pytest
 import torch
 from torch import Tensor
 
-from computronium.core.ontology import (
+from computronium.core.pipeline import phase_states
+from computronium.core.substrates.complex_substrate import ComplexSubstrate
+from computronium.core.substrates.sparse_substrate import SparseSubstrate
+from computronium.core.substrates.ternary_substrate import TernarySubstrate
+from computronium.core.system_trainer import compose_system
+from computronium.ontology import (
     AnalogSubstrate,
     CreditAssignmentConfig,
     DigitalSubstrate,
@@ -43,11 +48,6 @@ from computronium.core.ontology import (
     TemporalTraceCredit,
     ThermodynamicContrast,
 )
-from computronium.core.pipeline import phase_states
-from computronium.core.substrates.complex_substrate import ComplexSubstrate
-from computronium.core.substrates.sparse_substrate import SparseSubstrate
-from computronium.core.substrates.ternary_substrate import TernarySubstrate
-from computronium.core.system_trainer import compose_system
 from tests.property._support import (
     DEPTH,
     SETTLE_ITERS,
@@ -801,7 +801,7 @@ class TestSAxisSubstrateCertification:
         if device.type == "cuda":
             enable_deterministic_cuda()
 
-        from computronium.core.ontology import BackpropCredit
+        from computronium.ontology import BackpropCredit
 
         credit = BackpropCredit(CreditAssignmentConfig.gradient())
         sys, geometry, substrate, dynamics, _ = _make_system_for_credit(

@@ -27,7 +27,6 @@ import optuna
 
 from computronium.core._paths import db_path
 from computronium.core.logging import get_logger
-from computronium.core.ontology import PredictiveSettlingDynamics
 from computronium.core.registry import ComponentCategory, Registry
 from computronium.hyperopt import (
     create_optuna_space,
@@ -49,6 +48,7 @@ from computronium.hyperopt.portfolio import (
     PortfolioRow,
     regime_advantage_label,
 )
+from computronium.ontology import PredictiveSettlingDynamics
 from computronium.zoo import get_model_spec
 
 if TYPE_CHECKING:
@@ -809,7 +809,13 @@ def _build_system_from_flat_config(
 ):
     """Build a System or JointSystem from flat YAML config."""
 
-    from computronium.core.ontology import (
+    from computronium.core.plasticity import (
+        FastWeightPlasticity,
+        NullPlasticity,
+        RoutingPlasticity,
+    )
+    from computronium.core.system_trainer import compose_joint_system, compose_system
+    from computronium.ontology import (
         BackpropCredit,
         CreditAssignmentConfig,
         DigitalSubstrate,
@@ -830,12 +836,6 @@ def _build_system_from_flat_config(
         ThermodynamicContrast,
         TileGeometry,
     )
-    from computronium.core.plasticity import (
-        FastWeightPlasticity,
-        NullPlasticity,
-        RoutingPlasticity,
-    )
-    from computronium.core.system_trainer import compose_joint_system, compose_system
 
     # Build substrate
     substrate_precision = substrate_cfg.get("precision", "float32")

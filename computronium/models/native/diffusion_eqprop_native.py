@@ -7,7 +7,8 @@ settling with stochastic noise injection.
 
 from __future__ import annotations
 
-from computronium.core.ontology import (
+from computronium.core.system_trainer import compose_system
+from computronium.ontology import (
     CreditAssignmentConfig,
     DiffusionDynamics,
     DigitalSubstrate,
@@ -19,7 +20,6 @@ from computronium.core.ontology import (
     System,
     ThermodynamicContrast,
 )
-from computronium.core.system_trainer import compose_system
 
 
 def create_native_diffusion_eqprop(

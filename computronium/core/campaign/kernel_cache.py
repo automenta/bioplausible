@@ -23,10 +23,9 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 if TYPE_CHECKING:
-    from computronium.core.joint.context import SystemContext
-    from computronium.core.joint.state import CompositeState
     from computronium.core.joint.transition import CoupledTransition
     from computronium.core.plasticity import PlasticityPrimitive
+    from computronium.state import CompositeState, SystemContext
 
 
 @dataclass(frozen=True, slots=True)

@@ -15,35 +15,33 @@ from __future__ import annotations
 
 import json
 import sys
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import torch
-from torch import Tensor
 
-from computronium.core.joint.context import SystemContext
-from computronium.core.joint.state import CompositeState, StateRegistry, StateVariable
-from computronium.core.ontology import (
+from computronium.core.continual.system import ContinualJointSystem
+from computronium.core.plasticity import (
+    FastWeightPlasticity,
+    NullPlasticity,
+    RoutingPlasticity,
+    RuleStatePlasticity,
+)
+from computronium.core.system_trainer import compose_joint_system
+from computronium.ontology import (
+    BackpropCredit,
+    CreditAssignmentConfig,
     DigitalSubstrate,
-    SubstrateConfig,
+    EuclideanUpdate,
     FeedforwardGeometry,
     GeometryConfig,
     InstantaneousDynamics,
-    StateDynamicsConfig,
-    BackpropCredit,
-    CreditAssignmentConfig,
-    EuclideanUpdate,
     ParameterUpdateConfig,
+    StateDynamicsConfig,
+    SubstrateConfig,
     _learnable_weight_names,
 )
-from computronium.core.plasticity import (
-    FastWeightPlasticity,
-    RoutingPlasticity,
-    RuleStatePlasticity,
-    NullPlasticity,
-)
-from computronium.core.system_trainer import compose_joint_system
-from computronium.core.continual.system import ContinualJointSystem
+from computronium.state import CompositeState
 
 
 @dataclass

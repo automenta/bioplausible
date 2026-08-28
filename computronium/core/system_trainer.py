@@ -15,11 +15,10 @@ from typing import TYPE_CHECKING, Protocol, TypeVar
 import torch
 from torch import Tensor
 
-from computronium.core.joint.context import SystemContext
-from computronium.core.joint.state import StateVariable
 from computronium.core.joint.transition import PlasticityConfig, PlasticityPrimitive
 from computronium.core.logging import get_logger
-from computronium.core.ontology import (
+from computronium.core.pipeline import run_forward, run_train_step
+from computronium.ontology import (
     CreditAssignment,
     CreditAssignmentConfig,
     Geometry,
@@ -33,7 +32,7 @@ from computronium.core.ontology import (
     System,
     substrate_from_config,
 )
-from computronium.core.pipeline import run_forward, run_train_step
+from computronium.state import StateVariable, SystemContext
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -274,7 +273,7 @@ class SystemTrainer:
 
 def _credit_from_config(config: CreditAssignmentConfig):
     """Instantiate the credit implementation named by ``config.credit_type``."""
-    from computronium.core.ontology import (
+    from computronium.ontology import (
         BackpropCredit,
         HomeostaticCredit,
         LocalGoodnessCredit,
@@ -389,7 +388,7 @@ def compose_system[
                     f"Unsupported schema version: {spec.get('schema_version')}"
                 )
 
-            from computronium.core.ontology import (
+            from computronium.ontology import (
                 CreditAssignmentConfig,
                 ElasticConsolidationUpdate,
                 EnergyMinimizationDynamics,
@@ -435,7 +434,7 @@ def compose_system[
                     recurrent_weight=recurrent_weight,
                 )
             elif topology_type in ("tile_mesh", "tile"):
-                from computronium.core.ontology import TileGeometry
+                from computronium.ontology import TileGeometry
 
                 geometry = TileGeometry(
                     geometry_cfg,
@@ -520,7 +519,7 @@ def create_eqprop_system(
     update_momentum: float = 0.9,
 ) -> System:
     """Create an Equilibrium Propagation system (classic EqProp coordinate)."""
-    from computronium.core.ontology import (
+    from computronium.ontology import (
         CreditAssignmentConfig,
         DigitalSubstrate,
         EnergyMinimizationDynamics,
@@ -600,7 +599,7 @@ def create_backprop_system(
     lr: float = 0.001,
 ) -> System:
     """Create a standard Backprop system (baseline coordinate)."""
-    from computronium.core.ontology import (
+    from computronium.ontology import (
         BackpropCredit,
         CreditAssignmentConfig,
         DigitalSubstrate,
@@ -673,7 +672,7 @@ def create_fa_system(
     feedback_scale: float = 0.1,
 ) -> System:
     """Create a Feedback Alignment system."""
-    from computronium.core.ontology import (
+    from computronium.ontology import (
         CreditAssignmentConfig,
         DigitalSubstrate,
         EuclideanUpdate,
@@ -774,7 +773,7 @@ def compose_system_from_configs(
     Returns:
         A composed System with default implementations for each layer.
     """
-    from computronium.core.ontology import (
+    from computronium.ontology import (
         ElasticConsolidationUpdate,
         EnergyMinimizationDynamics,
         EuclideanUpdate,
@@ -802,7 +801,7 @@ def compose_system_from_configs(
             geometry, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight
         )
     elif topology_type in ("tile_mesh", "tile"):
-        from computronium.core.ontology import TileGeometry
+        from computronium.ontology import TileGeometry
 
         geometry_instance = TileGeometry(
             geometry,
@@ -959,9 +958,8 @@ def compose_joint_system[
 
         def _make_context(self) -> SystemContext:
             """Create SystemContext from this joint system."""
-            from computronium.core.joint.context import SystemContext
-            from computronium.core.joint.state import StateRegistry
             from computronium.core.joint.transition import PlasticityConfig
+            from computronium.state import StateRegistry, SystemContext
 
             # Build registry from all components
             registry = StateRegistry()
@@ -1102,9 +1100,12 @@ def compose_joint_system[
                 return self._make_context()
 
             def _make_context(self) -> SystemContext:
-                from computronium.core.joint.context import SystemContext
-                from computronium.core.joint.state import StateRegistry, StateVariable
                 from computronium.core.joint.transition import PlasticityConfig
+                from computronium.state import (
+                    StateRegistry,
+                    StateVariable,
+                    SystemContext,
+                )
 
                 # Build registry from all components
                 registry = StateRegistry()
@@ -1207,7 +1208,13 @@ def compose_joint_system_from_configs(
     Returns:
         A composed JointSystem with default implementations for each layer.
     """
-    from computronium.core.ontology import (
+    from computronium.core.plasticity import (
+        NullPlasticity,
+        create_fast_weight_plasticity,
+        create_routing_plasticity,
+        create_substrate_coupled_plasticity,
+    )
+    from computronium.ontology import (
         ElasticConsolidationUpdate,
         EnergyMinimizationDynamics,
         EuclideanUpdate,
@@ -1219,12 +1226,6 @@ def compose_joint_system_from_configs(
         RiemannianOrthogonalUpdate,
         SpectralConstrainedUpdate,
         SpikeIntegrationDynamics,
-    )
-    from computronium.core.plasticity import (
-        NullPlasticity,
-        create_fast_weight_plasticity,
-        create_routing_plasticity,
-        create_substrate_coupled_plasticity,
     )
 
     # Instantiate substrate from config (class named by the explicit type tag)
@@ -1241,7 +1242,7 @@ def compose_joint_system_from_configs(
             geometry, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight
         )
     elif topology_type in ("tile_mesh", "tile"):
-        from computronium.core.ontology import TileGeometry
+        from computronium.ontology import TileGeometry
 
         geometry_instance = TileGeometry(
             geometry,
@@ -1316,7 +1317,8 @@ def create_routing_eqprop_system(
     gate_init_scale: float = 0.1,
 ) -> JointSystem:
     """Create an EqProp system with RoutingPlasticity (6-D coordinate)."""
-    from computronium.core.ontology import (
+    from computronium.core.plasticity import RoutingPlasticity
+    from computronium.ontology import (
         CreditAssignmentConfig,
         DigitalSubstrate,
         EnergyMinimizationDynamics,
@@ -1328,7 +1330,6 @@ def create_routing_eqprop_system(
         SubstrateConfig,
         ThermodynamicContrast,
     )
-    from computronium.core.plasticity import RoutingPlasticity
 
     substrate = DigitalSubstrate(
         SubstrateConfig(
@@ -1406,7 +1407,10 @@ def create_fast_weight_eqprop_system(
     fast_weight_dim: int = 512,
 ) -> JointSystem:
     """Create an EqProp system with FastWeightPlasticity (6-D coordinate)."""
-    from computronium.core.ontology import (
+    from computronium.core.plasticity import (
+        FastWeightPlasticity,
+    )
+    from computronium.ontology import (
         CreditAssignmentConfig,
         DigitalSubstrate,
         EnergyMinimizationDynamics,
@@ -1417,9 +1421,6 @@ def create_fast_weight_eqprop_system(
         StateDynamicsConfig,
         SubstrateConfig,
         ThermodynamicContrast,
-    )
-    from computronium.core.plasticity import (
-        FastWeightPlasticity,
     )
 
     substrate = DigitalSubstrate(

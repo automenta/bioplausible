@@ -10,9 +10,8 @@ import torch
 from torch import Tensor
 
 if TYPE_CHECKING:
-    from computronium.core.joint.state import StateRegistry
     from computronium.core.joint.transition import PlasticityConfig
-    from computronium.core.ontology import (
+    from computronium.ontology import (
         CreditAssignmentConfig,
         Geometry,
         GeometryConfig,
@@ -21,6 +20,7 @@ if TYPE_CHECKING:
         Substrate,
         SubstrateConfig,
     )
+    from computronium.state import StateRegistry
 
 __all__ = ["SystemContext"]
 

@@ -5,15 +5,14 @@ from __future__ import annotations
 import pytest
 import torch
 
-from computronium.core.joint.context import SystemContext
-from computronium.core.joint.state import CompositeState
 from computronium.core.joint.transition import PlasticityConfig
-from computronium.core.stability import (
+from computronium.stability import (
     StabilityGuard,
     calibrate_threshold,
     measure_guard_overhead,
     quantify_proxy_disagreement,
 )
+from computronium.state import CompositeState, SystemContext
 
 GOOD_STATS = [1.0, 1.1, 0.9]
 BAD_STATS = [2.0, 2.2, 2.1]
@@ -26,8 +25,7 @@ PROBE_COUNT = 5
 
 @pytest.fixture
 def context():
-    from computronium.core.joint.state import StateRegistry, StateVariable
-    from computronium.core.ontology import (
+    from computronium.ontology import (
         CreditAssignmentConfig,
         DigitalSubstrate,
         GeometryConfig,
@@ -36,6 +34,7 @@ def context():
         StateDynamicsConfig,
         SubstrateConfig,
     )
+    from computronium.state import StateRegistry, StateVariable
 
     geometry_config = GeometryConfig.feedforward(
         input_dim=8, output_dim=2, hidden_dims=(8,)

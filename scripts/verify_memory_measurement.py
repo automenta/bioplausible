@@ -16,7 +16,6 @@ import sys
 
 import torch
 
-import computronium.zoo  # ruff: ignore[unused-import]  (registration side effect; mirrors scripts/preliminary_run.py)
 from computronium.core.trainer import CoreTrainer, TrainerConfig
 
 _ALLOWED_RATIO_LO: float = 0.9
