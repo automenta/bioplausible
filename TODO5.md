@@ -14,91 +14,25 @@
 | Phase 2 — Continual learning flagship | ✅ **COMPLETE (NULL)** — re-test on discriminating probe with 3 critical bugs fixed: fast_weights BWT superior (mean_diff=+0.100, p=0.0076) but CI lower bound (0.065) < pre-reg threshold (0.1) |
 | Phase 3 — Edge memory-wall benchmark | ✅ **COMPLETE** — benchmark implemented, tested, chart + deployment artifacts generated |
 | Phase 3.5 — Arm verification & calibration | ✅ **COMPLETE** — 3.5.1 ✅, 3.5.2 ✅ (capacity-limited probe discriminates), 3.5.3 ✅, 3.5.4 ✅, 3.5.5 ✅ |
-| Phase 4 — Regime discovery + substrate counterfactuals | 🟢 **UNBLOCKED** — PR-9 campaign stack commissioned |
-| Phase 5 — Re-axed family-coverage benchmark | ⬜ not started |
-| Phase 6 — Frontier certification + Goldilocks map | 🟢 **UNBLOCKED** — PR-9 commissioned; awaits flagship coordinate |
+| Phase 3.6 — System-wide correctness audit | 🔴 **BLOCKING** — mandatory before any experiments |
+| Phase 4 — Regime discovery + substrate counterfactuals | 🔴 **BLOCKED** — awaits Phase 3.6 audits |
+| Phase 5 — Re-axed family-coverage benchmark | 🔴 **BLOCKED** — awaits Phase 3.6 audits |
+| Phase 6 — Frontier certification + Goldilocks map | 🔴 **BLOCKED** — awaits Phase 3.6 audits |
 | Inherited infrastructure (PR-0…PR-9, Phase 9 pipeline, guard τ=1.029) | ✅ carried green from TODO4 |
 
 **Carried forward (do not rebuild):** Phase 9 family-neutral pipeline (30/30 probes green) · PR-2 θ-audit harness · PR-3a `ResourceUsage` (incl. `peak_memory_mb`/`activation_memory_mb`/`gradient_memory_mb`/`peak_activation_bytes`) · PR-4 stats kit · PR-5 guard (τ=1.029, FKR 0%) · PR-6 fairness contract · **PR-9 campaign stack COMMISSIONED** (6 episodes, checkpoint/resume + determinism verified) · EqProp 81.32% MNIST anchor · Z3 v2 canonical-order capability + gate-history instrumentation.
 
 ---
 
-## Immediate Execution Queue (next sessions, in priority order)
+## Next: Phase 3.6 Audit Execution
 
-*Critical-path logic: the memory wall is structurally guaranteed (local rules store no backward graph) and uses already-verified standard factories — it is the highest-value, lowest-risk, most shareable deliverable. The Phase 2 re-test is genuinely uncertain and must first be gated on a discriminating probe; re-testing on the current non-discriminating setup risks a second uninterpretable null.*
+All prior work complete. **Mandatory audit phase (Phase 3.6) now blocks all further experiments.** See Phase 3.6 section below for audit specifications, regression test requirements, and session-by-session execution plan.
 
-### 0. ✅ **`DECISIONS.md` committed** — 6 strategic entries + all pre-registrations/kills/deviations to date.
-- Hard rule: no data collected before relevant `DECISIONS.md` entry + E-1 pre-registration exist.
-- Already tracked in git (Session 15).
+> **Note on PR-9 / campaign stack:** the AutoScientist commissioning is **already complete** — `autoscientist_campaigns/campaign.db` holds 1 campaign, 6 completed episodes, with checkpoint/resume verified (θ/state/RNG fidelity + bitwise determinism, `commission_report.json`). This unblocks **Phase 4 (regime discovery)** and **Phase 6 (frontier campaign)** once Phase 3.6 audits pass.
 
-### 1. 🎯 **Phase 3 memory-wall benchmark** (highest value / lowest risk — NOT blocked by CL) ✅ **COMPLETE** (Session 26+)
-- Arms are **standard, already-verified factories** (`create_fa_mlp`, `create_eqprop_mlp`, `create_hebbian_mlp` in `core/presets.py`) — independent of the CL subsystem and its audits. No CL dependency.
-- Add `peak_activation_bytes` to `core/profiling.py::ResourceUsage` (fields `peak_memory_mb`/`activation_memory_mb`/`gradient_memory_mb` already exist — this is a small extension, not new instrumentation). ✅ **DONE** (Session 25)
-- Three envelopes: 2 MB / 8 MB / 32 MB SRAM-class ceilings. OOM = recorded disqualified, not truncated.
-- Control floor: gradient-checkpointed + activation-offloaded backprop (PR-6).
-- Output: memory-accuracy frontier chart + deployment artifacts via PR-8 pipeline.
-- **Rationale (codebase-verified):** this is the manifesto's Heresy One and the "most visually shareable" result — a win by construction. Do it while it's guaranteed.
-- **Implementation:** `computronium/experiments/joint/memory_wall.py` created with full benchmark runner, envelope enforcement, memory accounting, frontier chart generation, and PR-8 deployment export.
-- **Verified:** Smoke test passes (1 epoch, 1 seed, CPU), chart generated, ONNX/TorchScript export works.
-
-### 1a. 📋 **Phase 3 E-1 Pre-Registration** ✅ **COMPLETE** (Session 25)
-- **Envelope tier labeling**: All three ceilings (2/8/32 MB) are **simulated/accounting-tier** bounds — no measured-tier claims until PR-3b hardware.
-- **Offload accounting**: Envelope bounds **on-tier bytes only** (SRAM). Activation offload to host RAM escapes the envelope; control floor must explicitly budget offload bytes or run without offload. Decision: control floor runs **without offload** for fair on-tier comparison (gradient checkpointing only).
-- **Recompute peaks**: Gradient checkpointing's peak = stored checkpoints + one recomputed segment. Wrapper must capture recompute peak via `peak_activation_bytes`, not just static graph.
-- **Per-envelope model/optimizer budget**: At 2 MB, params + optimizer dominate. Pre-register:
-  - 2 MB: SGD + ternary weights (no Adam), hidden_dim=64
-  - 8 MB: Adam, hidden_dim=128
-  - 32 MB: Adam, hidden_dim=256
-  Local-rule arms use SGD (no optimizer state) at all envelopes — this is the structural advantage.
-- **Disqualification rule**: Any run exceeding envelope ceiling is recorded as **disqualified (DNF)**, not truncated. DNFs appear on frontier chart as "exceeds envelope" markers.
-- **Control floor**: Gradient checkpointing (no offload) + SGD at 2 MB, Adam at 8/32 MB. Best-val early stopping, both best/last reported. ≥5 seeds.
-
-### 1b. 🔬 **ThermodynamicContrast Pre-Flight** ✅ **COMPLETE** (Session 26)
-- Verified `ThermodynamicContrast` + `EnergyMinimizationDynamics` free/nudged gap > 0, pseudo-grad non-zero ✓
-- Verified `RandomProjectionsCredit` (FA & DFA) pseudo-grad non-zero ✓
-- Verified `BackpropCredit` pseudo-grad non-zero ✓
-- Script: `scripts/preflight_credit_assignment.py` (all checks pass)
-- Cost: ~30 seconds; doubles as 3.5.3 artifact; retires `max_steps` lesson permanently.
-- Note: Cosine similarity for ThermodynamicContrast vs backprop skipped (in-place op in RecurrentGeometry); core functionality verified.
-
-### 1b. 🔬 **ThermodynamicContrast Pre-Flight** (from 3.5.3, pulled forward as Phase 3 gate)
-- Run before Phase 3 suite: verify `ThermodynamicContrast` + `EnergyMinimizationDynamics` free/nudged gap > 0, pseudo-grad non-zero, cosine > 0.1 on MNIST.
-- Also verify `RandomProjectionsCredit` pseudo-grad non-zero.
-- Cost: minutes; doubles as pending 3.5.3 artifact; retires `max_steps` lesson permanently.
-- **Next action**: Execute pre-flight before Phase 3 suite runs.
-
-### 2. ✅ **Harden the 3.5.2 forgetting probe — COMPLETE** (gates the Phase 2 re-test)
-- Capacity-limited probe (hidden=32, 5 tasks, 2 epochs) now discriminates all 6 arms:
-  - fast_weights: forgetting=0.102 (target ≤0.1)
-  - ewc: forgetting=0.136
-  - backprop: forgetting=0.043
-  - replay: forgetting=0.035
-  - lwf: forgetting=0.010
-  - si: forgetting=0.214
-- Script: `scripts/verify_capacity_limited_cl.py` — validated with artifacts at `benchmark_results/arm_verification/capacity_limited_cl.json`
-
-### 3. ✅ **Re-test Phase 2 on verified arms — COMPLETE (NULL)**
-- Fresh E-1 pre-registration: `configs/preregistrations/cl_retest_discriminating_probe.json` committed.
-- ψ/θ hypothesis **NOT CONFIRMED** — Session 23 fixed 3 critical arm bugs; all 6 arms reach ≥95% single-task MNIST.
-- Paired 5-seed comparison on discriminating probe (hidden=32, 2 epochs, 5 tasks): fast_weights BWT = -0.049, replay BWT = -0.050; mean_diff = 0.0006, CI = [-0.044, 0.042], p = 1.0.
-- Forgetting: fast_weights = 0.049, replay = 0.040; mean_diff = 0.009, CI = [-0.019, 0.042], p = 0.65.
-- **Kill criterion invoked:** Replay matches ψ-decoupling at equal memory → demoted to boundary memo per pre-registration.
-- **Artifacts:** `benchmark_results/continual_learning_retest/continual_learning_results.json`; decision logged in `DECISIONS.md`.
-- **Conclusion:** Phase 2 CL flagship claim closed as null. Resources pivot to Phase 4/5/6.
-
-### 4. ✅ **Complete 3.5.3–3.5.5 arm audits — COMPLETE**
-- Credit: `ThermodynamicContrast` free/nudged gap > 0, pseudo-grad non-zero ✓; `BackpropCredit` pseudo-grad non-zero ✓; `RandomProjectionsCredit` (FA & DFA) pseudo-grad non-zero ✓. Pre-flight: `scripts/preflight_credit_assignment.py`.
-- Plasticity: `FastWeightPlasticity` round-trip verified (`initial_psi` → `step` → `forward` modulation), `reset_plastic_state` at task boundaries, no leakage for non-plasticity arms, memory accounting accurate.
-- Config: all 6 arms constructible via standard ontology factories (`create_fast_weight_arm`, `create_ewc_arm`, `create_backprop_arm`, `create_replay_arm`, `create_lwf_arm`, `create_si_arm`), YAML round-trip via `to_spec`/`from_spec`, registered with correct decorators.
-
-### 5. 📦 **Add untracked artifacts to repo** (once verified)
-- `benchmark_results/`, `autoscientist_campaigns/`, `scripts/verify_arms.py`, `scripts/verify_two_task.py` (keep verify scripts as calibration utilities; regression tests are the durable guarantee).
-
-> **Note on PR-9 / campaign stack:** the AutoScientist commissioning is **already complete** — `autoscientist_campaigns/campaign.db` holds 1 campaign, 6 completed episodes, with checkpoint/resume verified (θ/state/RNG fidelity + bitwise determinism, `commission_report.json`). This unblocks **Phase 4 (regime discovery)** and **Phase 6 (frontier campaign)** earlier than the plan previously assumed. Update the "carried forward" line and Phase 4/6 gates to treat PR-9 as green.
-
-**Additional work the reference docs suggest (codebase-verified as already-instrumented, pull in opportunistically):**
+**Additional work the reference docs suggest (codebase-verified as already-instrumented, pull in opportunistically post-audits):**
 - **L2 effective-FLOPs → 𝒞 vector (ready now):** `computronium/experiments/joint/compute_efficiency.py` already computes `effective_flops` via gate-entropy-aware route counting (RESEARCH3 L2). Its effective-FLOPs metric is the sanctioned feed into the 𝒞 resource vector (README §stability-plasticity) and should be wired into the Phase 5 runner rather than re-derived.
-- **Algorithm Migration (L3.5) as ψ-switching validation:** `algorithm_migration.py` is the cheapest end-to-end validation of ψ-switching machinery (Δθ=0 audit, two-strategy swap). Run it as the pre-flight sanity check before the Phase 2 re-test and Phase 3 — it de-risks both for ~minutes of compute.
+- **Algorithm Migration (L3.5) as ψ-switching validation:** `algorithm_migration.py` is the cheapest end-to-end validation of ψ-switching machinery (Δθ=0 audit, two-strategy swap). Validated post-audits.
 - **Edge/Green export path (PR-8):** the deployment suite (`deployment.py` + `acceleration/export.py`) is verified for ONNX/ternary round-trip. The memory-wall frontier chart plugs directly into the Edge/Green AI narrative; reuse the same export pipeline for the Phase 3 artifact suite.
 
 ---
@@ -261,7 +195,198 @@ All items done. Exit criteria met:
 
 ---
 
-## Phase 4 — Regime Discovery & Substrate Counterfactuals 🟢 UNBLOCKED (PR-9 commissioned)
+## INVALIDATED EXPERIMENTS (due to discovered bugs)
+
+*The following experimental results are INVALIDATED and must not be cited or relied upon until re-run with fixed components:*
+
+| Experiment | Artifact Location | Bug(s) That Invalidate It | Re-run Required |
+|------------|-------------------|---------------------------|-----------------|
+| **Z3 v2 canonical-order capability** | `benchmark_results/z3_full/` | FastWeightPlasticity truncation (ψ never learned) | YES — after 3.6.7 |
+| **Z3 v3 order-randomization** | `benchmark_results/z3_proportion/` | FastWeightPlasticity truncation | YES — after 3.6.7 |
+| **Z3 v4 order-robust attempts** | `benchmark_results/z3_order_robust/` | FastWeightPlasticity truncation + in-place ops | YES — after 3.6.7 |
+| **Z3 meta-training repair (R1-R5)** | `benchmark_results/z3_meta_repair/` | FastWeightPlasticity truncation | YES — after 3.6.7 |
+| **Z3 pilot / pilot rerun** | `benchmark_results/z3_pilot*/` | FastWeightPlasticity truncation | YES — after 3.6.7 |
+| **Phase 2 CL full run (Session 21)** | `benchmark_results/continual_learning_full/` | All 3 bugs + arm implementation bugs | Superseded by retest |
+| **Phase 2 CL rerun v2 (Session 21)** | `benchmark_results/continual_learning_full_rerun_v2/` | Memory matching + replay training + truncation | Superseded by retest |
+| **Phase 2 CL retest (initial, Session 28)** | `benchmark_results/continual_learning_retest/` | Memory matching bug | Superseded by fixed retest |
+| **Phase 2 CL retest matched (Session 28)** | `benchmark_results/continual_learning_retest_matched/` | Replay training + truncation bugs | Superseded by fixed retest |
+| **Adaptation efficiency** | `benchmark_results/adaptation_efficiency/` | FastWeightPlasticity truncation | YES — after 3.6.3 |
+| **Algorithm migration (L3.5)** | `benchmark_results/algorithm_migration/` | FastWeightPlasticity truncation | YES — after 3.6.3 |
+| **Structural robustness** | `benchmark_results/structural_robustness/` | Potential credit/dynamics bugs | AUDIT FIRST |
+| **Compute efficiency (L2)** | `benchmark_results/compute_efficiency/` | Potential dynamics bugs | AUDIT FIRST |
+
+**Rule:** Any experiment using `FastWeightPlasticity`, `EnergyMinimizationDynamics`, `ThermodynamicContrast`, `ReplayBuffer`, or continual learning pipeline is suspect until audits pass.
+
+---
+
+## Phase 3.6 — System-Wide Correctness Audit (BLOCKING) 🔴 **MANDATORY BEFORE ANY EXPERIMENTS**
+
+*The discovery of 3 critical bugs in Phase 2 (memory matching, replay training, fast weight truncation) — each of which completely invalidated the experimental result — demonstrates that the 6-D joint system has systemic correctness issues. No experiment results are trustworthy until the following audits are completed and passed.*
+
+### Audit Policy
+- **HARD RULE:** No new experiments (Phase 4, 5, 6, or any re-runs) until ALL audits below are ✅ COMPLETE.
+- Each audit produces a **verification artifact** (JSON/log) that must be committed to repo.
+- Audits are **independent of experimental outcomes** — they verify implementation correctness, not scientific hypotheses.
+- If an audit fails, the bug is fixed, regression test added, and audit re-run.
+
+### 3.6.1 Credit Assignment Correctness (Deep Audit)
+
+*Beyond pre-flight (non-zero pseudo-grads), verify pseudo-grad correctness against ground truth.*
+
+| Check | Method | Acceptance Criterion |
+|-------|--------|---------------------|
+| **ThermodynamicContrast vs BackpropCredit** | Linear regression (known θ): compute pseudo-grads from both, compare to autograd ∇L/∇θ | Cosine similarity ≥ 0.95; relative error ≤ 10% on all layers |
+| **ThermodynamicContrast vs BackpropCredit** | MLP on MNIST (small): compare pseudo-grad direction after 1 step | Cosine ≥ 0.9; same sign on ≥95% of params |
+| **RandomProjectionsCredit (FA/DFA)** | Compare to theoretical expectation: FA ≈ W^T · ∇L; DFA ≈ B^T · ∇L | Relative error ≤ 20% vs theoretical |
+| **BackpropCredit** | Identity check: must match autograd exactly | Bitwise identical to `loss.backward()` on same graph |
+| **Energy gap sign** | Verify free < nudged energy always (not just >0 on one batch) | 100/100 random batches: free_energy < nudged_energy |
+| **Settling convergence** | Log energy trajectory per step; verify monotonic decrease | Energy decreases monotonically; converges within `max_steps` |
+
+**Artifacts:** `audit_results/credit_assignment_audit.json` with per-check pass/fail + metrics
+
+### 3.6.2 Dynamics & Settling Correctness
+
+| Check | Method | Acceptance Criterion |
+|-------|--------|---------------------|
+| **EnergyMinimizationDynamics** | Fixed point test: run settle to convergence, verify `dynamics.settle()` returns state where `∇E ≈ 0` | `‖∇E‖ < 1e-4` on 10/10 random inits |
+| **InstantaneousDynamics** | Single step = autograd forward | Output matches `geometry.forward(x)` exactly |
+| **PredictiveSettling** | Verify prediction error decreases | `‖x_{t+1} - x_t‖` decreases over steps |
+| **In-place op audit** | Scan `RecurrentGeometry` and all dynamics for in-place ops that break autograd | Zero in-place ops on tensors requiring grad |
+| **Device consistency** | Run settle on CPU vs CUDA; compare outputs | Allclose (rtol=1e-5, atol=1e-7) |
+
+**Artifacts:** `audit_results/dynamics_audit.json`
+
+### 3.6.3 Plasticity Correctness
+
+| Check | Method | Acceptance Criterion |
+|-------|--------|---------------------|
+| **FastWeightPlasticity** | Round-trip: `initial_psi` → `step` → `forward` modulation changes output | Output with ψ ≠ output without ψ; modulation norm > 0 |
+| **FastWeightPlasticity** | Projection correctness: full outer product (7840) projected to 512; verify projection matrix is fixed per outer_dim | Same outer_dim → same projection matrix; different outer_dim → different matrix |
+| **FastWeightPlasticity** | Decay property: after N steps with zero activity, `‖ψ_N‖ = decay^N ‖ψ_0‖` | Relative error ≤ 1e-6 |
+| **NullPlasticity** | Returns empty state; no side effects | `initial_psi` = `{}`, `step` returns `{}`, `forward` unchanged |
+| **RuleStatePlasticity** | Consolidation: ψ updates affect θ at episode boundary | θ changes after `consolidate()` call |
+| **Device management** | `.to(device)` on all plasticity types moves all internal tensors | All tensors on target device after `.to()` |
+
+**Artifacts:** `audit_results/plasticity_audit.json`
+
+### 3.6.4 Joint System Composition & Contracts
+
+| Check | Method | Acceptance Criterion |
+|-------|--------|---------------------|
+| **SystemContext construction** | Verify all 6 components have consistent config objects; no None | All `*_config` attributes present and non-None |
+| **CompositeState structure** | Activity dict has `x`, `y`; plastic dict matches plasticity config; substrate dict present | Required keys present; shapes match batch_size |
+| **ParameterUpdate application** | `update.step(params, pseudo_grads, geometry)` modifies params in-place | `params` tensors changed; `pseudo_grads` consumed |
+| **Device propagation** | `joint_system.to(device)` moves substrate, geometry, dynamics, credit, update, plasticity | All components on target device |
+| **StateRegistry integrity** | Persistent/fast_plastic/consolidatable flags match component configs | Registry entries = sum of θ params + ψ dims |
+
+**Artifacts:** `audit_results/composition_audit.json`
+
+### 3.6.5 Continual Learning Pipeline Correctness
+
+| Check | Method | Acceptance Criterion |
+|-------|--------|---------------------|
+| **Task masking** | 10-class output; loss computed only on task's 2 classes; other logits ignored | `loss = CE(logits[:, task_slice], y)`; gradient zero outside slice |
+| **Replay buffer** | Capacity respected; balanced eviction works; sampling returns correct shapes | `len(buffer) ≤ capacity`; `sample(n)` returns `(n, ...)` |
+| **Replay training** | Replay samples trigger `train_step` with correct `task_id` from buffer | Replay batches show decreasing loss on replayed tasks |
+| **LwF distillation** | `prev_model` frozen; distillation loss added to task loss; affects θ | `prev_model` params unchanged; θ changes with distillation |
+| **SI importance** | Pseudo-grads accumulated per task; regularization uses accumulated importance | Importance non-zero after task; regularization loss > 0 |
+| **EWC consolidation** | Fisher computed at task boundary; penalty applied in subsequent tasks | Fisher diagonal non-zero; loss increases when θ moves from optimum |
+| **Stability guard integration** | Guard called per step; `windowed_growth` computed; kill triggers on divergence | Known-divergent coordinate killed; stable coordinates pass |
+
+**Artifacts:** `audit_results/cl_pipeline_audit.json`
+
+### 3.6.6 Memory Accounting & Resource Tracking
+
+| Check | Method | Acceptance Criterion |
+|-------|--------|---------------------|
+| **ResourceUsage fields** | `peak_activation_bytes` captured during forward/backward | Matches `torch.cuda.max_memory_allocated()` for activation tensors |
+| **Gradient checkpointing** | Peak includes recomputed segment | Peak ≥ static graph peak |
+| **Plastic state bytes** | `CLMetrics.plastic_state_bytes` = actual ψ tensor size | Exact match |
+| **Replay buffer bytes** | `ReplayBuffer.memory_bytes()` = `capacity × (input_dim + 1) × 4` | Exact match |
+| **Envelope enforcement** | MemoryWall benchmark DNF when exceeding ceiling | 100% of over-ceiling runs marked DNF |
+
+**Artifacts:** `audit_results/memory_accounting_audit.json`
+
+### 3.6.7 Z3-Specific Re-verification
+
+| Check | Method | Acceptance Criterion |
+|-------|--------|---------------------|
+| **RuleStatePlasticity in Z3** | Fast weights actually update during ψ-adaptation | `ψ` norm > 0 after adaptation steps |
+| **Z3 v2 canonical-order** | Re-run 5-seed confirmatory with fixed fast weights | All 5 seeds: 3/3 tasks ≥ 0.95, Δθ exact |
+| **Z3 v4 order-robust** | Re-run with fixed fast weights; test if order sensitivity remains | If still order-sensitive → document as structural, not bug |
+| **Gate-history instrumentation** | Per-step gates logged; entropy recorded | Complete gate history for all adaptation steps |
+
+**Artifacts:** `audit_results/z3_reverification.json`
+
+### 3.6.8 Regression Test Suite (Prevent Regressions)
+
+| Test | Location | Trigger |
+|------|----------|---------|
+| FastWeightPlasticity projection non-zero | `tests/unit/core/test_plasticity.py` | On every commit |
+| Credit assignment cosine vs backprop | `tests/unit/core/test_credit.py` | On every commit |
+| Replay buffer capacity + sampling | `tests/unit/core/test_buffers.py` | On every commit |
+| Task masking gradient check | `tests/unit/core/test_cl_pipeline.py` | On every commit |
+| Memory accounting peak capture | `tests/unit/core/test_profiling.py` | On every commit |
+| Device consistency for all components | `tests/unit/core/test_device.py` | On every commit |
+| Dynamics settling convergence | `tests/unit/core/test_dynamics.py` | On every commit |
+| EnergyMinimizationDynamics fixed point | `tests/unit/core/test_dynamics.py` | On every commit |
+
+**Artifacts:** `tests/unit/core/test_*_audit.py` — all must pass in CI
+
+---
+
+## Updated Phase Gates
+
+| Phase | New Gate |
+|-------|----------|
+| Phase 4 (Regime Discovery) | **BLOCKED** until 3.6.1–3.6.4 ✅ |
+| Phase 5 (Family-Coverage) | **BLOCKED** until 3.6.1–3.6.6 ✅ |
+| Phase 6 (Frontier) | **BLOCKED** until 3.6.1–3.6.7 ✅ |
+| Z3 Re-evaluation | **REQUIRED** (3.6.7) before any Z3 claims |
+
+---
+
+## Execution Order (Next Sessions)
+
+### Session 29 — Credit Assignment Deep Audit (3.6.1)
+- Implement gradient check harness: compare pseudo-grads vs autograd on linear regression + MLP
+- Fix `RecurrentGeometry` in-place ops if needed
+- Run ThermodynamicContrast vs BackpropCredit cosine similarity
+- Run FA/DFA theoretical comparison
+- **Exit:** `audit_results/credit_assignment_audit.json` all ✅
+
+### Session 30 — Dynamics & Settling Audit (3.6.2)
+- Fixed point test for EnergyMinimizationDynamics
+- In-place op scan + fix
+- CPU vs CUDA consistency
+- **Exit:** `audit_results/dynamics_audit.json` all ✅
+
+### Session 31 — Plasticity & Composition Audit (3.6.3–3.6.4)
+- FastWeightPlasticity projection + decay tests
+- NullPlasticity / RuleStatePlasticity verification
+- SystemContext / CompositeState / StateRegistry contracts
+- **Exit:** `audit_results/plasticity_audit.json`, `audit_results/composition_audit.json` all ✅
+
+### Session 32 — CL Pipeline & Memory Accounting (3.6.5–3.6.6)
+- Task masking gradient check
+- Replay buffer + training verification
+- LwF/SI/EWC integration tests
+- Memory accounting accuracy
+- **Exit:** `audit_results/cl_pipeline_audit.json`, `audit_results/memory_accounting_audit.json` all ✅
+
+### Session 33 — Z3 Re-verification (3.6.7)
+- Re-run Z3 confirmatory with fixed fast weights
+- Document order-sensitivity status
+- **Exit:** `audit_results/z3_reverification.json` + decision in `DECISIONS.md`
+
+### Session 34 — Regression Test Suite (3.6.8)
+- Add all audit checks as permanent unit tests
+- CI integration
+- **Exit:** All new tests pass; coverage maintained
+
+---
+
+## Phase 4 — Regime Discovery & Substrate Counterfactuals 🔴 BLOCKED (awaits Phase 3.6 audits)
 
 *Replace open-ended LLM algorithm generation with constrained regime search over PR-9 campaign stack.*
 

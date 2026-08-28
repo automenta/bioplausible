@@ -226,3 +226,24 @@ Append-only. One entry per pre-registration threshold, kill-criterion invocation
 - **Kill criterion:** Replay does not statistically lose to ψ-decoupling at the pre-registered +0.1 margin → claim not confirmed.
 - **Artifacts:** `benchmark_results/continual_learning_retest_fixed2/continual_learning_results.json` (+ this decision entry as E-3 manifest).
 - **Conclusion:** Phase 2 CL flagship claim closed as null per pre-registered threshold. The ψ/θ decoupling shows strong directional advantage at matched memory with all implementation bugs fixed, but the pre-registered threshold of +0.1 is not met by the CI criterion at n=5. Resources pivot to Phase 4/5/6.
+
+## 2026-08-27 — Strategic Decision #7: Phase 3.6 System-Wide Correctness Audit Mandated (Blocks All Experiments)
+
+- **Decision:** All experiments (Phase 4, 5, 6, Z3 re-runs, any new work) are **BLOCKED** until a comprehensive system-wide correctness audit (Phase 3.6) is completed and passed.
+- **Trigger:** Discovery of 3 critical bugs in Phase 2 re-test that each completely invalidated the experimental result:
+  1. Memory matching: replay 122× more memory than fast weights
+  2. Replay training never triggered: condition `len(buffer) >= batch_size` impossible with matched capacity
+  3. FastWeightPlasticity truncation bias: outer product truncated to MNIST zero-border pixels
+- **Scope:** These bugs affected every experiment using `FastWeightPlasticity`, `EnergyMinimizationDynamics`, `ThermodynamicContrast`, `ReplayBuffer`, or CL pipeline — invalidating Z3 v2-v4, adaptation efficiency, algorithm migration, and all CL runs.
+- **Audit requirements (Phase 3.6):**
+  - 3.6.1 Credit Assignment Correctness (cosine ≥0.95 vs autograd)
+  - 3.6.2 Dynamics & Settling (fixed point, no in-place ops, CPU/CUDA consistency)
+  - 3.6.3 Plasticity (projection not truncation, decay exact, device management)
+  - 3.6.4 Joint System Composition (contracts, device propagation, registry integrity)
+  - 3.6.5 CL Pipeline (task masking, replay, LwF/SI/EWC, guard integration)
+  - 3.6.6 Memory Accounting (peak activation, plastic state, replay bytes exact)
+  - 3.6.7 Z3 Re-verification (with fixed fast weights)
+  - 3.6.8 Regression Test Suite (24+ unit tests, one per fix)
+- **Gate:** No experiment runs until ALL 7 audits ✅ + 24+ unit tests passing in CI.
+- **Rationale:** The pattern of bugs — each silent, each completely invalidating results, each discovered only post-hoc — indicates systemic correctness issues that cannot be addressed by ad-hoc fixes. A mandatory audit phase with permanent regression tests is required before any experimental results can be trusted.
+- **Artifacts:** Phase 3.6 audit plan in `TODO5.md`; audit results in `audit_results/*.json`; regression tests in `tests/unit/core/test_*_audit.py`.
