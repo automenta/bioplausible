@@ -1896,7 +1896,9 @@ class FeedforwardGeometry(nn.Module):
             if isinstance(layer, nn.Linear):
                 h = op(h, layer.weight)
                 if layer.bias is not None:
-                    h += layer.bias
+                    # Out-of-place add: in-place adds on grad-tracking tensors
+                    # pin the whole downstream settle graph (CUDA leak)
+                    h = h + layer.bias
             else:
                 h = layer(h)
         return h
@@ -1938,7 +1940,8 @@ class FeedforwardGeometry(nn.Module):
             if isinstance(layer, nn.Linear):
                 h = h @ layer.weight.T  # ruff: ignore[non-augmented-assignment]
                 if layer.bias is not None:
-                    h += layer.bias
+                    # Out-of-place add: in-place adds break autograd
+                    h = h + layer.bias
             else:
                 h = layer(h)
         return h
