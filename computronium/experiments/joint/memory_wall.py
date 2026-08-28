@@ -731,7 +731,7 @@ def export_deployment_artifacts(
                         model_name=model_name,
                         model_params=model_params,
                         output_dir=str(export_dir / model_name),
-                        formats=["onnx", "torchscript", "config", "state"],
+                        formats=["onnx", "pt2", "config", "state"],
                         training_metrics={"best_accuracy": env_data["mean_best_accuracy"]},
                         verbose=False,
                     )

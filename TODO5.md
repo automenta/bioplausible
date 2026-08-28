@@ -390,6 +390,13 @@ All items done. Exit criteria met:
 
 ## Execution Order (Next Sessions)
 
+### Session 34 — Code-Improvement Pass: TorchScript → torch.export Migration ✅ COMPLETE
+- Replaced deprecated `torch.jit.script`/`torch.jit.trace` (unsupported on Python 3.14+) with `torch.export` in `computronium/deployment.py`.
+- `ModelExporter._export_pt2` + module fn `export_to_pt2`: `program = torch.export.export(model, (dummy,))` + `torch.export.save(program, path)` (`.pt2`).
+- Format key `"torchscript"` → `"pt2"`; output file `model_ts.pt` → `model.pt2`; `memory_wall.py` format list updated.
+- Verified: export + `torch.export.load` round-trip works on `FeedforwardGeometry` AND `RecurrentGeometry` (both return correct output shapes). `test_profiling.py` 6/6 pass.
+- Cleanup: removed dead `method='script'/'trace'` branch + unused `method` param. ruff deployment.py 49→47 errors (2 removed), 0 new pyright errors.
+
 ### Session 29 — Credit Assignment Deep Audit (3.6.1) ✅ COMPLETE
 - Implement gradient check harness: compare pseudo-grads vs autograd on linear regression + MLP
 - Fix `RecurrentGeometry` in-place ops if needed
@@ -684,7 +691,7 @@ Writing begins only after system is complete and tested. Candidate artifacts, in
 - `tests/unit/core/test_dynamics.py` (6 tests: EnergyMinimization fixed point, Instantaneous vs autograd, PredictiveSettling, in-place ops, device consistency)
 
 **Improvement Opportunities Noted (Post-System):**
-- `torch.jit.script`/`torch.jit.trace` in `computronium/deployment.py` emits deprecation warnings in Python 3.14+ — migrate to `torch.compile` or `torch.export` for TorchScript export path
+- ✅ **DONE (code-improvement pass):** `torch.jit.script`/`torch.jit.trace` in `computronium/deployment.py` migrated to `torch.export` (PT2). `torch.jit` is deprecated/unsupported on Python 3.14+. Replaced `ModelExporter._export_torchscript` → `_export_pt2`, module fn `export_to_torchscript` → `export_to_pt2`; format key `"torchscript"` → `"pt2"`, output `model_ts.pt` → `model.pt2`. `memory_wall.py:734` format key updated. Verified on `FeedforwardGeometry` + `RecurrentGeometry`: export + `torch.export.load` round-trip both return correct shapes. ruff errors in deployment.py reduced 49→47; no new pyright errors.
 
 ### Session 31 — COMPLETED (2026-08-28)
 **Phase 3.6.3 Plasticity Correctness Audit + Phase 3.6.4 Composition & Contracts Audit — ALL CHECKS PASS:**

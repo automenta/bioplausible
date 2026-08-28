@@ -5,7 +5,7 @@ Model export, serialization, and deployment utilities for production use.
 
 Features:
 - ONNX export for cross-platform deployment
-- TorchScript compilation for optimized inference
+- ``torch.export`` (PT2) serialized program export
 - Model serialization/deserialization
 - Inference optimization
 - Batch prediction utilities
@@ -60,7 +60,7 @@ class ModelExporter:
 
     Supported formats:
     - ONNX: Cross-platform inference
-    - TorchScript: PyTorch optimized inference
+    - PT2: Serialized ``torch.export`` program (replaces TorchScript)
     - State dict: PyTorch checkpoint
     - JSON config: Model configuration
 
@@ -73,7 +73,7 @@ class ModelExporter:
             model_name='looped_mlp',
             model_params={'input_dim': 784, 'hidden_dim': 256, 'output_dim': 10},
             output_dir='./exports',
-            formats=['onnx', 'torchscript', 'config'],
+            formats=['onnx', 'pt2', 'config'],
         )
     """
 
@@ -102,7 +102,7 @@ class ModelExporter:
             model_name: Name of the model.
             model_params: Model parameters.
             output_dir: Output directory for exports.
-            formats: List of formats ['onnx', 'torchscript', 'config', 'state'].
+            formats: List of formats ['onnx', 'pt2', 'config', 'state'].
             optimizer: Optional optimizer for state export.
             optimizer_name: Name of optimizer.
             optimizer_params: Optimizer parameters.
@@ -114,7 +114,7 @@ class ModelExporter:
             ModelInfo with export details.
         """
         if formats is None:
-            formats = ["onnx", "torchscript", "config", "state"]
+            formats = ["onnx", "pt2", "config", "state"]
 
         Path(output_dir).mkdir(exist_ok=True, parents=True)
         model = model.to(self.device)
@@ -134,15 +134,13 @@ class ModelExporter:
                 if verbose:
                     logger.warning("ONNX export failed: %s", e)
 
-        if "torchscript" in formats:
+        if "pt2" in formats:
             try:
-                path = self._export_torchscript(
-                    model, output_dir, input_shape, verbose, method="trace"
-                )
-                export_paths["torchscript"] = path
-            except (RuntimeError, ValueError, OSError) as e:
+                path = self._export_pt2(model, output_dir, input_shape, verbose)
+                export_paths["pt2"] = path
+            except Exception as e:
                 if verbose:
-                    logger.warning("TorchScript export failed: %s", e)
+                    logger.warning("PT2 export failed: %s", e)
 
         if "config" in formats:
             path = self._export_config(
@@ -222,44 +220,38 @@ class ModelExporter:
 
         return path
 
-    def _export_torchscript(
+    def _export_pt2(
         self,
         model: nn.Module,
         output_dir: str,
         input_shape: tuple[int, ...],
         verbose: bool,
-        method: str = "script",
     ) -> str:
-        """Export to TorchScript format (script or trace).
+        """Export to a serialized ``torch.export`` (PT2) program.
+
+        Replaces the deprecated ``torch.jit`` path, which is unsupported on
+        Python 3.14+.
 
         Args:
             model: Model to export.
             output_dir: Output directory.
             input_shape: Example input shape for tracing.
             verbose: Print progress.
-            method: 'script' (torch.jit.script) or 'trace' (torch.jit.trace).
 
         Returns:
             Path to exported model.
         """
-        path = str(Path(output_dir) / "model_ts.pt")
+        path = str(Path(output_dir) / "model.pt2")
 
         model.eval()
         model = model.to(self.device)
         dummy_input = torch.randn(input_shape, device=self.device)
 
-        if method == "script":
-            scripted = torch.jit.script(model)
-        elif method == "trace":
-            scripted = torch.jit.trace(model, dummy_input)
-        else:
-            raise ValueError(f"Unknown TorchScript method: {method}")
-
-        # Save TorchScript model
-        scripted.save(path)
+        program = torch.export.export(model, (dummy_input,))
+        torch.export.save(program, path)
 
         if verbose:
-            logger.info("  ✓ TorchScript (%s): %s", method, path)
+            logger.info("  ✓ PT2 export: %s", path)
 
         return path
 
@@ -711,28 +703,24 @@ def export_to_onnx(model, input_sample, path):
         )
 
 
-def export_to_torchscript(model, input_sample, path, method: str = "script"):
-    """Export model to TorchScript format.
+def export_to_pt2(model, input_sample, path):
+    """Export model to a serialized ``torch.export`` (PT2) program.
+
+    Replaces the deprecated ``torch.jit`` path, which is unsupported on
+    Python 3.14+.
 
     Args:
         model: Model to export.
-        input_sample: Example input for tracing (required for trace method).
-        path: Output path.
-        method: 'script' (torch.jit.script) or 'trace' (torch.jit.trace).
+        input_sample: Example input for tracing.
+        path: Output path (should end in ``.pt2``).
 
     Returns:
         Path to exported model.
     """
     model.eval()
 
-    if method == "script":
-        scripted = torch.jit.script(model)
-    elif method == "trace":
-        scripted = torch.jit.trace(model, input_sample)
-    else:
-        raise ValueError(f"Unknown TorchScript method: {method}")
-
-    scripted.save(path)
+    program = torch.export.export(model, (input_sample,))
+    torch.export.save(program, path)
     return path
 
 
@@ -1551,7 +1539,7 @@ __all__ = [
     "create_inference_server",
     "export_model",
     "export_to_onnx",
-    "export_to_torchscript",
+    "export_to_pt2",
     "get_app",
     "load_model",
     "load_quantized_model",
