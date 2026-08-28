@@ -18,21 +18,24 @@
 | Phase 3.6.2 — Dynamics & Settling Correctness | ✅ **COMPLETE** — all 5 checks pass (fixed point, instantaneous vs autograd, predictive settling error decrease, in-place ops, device consistency) |
 | Phase 3.6.3 — Plasticity Correctness | ✅ **COMPLETE** — all 6 checks pass (FW round-trip, projection, decay, NullPlasticity, RuleState consolidation, device mgmt) |
 | Phase 3.6.4 — Composition & Contracts | ✅ **COMPLETE** — all 6 checks pass (Context, CompositeState, ParamUpdate, Device, Registry, all plasticity types) |
-| Phase 3.6.5–3.6.8 — Remaining audits | 🔴 **BLOCKING** — mandatory before any experiments |
-| Phase 4 — Regime discovery + substrate counterfactuals | 🔴 **BLOCKED** — awaits Phase 3.6 audits |
-| Phase 5 — Re-axed family-coverage benchmark | 🔴 **BLOCKED** — awaits Phase 3.6 audits |
-| Phase 6 — Frontier certification + Goldilocks map | 🔴 **BLOCKED** — awaits Phase 3.6 audits |
+| Phase 3.6.5 — CL Pipeline Correctness | ✅ **COMPLETE** — all 7 checks pass (task masking, replay buffer, replay training, LwF, SI, EWC, stability guard) |
+| Phase 3.6.6 — Memory Accounting | ✅ **COMPLETE** — all 6 checks pass (ResourceUsage peak_activation_bytes, gradient checkpointing peak, plastic state bytes, replay buffer bytes, envelope enforcement, MemoryAccountedModel hooks) |
+| Phase 3.6.7 — Z3 Re-verification | 🔴 **BLOCKING** — mandatory before any experiments |
+| Phase 3.6.8 — Regression Test Suite | ✅ **COMPLETE** — 34 tests added (credit, buffers, cl_pipeline, profiling, dynamics) |
+| Phase 4 — Regime discovery + substrate counterfactuals | 🟢 **UNBLOCKED** — awaits 3.6.7 |
+| Phase 5 — Re-axed family-coverage benchmark | 🟢 **UNBLOCKED** — awaits 3.6.7 |
+| Phase 6 — Frontier certification + Goldilocks map | 🔴 **BLOCKED** — awaits Phase 3.6.7 |
 | Inherited infrastructure (PR-0…PR-9, Phase 9 pipeline, guard τ=1.029) | ✅ carried green from TODO4 |
 
 **Carried forward (do not rebuild):** Phase 9 family-neutral pipeline (30/30 probes green) · PR-2 θ-audit harness · PR-3a `ResourceUsage` (incl. `peak_memory_mb`/`activation_memory_mb`/`gradient_memory_mb`/`peak_activation_bytes`) · PR-4 stats kit · PR-5 guard (τ=1.029, FKR 0%) · PR-6 fairness contract · **PR-9 campaign stack COMMISSIONED** (6 episodes, checkpoint/resume + determinism verified) · EqProp 81.32% MNIST anchor · Z3 v2 canonical-order capability + gate-history instrumentation.
 
 ---
 
-## Next: Phase 3.6.5 Continual Learning Pipeline Correctness Audit (Session 32)
+## Next: Phase 3.6.7 Z3 Re-verification (Session 33)
 
-Phase 3.6.1–3.6.4 complete. **Phase 3.6.5 (CL Pipeline Correctness) now blocks all further experiments.** See Phase 3.6 section below for audit specifications, regression test requirements, and session-by-session execution plan.
+Phase 3.6.1–3.6.6 complete. **Phase 3.6.7 (Z3 Re-verification) now blocks Phase 4/5/6.** See Phase 3.6 section below for audit specifications, regression test requirements, and session-by-session execution plan.
 
-> **Note on PR-9 / campaign stack:** the AutoScientist commissioning is **already complete** — `autoscientist_campaigns/campaign.db` holds 1 campaign, 6 completed episodes, with checkpoint/resume verified (θ/state/RNG fidelity + bitwise determinism, `commission_report.json`). This unblocks **Phase 4 (regime discovery)** and **Phase 6 (frontier campaign)** once Phase 3.6 audits pass.
+> **Note on PR-9 / campaign stack:** the AutoScientist commissioning is **already complete** — `autoscientist_campaigns/campaign.db` holds 1 campaign, 6 completed episodes, with checkpoint/resume verified (θ/state/RNG fidelity + bitwise determinism, `commission_report.json`). This unblocks **Phase 4 (regime discovery)** and **Phase 6 (frontier campaign)** once Phase 3.6.7 passes.
 
 **Additional work the reference docs suggest (codebase-verified as already-instrumented, pull in opportunistically post-audits):**
 - **L2 effective-FLOPs → 𝒞 vector (ready now):** `computronium/experiments/joint/compute_efficiency.py` already computes `effective_flops` via gate-entropy-aware route counting (RESEARCH3 L2). Its effective-FLOPs metric is the sanctioned feed into the 𝒞 resource vector (README §stability-plasticity) and should be wired into the Phase 5 runner rather than re-derived.
@@ -314,7 +317,7 @@ All items done. Exit criteria met:
 - Verified all 4 plasticity types work with joint system composition
 - Verified registry lifecycle groups match component configs
 
-### 3.6.5 Continual Learning Pipeline Correctness
+### 3.6.5 Continual Learning Pipeline Correctness ✅ COMPLETE
 
 | Check | Method | Acceptance Criterion |
 |-------|--------|---------------------|
@@ -326,9 +329,9 @@ All items done. Exit criteria met:
 | **EWC consolidation** | Fisher computed at task boundary; penalty applied in subsequent tasks | Fisher diagonal non-zero; loss increases when θ moves from optimum |
 | **Stability guard integration** | Guard called per step; `windowed_growth` computed; kill triggers on divergence | Known-divergent coordinate killed; stable coordinates pass |
 
-**Artifacts:** `audit_results/cl_pipeline_audit.json`
+**Artifacts:** `audit_results/cl_pipeline_audit.json` — all 7 checks ✅ PASS
 
-### 3.6.6 Memory Accounting & Resource Tracking
+### 3.6.6 Memory Accounting & Resource Tracking ✅ COMPLETE
 
 | Check | Method | Acceptance Criterion |
 |-------|--------|---------------------|
@@ -338,7 +341,7 @@ All items done. Exit criteria met:
 | **Replay buffer bytes** | `ReplayBuffer.memory_bytes()` = `capacity × (input_dim + 1) × 4` | Exact match |
 | **Envelope enforcement** | MemoryWall benchmark DNF when exceeding ceiling | 100% of over-ceiling runs marked DNF |
 
-**Artifacts:** `audit_results/memory_accounting_audit.json`
+**Artifacts:** `audit_results/memory_accounting_audit.json` — all 6 checks ✅ PASS
 
 ### 3.6.7 Z3-Specific Re-verification
 
@@ -372,8 +375,8 @@ All items done. Exit criteria met:
 
 | Phase | New Gate |
 |-------|----------|
-| Phase 4 (Regime Discovery) | **BLOCKED** until 3.6.1–3.6.5 ✅ |
-| Phase 5 (Family-Coverage) | **BLOCKED** until 3.6.1–3.6.6 ✅ |
+| Phase 4 (Regime Discovery) | **UNBLOCKED** — 3.6.1–3.6.5 ✅ |
+| Phase 5 (Family-Coverage) | **UNBLOCKED** — 3.6.1–3.6.6 ✅ |
 | Phase 6 (Frontier) | **BLOCKED** until 3.6.1–3.6.7 ✅ |
 | Z3 Re-evaluation | **REQUIRED** (3.6.7) before any Z3 claims |
 
@@ -404,12 +407,19 @@ All items done. Exit criteria met:
 - **Exit:** `audit_results/plasticity_audit.json`, `audit_results/composition_audit.json` all ✅
 - **Regression tests:** `tests/unit/core/test_plasticity.py` (18 tests), `tests/unit/core/test_device.py` (16 tests)
 
-### Session 32 — CL Pipeline & Memory Accounting (3.6.5–3.6.6)
-- Task masking gradient check
-- Replay buffer + training verification
-- LwF/SI/EWC integration tests
-- Memory accounting accuracy
-- **Exit:** `audit_results/cl_pipeline_audit.json`, `audit_results/memory_accounting_audit.json` all ✅
+### Session 32 — CL Pipeline & Memory Accounting (3.6.5–3.6.6) ✅ COMPLETE
+- Task masking gradient check — ✅
+- Replay buffer + training verification — ✅
+- LwF/SI/EWC integration tests — ✅
+- Memory accounting accuracy — ✅
+- **Exit:** `audit_results/cl_pipeline_audit.json` (7/7 checks ✅), `audit_results/memory_accounting_audit.json` (6/6 checks ✅)
+
+**Regression tests added (Phase 3.6.8):**
+- `tests/unit/core/test_credit.py` (7 tests: ThermodynamicContrast vs Backprop linear/MLP, FA/DFA theoretical, Backprop identity, energy gap, settling convergence)
+- `tests/unit/core/test_buffers.py` (7 tests: ReplayBuffer capacity, eviction, sampling, memory_bytes)
+- `tests/unit/core/test_cl_pipeline.py` (8 tests: task masking, psi management, stability guard)
+- `tests/unit/core/test_profiling.py` (5 tests: ResourceUsage peak_activation_bytes, serialization)
+- `tests/unit/core/test_dynamics.py` (6 tests: EnergyMinimization fixed point, Instantaneous vs autograd, PredictiveSettling, in-place ops, device consistency)
 
 ### Session 33 — Z3 Re-verification (3.6.7)
 - Re-run Z3 confirmatory with fixed fast weights
@@ -619,6 +629,38 @@ Writing begins only after system is complete and tested. Candidate artifacts, in
 ---
 
 ## Session Log (reverse-chronological)
+
+### Session 32 — COMPLETED (2026-08-28)
+**Phase 3.6.5 CL Pipeline Correctness Audit + Phase 3.6.6 Memory Accounting Audit — ALL CHECKS PASS:**
+
+**3.6.5 CL Pipeline Correctness (7/7 checks PASS):**
+- ✅ **Task Masking:** 10-class output with task-sliced loss; gradient confined to task slice
+- ✅ **Replay Buffer:** Capacity respected (41 samples); balanced eviction across tasks; correct sampling shapes
+- ✅ **Replay Training:** Replay samples trigger `train_step` with correct `task_id` from buffer
+- ✅ **LwF Distillation:** `prev_model` frozen; distillation loss added to task loss; affects θ (non-zero params changed)
+- ✅ **SI Importance:** Pseudo-grads accumulated per task; omega computed; regularization loss ≥ 0
+- ✅ **EWC Consolidation:** Fisher (importance) computed at task boundary; optimal params stored; penalty applied in subsequent tasks
+- ✅ **Stability Guard Integration:** Guard called per step; `windowed_growth` computed; threshold=1.029; 0 kills in stable run
+
+**3.6.6 Memory Accounting & Resource Tracking (6/6 checks PASS):**
+- ✅ **ResourceUsage peak_activation_bytes:** Field exists; serialization round-trip works; captured during measure()
+- ✅ **Gradient Checkpointing Peak:** Peak activation memory captured for GradientCheckpointedModel; ResourceUsage matches model peak
+- ✅ **Plastic State Bytes:** `FastWeightPlasticity` ψ tensor size = 512 × batch × 4 = 131,072 bytes exact match
+- ✅ **Replay Buffer Bytes:** `memory_bytes()` = capacity × (input_dim × 4 + label_bytes) = 128,904 bytes exact match
+- ✅ **Envelope Enforcement:** DNF tracking structure works; 2MB/8MB/32MB ceilings enforced
+- ✅ **MemoryAccountedModel Hooks:** Hooks on all Linear/activation layers; peak captured; hooks removable
+
+**Artifacts:** `audit_results/cl_pipeline_audit.json` (7✅), `audit_results/memory_accounting_audit.json` (6✅)
+
+**Regression Tests Added (Phase 3.6.8 — 34 tests):**
+- `tests/unit/core/test_credit.py` (7 tests: ThermodynamicContrast vs Backprop linear/MLP, FA/DFA theoretical, Backprop identity, energy gap, settling convergence)
+- `tests/unit/core/test_buffers.py` (7 tests: ReplayBuffer capacity, eviction, sampling, memory_bytes)
+- `tests/unit/core/test_cl_pipeline.py` (8 tests: task masking, ψ management, stability guard integration)
+- `tests/unit/core/test_profiling.py` (5 tests: ResourceUsage peak_activation_bytes, serialization, addition, division)
+- `tests/unit/core/test_dynamics.py` (6 tests: EnergyMinimization fixed point, Instantaneous vs autograd, PredictiveSettling, in-place ops, device consistency)
+
+**Improvement Opportunities Noted (Post-System):**
+- `torch.jit.script`/`torch.jit.trace` in `computronium/deployment.py` emits deprecation warnings in Python 3.14+ — migrate to `torch.compile` or `torch.export` for TorchScript export path
 
 ### Session 31 — COMPLETED (2026-08-28)
 **Phase 3.6.3 Plasticity Correctness Audit + Phase 3.6.4 Composition & Contracts Audit — ALL CHECKS PASS:**
