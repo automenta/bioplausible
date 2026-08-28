@@ -534,3 +534,61 @@ The naming instinct is right. "Constitutional self-modification of learning oper
 
 **Verdict:** proceed to E-1 registration after amendments 1–5 are in the doc and the prior-art gate is logged. The Ouroboros Probe, with the oracle-rescue pilot added, is a clean falsifiable instrument — and if Tier 3 fails, you still publish the first honest three-tier self-modification measurement. That's a win either way, which is the signature of a well-formed experiment.
 
+----
+
+**Autopoiesis** (formally described as the **constitutional self-modification of learning operators**) can be simplified significantly. In fact, cutting out several layers of over-engineered abstraction would likely make it **more robust, faster to run, and less prone to failure**, without sacrificing its core capability to grow and adapt modular tiled networks.
+
+An analysis of the system's design reveals several areas of unnecessary complexity, followed by a proposal for a "lean" version that retains the framework's genuine strengths.
+
+---
+
+### 1. Unnecessary Complexities (The Bloat)
+
+#### ❌ Tier 3 Recursion (Meta-Morphogenesis)
+*   **The Complexity:** Tier 3 aims to mutate the mutation operators, selection policies, and stagnation detectors themselves using a complex `MorphogenSignal` trigger. 
+*   **Why it is unnecessary:** The documentation admits that open-ended self-modification at this tier is deferred because of the risk of **"Meta-Recursive Divergence"** (where mutating strategies become increasingly unstable). Instead, v1 relies on a rigid "fixed menu" of meta-mutations (like swapping mutator pools or adjusting probe budgets). Whether Tier 3 even yields better results than fixed Tier 1 + 2 rules remains an open, unproven question.
+*   **The Simplification:** Eliminate Tier 3 entirely. Stripping this out removes the need for `MorphogenSignal`, the meta-mutation menu, and the complex triggers in the consolidation loop. A fixed set of well-calibrated Tier 1 (Structural) and Tier 2 (Algorithmic) operators is more than sufficient for modular network evolution.
+
+#### ❌ Protocol Bloat in Metrics and Selection
+*   **The Complexity:** The framework defines five different `SelectionPolicy` implementations (Greedy, Threshold, Stochastic, Tournament, Pareto) and four `FitnessMetric` variants (ValidationAccuracy, SurrogateObjective, ResourceWeightedFitness, MultiObjectivePareto).
+*   **Why it is unnecessary:** 
+    *   **SurrogateObjective** is structurally flawed for cross-family selection because it does not produce comparable signals across different Credit axes.
+    *   **GreedySelection** on raw point slopes is highly vulnerable to noise over short evaluation budgets (\\(K \le 20\\) steps), leading to the acceptance of bad mutations.
+    *   **Tournament and Crossover Operators** require maintaining a population of genomes, which completely clashes with the "multicellular organism" metaphor of a single network mutating locally over time.
+*   **The Simplification:** Standardize on exactly **one** robust, statistical selection policy (using a paired statistical test or sequential ratio test to filter out noise) and **one** unified metric, such as **ResourceWeightedFitness**.
+
+#### ❌ Multi-Objective Pareto Sorting
+*   **The Complexity:** The architecture introduces `MultiObjectivePareto` fitness and `ParetoSelection` to manage the trade-offs of the resource vector (compute, memory, energy).
+*   **Why it is unnecessary:** Multi-objective optimization introduces heavy mathematical and algorithmic overhead (dominance sorting, hypervolume calculation, and coordination issues).
+*   **The Simplification:** Use a simple, scalarized metabolic penalty. A metric like **ResourceWeightedFitness** (Accuracy minus a size/metabolic cost penalty, i.e., `GenomeSizePenalty`) creates a continuous, clean selective pressure that prevents "Ontological Cancer" without the overhead of Pareto sorting.
+
+#### ❌ Excessive Stagnation Detector Subtypes
+*   **The Complexity:** The system introduces four separate stagnation detector protocols (Windowed Mean, EMA, Statistical Test, Veto Rate) to act as a gate before triggering probes.
+*   **Why it is unnecessary:** These statistical heuristics add unnecessary configuration parameters that require tedious tuning.
+*   **The Simplification:** Replace these with a simple, unified rolling compute budget. If the system is allocated a fixed "metabolic energy budget" per episode, it can dynamically decide whether it has the resources to run a probe.
+
+---
+
+### 2. What Must Remain (The Core Strengths)
+
+To achieve the same (or better) results, any simplified version of Autopoiesis must preserve two highly effective, load-bearing mechanisms:
+
+1.  **Neutral Birth (Phenotype-Preserving Birth):** Structural mutations (like spawning nodes or growing new tiles) must be initialized so they produce bit-identical outputs to the parent at the moment of insertion (e.g., new edges start at zero weight, and new nodes start as identity mappings). This ensures the new tile doesn't shock the system or immediately violate the critical Lyapunov stability bounds of the Constitution.
+2.  **Slope-Based Selection:** Evaluating a proposed mutation based on its immediate "point accuracy" is useless for Tier 2 mutations (like changing a credit assignment rule), because swapping the rule doesn't change the forward pass at birth—it only changes how the model *will* learn. Giving mutations a short, equal-budget **adaptation probe** and measuring the **improvement rate (slope)** is a genuine contribution that must be kept.
+
+---
+
+### 3. The "Lean Autopoiesis" Blueprint
+
+By removing the over-engineered layers, a simplified and highly effective version of the consolidator would look like this:
+
+*   **Genotype (\(\Omega\)):** A simple, direct topology graph of tiles.
+*   **Mutations (Asexual only):** Limited strictly to **`DuplicateAndPerturb`** (cellular division) and **`SpliceOperator`** (inserting a new tile or route). No crossover, no population management.
+*   **The Consolidator Loop:**
+    1.  At the episode boundary (Sleep phase), if progress slows down, propose a local structural or algorithmic mutation.
+    2.  Apply **Neutral Birth** to initialize the new tile/connection.
+    3.  Run a brief, isolated **Adaptation Probe** on a held-out data fork to measure the learning slope of both the parent and the mutated offspring.
+    4.  Apply a **Paired Statistical Test** to accept the mutation only if its learning slope is significantly better than the parent's, penalized by the metabolic cost (`GenomeSizePenalty`) of the new tile.
+
+This lean architecture eliminates the meta-learning abstractions of Tier 3 and the overhead of population-based genetics, while keeping the powerful biological capability for a single, multi-tile organism to dynamically grow, split its "cells," and reroute its pathways to survive damage or master complex tasks.
+

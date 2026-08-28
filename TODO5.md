@@ -20,7 +20,7 @@
 | Phase 3.6.4 — Composition & Contracts | ✅ **COMPLETE** — all 6 checks pass (Context, CompositeState, ParamUpdate, Device, Registry, all plasticity types) |
 | Phase 3.6.5 — CL Pipeline Correctness | ✅ **COMPLETE** — all 7 checks pass (task masking, replay buffer, replay training, LwF, SI, EWC, stability guard) |
 | Phase 3.6.6 — Memory Accounting | ✅ **COMPLETE** — all 6 checks pass (ResourceUsage peak_activation_bytes, gradient checkpointing peak, plastic state bytes, replay buffer bytes, envelope enforcement, MemoryAccountedModel hooks) |
-| Phase 3.6.7 — Z3 Re-verification | ✅ **COMPLETE** — ψ evolution ✅, θ-invariance exact (0.0) ✅, gate history ✅, parity coverage structural limitation documented |
+| Phase 3.6.7 — Z3 Re-verification | ✅ **COMPLETE** — ψ evolution ✅, θ-invariance exact (0.0) ✅, gate history ✅, parity coverage cause undetermined |
 | Phase 3.6.8 — Regression Test Suite | ✅ **COMPLETE** — 34 tests added (credit, buffers, cl_pipeline, profiling, dynamics) |
 | Phase 4 — Regime discovery + substrate counterfactuals | 🟢 **UNBLOCKED** — awaits 3.6.7 |
 | Phase 5 — Re-axed family-coverage benchmark | 🟢 **UNBLOCKED** — awaits 3.6.7 |
@@ -348,17 +348,17 @@ All items done. Exit criteria met:
 | Check | Method | Acceptance Criterion | Result |
 |-------|--------|---------------------|--------|
 | **RuleStatePlasticity in Z3** | Fast weights actually update during ψ-adaptation | `ψ` norm > 0 after adaptation steps | ✅ PASS — ψ norm 5.06 → 5.59 |
-| **Z3 v2 canonical-order** | Re-run 5-seed confirmatory with fixed fast weights | All 5 seeds: 3/3 tasks ≥ 0.95, Δθ exact | ⚠️ STRUCTURAL — θ-invariant exact (0.0) on all seeds; parity fails at ~0.49 for 4/5 seeds (controller never discovers T_4) |
-| **Z3 v4 order-robust** | Re-run with fixed fast weights; test if order sensitivity remains | If still order-sensitive → document as structural, not bug | ✅ DOCUMENTED — order sensitivity confirmed; parity remains unsolved regardless of task order |
+| **Z3 v2 canonical-order** | Re-run 5-seed confirmatory with fixed fast weights | All 5 seeds: 3/3 tasks ≥ 0.95, Δθ exact | ⚠️ PARTIAL — θ-invariant exact (0.0) on all seeds; parity fails at ~0.49 for 4/5 seeds. Cause undetermined (structural vs. residual implementation defect). |
+| **Z3 v4 order-robust** | Re-run with fixed fast weights; test if order sensitivity remains | If still order-sensitive → document as structural, not bug | ✅ DOCUMENTED — order sensitivity confirmed; parity remains unsolved regardless of task order. |
 | **Gate-history instrumentation** | Per-step gates logged; entropy recorded | Complete gate history for all adaptation steps | ✅ PASS — 240/240 steps logged for all 3 tasks |
 
-**Artifacts:** `audit_results/z3_reverification.json` — 3/4 checks pass; parity coverage is the known structural limitation from TODO4 (not a regression from fixed bugs)
+**Artifacts:** `audit_results/z3_reverification.json` — 3/4 checks pass; parity coverage cause not yet determined (may be structural or residual implementation defects)
 
 **Key findings:**
 - θ-invariance verified: Δθ = 0.00000000 on all 5 seeds (exact, matching `RuleStatePlasticity` fix)
 - ψ evolution confirmed: plastic state norm increases during adaptation steps
 - Gate history instrumentation complete: per-step mean gates, hard-selection fraction, and entropy logged
-- Parity task remains structurally unsolvable by within-episode adaptation (TODO4 finding persists)
+- Parity task unsolved at ~0.49 for 4/5 seeds — cause undetermined. Could be structural (controller never discovers T_4) or residual implementation defects. Not concluded.
 
 ### 3.6.8 Regression Test Suite (Prevent Regressions)
 
@@ -384,7 +384,7 @@ All items done. Exit criteria met:
 | Phase 4 (Regime Discovery) | **UNBLOCKED** — 3.6.1–3.6.7 ✅ |
 | Phase 5 (Family-Coverage) | **UNBLOCKED** — 3.6.1–3.6.7 ✅ |
 | Phase 6 (Frontier) | **UNBLOCKED** — 3.6.1–3.6.7 ✅ |
-| Z3 Re-evaluation | **COMPLETE** (3.6.7) — parity structural, θ-invariant exact |
+| Z3 Re-evaluation | **COMPLETE** (3.6.7) — parity cause undetermined, θ-invariant exact |
 
 ---
 
@@ -429,9 +429,9 @@ All items done. Exit criteria met:
 
 ### Session 33 — Z3 Re-verification (3.6.7) ✅ COMPLETE
 - Re-run Z3 confirmatory with fixed fast weights: ψ evolution ✅, θ-invariance exact (0.0) on all 5 seeds
-- Documented order-sensitivity status: parity structural limitation persists (TODO4 finding)
+- Documented order-sensitivity status: parity cause undetermined (structural vs. implementation defect not concluded)
 - Gate history instrumentation verified: 240/240 steps logged for all 3 tasks
-- **Exit:** `audit_results/z3_reverification.json` — 3/4 checks pass; parity is structural
+- **Exit:** `audit_results/z3_reverification.json` — 3/4 checks pass; parity cause undetermined
 
 ### Session 34 — Regression Test Suite (3.6.8)
 - Add all audit checks as permanent unit tests
@@ -638,21 +638,21 @@ Writing begins only after system is complete and tested. Candidate artifacts, in
 ## Session Log (reverse-chronological)
 
 ### Session 33 — COMPLETED (2026-08-28)
-**Phase 3.6.7 Z3 Re-verification — STRUCTURAL PARITY LIMITATION DOCUMENTED:**
+**Phase 3.6.7 Z3 Re-verification — PARITY LIMITATION OBSERVED (CAUSE NOT YET DETERMINED):**
 
 **3.6.7 Z3 Re-verification (3/4 checks PASS):**
 - ✅ **ψ Evolution:** Plastic state norm evolved 5.06 → 5.59 during adaptation (ψ updates work)
 - ✅ **θ-Invariance:** Δθ = 0.00000000 on all 5 seeds — exact parameter invariance verified
 - ✅ **Gate History:** 240/240 steps logged for all 3 tasks (mean gates, hard-selection fraction, entropy)
-- ⚠️ **Parity Coverage:** Structural limitation — controller never discovers T_4 (parity operator) from within-episode adaptation. 4/5 seeds fail at ~0.49 on parity; last_symbol and threshold ≥ 0.99 on all seeds. This is the known TODO4 finding, not a regression from fixed bugs.
-- ✅ **Order Robustness:** Order sensitivity confirmed; parity remains unsolved regardless of task order (structural)
+- ⚠️ **Parity Coverage:** 4/5 seeds fail at ~0.49 on parity; last_symbol and threshold ≥ 0.99 on all seeds. Cause undetermined — could be structural (controller never discovers T_4 from within-episode adaptation) OR residual implementation defects. Not concluded as structural.
+- ✅ **Order Robustness:** Order sensitivity confirmed; parity remains unsolved regardless of task order.
 
 **Key verification:** The fixed `RuleStatePlasticity` + `FastWeightPlasticity` + in-place op fixes produce exact θ-invariance — the critical invariant that was broken before.
 
 **Artifacts:** `audit_results/z3_reverification.json`, `scripts/z3_reverification_audit.py`
 
 **Improvement Opportunities Noted (Post-System):**
-- Parity task requires a dedicated adaptation strategy (e.g., longer episodes, curriculum, or explicit parity operator injection) — structural research question for Phase 4 regime discovery
+- Parity task requires investigation: longer episodes, curriculum, explicit parity operator injection, or debugging of adaptation dynamics. Open question for Phase 4 regime discovery.
 
 ### Session 32 — COMPLETED (2026-08-28)
 **Phase 3.6.5 CL Pipeline Correctness Audit + Phase 3.6.6 Memory Accounting Audit — ALL CHECKS PASS:**
