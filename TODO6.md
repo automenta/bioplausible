@@ -8,15 +8,15 @@
 
 ```
 CRITICAL PATH (longest dependency chain):
-0.0 CL Re-verify ──────────────────────► (independent, parallel)
-0.1 Cleanup ──► 0.2 Move core/stability ──► 1.1-1.6 Stability Lib ──► 2.2 State Types ──► 2.3 Configs ──► 3.1 Fairness ──► 3.2 Campaign ──► 4.1-4.3 Execution
-                    │                          │
-                    └────► 1.1 (ResourceUsage) ┘
-                                                                 
+0.0a Reconcile ──► 0.0b Pre-flight ──► 0.0c Retest ──► (independent, parallel)
+0.1 Cleanup ──► 0.2 Move core/stability ──► 1.1-1.6 Stability Lib ──► 2.1 State Types ──► 2.2 Ontology ──► 2.3 Joint Facade ──► 3.1 Fairness ──► 3.2 Campaign ──► 4.1-4.3 Execution
+                     │                          │
+                     └────► 1.1 (ResourceUsage) ┘
+                                                                  
 PARALLEL WORKSTREAMS (can overlap):
 ├─ 0.0 CL Re-verification (blocks design decisions only)
 ├─ 1.5 Tests (starts after 1.3)
-├─ 2.4 Joint Facade (after 2.2, 2.3)
+├─ 2.3 Joint Facade (after 2.1, 2.2)
 ├─ 3.3 L2/𝒞 wiring (after 1.1 ResourceUsage)
 ├─ 3.4 Algorithm Migration (after 1.1)
 ├─ 3.5 PR-8 Export (independent)
@@ -31,7 +31,7 @@ PARALLEL WORKSTREAMS (can overlap):
 
 | Track | State |
 |---|---|
-| `computronium/nn` (CP-C wrapper) | ✅ **COMPLETE** — 26 tests, ruff/pyright clean |
+| `computronium/nn` (CP-C wrapper) | ✅ **COMPLETE** — 26 tests, ruff/pyright clean; **CP-C acceptance verified**: (a) unmodified training script except swapped line; (b) NullPlasticity+backprop bitwise-native fallback. `DECISIONS.md` entry: shipped despite Phase 2 flagship null (E-8 gate was "post-flagship") |
 | `libraries/computronium_stability` | ✅ **CLEANED UP** — `.venv/`, `build/`, cache dirs removed; source moved to `computronium/stability/` |
 | Phase 3.6 Audits | ✅ **COMPLETE** — 7 audits pass, 34 regression tests |
 | Phase 4 (Regime Discovery) | 🟢 **UNBLOCKED** — Awaits execution |
@@ -43,8 +43,15 @@ PARALLEL WORKSTREAMS (can overlap):
 
 ## Phase 0 — Prerequisites & Cleanup (Week 1) ✅ **COMPLETE**
 
-### 0.0 Phase 2 CL Re-verification (Parallel, Non-Blocking for Lib)
-**Run immediately in parallel with Phase 1.** Fresh E-1 registration → `scripts/verify_capacity_limited_cl.py` (6 arms, hidden=32, 2 epochs, 5 seeds) → compare vs Session 28 baseline. **Exit:** Null holds → `DECISIONS.md`; signal → new E-1 for full run. **No design deps** on CL outcome until this passes.
+### 0.0 Phase 2 CL Re-verification (Parallel, Non-Blocking for Lib) — **REWRITTEN**
+
+**0.0a Reconcile (Do First):** Declare `continual_learning_retest_fixed2/` authoritative; correct §2.5 numbers/artifact path (supersedes `retest`/`retest_matched`); log in `DECISIONS.md`. Session 28 full log (+0.100, p=0.0076) is authoritative; §2.5's +0.0006/p=1.0 reflects a superseded intermediate run.
+
+**0.0b Pre-flight (Before Every Run):** Logged assertions — replay batches > 0/epoch; both arms' memory logged, ratio ≤ 1.1; ψ modulation norm > 0. If any fail, the run is invalid *before* spending seeds.
+
+**0.0c Retest Protocol:** Fresh E-1 registration → **paired fast_weights vs. replay**, matched memory (`replay_capacity=41`), probe geometry (hidden=32, 2 epochs/task, 5 tasks), ≥5 paired seeds, guard live. **Not** `verify_capacity_limited_cl.py` (arm-discrimination probe).
+
+**Exit:** Null holds → memo + `DECISIONS.md`; signal (CI lower bound ≥ 0.1, or forgetting CI excludes 0) → new E-1 for full run. **No design deps** on CL outcome until this passes.
 
 ### 0.1 Remove Fractured `libraries/computronium_stability/` ✅ **DONE**
 - `rm -rf libraries/computronium_stability/.venv/ build/ .pytest_cache/ .ruff_cache/` ✅
@@ -52,7 +59,7 @@ PARALLEL WORKSTREAMS (can overlap):
 - **After Phase 1:** `rm -rf libraries/` — publishing via root `pyproject.toml`
 
 ### 0.2 Move `computronium/core/stability/` → `computronium/stability/` ✅ **DONE**
-- **Single canonical location** — `core/stability/` becomes deprecated shim (one release) or removed
+- **Single canonical location** — `core/stability/` **removed**
 - Internal imports updated for stability modules
 
 ### 0.3 Standalone Test Suite for Published API ✅ **DONE**
@@ -60,6 +67,7 @@ PARALLEL WORKSTREAMS (can overlap):
 - Imports: `from computronium_stability import attach, StabilityGuard, ...`
 - Mirrors `tests/unit/nn/test_computronium_linear.py` pattern
 - Validates wheel works identically to internal usage
+- **Runs against built wheel** (`uv build && pip install dist/*.whl`), not source tree
 
 ### 0.4 Publishing Config (Root `pyproject.toml`) ✅ **DONE**
 ```toml
@@ -89,7 +97,8 @@ computronium/
     basin.py              # BasinStabilityEstimator, estimate_basin_stability, estimate_basin_stability_multistart
     frontier.py           # FrontierRecord, FrontierAggregator (from core.stability.frontier)
     config.py             # Config dataclasses + factories (PEP 695, from_spec/to_spec)
-    resources.py          # ResourceUsage (moved from core.profiling)
+    resources.py          # Re-exports ResourceUsage from computronium.resources
+  resources.py            # ResourceUsage (neutral home for universal currency)
 ```
 
 ### 1.2 Public API Exports (`__init__.py`) ✅ **DONE**
@@ -109,9 +118,11 @@ All exports match the plan including:
 ### 1.4 Config Dataclasses (`config.py`) — PEP 695, Frozen, Slotted ✅ **DONE**
 All 5 configs with `to_spec()` / `from_spec(cls, spec)` and factories.
 
-### 1.5 Resources (`resources.py`) — Universal Currency ✅ **DONE**
-- `ResourceUsage` moved from `core/profiling.py` with `effective_flops` field added
+### 1.5 Resources (`resources.py`) — Universal Currency ✅ **DONE (MOVED)**
+- `ResourceUsage` moved to **`computronium/resources.py`** (neutral home for universal currency)
+- `computronium/stability/resources.py` re-exports: `from computronium.resources import ResourceUsage`
 - Profiling utilities remain in `core/profiling.py`
+- `effective_flops: float` field added for Phase 3.3 L2/𝒞 wiring
 
 ### 1.6 Tests: `tests/unit/stability/test_stability_api.py` (55 tests) ✅ **DONE**
 - `TestResourceUsage`, `TestFrontierRecord`, `TestFrontierAggregator`
@@ -129,7 +140,10 @@ All 5 configs with `to_spec()` / `from_spec(cls, spec)` and factories.
 | From | To | Files |
 |---|---|---|
 | `computronium.core.stability` | `computronium.stability` | 8+ files (campaign, continual, profiling, stability modules) |
-| `computtonium.core.profiling import ResourceUsage` | `computronium.stability import ResourceUsage` | 6 files (memory_wall, campaign, profiling, stability) |
+| `computronium.core.profiling import ResourceUsage` | `computronium.resources import ResourceUsage` | 6 files (memory_wall, campaign, profiling, stability) |
+| `computronium.core.ontology import ...` | `computronium.ontology import ...` | 50+ files (Phase 2.2) |
+| `computronium.core.joint.state import ...` | `computronium.state import ...` | ~30 files (Phase 2.1) |
+| `computronium.core.joint.context import ...` | `computronium.state import ...` | ~25 files (Phase 2.1) |
 
 ---
 
@@ -149,22 +163,25 @@ computronium/
 - **Protocol:** `TransitionFn` in `transitions.py` for duck-typing
 - **Update imports** in: stability modules, campaign, pipeline, plasticity, joint, profiling
 
-### 2.2 Ontology Configs → `computronium/config/` (After Phase 1.1)
+### 2.2 Ontology Primitives → `computronium/ontology/` (After Phase 1.1)
 Extract from `core/ontology.py` (single 1500-line file) to per-axis modules:
 ```
 computronium/
-  config/
-    __init__.py          # Re-exports all config classes + factory methods
+  ontology/
+    __init__.py          # Re-exports all config classes + runtime primitives + factory methods
     substrate.py         # SubstrateConfig, SubstrateType, DigitalSubstrateConfig, etc.
-    geometry.py          # GeometryConfig (feedforward, recurrent, tile_mesh)
-    dynamics.py          # StateDynamicsConfig (energy_minimization, predictive_settling, etc.)
-    plasticity.py        # PlasticityConfig (null, routing, fast_weights, rule_state)
-    credit.py            # CreditAssignmentConfig (thermodynamic_contrast, random_projections, etc.)
-    update.py            # ParameterUpdateConfig (euclidean, riemannian_orthogonal, etc.)
+    geometry.py          # GeometryConfig (feedforward, recurrent, tile_mesh), FeedforwardGeometry, RecurrentGeometry
+    dynamics.py          # StateDynamicsConfig (energy_minimization, predictive_settling, etc.), EnergyMinimizationDynamics, etc.
+    plasticity.py        # PlasticityConfig (null, routing, fast_weights, rule_state), NullPlasticity, RoutingPlasticity, etc.
+    credit.py            # CreditAssignmentConfig (thermodynamic_contrast, random_projections, etc.), ThermodynamicContrast, etc.
+    update.py            # ParameterUpdateConfig (euclidean, riemannian_orthogonal, etc.), EuclideanUpdate, etc.
+    system.py            # SystemConfig, System, SystemState, Phase, FAMILY_TOLERANCES, substrate_from_config
 ```
-- **Single import:** `from computronium.config import *` gets all
+- **Single import:** `from computronium.ontology import *` gets all configs + runtime primitives
 - **Factory pattern preserved:** `GeometryConfig.feedforward(...)`, `PlasticityConfig.fast_weights(...)`
-- **Cross-axis validation** (`SystemConfig.validate()`) moves to `config/__init__.py` or stays in `core/ontology.py` as internal
+- **Cross-axis validation** (`SystemConfig.validate()`) stays in `core/ontology.py` as internal
+- **Config-only re-export** available at `from computronium.config import *` (thin wrapper over ontology config classes only)
+- **Check for import cycles:** `System` generics reference configs and vice versa — ensure forward refs or lazy imports
 
 ### 2.3 Joint System Facade (`computronium/core/joint/__init__.py`)
 Export only the composition API:
@@ -175,7 +192,6 @@ from .transition import compose_joint_system, compose_joint_system_from_configs
 from .pipeline import run_train_step, run_forward, JointSystem
 ```
 - **Hide internals:** `trajectory.py`, `consolidation.py` behind facade
-- **Deprecation path** for direct imports from submodules
 
 ---
 
@@ -246,10 +262,10 @@ class BenchmarkRunner:  # base class enforcing contract
 
 | Session | Focus | Dependencies | Parallel With |
 |---|---|---|---|
-| **S1** | 0.1 Cleanup + 0.2 Move stability | — | 0.0 CL Re-verify |
+| **S1** | 0.0a Reconcile + 0.0b Pre-flight + 0.0c Retest + 0.1 Cleanup + 0.2 Move stability | — | — |
 | **S2** | 1.1-1.4 Stability impl (guard, estimators, config, resources) | S1 | 0.3 Standalone tests |
 | **S3** | 1.5 Tests + 1.7 CI | S2 | 2.1 State types (can start) |
-| **S4** | 2.1 State types + 2.2 Configs | S2 (stability moved) | 3.3 L2/𝒞 wiring |
+| **S4** | 2.1 State types + 2.2 Ontology | S2 (stability moved) | 3.3 L2/𝒞 wiring |
 | **S5** | 2.3 Joint facade + 2.4 import sweep | S4 | 3.4 Algorithm Migration |
 | **S6** | 3.1 Fairness + 3.2 Campaign | S4 (configs, state) | 3.5 PR-8 Export |
 | **S7** | 3.3 L2/𝒞 + 3.4/3.5 | S4, S6 | — |
@@ -264,12 +280,11 @@ class BenchmarkRunner:  # base class enforcing contract
 - ✅ `computronium[stability]` installs via `pip install -e .[stability]`; `import computronium_stability` works
 - ✅ `computronium/stability/` public API complete; tests match `computronium/nn` quality (55 tests, coverage ≥85%)
 - 🔄 `libraries/` directory **to be deleted** after Phase 2
-- 🔄 `computronium/state/`, `computronium/config/` extracted; all imports updated (~100 sites) — **Phase 2**
+- 🔄 `computronium/state/`, `computronium/ontology/` extracted; all imports updated (~100 sites) — **Phase 2**
 - 🔄 `computronium/core/joint/` facade exports only composition API — **Phase 2**
 - ✅ All existing tests pass; no import regressions
 - ✅ `ruff format --check . && ruff check . && pyright . && pytest --cov` green
 - 🔄 `DECISIONS.md` updated: coordinate lock, fairness contract, prior-art gate, CL re-verification outcome — **Phase 3+**
-- 🔄 Migration guide documented (`docs/migration_stability_v1.md`) — **Phase 2+**
 
 ---
 
@@ -278,18 +293,24 @@ class BenchmarkRunner:  # base class enforcing contract
 ### ✅ COMPLETED (Phase 0 + Phase 1)
 - **Phase 0.1**: Cleaned up fractured `libraries/computronium_stability/` (removed `.venv/`, `build/`, cache dirs)
 - **Phase 0.2**: Moved `computronium/core/stability/` → `computronium/stability/` (single canonical location)
-- **Phase 0.3**: Created standalone test suite `tests/unit/core/test_stability_standalone.py` (55 tests)
+- **Phase 0.3**: Created standalone test suite `tests/unit/core/test_stability_standalone.py` (55 tests) — runs against built wheel
 - **Phase 0.4**: Updated `pyproject.toml` with `package-dir` mapping for `computronium_stability`
-- **Phase 1.1-1.5**: Created all stability modules (`guard.py`, `spectral_radius.py`, `lyapunov.py`, `settling.py`, `basin.py`, `frontier.py`, `config.py`, `resources.py`)
+- **Phase 1.1-1.5**: Created all stability modules (`guard.py`, `spectral_radius.py`, `lyapunov.py`, `settling.py`, `basin.py`, `frontier.py`, `config.py`, `resources.py` re-export)
 - **Phase 1.6**: Created comprehensive test suite `tests/unit/stability/test_stability_api.py` (55 tests)
 - **Phase 1.7**: Verified CI quality gates (ruff, pyright, pytest all pass)
 - **Publishing**: `uv pip install -e .[stability]` → `import computronium_stability` works ✅
 
+### 🔧 FIXED FROM REVIEW (Pre-S1)
+- **Phase 0.0 rewritten**: Split into 0.0a (Reconcile), 0.0b (Pre-flight), 0.0c (Retest with correct paired protocol)
+- **ResourceUsage moved**: `computronium/resources.py` (neutral home); stability re-exports
+- **Ontology vs Config**: Renamed `computronium/config/` → `computronium/ontology/`; thin `config/` wrapper for config-only imports
+- **Standalone wheel**: Guard uses duck-typed `CompositeState`; test suite runs against built wheel
+
 ### 🔄 NEXT STEPS (Phase 2)
 1. **Phase 2.1**: Extract state types to `computronium/state/`
-2. **Phase 2.2**: Extract ontology configs to `computronium/config/`
+2. **Phase 2.2**: Extract ontology primitives to `computronium/ontology/`
 3. **Phase 2.3**: Create joint system facade
-4. **Phase 2.4**: Import sweep (~100 sites) using automation scripts
+4. **Phase 2.4**: Import sweep (~100 sites) using per-module commits with automation scripts
 
 ### 📋 PHASE 3-4 (Future)
 - Phase 3: RESEARCH3 infrastructure (fairness, campaign, L2/𝒞, algorithm migration, export)
@@ -299,17 +320,19 @@ class BenchmarkRunner:  # base class enforcing contract
 
 ## Risk Register (Updated)
 
----
-
-## Risk Register
-
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| Import sweep breaks tests | High | High | Incremental: move → update imports → test → commit per module; use `ruff --fix` for trivial renames |
-| External API diverges from internal | Low | High | Shared implementation; `test_stability_standalone.py` validates published API |
+| Import sweep breaks tests | High | High | Incremental: move → update imports → test → commit per module; use `ruff --fix` for trivial renames; per-module commits (stability in S2, state in S4, ontology in S4) |
+| External API diverges from internal | Low | High | Shared implementation; `test_stability_standalone.py` validates published API against built wheel |
 | Campaign DB schema churn | Med | Med | Freeze schema before Phase 4; migrations for future |
 | Effective-FLOPs definition ambiguity | Low | Med | Lock to `compute_efficiency.py` gate-entropy method; document in `ResourceUsage` |
 | CL re-verification reveals signal | Low | High | Pre-registered kill criterion honored; design deps wait for 0.0 outcome |
+| Session 28 baseline ambiguity | High | High | 0.0a Reconcile step declares `retest_fixed2` authoritative; corrects §2.5; logs in `DECISIONS.md` |
+| `ResourceUsage` in wrong package | Med | Med | Moved to `computronium.resources.py` (neutral home); stability re-exports |
+| `computronium/ontology` vs `config` confusion | Med | Low | Split: `computronium.ontology/` for all configs + runtime primitives; thin `computronium.config/` wrapper for config-only imports |
+| Standalone wheel hard-imports `computronium.state` | Low | High | Guard uses duck-typed/lazy `CompositeState` handling; standalone test runs against built wheel |
+| `git stash` unsafe in this repo | Med | Med | Use commit or `git worktree` for backup |
+| Mega-sweep import migration | High | High | Per-module commits with verification after each |
 
 ---
 
@@ -388,18 +411,18 @@ Writing begins only after system complete and tested. Dependency order:
 | Migration | Pattern | Tool | Files | Time |
 |---|---|---|---|---|
 | `core.stability` → `stability` | `from computronium.core.stability import` → `from computronium.stability import` | `sed` / `ruff --fix` | 8 | 1 min |
-| `core.profiling.ResourceUsage` → `stability.ResourceUsage` | `from computronium.core.profiling import ResourceUsage` → `from computronium.stability import ResourceUsage` | `sed` | 8 | 1 min |
+| `core.profiling.ResourceUsage` → `resources.ResourceUsage` | `from computronium.core.profiling import ResourceUsage` → `from computronium.resources import ResourceUsage` | `sed` | 8 | 1 min |
 | `core.joint.state` → `state` | `from computronium.core.joint.state import X` → `from computronium.state import X` | `sed` | ~30 | 1 min |
 | `core.joint.context` → `state` | `from computronium.core.joint.context import X` → `from computronium.state import X` | `sed` | ~25 | 1 min |
-| `core.ontology` → `config/*` | Multi-symbol splits per symbol map | `libcst` script | 50+ | 30 min to write, then instant |
+| `core.ontology` → `ontology/*` | Multi-symbol splits per symbol map | `libcst` script | 50+ | 30 min to write, then instant |
 
 **Commands for simple renames:**
 ```bash
 # Stability module
 find . -name "*.py" -exec sed -i 's/from computronium\.core\.stability import/from computronium.stability import/g' {} +
 
-# ResourceUsage
-find . -name "*.py" -exec sed -i 's/from computronium\.core\.profiling import ResourceUsage/from computronium.stability import ResourceUsage/g' {} +
+# ResourceUsage (neutral home)
+find . -name "*.py" -exec sed -i 's/from computronium\.core\.profiling import ResourceUsage/from computronium.resources import ResourceUsage/g' {} +
 
 # Joint state/context
 find . -name "*.py" -exec sed -i 's/from computronium\.core\.joint\.state import/from computronium.state import/g' {} +
@@ -410,59 +433,59 @@ ruff check --select F401 --fix .  # Remove unused imports
 ruff check --select I001 --fix .   # Sort imports
 ```
 
-**`libcst` script for ontology → config splits:**
+**`libcst` script for ontology → ontology splits:**
 ```python
 # tools/migrate_ontology.py
 import libcst as cst
 from pathlib import Path
 
 MODULE_MAP = {
-    "SubstrateConfig": "computronium.config.substrate",
-    "SubstrateType": "computronium.config.substrate",
-    "DigitalSubstrate": "computronium.config.substrate",
-    "AnalogSubstrate": "computronium.config.substrate",
-    "MemristiveSubstrate": "computronium.config.substrate",
-    "NeuromorphicSubstrate": "computronium.config.substrate",
-    "SparseSubstrate": "computronium.config.substrate",
-    "TernarySubstrate": "computronium.config.substrate",
-    "OpticalSubstrate": "computronium.config.substrate",
-    "QuantumSubstrate": "computronium.config.substrate",
-    "ComplexSubstrate": "computronium.config.substrate",
-    "GeometryConfig": "computronium.config.geometry",
-    "FeedforwardGeometry": "computronium.config.geometry",
-    "RecurrentGeometry": "computronium.config.geometry",
-    "TileGeometry": "computronium.config.geometry",
-    "StateDynamicsConfig": "computronium.config.dynamics",
-    "EnergyMinimizationDynamics": "computronium.config.dynamics",
-    "PredictiveSettlingDynamics": "computronium.config.dynamics",
-    "InstantaneousDynamics": "computronium.config.dynamics",
-    "SpikeIntegrationDynamics": "computronium.config.dynamics",
-    "DiffusionDynamics": "computronium.config.dynamics",
-    "PlasticityConfig": "computronium.config.plasticity",
-    "NullPlasticity": "computronium.config.plasticity",
-    "RoutingPlasticity": "computronium.config.plasticity",
-    "FastWeightPlasticity": "computronium.config.plasticity",
-    "RuleStatePlasticity": "computronium.config.plasticity",
-    "CreditAssignmentConfig": "computronium.config.credit",
-    "ThermodynamicContrast": "computronium.config.credit",
-    "RandomProjectionsCredit": "computronium.config.credit",
-    "LocalGoodnessCredit": "computronium.config.credit",
-    "TemporalTraceCredit": "computronium.config.credit",
-    "TargetInversionCredit": "computronium.config.credit",
-    "HomeostaticCredit": "computronium.config.credit",
-    "BackpropCredit": "computronium.config.credit",
-    "ParameterUpdateConfig": "computronium.config.update",
-    "EuclideanUpdate": "computronium.config.update",
-    "RiemannianOrthogonalUpdate": "computronium.config.update",
-    "SpectralConstrainedUpdate": "computronium.config.update",
-    "NaturalGradientUpdate": "computronium.config.update",
-    "ElasticConsolidationUpdate": "computronium.config.update",
-    "SystemConfig": "computronium.config",
-    "System": "computronium.config",
-    "SystemState": "computronium.config",
-    "Phase": "computronium.config",
-    "FAMILY_TOLERANCES": "computronium.config",
-    "substrate_from_config": "computronium.config.substrate",
+    "SubstrateConfig": "computronium.ontology.substrate",
+    "SubstrateType": "computronium.ontology.substrate",
+    "DigitalSubstrate": "computronium.ontology.substrate",
+    "AnalogSubstrate": "computronium.ontology.substrate",
+    "MemristiveSubstrate": "computronium.ontology.substrate",
+    "NeuromorphicSubstrate": "computronium.ontology.substrate",
+    "SparseSubstrate": "computronium.ontology.substrate",
+    "TernarySubstrate": "computronium.ontology.substrate",
+    "OpticalSubstrate": "computronium.ontology.substrate",
+    "QuantumSubstrate": "computronium.ontology.substrate",
+    "ComplexSubstrate": "computronium.ontology.substrate",
+    "GeometryConfig": "computronium.ontology.geometry",
+    "FeedforwardGeometry": "computronium.ontology.geometry",
+    "RecurrentGeometry": "computronium.ontology.geometry",
+    "TileGeometry": "computronium.ontology.geometry",
+    "StateDynamicsConfig": "computronium.ontology.dynamics",
+    "EnergyMinimizationDynamics": "computronium.ontology.dynamics",
+    "PredictiveSettlingDynamics": "computronium.ontology.dynamics",
+    "InstantaneousDynamics": "computronium.ontology.dynamics",
+    "SpikeIntegrationDynamics": "computronium.ontology.dynamics",
+    "DiffusionDynamics": "computronium.ontology.dynamics",
+    "PlasticityConfig": "computronium.ontology.plasticity",
+    "NullPlasticity": "computronium.ontology.plasticity",
+    "RoutingPlasticity": "computronium.ontology.plasticity",
+    "FastWeightPlasticity": "computronium.ontology.plasticity",
+    "RuleStatePlasticity": "computronium.ontology.plasticity",
+    "CreditAssignmentConfig": "computronium.ontology.credit",
+    "ThermodynamicContrast": "computronium.ontology.credit",
+    "RandomProjectionsCredit": "computronium.ontology.credit",
+    "LocalGoodnessCredit": "computronium.ontology.credit",
+    "TemporalTraceCredit": "computronium.ontology.credit",
+    "TargetInversionCredit": "computronium.ontology.credit",
+    "HomeostaticCredit": "computronium.ontology.credit",
+    "BackpropCredit": "computronium.ontology.credit",
+    "ParameterUpdateConfig": "computronium.ontology.update",
+    "EuclideanUpdate": "computronium.ontology.update",
+    "RiemannianOrthogonalUpdate": "computronium.ontology.update",
+    "SpectralConstrainedUpdate": "computronium.ontology.update",
+    "NaturalGradientUpdate": "computronium.ontology.update",
+    "ElasticConsolidationUpdate": "computronium.ontology.update",
+    "SystemConfig": "computronium.ontology.system",
+    "System": "computronium.ontology.system",
+    "SystemState": "computronium.ontology.system",
+    "Phase": "computronium.ontology.system",
+    "FAMILY_TOLERANCES": "computronium.ontology.system",
+    "substrate_from_config": "computronium.ontology.substrate",
 }
 
 class ImportRewriter(cst.CSTTransformer):
@@ -506,24 +529,32 @@ for py_file in Path(".").rglob("*.py"):
 ### S5 Import Sweep: Safe Execution Order
 
 ```bash
-# 1. Backup
-git stash push -m "pre-import-sweep"  # or git commit
+# 1. Backup (use commit or git worktree, NOT git stash — unsafe in this repo)
+git commit -m "pre-import-sweep backup" --allow-empty
+# or: git worktree add ../bioplausible-sweep
 
-# 2. Automated renames (safe, reversible)
-./tools/auto_rename_imports.sh
+# 2. Automated renames (safe, reversible) — PER MODULE, not mega-sweep
+# S2: stability module
+./tools/auto_rename_imports.sh stability
+git commit -m "refactor: stability imports to computronium.stability"
 
-# 3. AST-based ontology splits
+# S4: state module  
+./tools/auto_rename_imports.sh state
+git commit -m "refactor: state imports to computronium.state"
+
+# S4: ontology module (libcst)
 python tools/migrate_ontology.py
+git commit -m "refactor: ontology imports to computronium.ontology"
 
-# 4. Verify
+# 3. Verify
 grep -r "computronium.core.stability\|computronium.core.profiling import ResourceUsage\|computronium.core.ontology import\|computronium.core.joint.state import\|computronium.core.joint.context import" --include="*.py" | grep -v test_stability_standalone | grep -v test_ontology.py || echo "CLEAN"
 
-# 5. Fix any stragglers manually
-# 6. Run full test suite
+# 4. Fix any stragglers manually
+# 5. Run full test suite
 pytest --cov -x
 
-# 7. Commit
-git add -A && git commit -m "refactor: import migration to stability/state/config modules"
+# 6. Commit
+git add -A && git commit -m "refactor: import migration to stability/state/ontology modules"
 ```
 
 ### Phase 1 Test Acceleration: Shared Test Infrastructure
@@ -569,13 +600,13 @@ Then each estimator test class uses `@pytest.mark.parametrize("transition,expect
 
 | Session | Focus | Automation Used |
 |---|---|---|
-| **S1** | Cleanup + Move stability | `rm -rf`, `mv` |
-| **S2** | Stability impl (1.1-1.4) | Config generator for boilerplate |
-| **S3** | Tests + CI | Shared fixtures + parametrize; `pytest -n auto` |
-| **S4** | State + Config extraction | `libcst` script for ontology splits |
-| **S5** | Import sweep + Joint facade | `sed` + `ruff --fix` + `libcst`; verification script |
-| **S6** | Fairness + Campaign | — |
-| **S7** | L2/𝒞 + Algorithm Migration + Export | — |
+| **S1** | 0.0a Reconcile + 0.0b Pre-flight + 0.0c Retest + 0.1 Cleanup + 0.2 Move stability | `rm -rf`, `mv` |
+| **S2** | 1.1-1.4 Stability impl (guard, estimators, config, resources) | Config generator for boilerplate |
+| **S3** | 1.5 Tests + 1.7 CI | Shared fixtures + parametrize; `pytest -n auto` |
+| **S4** | 2.1 State types + 2.2 Ontology | `libcst` script for ontology splits |
+| **S5** | 2.3 Joint facade + 2.4 import sweep (per-module commits) | `sed` + `ruff --fix` + `libcst`; verification script |
+| **S6** | 3.1 Fairness + 3.2 Campaign | — |
+| **S7** | 3.3 L2/𝒞 + 3.4/3.5 | — |
 | **S8+** | Phase 4 Execution | — |
 
 **Total S5 import migration time:** ~10 minutes automated + 10 minutes verification vs. 2-3 hours manual.
