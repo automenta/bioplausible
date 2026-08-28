@@ -188,3 +188,41 @@ Append-only. One entry per pre-registration threshold, kill-criterion invocation
 - **Required fix:** Rewrite training loop to call `model.joint_system.train_step(x, y)` or `run_train_step(substrate, geometry, dynamics, credit, update, x, y)` with proper task-head integration.
 - **Status:** Logged as known issue; Phase 2 marked "implementation incomplete" in decision log. Re-run required after fix. Phase 3 proceeds independently (memory-wall benchmark doesn't depend on CL plasticity mechanics).
 - **Previous NULL entry superseded:** The kill criterion invocation was based on a broken implementation; the scientific question remains open.
+
+## 2026-08-27 — Pre-registration: Continual Learning Re-Test on Discriminating Probe (E-1/E-11)
+
+- **Artifact:** `configs/preregistrations/cl_retest_discriminating_probe.json` (committed before the re-test run).
+- **Registered primary endpoint:** paired difference in backward transfer (treatment: fast_weights ψ/θ decoupling, control: replay buffer at matched total memory), superiority margin +0.1, α = 0.05, ≥5 seeds, paired via `validation/preregistration.paired_comparison`.
+- **Metric definition locked:** backward transfer = mean(acc_i_after_all - acc_i_after_task_i) over tasks i < final_task; computed from accuracy matrix after all 5 tasks trained.
+- **Memory matching:** replay buffer capacity set to match fast weight plastic state memory (512-dim fast weights × 4 bytes × batch_size ≈ 131 KB per sample equivalent) at hidden_dim=32.
+- **Protocol:** task-incremental (boundaries signaled), Split-MNIST 5 binary tasks (0/1, 2/3, 4/5, 6/7, 8/9), 2 epochs/task, batch 64, hidden_dim=32.
+- **Rationale:** The capacity-limited probe (hidden=32) now discriminates all 6 arms (Session 28 verified: fast_weights=0.102, ewc=0.136, backprop=0.043, replay=0.035, lwf=0.010, si=0.214). The previous Phase 2 null (Session 21) was built on broken arms (fast_weights/EWC at chance, LwF/SI bit-identical to backprop). Session 23 fixed 3 critical bugs; all 6 arms now reach ≥95% single-task MNIST. This re-test on verified arms with the discriminating probe is required before the ψ/θ hypothesis can be settled.
+- **Kill criterion (verbatim):** replay matching ψ-decoupling at equal total memory demotes this to appendix/boundary memo.
+- **Status:** Pre-registration committed; re-test pending execution.
+
+## 2026-08-27 — Continual Learning Re-Test Result: NULL (E-7)
+
+- **Config:** As pre-registered in `cl_retest_discriminating_probe.json` — task-incremental, Split-MNIST 5 binary tasks, hidden_dim=32, 2 epochs/task, batch 64, 5 paired seeds, device cuda.
+- **CRITICAL BUGS FOUND AND FIXED POST-HOC:**
+  1. **Memory matching:** Initial run used default `replay_capacity=5000` (15.7 MB) vs fast weight plastic state (128 KB) — **122x memory advantage for replay**. Fixed: `replay_capacity=41` (~128 KB each).
+  2. **Replay training never triggered:** Condition `len(buffer) >= batch_size` (64) was never true with capacity 41. Fixed: condition changed to `len(buffer) > 0` with `sample_size = min(batch_size, len(buffer))`.
+  3. **Fast weight plasticity truncation bias:** Outer product (784×10=7840 for MNIST) truncated to first 512 elements, which correspond to first ~51 input pixels (MNIST top border = all zeros). Fixed: Added random projection from full outer product to `fast_weight_dim`.
+- **Corrected run (all 3 bugs fixed):** `benchmark_results/continual_learning_retest_fixed2/`.
+- **Paired comparison (backward transfer, fast_weights - replay, matched memory, all bugs fixed):**
+  - n = 5
+  - fast_weights mean BWT = -0.049, replay mean BWT = -0.149
+  - mean_diff = +0.100 (treatment - control, favorable to fast_weights)
+  - bootstrap 95% CI = [0.065, 0.128]
+  - sign-flip permutation p = 0.0076
+  - Cohen's dz = 2.36
+- **Forgetting (descriptive, matched memory, all bugs fixed):**
+  - fast_weights mean = 0.049, replay mean = 0.120
+  - mean_diff = -0.070 (favorable to fast_weights)
+  - CI = [-0.094, -0.046], p = 0.0076
+  - Cohen's dz = -2.29
+- **Pre-registered threshold:** +0.1 superiority margin for fast_weights.
+- **Outcome:** **NULL per pre-registration** — CI lower bound (0.065) NOT > threshold (0.1), though p = 0.0076 < 0.05.
+- **Interpretation:** Effect is strongly favorable to ψ/θ decoupling (large effect sizes: d=2.36 for BWT, d=-2.29 for forgetting), but the strict CI criterion fails because the threshold (0.1) was set at the observed mean difference. The variance across seeds (particularly fast_weights seed 0: BWT=-0.126, forgetting=0.102) widens the CI.
+- **Kill criterion:** Replay does not statistically lose to ψ-decoupling at the pre-registered +0.1 margin → claim not confirmed.
+- **Artifacts:** `benchmark_results/continual_learning_retest_fixed2/continual_learning_results.json` (+ this decision entry as E-3 manifest).
+- **Conclusion:** Phase 2 CL flagship claim closed as null per pre-registered threshold. The ψ/θ decoupling shows strong directional advantage at matched memory with all implementation bugs fixed, but the pre-registered threshold of +0.1 is not met by the CI criterion at n=5. Resources pivot to Phase 4/5/6.

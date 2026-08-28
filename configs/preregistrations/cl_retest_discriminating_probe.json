@@ -1,0 +1,19 @@
+{
+  "claim": "FastWeightPlasticity (psi/theta decoupling) achieves superior backward transfer compared to replay buffer at matched total memory on Split-MNIST (5 binary tasks) under task-incremental protocol with capacity-limited probe (hidden_dim=32). This re-test uses verified arms (all 6 arms reach >=95% single-task MNIST after bug fixes in Session 23).",
+  "metric": "backward_transfer",
+  "threshold": 0.1,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-08-27",
+  "arms": {
+    "treatment": "fast_weights",
+    "control": "replay"
+  },
+  "protocol": "task_incremental",
+  "memory_matching": "replay buffer capacity matched to fast weight plastic state memory footprint at hidden_dim=32",
+  "paired_structure": true,
+  "epochs_per_task": 2,
+  "batch_size": 64,
+  "hidden_dim": 32,
+  "note": "Re-test of Phase 2 CL flagship after Session 23 arm bug fixes (nudged-target indexing, max_steps=3->30, SI/LwF no-op). Previous null (Session 21) was based on broken arms and is superseded. Probe is capacity-limited (hidden=32, 2 epochs) to discriminate forgetting."
+}

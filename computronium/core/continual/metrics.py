@@ -28,7 +28,7 @@ class CLConfig:
     lr: float = 0.001
 
     # Replay
-    replay_capacity: int = 5000
+    replay_capacity: int = 41  # Matched to fast weight plastic state: 512-dim * 64 batch * 4 bytes = 128 KB ≈ 41 samples * 785 * 4 bytes
 
     # LwF
     lwf_temperature: float = 2.0

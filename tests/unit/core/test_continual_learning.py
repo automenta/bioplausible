@@ -304,10 +304,11 @@ class TestOtherArms:
     """Test EWC, Backprop, Replay, LwF, SI arm implementations."""
 
     def test_ewc_arm_creation(self, device):
-        """Test EWC arm creates correctly with SI tracker."""
-        model, si = create_ewc_arm(device=str(device))
+        """Test EWC arm creates correctly with ElasticConsolidationUpdate."""
+        model, update = create_ewc_arm(device=str(device))
         assert isinstance(model, ContinualJointSystem)
-        assert isinstance(si, SynapticIntelligence)
+        from computronium.core.ontology import ElasticConsolidationUpdate
+        assert isinstance(update, ElasticConsolidationUpdate)
 
     def test_backprop_arm_creation(self, device):
         """Test backprop arm creation."""

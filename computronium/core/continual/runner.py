@@ -144,9 +144,11 @@ def run_continual_learning(
                         buffer.add(x, y, task_id)
 
                     # Replay training
-                    if arm_name == "replay" and len(extra["buffer"]) >= config.batch_size:
+                    if arm_name == "replay" and len(extra["buffer"]) > 0:
                         buffer = extra["buffer"]
-                        rx, ry, rt = buffer.sample(config.batch_size)
+                        # Sample up to batch_size (handles case where buffer < batch_size)
+                        sample_size = min(config.batch_size, len(buffer))
+                        rx, ry, rt = buffer.sample(sample_size)
                         # For replay, we need to train on the replay task
                         # Use the replay sample's task_id
                         replay_task_id = rt[0].item()
@@ -206,6 +208,14 @@ def run_continual_learning(
             if arm_name == "replay":
                 buffer = extra["buffer"]
                 buffer.add(x, y, task_id)
+
+            # Replay training (task-free protocol)
+            if arm_name == "replay" and len(extra["buffer"]) > 0:
+                buffer = extra["buffer"]
+                sample_size = min(config.batch_size, len(buffer))
+                rx, ry, rt = buffer.sample(sample_size)
+                replay_task_id = rt[0].item()
+                model.train_step(rx, ry, task_id=replay_task_id)
 
             # Periodic evaluation
             if batch_idx % (total_batches // CL_NUM_TASKS) == 0:

@@ -40,7 +40,11 @@ class FastWeightPlasticity:
     at episode boundaries.
 
     ψ = fast_weights updated as:
-        A_{t+1} = decay * A_t + lr * outer(pre_t, post_t)
+        A_{t+1} = decay * A_t + lr * Proj(outer(pre_t, post_t))
+
+    Uses a fixed random projection to map the full outer product
+    (input_dim * output_dim) to fast_weight_dim, avoiding the
+    truncation bias that discards informative dimensions.
 
     The fast weights can modulate activity dynamics or be
     consolidated into persistent weights at episode boundaries.
@@ -70,10 +74,34 @@ class FastWeightPlasticity:
             outer_product_scale=outer_product_scale,
         )
         self.config = PlasticityConfig.fast_weights(fast_weight_dim=fast_weight_dim)
+        # Random projection matrices (lazy-initialized per outer product size)
+        self._proj_matrices: dict[int, Tensor] = {}
 
     @property
     def fast_weight_dim(self) -> int:
         return self._config.fast_weight_dim
+
+    def _get_proj_matrix(self, outer_dim: int, device: torch.device) -> Tensor:
+        """Get or create random projection matrix for given outer product dimension.
+
+        Uses a fixed seed per dimension for reproducibility across episodes.
+        """
+        if outer_dim not in self._proj_matrices:
+            # Deterministic random projection for given outer_dim
+            generator = torch.Generator(device=device)
+            generator.manual_seed(outer_dim * 12345 + 42)
+            proj = torch.randn(
+                self.fast_weight_dim, outer_dim,
+                generator=generator, device=device
+            ) / (outer_dim ** 0.5)
+            self._proj_matrices[outer_dim] = proj
+        return self._proj_matrices[outer_dim]
+
+    def to(self, device: torch.device) -> FastWeightPlasticity:
+        """Move projection matrices to device."""
+        for k, v in self._proj_matrices.items():
+            self._proj_matrices[k] = v.to(device)
+        return self
 
     def initial_psi(
         self, context: SystemContext | None, batch_size: int = 1
@@ -95,7 +123,7 @@ class FastWeightPlasticity:
         z: CompositeState,
         context: SystemContext,
     ) -> dict[str, Tensor]:
-        """Compute next plastic state via Hebbian update.
+        """Compute next plastic state via Hebbian update with random projection.
 
         Args:
             psi: Current plastic state with fast_weights.
@@ -107,6 +135,7 @@ class FastWeightPlasticity:
         """
         fast_weights = psi["fast_weights"]
         batch_size = fast_weights.shape[0]
+        device = fast_weights.device
 
         # Decay existing fast weights
         new_fast_weights = self._config.decay * fast_weights
@@ -128,24 +157,18 @@ class FastWeightPlasticity:
             for b in range(batch_size):
                 pre_b = pre[b].flatten()
                 post_b = post[b].flatten()
-                outer = torch.outer(pre_b, post_b).flatten()
+                outer = torch.outer(pre_b, post_b).flatten()  # [input_dim * output_dim]
 
-                # Truncate or pad to fast_weight_dim
-                if outer.shape[0] > self.fast_weight_dim:
-                    outer = outer[: self.fast_weight_dim]
-                elif outer.shape[0] < self.fast_weight_dim:
-                    padding = torch.zeros(
-                        self.fast_weight_dim - outer.shape[0],
-                        device=outer.device,
-                        dtype=outer.dtype,
-                    )
-                    outer = torch.cat([outer, padding])
+                # Project to fast_weight_dim using fixed random projection
+                # (avoids truncation bias that discards informative dimensions)
+                proj = self._get_proj_matrix(outer.shape[0], device)
+                projected = proj @ outer  # [fast_weight_dim]
 
                 new_fast_weights[b] = (
                     new_fast_weights[b]
                     + self._config.learning_rate
                     * self._config.outer_product_scale
-                    * outer
+                    * projected
                 )
 
         return {"fast_weights": new_fast_weights}

@@ -984,6 +984,7 @@ def _finetune_forgetting_baseline(  # noqa: PLR0913 - protocol tuple stays flat
     probe_batches: int = 16,
     feedback: bool = True,
     adapt_entropy_beta: float = 0.0,
+    adapt_temp_end: float | None = None,
 ) -> dict:
     """Baseline (a): sequential θ fine-tuning at the same per-task step budget.
 
