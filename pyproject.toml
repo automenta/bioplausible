@@ -2,12 +2,12 @@
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools.packages.find]
-exclude = ["docs.archive*"]
-include = ["computronium", "computronium.*"]
+[tool.setuptools.package-dir]
+computronium_stability = "computronium/stability"
 
 [tool.setuptools]
 include-package-data = true
+packages = ["computronium", "computronium_stability"]
 
 [project]
 name = "computronium"
