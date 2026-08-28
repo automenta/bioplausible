@@ -125,6 +125,15 @@ class RuleStatePlasticity:
         # Controller hidden state (part of ψ, evolves during episodes)
         self._controller_hidden_dim = controller_hidden
 
+    def to(self, device: torch.device | str) -> RuleStatePlasticity:
+        """Move operator embeddings and controller to device."""
+        device = torch.device(device)
+        if self._operator_embeddings.device != device:
+            self._operator_embeddings.data = self._operator_embeddings.data.to(device)
+        self._controller.to(device)
+        self._device = device
+        return self
+
     @property
     def num_operators(self) -> int:
         return self._config.num_operators
