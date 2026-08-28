@@ -31,9 +31,9 @@ PARALLEL WORKSTREAMS (can overlap):
 
 | Track | State |
 |---|---|
-| `computronium/nn` (CP-C wrapper) | ✅ **COMPLETE** — 26 tests, ruff/pyright clean; **CP-C acceptance verified**: (a) unmodified training script except swapped line; (b) NullPlasticity+backprop bitwise-native fallback. `DECISIONS.md` entry: shipped despite Phase 2 flagship null (E-8 gate was "post-flagship") |
+| `computronium/nn` (CP-C wrapper) | ✅ **COMPLETE** — 26 tests, ruff/pyright clean; **CP-C acceptance verified**: (a) unmodified training script except swapped line; (b) NullPlasticity+backprop bitwise-native fallback. `DECISIONS.md` entry: shipped despite Phase 2 flagship null (E-8 gate was "post-flagship" → interpreted as *a verified Phase 2 outcome exists*, not *a positive one*) |
 | `libraries/computronium_stability` | ✅ **CLEANED UP** — `.venv/`, `build/`, cache dirs removed; source moved to `computronium/stability/` |
-| Phase 3.6 Audits | ✅ **COMPLETE** — 7 audits pass, 34 regression tests |
+| Phase 3.6 Audits | ✅ **COMPLETE** — 8 audits pass (3.6.1–3.6.8), 34 regression tests |
 | Phase 4 (Regime Discovery) | 🟢 **UNBLOCKED** — Awaits execution |
 | Phase 5 (Family-Coverage) | 🟢 **UNBLOCKED** — Awaits coordinate lock |
 | Phase 6 (Frontier Cert) | 🟢 **UNBLOCKED** — Awaits flagship coordinate |
@@ -51,7 +51,9 @@ PARALLEL WORKSTREAMS (can overlap):
 
 **0.0c Retest Protocol:** Fresh E-1 registration → **paired fast_weights vs. replay**, matched memory (`replay_capacity=41`), probe geometry (hidden=32, 2 epochs/task, 5 tasks), ≥5 paired seeds, guard live. **Not** `verify_capacity_limited_cl.py` (arm-discrimination probe).
 
-**Exit:** Null holds → memo + `DECISIONS.md`; signal (CI lower bound ≥ 0.1, or forgetting CI excludes 0) → new E-1 for full run. **No design deps** on CL outcome until this passes.
+**Pre-registered Escalation Logic (E-1):** If retest reproduces Session 28 (forgetting CI excludes 0, d ≈ 2.3), a full run is **auto-triggered**. Metric hierarchy for full run: **co-primary** = (1) BWT CI lower bound ≥ 0.1, (2) Forgetting CI excludes 0. Claim scope: *"ψ/θ decoupling reduces forgetting vs. matched-memory replay."* Power: observed paired SD ~0.025 → BWT threshold needs mean > 0.10 with **12–20 paired seeds** (half-width ∝ 1/√n).
+
+**Exit:** Null holds → memo + `DECISIONS.md`; signal (co-primary met) → new E-1 for full run powered as above. **No design deps** on CL outcome until this passes.
 
 ### 0.1 Remove Fractured `libraries/computronium_stability/` ✅ **DONE**
 - `rm -rf libraries/computronium_stability/.venv/ build/ .pytest_cache/ .ruff_cache/` ✅
@@ -162,6 +164,7 @@ computronium/
 - **Benefit:** External users import state types without joint system internals
 - **Protocol:** `TransitionFn` in `transitions.py` for duck-typing
 - **Update imports** in: stability modules, campaign, pipeline, plasticity, joint, profiling
+- **Verification:** Re-run standalone wheel tests (`tests/unit/core/test_stability_standalone.py` against built wheel) after 2.1 commit to catch `computronium.state` hard-imports.
 
 ### 2.2 Ontology Primitives → `computronium/ontology/` (After Phase 1.1)
 Extract from `core/ontology.py` (single 1500-line file) to per-axis modules:
@@ -182,6 +185,8 @@ computronium/
 - **Cross-axis validation** (`SystemConfig.validate()`) stays in `core/ontology.py` as internal
 - **Config-only re-export** available at `from computronium.config import *` (thin wrapper over ontology config classes only)
 - **Check for import cycles:** `System` generics reference configs and vice versa — ensure forward refs or lazy imports
+- **Import cycle strategy (before libcst sweep):** `System[ConfigT]` uses `typing.TYPE_CHECKING` for config imports; config classes use `from __future__ import annotations` + string annotations for `System` references. No runtime import between `system.py` and per-axis modules. Verify with `pyright --verifytypes computronium` after sweep.
+- **CI gate:** Add job `grep -r "computronium.core.ontology import" --include="*.py" || exit 1` to CI (runs on every PR during sweep).
 
 ### 2.3 Joint System Facade (`computronium/core/joint/__init__.py`)
 Export only the composition API:
@@ -233,19 +238,20 @@ class BenchmarkRunner:  # base class enforcing contract
 ### 3.5 PR-8 Export Pipeline Reuse
 - Single `export_model(model, formats=["onnx", "ternary", "int8"])` in `computronium/deployment.py`
 - Wire into Phase 3 memory-wall artifacts + Phase 5 benchmark export
+- **`torch.jit` → `torch.export` migration** (Session 32): Replace `torch.jit.script`/`torch.jit.trace` with `torch.export` in `computronium/deployment.py`; update format keys `"torchscript"` → `"pt2"`, output `model_ts.pt` → `model.pt2`; suppress dynamo warnings with `dynamo=False`.
 
 ---
 
-## Phase 4 — Phase 4/5/6 Execution Prep (Week 4+)
+## Phase 4 — Phase 4/5/6 Execution Prep (Week 4+) — **CPU/GPU ONLY**
 
-### 4.1 Phase 4 — Regime Discovery
+### 4.1 Phase 4 — Regime Discovery (CPU/GPU)
 - **4.1 Prior-Art Gate:** Literature check (mixed credit, hypernetworks, MoE) → `DECISIONS.md`
 - **4.2 Bandit Router:** Generalize `RoutingPlasticity` to route **learning rules** per layer; reward = energy descent rate + windowed growth + validation improvement
-- **4.3 Memristive IR-Drop** (simulation): Sweep IR-drop on `MemristiveSubstrate`; test `SpectralConstrainedUpdate` + `EnergyMinimization` + `SubstrateCoupledPlasticity`
-- **4.4 Photonic Epistemology** (simulation): `OpticalSubstrate` × credit families; test settling-energy preference
+- **4.3 Memristive IR-Drop** — **DEFERRED** (simulation requires `MemristiveSubstrate`; not CPU/GPU/universal)
+- **4.4 Photonic Epistemology** — **DEFERRED** (simulation requires `OpticalSubstrate`; not CPU/GPU/universal)
 - **4.5 Campaign Hygiene:** Enforce `simulated/estimated/measured` labeling; `ProposalObjective` non-accuracy ranking
 
-### 4.2 Phase 5 — Family-Coverage Benchmark
+### 4.2 Phase 5 — Family-Coverage Benchmark (CPU/GPU)
 - **5.1 Coordinate Lock:** Lock by rule-family coverage (every credit×update + substrate variants); ≥30 coords; freeze in `DECISIONS.md`
 - **5.2 Resource-Vector Runner:** Full `ResourceUsage` per coord/seed; equal GPU-hours (PR-6); ≥5 seeds paired
 - **5.3 Dynamical Phylogeny:** Cluster by settling time, windowed growth, gate entropy, ρ via `analysis/genealogy.py`
@@ -301,10 +307,17 @@ class BenchmarkRunner:  # base class enforcing contract
 - **Publishing**: `uv pip install -e .[stability]` → `import computronium_stability` works ✅
 
 ### 🔧 FIXED FROM REVIEW (Pre-S1)
-- **Phase 0.0 rewritten**: Split into 0.0a (Reconcile), 0.0b (Pre-flight), 0.0c (Retest with correct paired protocol)
+- **Phase 0.0 rewritten**: Split into 0.0a (Reconcile), 0.0b (Pre-flight), 0.0c (Retest with correct paired protocol + co-primary metrics + power calc)
 - **ResourceUsage moved**: `computronium/resources.py` (neutral home); stability re-exports
 - **Ontology vs Config**: Renamed `computronium/config/` → `computronium/ontology/`; thin `config/` wrapper for config-only imports
-- **Standalone wheel**: Guard uses duck-typed `CompositeState`; test suite runs against built wheel
+- **Standalone wheel**: Guard uses duck-typed `CompositeState`; test suite runs against **built wheel** (`uv build && pip install dist/*.whl`)
+- **Import cycle strategy**: `TYPE_CHECKING` + string annotations for `System`/`Config` cycles; CI grep gate
+- **Wheel test re-run**: After 2.1 commit, re-run standalone tests against built wheel
+
+### ⚠️ 0.0a RECONCILE PENDING (Do First — Zero Compute)
+- §2.5 in tracker still shows superseded +0.0006/p=1.0 numbers
+- Authoritative artifact: `continual_learning_retest_fixed2/` (+0.100, p=0.0076)
+- Action: Update §2.5 numbers/artifact path; log in `DECISIONS.md`
 
 ### 🔄 NEXT STEPS (Phase 2)
 1. **Phase 2.1**: Extract state types to `computronium/state/`
