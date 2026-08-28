@@ -1858,7 +1858,7 @@ class FeedforwardGeometry(nn.Module):
         super().__init__()
         self.config = config
         self._layers = nn.ModuleList(layers) if layers else nn.ModuleList()
-        if not self._layers and config.hidden_dims:
+        if not self._layers:
             self._build_layers()
 
     def _build_layers(self) -> None:
@@ -2048,12 +2048,14 @@ class RecurrentGeometry(nn.Module):
             if isinstance(layer, nn.Linear):
                 h = op(h, layer.weight)
                 if layer.bias is not None:
-                    h += layer.bias
+                    # Out-of-place: in-place adds break autograd
+                    h = h + layer.bias
             else:
                 h = layer(h)
             # Apply recurrent connection after each hidden layer (except output)
             if self._recurrent_weight is not None and i < len(self._layers) - 2:
-                h += op(h, self._recurrent_weight)
+                # Out-of-place: in-place adds break autograd
+                h = h + op(h, self._recurrent_weight)
         return h
 
     def route(self, activations: Tensor) -> Tensor:
@@ -2065,7 +2067,8 @@ class RecurrentGeometry(nn.Module):
         if self._recurrent_weight is not None:
             # Hidden state should match recurrent weight dimensions
             if h.shape[-1] == self._recurrent_weight.shape[0]:
-                h @= self._recurrent_weight.T
+                # Out-of-place: in-place matmul breaks autograd
+                h = h @ self._recurrent_weight.T
             else:
                 # Activations are output dim; we can't apply recurrent weight
                 # This happens when route is called on output instead of hidden state
@@ -2586,7 +2589,7 @@ class ThermodynamicContrast:
                 nudged_post = nudged_acts[l + 1]
                 nudged_corr = nudged_pre.T @ nudged_post
 
-                # Contrastive gradient: (free - nudged) / β
+                # Contrastive gradient: (free - nudged) / β (standard EqProp)
                 contrast = (
                     (free_corr - nudged_corr) / self.config.beta / free_pre.shape[0]
                 )
@@ -3986,7 +3989,11 @@ class EnergyMinimizationDynamics:
             else:
                 # Output layer: last feedforward weight (hidden -> output)
                 weight_idx = num_ff_weights - 1
-                h_prev = acts[i - 1]  # Last hidden layer
+                # For linear network (no hidden layers), h_prev should be input
+                if num_hidden == 0:
+                    h_prev = all_acts[0]
+                else:
+                    h_prev = acts[i - 1]  # Last hidden layer
 
             if weight_idx < num_ff_weights:
                 W = params[weight_names[weight_idx]]
