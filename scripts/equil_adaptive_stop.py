@@ -155,7 +155,9 @@ def _report(
 
     print()
     if best:
-        print(f"BEST: threshold={best[0]:.0e}, start={best[1]}  (speedup={best_speedup:.2f}x)")
+        print(
+            f"BEST: threshold={best[0]:.0e}, start={best[1]}  (speedup={best_speedup:.2f}x)"
+        )
     else:
         print("NO WINNING CONFIGURATION")
 

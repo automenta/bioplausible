@@ -374,7 +374,9 @@ class SplitMNIST(DomainTask):
         self._val_loader = None
         self._test_loader = None
 
-    def get_all_task_loaders(self, split: TaskSplit = TaskSplit.TEST) -> list[DataLoader]:
+    def get_all_task_loaders(
+        self, split: TaskSplit = TaskSplit.TEST
+    ) -> list[DataLoader]:
         """Get dataloaders for all 5 tasks (useful for evaluation)."""
         loaders = []
         for task_id in range(5):

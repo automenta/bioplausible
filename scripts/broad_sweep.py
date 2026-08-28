@@ -232,7 +232,9 @@ def _match_param_budget(
 
     def _count(width: int) -> int:
         return estimate_param_count(
-            model, {**config, width_key: width}, input_dim=input_dim,
+            model,
+            {**config, width_key: width},
+            input_dim=input_dim,
             output_dim=output_dim,
         )
 
@@ -580,8 +582,10 @@ def _forward_probe_ok(
         spatial = getattr(m, "input_format", "flat") == "spatial"
         dev = torch.device(device)
         with torch.no_grad():
-            sample = _build_spatial_dummy(m, dev) if spatial else torch.zeros(
-                1, int(input_dim), device=dev
+            sample = (
+                _build_spatial_dummy(m, dev)
+                if spatial
+                else torch.zeros(1, int(input_dim), device=dev)
             )
             m(sample)
         if propagator is not None:
@@ -691,13 +695,11 @@ def _probe_runs(
                 probe_i,
                 exc,
             )
-            runs.append(
-                {
-                    "ok": False,
-                    "error": str(exc),
-                    "defects": ["nan_divergence"] if "diverged" in str(exc) else [],
-                }
-            )
+            runs.append({
+                "ok": False,
+                "error": str(exc),
+                "defects": ["nan_divergence"] if "diverged" in str(exc) else [],
+            })
             continue
         # NaN divergence that slipped past the trainer guard (defense in depth):
         # a non-finite loss means the run is not a real result — flag it as a
@@ -807,9 +809,7 @@ def broad_sweep(
     skipped: dict[str, list[str]] = {}
 
     for family in requested:
-        models = _models_in_family(
-            family, domain=domain, include_broken=include_broken
-        )
+        models = _models_in_family(family, domain=domain, include_broken=include_broken)
         if exclude_models:
             models = [m for m in models if m not in exclude_models]
         if not include_broken:

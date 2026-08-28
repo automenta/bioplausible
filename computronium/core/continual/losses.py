@@ -25,7 +25,13 @@ class LwFLoss(nn.Module):
             p.requires_grad_(False)
         self.prev_model.eval()
 
-    def forward(self, logits: Tensor, targets: Tensor, task_id: int, prev_logits: Tensor | None = None) -> Tensor:
+    def forward(
+        self,
+        logits: Tensor,
+        targets: Tensor,
+        task_id: int,
+        prev_logits: Tensor | None = None,
+    ) -> Tensor:
         """Compute loss: CE on current task classes + distillation from previous model.
 
         Args:
@@ -69,9 +75,8 @@ class LwFLoss(nn.Module):
         soft_logits = F.log_softmax(
             logits[:, :num_old_classes] / self.temperature, dim=1
         )
-        distill = (
-            F.kl_div(soft_logits, soft_targets, reduction="batchmean")
-            * (self.temperature**2)
+        distill = F.kl_div(soft_logits, soft_targets, reduction="batchmean") * (
+            self.temperature**2
         )
         return self.lambda_lwf * distill
 
@@ -106,10 +111,11 @@ class SynapticIntelligence:
 
     def accumulate_pseudo_grads(self, pseudo_grads: list[Tensor], geometry) -> None:
         """Accumulate pseudo-gradients for importance computation.
-        
+
         Matches pseudo-gradients to parameters by learnable-weight order.
         """
         from computronium.core.ontology import _learnable_weight_names
+
         param_dict = dict(self.model.named_parameters())
         param_names = _learnable_weight_names(param_dict)
         for name, grad in zip(param_names, pseudo_grads):

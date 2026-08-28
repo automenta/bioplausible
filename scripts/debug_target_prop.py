@@ -6,6 +6,7 @@ Checks:
 2. Inverse mapping reduces cycle error
 3. Multiple target steps improve target quality
 """
+
 import torch
 from torch import nn
 from computronium.zoo.models.target_prop import DifferenceTargetProp
@@ -14,8 +15,12 @@ from computronium.zoo.models.target_prop import DifferenceTargetProp
 def debug_target_prop(steps: int = 10, lr: float = 0.001, target_lr: float = 0.1):
     """Run target prop and log target propagation + inverse quality."""
     model = DifferenceTargetProp(
-        input_dim=784, hidden_dim=128, output_dim=10,
-        num_layers=3, learning_rate=lr, target_lr=target_lr,
+        input_dim=784,
+        hidden_dim=128,
+        output_dim=10,
+        num_layers=3,
+        learning_rate=lr,
+        target_lr=target_lr,
     )
 
     x = torch.randn(32, 784)
@@ -44,7 +49,14 @@ def debug_target_prop(steps: int = 10, lr: float = 0.001, target_lr: float = 0.1
 
 if __name__ == "__main__":
     import sys
-    steps = int(sys.argv[sys.argv.index("--steps") + 1]) if "--steps" in sys.argv else 10
+
+    steps = (
+        int(sys.argv[sys.argv.index("--steps") + 1]) if "--steps" in sys.argv else 10
+    )
     lr = float(sys.argv[sys.argv.index("--lr") + 1]) if "--lr" in sys.argv else 0.001
-    target_lr = float(sys.argv[sys.argv.index("--target_lr") + 1]) if "--target_lr" in sys.argv else 0.1
+    target_lr = (
+        float(sys.argv[sys.argv.index("--target_lr") + 1])
+        if "--target_lr" in sys.argv
+        else 0.1
+    )
     debug_target_prop(steps=steps, lr=lr, target_lr=target_lr)

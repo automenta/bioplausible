@@ -36,9 +36,17 @@ from computronium.core.system_trainer import (
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Continual Learning Flagship (Phase 2)")
-    parser.add_argument("--arms", nargs="+", default=["fast_weights", "ewc", "backprop", "replay", "lwf", "si"])
-    parser.add_argument("--protocols", nargs="+", default=["task_incremental", "task_free"])
+    parser = argparse.ArgumentParser(
+        description="Continual Learning Flagship (Phase 2)"
+    )
+    parser.add_argument(
+        "--arms",
+        nargs="+",
+        default=["fast_weights", "ewc", "backprop", "replay", "lwf", "si"],
+    )
+    parser.add_argument(
+        "--protocols", nargs="+", default=["task_incremental", "task_free"]
+    )
     parser.add_argument("--output-dir", default="benchmark_results/continual_learning")
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--batch-size", type=int, default=64)

@@ -349,7 +349,10 @@ def main(argv: list[str] | None = None) -> int:
     generator = FailureManifestoGenerator(args.db)
     if args.z3_memo or args.cl_memo:
         out = generator.generate_with_memos(
-            args.output, model=args.model, z3=args.z3_memo, continual_learning=args.cl_memo
+            args.output,
+            model=args.model,
+            z3=args.z3_memo,
+            continual_learning=args.cl_memo,
         )
     else:
         out = generator.generate(args.output, model=args.model)

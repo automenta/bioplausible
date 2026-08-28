@@ -13,54 +13,75 @@ def extract_lock_tests(filepath: Path) -> dict[str, list[str]]:
     content = filepath.read_text()
 
     # Pattern to match test functions and classes
-    test_pattern = r'(?:^    def (test_\w+)\(.*\):|^class (Test\w+):)'
+    test_pattern = r"(?:^    def (test_\w+)\(.*\):|^class (Test\w+):)"
     lock_labels = {
-        'test_l1': 'L1',
-        'test_l2': 'L2',
-        'test_l3': 'L3',
-        'test_l4': 'L4',
-        'test_l5': 'L5',
-        'test_l6': 'L6',
-        'test_l7': 'L7',
-        'test_l0': 'L0',
-        'test_s_': 'S',
-        'test_d_': 'D',
-        'test_c_': 'C',
-        'test_u_': 'U',
-        'test_u_': 'U',
+        "test_l1": "L1",
+        "test_l2": "L2",
+        "test_l3": "L3",
+        "test_l4": "L4",
+        "test_l5": "L5",
+        "test_l6": "L6",
+        "test_l7": "L7",
+        "test_l0": "L0",
+        "test_s_": "S",
+        "test_d_": "D",
+        "test_c_": "C",
+        "test_u_": "U",
+        "test_u_": "U",
     }
 
     # Also check for class-based tests
     class_lock_map = {
-        'TestL2OrthogonalityLock': 'L2',
-        'TestL3LocalityLock': 'L3',
-        'TestL4LyapunovLock': 'L4',
-        'TestL5DeterminismLock': 'L5',  # parameterized
-        'TestL6': 'L6',
-        'TestU_EuclideanProperties': 'U',
-        'TestC_BackpropCreditProperties': 'C',
-        'TestC_SurrogateLocks': 'C',
-        'TestC_TemporalTraceSTDP': 'C',
-        'TestU_StepProperties': 'U',
+        "TestL2OrthogonalityLock": "L2",
+        "TestL3LocalityLock": "L3",
+        "TestL4LyapunovLock": "L4",
+        "TestL5DeterminismLock": "L5",  # parameterized
+        "TestL6": "L6",
+        "TestU_EuclideanProperties": "U",
+        "TestC_BackpropCreditProperties": "C",
+        "TestC_SurrogateLocks": "C",
+        "TestC_TemporalTraceSTDP": "C",
+        "TestU_StepProperties": "U",
     }
 
-    locks = {label: [] for label in ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'S', 'G', 'D', 'C', 'U']}
+    locks = {
+        label: []
+        for label in [
+            "L0",
+            "L1",
+            "L2",
+            "L3",
+            "L4",
+            "L5",
+            "L6",
+            "L7",
+            "S",
+            "G",
+            "D",
+            "C",
+            "U",
+        ]
+    }
 
     # Find class-based tests
-    for match in re.finditer(r'^class (\w+):', content, re.MULTILINE):
+    for match in re.finditer(r"^class (\w+):", content, re.MULTILINE):
         class_name = match.group(1)
         if class_name in class_lock_map:
             lock = class_lock_map[class_name]
             # Find methods in this class
             class_start = match.end()
-            next_class = re.search(r'^class \w+:', content[class_start:], re.MULTILINE)
+            next_class = re.search(r"^class \w+:", content[class_start:], re.MULTILINE)
             class_end = class_start + next_class.start() if next_class else len(content)
             class_content = content[class_start:class_end]
-            for method_match in re.finditer(r'^    def (test_\w+)\(.*?\):', class_content, re.MULTILINE | re.DOTALL):
+            for method_match in re.finditer(
+                r"^    def (test_\w+)\(.*?\):", class_content, re.MULTILINE | re.DOTALL
+            ):
                 locks[lock].append(f"{class_name}::{method_match.group(1)}")
 
     # Find standalone test functions
-    for match in re.finditer(r'^def (test_\w+)\(.*?\):', content, re.MULTILINE | re.DOTALL):
+    for match in re.finditer(
+        r"^def (test_\w+)\(.*?\):", content, re.MULTILINE | re.DOTALL
+    ):
         test_name = match.group(1)
         # Determine lock from name
         assigned = False
@@ -70,7 +91,7 @@ def extract_lock_tests(filepath: Path) -> dict[str, list[str]]:
                 assigned = True
                 break
         if not assigned:
-            locks.setdefault('Other', []).append(test_name)
+            locks.setdefault("Other", []).append(test_name)
 
     return locks
 
@@ -85,12 +106,26 @@ def generate_matrix(locks: dict[str, list[str]]) -> str:
     ]
 
     total_tests = 0
-    for label in ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'S', 'G', 'D', 'C', 'U']:
+    for label in [
+        "L0",
+        "L1",
+        "L2",
+        "L3",
+        "L4",
+        "L5",
+        "L6",
+        "L7",
+        "S",
+        "G",
+        "D",
+        "C",
+        "U",
+    ]:
         tests = locks.get(label, [])
         count = len(tests)
         total_tests += count
         status = "✅" if count > 0 else "❌"
-        test_list = ", ".join(tests[:3]) + (f" +{count-3} more" if count > 3 else "")
+        test_list = ", ".join(tests[:3]) + (f" +{count - 3} more" if count > 3 else "")
         lines.append(f"| {label} | {test_list} | {count} | {status} |")
 
     lines.extend([
@@ -132,7 +167,21 @@ def main():
     print(f"Total tests: {sum(len(v) for v in locks.values())}")
 
     # Print summary
-    for label in ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'S', 'G', 'D', 'C', 'U']:
+    for label in [
+        "L0",
+        "L1",
+        "L2",
+        "L3",
+        "L4",
+        "L5",
+        "L6",
+        "L7",
+        "S",
+        "G",
+        "D",
+        "C",
+        "U",
+    ]:
         count = len(locks.get(label, []))
         if count > 0:
             print(f"  {label}: {count} tests")

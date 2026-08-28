@@ -532,7 +532,11 @@ All items done. Exit criteria met:
 ## Ongoing / Pull-Based (E-8 waiting-period queue)
 
 - **CP-B Rocq:** close diagonal-case plumbing; ψ-selection coverage proposition; contraction-vs-plasticity statement. Blocked-periods only; hard-stop policy unchanged. Consumer: post-system theory paper only.
-- **Drop-in PyTorch wrapper (`torch.nn.ComputroniumLinear`):** DEFERRED, not dropped. `computronium-stability` (Phase 1.2) holds adoption-artifact primacy (consumed by Phases 2.3, 4.2, 6.2); wrapper multiplies audience but nothing on-plan. Valid E-8 candidate once Phase 2 flagship exists. Acceptance per RESEARCH3 CP-C: unmodified training script except swapped line; NullPlasticity+backprop falls back bit-for-bit native.
+- **ComputroniumLinear (CP-C) — ✅ COMPLETE (Session 34):** Drop-in `torch.nn.ComputroniumLinear` wrapper completed at `computronium/nn/`. All acceptance criteria met:
+  - ✅ `__init__.py` exports complete (ComputroniumLinear, ComputroniumLinearConfig, CreditRule, CreditRuleConfig, FastWeightPlasticity, NullPlasticity, PlasticityConfig, PlasticityType, create_plasticity, replace_linear_with_computronium)
+  - ✅ Tests written and passing (26 tests): backprop bit-for-bit, FA diff, Hebbian local, fast_weights ψ, training-loop swap, device management (CPU/CUDA), state_dict save/load, module replacement utility, config dataclass, extra_repr
+  - ✅ ruff format/check clean, pyright 0 errors (warnings only from autograd typing), pytest green
+  - ✅ Acceptance per RESEARCH3 CP-C verified: unmodified training script except swapped line; NullPlasticity+backprop falls back bit-for-bit native
 - **PR-3b procurement:** continues at own latency; measured-tier energy claims arrive when board does.
 
 ---
@@ -562,6 +566,7 @@ E-1 three-rung ladder · E-2 timeboxed tuning (≤3 rounds) · E-3 reproducibili
 | Resource instrumentation (PR-3a) | `core/profiling.py::ResourceUsage` + `measure_suite_resources` |
 | Pre-registration kit (PR-4) | `validation/preregistration.py`, `configs/preregistrations/` |
 | Fairness contract (PR-6) | `docs/evaluation_fairness_contract.md` |
+| ComputroniumLinear (CP-C) | `computronium/nn/` |
 | Campaign stack (PR-9) | `autoscientist_campaigns/commission.py`, `core/campaign/evaluation.py` |
 | Phylogeny / genealogy | `analysis/genealogy.py` |
 | Pareto frontier | `analysis/pareto.py`, `core/stability/frontier.py` |
@@ -643,6 +648,34 @@ Writing begins only after system is complete and tested. Candidate artifacts, in
 ---
 
 ## Session Log (reverse-chronological)
+
+### Session 34 — COMPLETED (2026-08-28)
+**ComputroniumLinear (CP-C) — DROP-IN nn.Linear WRAPPER COMPLETE:**
+
+**Code Quality Fixes:**
+- ✅ Fixed all ruff linting errors in `computronium/nn/` (module.py, rules.py, plasticity.py):
+  - E501 line length, RUF009 dataclass defaults with factory, PLR0913/PLR0917 too many args, PLR6104 augmented assignment, PLW0642 self reassignment, ARG001/ARG002 unused args, S101 assert statements, TRY003 long ValueError messages
+  - Added appropriate `# noqa` comments where needed for autograd function signatures and interface methods
+- ✅ pyright strict mode: 0 errors (warnings only from autograd typing limitations)
+- ✅ ruff format/check clean across `computronium/nn/` and `tests/unit/nn/`
+
+**Tests Written & Passing (26 tests in `tests/unit/nn/test_computronium_linear.py`):**
+- Backprop bit-for-bit parity with `nn.Linear` (forward + backward)
+- FA differs from backprop (different input gradients, same weight gradients)
+- FA feedback matrix deterministic per layer dims
+- Hebbian: no upstream gradient propagation, local weight updates
+- EqProp: gradients scaled by 1/β
+- Fast weights: ψ initialization, step updates, output modulation, reset_psi
+- Device management: to(), cuda(), cpu() with plasticity internal tensors
+- Training loop integration: backprop, FA, fast_weights with SGD optimizer
+- Module replacement utility: replace_all_linear, preserves weights, nested modules
+- Config dataclass: defaults and custom config
+- Extra repr includes rule and plasticity
+- State dict save/load compatibility
+
+**Acceptance Criteria Met (per RESEARCH3 CP-C):**
+- ✅ Unmodified training script except swapped line
+- ✅ NullPlasticity + Backprop falls back bit-for-bit native
 
 ### Session 33 — COMPLETED (2026-08-28)
 **Phase 3.6.7 Z3 Re-verification — PARITY LIMITATION OBSERVED (CAUSE NOT YET DETERMINED):**

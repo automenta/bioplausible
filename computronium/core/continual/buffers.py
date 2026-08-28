@@ -13,7 +13,9 @@ class ReplayBuffer:
     to maintain balanced representation across seen tasks.
     """
 
-    def __init__(self, capacity: int, input_shape: tuple[int, ...], device: torch.device):
+    def __init__(
+        self, capacity: int, input_shape: tuple[int, ...], device: torch.device
+    ):
         self.capacity = capacity
         self.input_shape = input_shape
         self.device = device
@@ -30,7 +32,9 @@ class ReplayBuffer:
             if len(self.buffer) >= self.capacity:
                 # Evict from the task with most samples
                 if self.task_counts:
-                    evict_task = max(self.task_counts.keys(), key=lambda k: self.task_counts[k])
+                    evict_task = max(
+                        self.task_counts.keys(), key=lambda k: self.task_counts[k]
+                    )
                     # Find and remove one sample from that task
                     for idx, (_, _, t) in enumerate(self.buffer):
                         if t == evict_task:
@@ -62,7 +66,10 @@ class ReplayBuffer:
         if not self.buffer:
             return 0
         sample = self.buffer[0]
-        per_sample = sample[0].numel() * sample[0].element_size() + sample[1].numel() * sample[1].element_size()
+        per_sample = (
+            sample[0].numel() * sample[0].element_size()
+            + sample[1].numel() * sample[1].element_size()
+        )
         return per_sample * len(self.buffer)
 
 

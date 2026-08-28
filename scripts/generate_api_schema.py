@@ -46,29 +46,30 @@ def _get_type_repr(annotation: Any) -> str:
     """Get string representation of a type annotation."""
     if annotation is inspect.Parameter.empty or annotation is inspect.Signature.empty:
         return "Any"
-    
+
     if hasattr(annotation, "__origin__"):
         # Generic types like list[int], dict[str, int], etc.
         origin = getattr(annotation, "__origin__", None)
         args = getattr(annotation, "__args__", ())
         if origin is None:
             return str(annotation)
-        
+
         origin_name = getattr(origin, "__name__", str(origin))
         if args:
             arg_strs = [_get_type_repr(a) for a in args]
             return f"{origin_name}[{', '.join(arg_strs)}]"
         return origin_name
-    
+
     if hasattr(annotation, "__name__"):
         return annotation.__name__
-    
+
     return str(annotation)
 
 
 def _extract_dataclass_fields(cls: type) -> list[dict]:
     """Extract field information from a dataclass."""
     from dataclasses import MISSING
+
     result = []
     for field in fields(cls):
         default_val = field.default
@@ -92,12 +93,12 @@ def _extract_function_signature(obj: Any) -> dict:
         sig = inspect.signature(obj)
         try:
             type_hints = get_type_hints(obj)
-        except (NameError, AttributeError):
+        except NameError, AttributeError:
             # Handle forward references that can't be resolved
             type_hints = {}
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return {"error": "Could not inspect signature"}
-    
+
     params = []
     for name, param in sig.parameters.items():
         if name == "self":
@@ -110,9 +111,9 @@ def _extract_function_signature(obj: Any) -> dict:
         if param.default is not param.empty:
             param_info["default"] = param.default
         params.append(param_info)
-    
+
     return_type = _get_type_repr(type_hints.get("return", sig.return_annotation))
-    
+
     return {
         "params": params,
         "return_type": return_type,
@@ -131,24 +132,26 @@ def _extract_class_info(cls: type) -> dict:
         "methods": {},
         "fields": [],
     }
-    
+
     # Dataclass fields
     if info["is_dataclass"]:
         info["fields"] = _extract_dataclass_fields(cls)
-    
+
     # Methods
     for name, obj in inspect.getmembers(cls, predicate=inspect.isfunction):
         if name.startswith("_"):
             continue
         info["methods"][name] = _extract_function_signature(obj)
-    
+
     # Class methods
-    for name, obj in inspect.getmembers(cls, predicate=lambda x: isinstance(x, classmethod)):
+    for name, obj in inspect.getmembers(
+        cls, predicate=lambda x: isinstance(x, classmethod)
+    ):
         if name.startswith("_"):
             continue
         info["methods"][name] = _extract_function_signature(obj.__func__)
         info["methods"][name]["is_classmethod"] = True
-    
+
     return info
 
 
@@ -160,14 +163,14 @@ def _extract_protocol_info(proto: type) -> dict:
         "docstring": inspect.getdoc(proto) or "",
         "methods": {},
     }
-    
+
     for name in getattr(proto, "__protocol_attrs__", []):
         if name.startswith("_"):
             continue
         method = getattr(proto, name, None)
         if method:
             info["methods"][name] = _extract_function_signature(method)
-    
+
     return info
 
 
@@ -177,7 +180,7 @@ def _scan_module(module_name: str) -> dict:
         module = __import__(module_name, fromlist=["*"])
     except ImportError as e:
         return {"error": str(e)}
-    
+
     result = {
         "module": module_name,
         "classes": {},
@@ -186,52 +189,52 @@ def _scan_module(module_name: str) -> dict:
         "type_aliases": {},
         "constants": {},
     }
-    
+
     # Get __all__ if defined
     all_names = getattr(module, "__all__", None)
-    
+
     for name in dir(module):
         if name.startswith("_"):
             continue
         if all_names is not None and name not in all_names:
             continue
-        
+
         obj = getattr(module, name)
-        
+
         # Classes
         if inspect.isclass(obj):
             if obj.__module__ != module_name:
                 continue  # Skip imported classes
-            
+
             # Check if it's a Protocol
             if hasattr(obj, "__protocol_attrs__"):
                 result["protocols"][name] = _extract_protocol_info(obj)
             else:
                 result["classes"][name] = _extract_class_info(obj)
-        
+
         # Functions
         elif inspect.isfunction(obj):
             if obj.__module__ != module_name:
                 continue
             result["functions"][name] = _extract_function_signature(obj)
-        
+
         # Type aliases (variables with type annotations)
         elif isinstance(obj, type) and hasattr(obj, "__origin__"):
             result["type_aliases"][name] = _get_type_repr(obj)
-    
+
     return result
 
 
 def generate_schema(output_path: Path, modules: list[str] | None = None):
     """Generate the complete API schema."""
     modules = modules or PUBLIC_MODULES
-    
+
     schema = {
         "version": "1.0",
         "generated_from": "computronium",
         "modules": {},
     }
-    
+
     for module_name in modules:
         print(f"Scanning {module_name}...")
         module_data = _scan_module(module_name)
@@ -239,19 +242,25 @@ def generate_schema(output_path: Path, modules: list[str] | None = None):
             schema["modules"][module_name] = module_data
         else:
             print(f"  Warning: {module_data['error']}")
-    
+
     # Write output
     with output_path.open("w") as f:
         json.dump(schema, f, indent=2)
-    
+
     print(f"\nSchema written to {output_path}")
     print(f"Modules scanned: {len(schema['modules'])}")
-    
+
     # Print summary
     total_classes = sum(len(m.get("classes", {})) for m in schema["modules"].values())
-    total_functions = sum(len(m.get("functions", {})) for m in schema["modules"].values())
-    total_protocols = sum(len(m.get("protocols", {})) for m in schema["modules"].values())
-    print(f"Classes: {total_classes}, Functions: {total_functions}, Protocols: {total_protocols}")
+    total_functions = sum(
+        len(m.get("functions", {})) for m in schema["modules"].values()
+    )
+    total_protocols = sum(
+        len(m.get("protocols", {})) for m in schema["modules"].values()
+    )
+    print(
+        f"Classes: {total_classes}, Functions: {total_functions}, Protocols: {total_protocols}"
+    )
 
 
 def main():
@@ -266,9 +275,9 @@ def main():
         nargs="+",
         help="Specific modules to scan (default: all public modules)",
     )
-    
+
     args = parser.parse_args()
-    
+
     generate_schema(Path(args.output), args.modules)
 
 

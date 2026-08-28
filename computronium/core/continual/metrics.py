@@ -128,7 +128,9 @@ def compute_cl_metrics(
     if len(metrics.accuracy_matrix) > 0 and current_task > 0:
         bwt_sum = 0.0
         for i in range(current_task):
-            if i < len(metrics.accuracy_matrix) and current_task < len(metrics.accuracy_matrix[i]):
+            if i < len(metrics.accuracy_matrix) and current_task < len(
+                metrics.accuracy_matrix[i]
+            ):
                 acc_after_i = metrics.accuracy_matrix[i][i]
                 acc_after_all = metrics.accuracy_matrix[i][current_task]
                 bwt_sum += acc_after_all - acc_after_i
@@ -141,11 +143,13 @@ def compute_cl_metrics(
             if i < len(metrics.accuracy_matrix):
                 row = metrics.accuracy_matrix[i]
                 if len(row) > current_task:
-                    max_acc = max(row[:current_task + 1])
+                    max_acc = max(row[: current_task + 1])
                     final_acc = row[current_task]
                     forgetting.append(max_acc - final_acc)
         metrics.forgetting = forgetting
-        metrics.avg_forgetting = sum(forgetting) / len(forgetting) if forgetting else 0.0
+        metrics.avg_forgetting = (
+            sum(forgetting) / len(forgetting) if forgetting else 0.0
+        )
 
     return metrics
 

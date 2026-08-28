@@ -136,7 +136,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--arms", default="fast_weights,ewc,backprop,replay,lwf,si")
     parser.add_argument("--seeds", type=int, default=3)
     parser.add_argument("--epochs", type=int, default=5)
-    parser.add_argument("--hidden_dim", type=int, default=32, help="Hidden dimension (32-64 for capacity-limited probe)")
+    parser.add_argument(
+        "--hidden_dim",
+        type=int,
+        default=32,
+        help="Hidden dimension (32-64 for capacity-limited probe)",
+    )
     parser.add_argument("--device", default="auto")
     parser.add_argument(
         "--out", default="benchmark_results/arm_verification/two_task.json"

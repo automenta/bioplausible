@@ -129,7 +129,13 @@ def run_continual_train_step(
                 psi = plasticity.step(psi, z, joint_system.context)
 
         loss_val = loss.item() if isinstance(loss, Tensor) else float(loss)
-        energy_val = output.energy.item() if isinstance(output.energy, Tensor) else float(output.energy) if output.energy is not None else 0.0
+        energy_val = (
+            output.energy.item()
+            if isinstance(output.energy, Tensor)
+            else float(output.energy)
+            if output.energy is not None
+            else 0.0
+        )
         metrics = {
             "loss": loss_val,
             "energy": energy_val,
@@ -173,9 +179,7 @@ def _continual_step(
 
     psi = getattr(model, "_psi", None)
     if psi is None and hasattr(plasticity, "initial_psi") and plasticity is not None:
-        psi = plasticity.initial_psi(
-            model.context, batch_size=x.shape[0]
-        )
+        psi = plasticity.initial_psi(model.context, batch_size=x.shape[0])
     if psi is not None:
         device = x.device
         batch_size = x.shape[0]
@@ -240,7 +244,9 @@ def _continual_step(
                 psi = plasticity.step(psi, z, model.context)
 
     model._psi = psi
-    loss_val = total_loss.item() if isinstance(total_loss, Tensor) else float(total_loss)  # noqa: E501
+    loss_val = (
+        total_loss.item() if isinstance(total_loss, Tensor) else float(total_loss)
+    )  # noqa: E501
     energy_val = (
         output.energy.item()
         if isinstance(output.energy, Tensor)
@@ -253,13 +259,11 @@ def _continual_step(
         "energy": energy_val,
         "accuracy": output.metrics.get("accuracy", 0.0),
     }
-    metrics.update(
-        {
-            k: v
-            for k, v in output.metrics.items()
-            if isinstance(v, (int, float)) and k != "accuracy"
-        }
-    )
+    metrics.update({
+        k: v
+        for k, v in output.metrics.items()
+        if isinstance(v, (int, float)) and k != "accuracy"
+    })
     return metrics
 
 

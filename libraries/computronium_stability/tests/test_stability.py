@@ -169,6 +169,7 @@ class TestLyapunovEstimator:
 
         state = {"x": torch.randn(4, 10)}
         from computronium_stability.lyapunov import estimate_lyapunov_spectrum
+
         spectrum = estimate_lyapunov_spectrum(transition, state, num_vectors=3, num_steps=20)
         assert len(spectrum) == 3
         assert all(isinstance(v, float) for v in spectrum)
@@ -244,6 +245,7 @@ class TestBasinStabilityEstimator:
 
         attractor = {"x": torch.zeros(4, 10)}
         from computronium_stability.basin import estimate_basin_stability_multistart
+
         profile = estimate_basin_stability_multistart(
             transition, attractor, num_samples=10, perturbation_radii=[0.5, 1.0, 2.0]
         )
@@ -291,6 +293,7 @@ class TestIntegration:
                     with torch.no_grad():
                         y = x * c  # Pure contraction, no linear layer
                     return {"x": y}
+
                 return transition
 
             handle = attach(torch.nn.Identity(), transition_fn=make_transition(contraction), threshold=1.029)

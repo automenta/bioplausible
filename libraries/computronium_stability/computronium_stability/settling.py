@@ -185,13 +185,7 @@ class SettlingMonitor:
             # t = (log(a) - log(tolerance)) / b
             a = torch.exp(coeffs[0]).item()
             if a > self.tolerance:
-                estimated = int(
-                    (
-                        torch.log(torch.tensor(a))
-                        - torch.log(torch.tensor(self.tolerance))
-                    )
-                    / b
-                )
+                estimated = int((torch.log(torch.tensor(a)) - torch.log(torch.tensor(self.tolerance))) / b)
                 return min(estimated, self.max_steps)
 
         return self.max_steps

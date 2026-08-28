@@ -6,6 +6,7 @@ The train_step uses manual updates (p -= ...), so we check:
 2. train_step actually updates all parameters (via delta norms)
 3. Accuracy improves over steps
 """
+
 import torch
 from computronium.config.unified import ModelConfig
 from computronium.zoo.models.eqprop._energy import EquilibriumMLP
@@ -36,8 +37,10 @@ def debug_energy_grads(steps: int = 10, lr: float = 0.01, beta: float = 2.0):
 
     for step in range(steps):
         result = model.train_step(x, y)
-        print(f"\nStep {step}: loss={result.get('loss', 'N/A'):.6f}, "
-              f"accuracy={result.get('accuracy', 'N/A'):.4f}")
+        print(
+            f"\nStep {step}: loss={result.get('loss', 'N/A'):.6f}, "
+            f"accuracy={result.get('accuracy', 'N/A'):.4f}"
+        )
 
         for name, p in model.named_parameters():
             delta = (p - prev_params[name]).norm().item()
@@ -63,7 +66,12 @@ def debug_energy_grads(steps: int = 10, lr: float = 0.01, beta: float = 2.0):
 
 if __name__ == "__main__":
     import sys
-    steps = int(sys.argv[sys.argv.index("--steps") + 1]) if "--steps" in sys.argv else 10
+
+    steps = (
+        int(sys.argv[sys.argv.index("--steps") + 1]) if "--steps" in sys.argv else 10
+    )
     lr = float(sys.argv[sys.argv.index("--lr") + 1]) if "--lr" in sys.argv else 0.01
-    beta = float(sys.argv[sys.argv.index("--beta") + 1]) if "--beta" in sys.argv else 2.0
+    beta = (
+        float(sys.argv[sys.argv.index("--beta") + 1]) if "--beta" in sys.argv else 2.0
+    )
     debug_energy_grads(steps=steps, lr=lr, beta=beta)

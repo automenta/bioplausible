@@ -80,24 +80,26 @@ class TestEnergyMinimizationDynamics:
                 gradient_checkpointing=False,
             )
         )
-        
+
         n_passed = 0
         for trial in range(5):  # Reduced for test speed
             x = torch.randn(4, 784, device=device)
             y = torch.randint(0, 10, (4,), device=device)
-            
+
             initial_acts = forward_pass(substrate, recurrent_geometry, x)
             free_state = SystemState(x=x, y=y)
             free_state.activations = initial_acts
-            free_state = dynamics.settle(free_state, recurrent_geometry, substrate, target=None)
-            
+            free_state = dynamics.settle(
+                free_state, recurrent_geometry, substrate, target=None
+            )
+
             # Check energy gradient norm
             energy_history = dynamics.get_free_energy_history()
             if energy_history and len(energy_history) >= 2:
                 final_delta = abs(energy_history[-1] - energy_history[-2])
                 if final_delta < 1e-4:
                     n_passed += 1
-        
+
         assert n_passed == 5, f"Only {n_passed}/5 trials converged to fixed point"
 
     def test_energy_monotonic_decrease(self, recurrent_geometry, substrate, device):
@@ -119,17 +121,19 @@ class TestEnergyMinimizationDynamics:
                 gradient_checkpointing=False,
             )
         )
-        
+
         n_passed = 0
         for trial in range(5):
             x = torch.randn(4, 784, device=device)
             y = torch.randint(0, 10, (4,), device=device)
-            
+
             initial_acts = forward_pass(substrate, recurrent_geometry, x)
             free_state = SystemState(x=x, y=y)
             free_state.activations = initial_acts
-            free_state = dynamics.settle(free_state, recurrent_geometry, substrate, target=None)
-            
+            free_state = dynamics.settle(
+                free_state, recurrent_geometry, substrate, target=None
+            )
+
             energy_history = dynamics.get_free_energy_history()
             if energy_history and len(energy_history) >= 2:
                 # Overall decrease
@@ -138,32 +142,42 @@ class TestEnergyMinimizationDynamics:
                 converged = abs(energy_history[-1] - energy_history[-2]) < 1e-4
                 if overall_decrease and converged:
                     n_passed += 1
-        
-        assert n_passed == 5, f"Only {n_passed}/5 trials had energy decrease + convergence"
+
+        assert n_passed == 5, (
+            f"Only {n_passed}/5 trials had energy decrease + convergence"
+        )
 
 
 class TestInstantaneousDynamics:
     """Tests for InstantaneousDynamics correctness."""
 
-    def test_single_step_equals_autograd_forward(self, feedforward_geometry, substrate, device):
+    def test_single_step_equals_autograd_forward(
+        self, feedforward_geometry, substrate, device
+    ):
         """Single step output matches geometry.forward exactly."""
         dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
-        
+
         n_passed = 0
         for trial in range(10):
             x = torch.randn(4, 784, device=device)
             y = torch.randint(0, 10, (4,), device=device)
-            
+
             state = SystemState(x=x, y=y)
-            settled = dynamics.settle(state, feedforward_geometry, substrate, target=None)
-            
+            settled = dynamics.settle(
+                state, feedforward_geometry, substrate, target=None
+            )
+
             # Get output
-            settled_logits = settled.activations[-1] if isinstance(settled.activations, list) else settled.activations
+            settled_logits = (
+                settled.activations[-1]
+                if isinstance(settled.activations, list)
+                else settled.activations
+            )
             direct_logits = feedforward_geometry.forward(x, substrate)
-            
+
             if torch.allclose(settled_logits, direct_logits, rtol=1e-5, atol=1e-7):
                 n_passed += 1
-        
+
         assert n_passed == 10, f"Only {n_passed}/10 trials matched autograd forward"
 
 
@@ -172,13 +186,13 @@ class TestPredictiveSettlingDynamics:
 
     def test_prediction_error_decreases(self, substrate, device):
         """Prediction error decreases overall and in first 20 steps.
-        
+
         Uses FeedforwardGeometry as in the audit script (not RecurrentGeometry).
         """
         n_passed = 0
         for trial in range(5):
             torch.manual_seed(3000 + trial)
-            
+
             # Use FeedforwardGeometry as in audit script
             geometry = FeedforwardGeometry(
                 GeometryConfig.feedforward(
@@ -189,7 +203,7 @@ class TestPredictiveSettlingDynamics:
                 )
             )
             geometry.to(device)
-            
+
             dynamics = PredictiveSettlingDynamics(
                 StateDynamicsConfig.predictive_settling(
                     max_steps=100,
@@ -200,37 +214,39 @@ class TestPredictiveSettlingDynamics:
                     track_free_energy_per_iter=True,
                 )
             )
-            
+
             x = torch.randn(4, 784, device=device)
             y = torch.randint(0, 10, (4,), device=device)
-            
+
             initial_acts = forward_pass(substrate, geometry, x)
             free_state = SystemState(x=x, y=y)
             free_state.activations = initial_acts
             free_state = dynamics.settle(free_state, geometry, substrate, target=None)
-            
+
             energy_history = dynamics.get_free_energy_history()
             if energy_history is None or len(energy_history) < 2:
                 print(f"  Trial {trial}: No energy history")
                 continue
-            
-            # Energy should decrease overall (final < initial) 
+
+            # Energy should decrease overall (final < initial)
             initial_energy = energy_history[0]
             final_energy = energy_history[-1]
             overall_decrease = final_energy < initial_energy
-            
+
             # Check monotonic decrease in first 20 steps (before convergence issues)
             early_steps = min(20, len(energy_history))
             early_decreasing = all(
-                energy_history[i] >= energy_history[i+1] - 1e-5
+                energy_history[i] >= energy_history[i + 1] - 1e-5
                 for i in range(early_steps - 1)
             )
-            
+
             if overall_decrease and early_decreasing:
                 n_passed += 1
             else:
-                print(f"  Trial {trial}: overall_decrease={overall_decrease}, early_decreasing={early_decreasing}, energy: {initial_energy:.4f} -> {final_energy:.4f}")
-        
+                print(
+                    f"  Trial {trial}: overall_decrease={overall_decrease}, early_decreasing={early_decreasing}, energy: {initial_energy:.4f} -> {final_energy:.4f}"
+                )
+
         # Allow some failures due to numerical instability in simplified PC
         # Audit script expects 10/10 but we run only 5 trials
         assert n_passed >= 4, f"Only {n_passed}/5 trials had error decrease (need >=4)"
@@ -247,18 +263,24 @@ class TestInPlaceOperations:
                 beta=0.5,
             )
         )
-        
+
         # Functional autograd test - if in-place ops exist, this will fail
         x = torch.randn(4, 784, device=device, requires_grad=True)
         y = torch.randint(0, 10, (4,), device=device)
-        
+
         initial_acts = forward_pass(substrate, recurrent_geometry, x)
         free_state = SystemState(x=x, y=y)
         free_state.activations = initial_acts
-        
+
         try:
-            free_state = dynamics.settle(free_state, recurrent_geometry, substrate, target=None)
-            logits = free_state.activations[-1] if isinstance(free_state.activations, list) else free_state.activations
+            free_state = dynamics.settle(
+                free_state, recurrent_geometry, substrate, target=None
+            )
+            logits = (
+                free_state.activations[-1]
+                if isinstance(free_state.activations, list)
+                else free_state.activations
+            )
             loss = torch.nn.functional.cross_entropy(logits, y)
             loss.backward()
             # If we get here without error, no in-place ops broke autograd
@@ -268,7 +290,7 @@ class TestInPlaceOperations:
                 passed = False
             else:
                 raise
-        
+
         assert passed, "In-place operations broke autograd"
 
 
@@ -279,7 +301,7 @@ class TestDeviceConsistency:
     def test_energy_dynamics_cpu_vs_cuda(self, device):
         """EnergyMinimizationDynamics consistent across CPU/CUDA."""
         device_cuda = torch.device("cuda")
-        
+
         # Create identical models
         torch.manual_seed(42)
         geometry_cpu = RecurrentGeometry(
@@ -292,7 +314,7 @@ class TestDeviceConsistency:
             hidden_dim=256,
         )
         geometry_cpu.to(device)
-        
+
         torch.manual_seed(42)
         geometry_cuda = RecurrentGeometry(
             GeometryConfig.recurrent(
@@ -304,10 +326,12 @@ class TestDeviceConsistency:
             hidden_dim=256,
         )
         geometry_cuda.to(device_cuda)
-        
+
         substrate_cpu = DigitalSubstrate(SubstrateConfig.digital(device=str(device)))
-        substrate_cuda = DigitalSubstrate(SubstrateConfig.digital(device=str(device_cuda)))
-        
+        substrate_cuda = DigitalSubstrate(
+            SubstrateConfig.digital(device=str(device_cuda))
+        )
+
         dynamics_cpu = EnergyMinimizationDynamics(
             StateDynamicsConfig.energy_minimization(
                 max_steps=50,
@@ -322,26 +346,38 @@ class TestDeviceConsistency:
                 beta=0.5,
             )
         )
-        
+
         x = torch.randn(4, 784, device=device)
         x_cuda = x.to(device_cuda)
         y = torch.randint(0, 10, (4,), device=device)
         y_cuda = y.to(device_cuda)
-        
+
         initial_acts_cpu = forward_pass(substrate_cpu, geometry_cpu, x)
         initial_acts_cuda = forward_pass(substrate_cuda, geometry_cuda, x_cuda)
-        
+
         free_state_cpu = SystemState(x=x, y=y)
         free_state_cpu.activations = initial_acts_cpu
-        free_state_cpu = dynamics_cpu.settle(free_state_cpu, geometry_cpu, substrate_cpu, target=None)
-        
+        free_state_cpu = dynamics_cpu.settle(
+            free_state_cpu, geometry_cpu, substrate_cpu, target=None
+        )
+
         free_state_cuda = SystemState(x=x_cuda, y=y_cuda)
         free_state_cuda.activations = initial_acts_cuda
-        free_state_cuda = dynamics_cuda.settle(free_state_cuda, geometry_cuda, substrate_cuda, target=None)
-        
-        logits_cpu = free_state_cpu.activations[-1] if isinstance(free_state_cpu.activations, list) else free_state_cpu.activations
-        logits_cuda = free_state_cuda.activations[-1] if isinstance(free_state_cuda.activations, list) else free_state_cuda.activations
-        
+        free_state_cuda = dynamics_cuda.settle(
+            free_state_cuda, geometry_cuda, substrate_cuda, target=None
+        )
+
+        logits_cpu = (
+            free_state_cpu.activations[-1]
+            if isinstance(free_state_cpu.activations, list)
+            else free_state_cpu.activations
+        )
+        logits_cuda = (
+            free_state_cuda.activations[-1]
+            if isinstance(free_state_cuda.activations, list)
+            else free_state_cuda.activations
+        )
+
         assert torch.allclose(logits_cpu, logits_cuda.cpu(), rtol=1e-5, atol=1e-7)
 
 

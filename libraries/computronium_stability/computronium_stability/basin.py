@@ -68,9 +68,7 @@ def estimate_basin_stability(
         direction = direction / (direction.norm(dim=-1, keepdim=True) + 1e-8)
 
         # Scale by random radius in [0, perturbation_radius]
-        radius = (
-            torch.rand(batch_size, 1, device=x_attractor.device) * perturbation_radius
-        )
+        radius = torch.rand(batch_size, 1, device=x_attractor.device) * perturbation_radius
         perturbation = direction * radius
 
         # Perturbed initial state
@@ -93,9 +91,7 @@ def estimate_basin_stability(
                 dist = delta.norm(dim=-1).mean()
             else:
                 # Cosine distance
-                cos_sim = torch.nn.functional.cosine_similarity(
-                    x_current, x_attractor, dim=-1
-                )
+                cos_sim = torch.nn.functional.cosine_similarity(x_current, x_attractor, dim=-1)
                 dist = (1 - cos_sim).mean()
 
             if dist < tolerance:

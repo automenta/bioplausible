@@ -77,6 +77,7 @@ class ContinualJointSystem(nn.Module):
     def joint_system(self):
         """Backward compatibility: return a joint-system-like object."""
         from types import SimpleNamespace
+
         return SimpleNamespace(
             substrate=self.substrate,
             geometry=self.geometry,
@@ -91,6 +92,7 @@ class ContinualJointSystem(nn.Module):
         """Create a copy of this ContinualJointSystem (for LwF previous model)."""
         # Create a new geometry with the same config (deep copy of parameters)
         from computronium.core.ontology import FeedforwardGeometry
+
         new_geometry = FeedforwardGeometry(self.geometry.config)
         new_geometry.load_state_dict(self.geometry.state_dict())
 
@@ -159,7 +161,10 @@ class ContinualJointSystem(nn.Module):
             )
 
         # Register plastic variables if any
-        if hasattr(self.plasticity, "config") and self.plasticity.config.plastic_state_dims:
+        if (
+            hasattr(self.plasticity, "config")
+            and self.plasticity.config.plastic_state_dims
+        ):
             for name, dim in self.plasticity.config.plastic_state_dims.items():
                 registry.register(
                     StateVariable(
@@ -176,9 +181,7 @@ class ContinualJointSystem(nn.Module):
         dynamics_config = self.dynamics.config
         credit_config = self.credit.config
         update_config = self.update.config
-        plasticity_config = getattr(
-            self.plasticity, "config", PlasticityConfig.null()
-        )
+        plasticity_config = getattr(self.plasticity, "config", PlasticityConfig.null())
 
         return SystemContext(
             theta=self.geometry.params,
@@ -267,7 +270,9 @@ class ContinualJointSystem(nn.Module):
 
         return run_forward(self.substrate, self.geometry, self.dynamics, x)
 
-    def train_step(self, x: Tensor, y: Tensor, task_id: int | None = None) -> dict[str, float]:
+    def train_step(
+        self, x: Tensor, y: Tensor, task_id: int | None = None
+    ) -> dict[str, float]:
         """Training step using joint system's pipeline with task-masked loss and plasticity stepping."""
         task_id = task_id if task_id is not None else self.current_task
         from computronium.core.continual.training import run_continual_train_step

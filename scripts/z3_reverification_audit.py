@@ -33,7 +33,11 @@ from computronium.experiments.joint.z3_fixed_weights import (
 )
 from computronium.core.plasticity.theta_audit import ThetaInvarianceAudit
 
-TASKS = [("parity", create_parity_task), ("last_symbol", create_last_symbol_task), ("threshold", create_threshold_task)]
+TASKS = [
+    ("parity", create_parity_task),
+    ("last_symbol", create_last_symbol_task),
+    ("threshold", create_threshold_task),
+]
 TASK_NAMES = ["parity", "last_symbol", "threshold"]
 
 RECIPE = MetaRecipe(
@@ -72,8 +76,12 @@ def _meta_train_model(
     shape: TaskShape,
 ) -> dict[str, torch.Tensor]:
     _meta_train_phases(
-        model, tasks, criterion, shape,
-        recipe=RECIPE, meta_train_epochs=_META_EPOCHS,
+        model,
+        tasks,
+        criterion,
+        shape,
+        recipe=RECIPE,
+        meta_train_epochs=_META_EPOCHS,
     )
     return {k: v.detach().clone() for k, v in model.state_dict().items()}
 
@@ -94,9 +102,16 @@ def _check_psi_evolution(
         [p for p in model.parameters() if p.requires_grad], lr=0.001
     )
     _run_adaptation(
-        model, optimizer, criterion, shape, tasks[0][1],
-        epochs=30, probe=probe, feedback=True,
-        adapt_entropy_beta=0.1, adapt_temp_end=0.5,
+        model,
+        optimizer,
+        criterion,
+        shape,
+        tasks[0][1],
+        epochs=30,
+        probe=probe,
+        feedback=True,
+        adapt_entropy_beta=0.1,
+        adapt_temp_end=0.5,
     )
 
     psi_after = model.psi_state.norm().item()
@@ -125,15 +140,23 @@ def _check_canonical_order(
     model.freeze_theta()
     with ThetaInvarianceAudit(model, selector=_is_theta_param) as audit:
         rows, wall = _adapt_all_tasks(
-            model, tasks, criterion, shape,
-            epochs=_EVAL_EPOCHS, probe_batches=_PROBE_BATCHES,
-            feedback=True, adapt_entropy_beta=0.1, adapt_temp_end=0.5,
+            model,
+            tasks,
+            criterion,
+            shape,
+            epochs=_EVAL_EPOCHS,
+            probe_batches=_PROBE_BATCHES,
+            feedback=True,
+            adapt_entropy_beta=0.1,
+            adapt_temp_end=0.5,
         )
     report = audit.report
     assert report is not None
     task_accs = {name: rows[name]["accuracy"] for name in TASK_NAMES}
     all_pass = all(acc >= _ACCURACY_FLOOR for acc in task_accs.values())
-    criterion_ok = all(rows[name]["steps_to_criterion"] is not None for name in TASK_NAMES)
+    criterion_ok = all(
+        rows[name]["steps_to_criterion"] is not None for name in TASK_NAMES
+    )
 
     return {
         "seed": seed,
@@ -162,9 +185,15 @@ def _check_order_robustness(
     model.freeze_theta()
     with ThetaInvarianceAudit(model, selector=_is_theta_param) as audit:
         rows, wall = _adapt_all_tasks(
-            model, ordered, criterion, shape,
-            epochs=_EVAL_EPOCHS, probe_batches=_PROBE_BATCHES,
-            feedback=True, adapt_entropy_beta=0.1, adapt_temp_end=0.5,
+            model,
+            ordered,
+            criterion,
+            shape,
+            epochs=_EVAL_EPOCHS,
+            probe_batches=_PROBE_BATCHES,
+            feedback=True,
+            adapt_entropy_beta=0.1,
+            adapt_temp_end=0.5,
         )
     report = audit.report
     assert report is not None
@@ -187,7 +216,9 @@ def _check_gate_history(rows: dict) -> dict:
     for name in TASK_NAMES:
         gh = rows[name]["gate_history"]
         n_steps = len(gh["entropy"])
-        all_keys = all(len(gh[k]) == n_steps for k in ("mean_gates", "hard_op_fraction", "entropy"))
+        all_keys = all(
+            len(gh[k]) == n_steps for k in ("mean_gates", "hard_op_fraction", "entropy")
+        )
         completeness[name] = {
             "n_steps": n_steps,
             "mean_gates_len": len(gh["mean_gates"]),
@@ -196,16 +227,30 @@ def _check_gate_history(rows: dict) -> dict:
             "complete": all_keys and n_steps > 0,
         }
     all_complete = all(c["complete"] for c in completeness.values())
-    return {"per_task": completeness, "all_complete": all_complete, "pass": all_complete}
+    return {
+        "per_task": completeness,
+        "all_complete": all_complete,
+        "pass": all_complete,
+    }
 
 
 def run_audit(device: str = "cpu") -> dict:
     dev = torch.device(device)
     tasks = list(TASKS)
-    shape = TaskShape(batch_size=_BATCH_SIZE, seq_len=_SEQ_LEN, input_dim=_INPUT_DIM, device=dev)
+    shape = TaskShape(
+        batch_size=_BATCH_SIZE, seq_len=_SEQ_LEN, input_dim=_INPUT_DIM, device=dev
+    )
     criterion = torch.nn.CrossEntropyLoss()
 
-    results: dict = {"checks": {}, "meta": {"device": str(dev), "seeds": _SEEDS, "meta_epochs": _META_EPOCHS, "eval_epochs": _EVAL_EPOCHS}}
+    results: dict = {
+        "checks": {},
+        "meta": {
+            "device": str(dev),
+            "seeds": _SEEDS,
+            "meta_epochs": _META_EPOCHS,
+            "eval_epochs": _EVAL_EPOCHS,
+        },
+    }
     all_pass = True
 
     # --- Check 1: ψ evolution ---
@@ -215,7 +260,9 @@ def run_audit(device: str = "cpu") -> dict:
     psi_check = _check_psi_evolution(model, tasks, criterion, shape)
     results["checks"]["psi_evolution"] = psi_check
     all_pass &= psi_check["pass"]
-    print(f"  ψ norm: {psi_check['psi_norm_before']:.6f} → {psi_check['psi_norm_after']:.6f} | pass={psi_check['pass']}")
+    print(
+        f"  ψ norm: {psi_check['psi_norm_before']:.6f} → {psi_check['psi_norm_after']:.6f} | pass={psi_check['pass']}"
+    )
 
     # --- Check 2: canonical-order confirmatory (5 seeds) ---
     print("Check 2: Z3 v2 canonical-order confirmatory...")
@@ -226,7 +273,9 @@ def run_audit(device: str = "cpu") -> dict:
         ms = _meta_train_model(m, tasks, criterion, shape)
         cr = _check_canonical_order(seed, m, ms, tasks, criterion, shape)
         canonical_results.append(cr)
-        print(f"    accs: {cr['task_accuracies']} | θ-change: {cr['theta_change']:.8f} | pass={cr['pass']}")
+        print(
+            f"    accs: {cr['task_accuracies']} | θ-change: {cr['theta_change']:.8f} | pass={cr['pass']}"
+        )
     canonical_all_pass = all(r["pass"] for r in canonical_results)
     all_pass &= canonical_all_pass
     results["checks"]["canonical_order"] = {
@@ -246,7 +295,9 @@ def run_audit(device: str = "cpu") -> dict:
         print(f"  Order {i}: {order}...")
         m = _build_model(seed=i + 100, device=dev)
         ms = _meta_train_model(m, tasks, criterion, shape)
-        or_result = _check_order_robustness(i + 100, m, ms, tasks, criterion, shape, order)
+        or_result = _check_order_robustness(
+            i + 100, m, ms, tasks, criterion, shape, order
+        )
         order_results.append(or_result)
         print(f"    accs: {or_result['task_accuracies']} | pass={or_result['pass']}")
     order_sensitivity_detected = not all(r["pass"] for r in order_results)
@@ -266,14 +317,22 @@ def run_audit(device: str = "cpu") -> dict:
     m.freeze_theta()
     with ThetaInvarianceAudit(m, selector=_is_theta_param):
         adapt_rows, _ = _adapt_all_tasks(
-            m, tasks, criterion, shape,
-            epochs=_EVAL_EPOCHS, probe_batches=_PROBE_BATCHES,
-            feedback=True, adapt_entropy_beta=0.1, adapt_temp_end=0.5,
+            m,
+            tasks,
+            criterion,
+            shape,
+            epochs=_EVAL_EPOCHS,
+            probe_batches=_PROBE_BATCHES,
+            feedback=True,
+            adapt_entropy_beta=0.1,
+            adapt_temp_end=0.5,
         )
     gate_check = _check_gate_history(adapt_rows)
     results["checks"]["gate_history"] = gate_check
     all_pass &= gate_check["pass"]
-    print(f"  Gate history complete: {gate_check['all_complete']} | pass={gate_check['pass']}")
+    print(
+        f"  Gate history complete: {gate_check['all_complete']} | pass={gate_check['pass']}"
+    )
 
     results["all_pass"] = all_pass
     return results

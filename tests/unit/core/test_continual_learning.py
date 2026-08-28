@@ -113,7 +113,9 @@ class TestFastWeightPlasticityLearning:
         assert hasattr(plasticity, "fast_weight_dim")
         assert plasticity.fast_weight_dim == 512
 
-    def test_energy_minimization_dynamics_produces_different_states(self, fast_weight_model, mnist_batch):
+    def test_energy_minimization_dynamics_produces_different_states(
+        self, fast_weight_model, mnist_batch
+    ):
         """Verify EnergyMinimizationDynamics produces different free vs nudged states."""
         from computronium.core.ontology import SystemState
         from computronium.core.pipeline import forward_pass
@@ -125,12 +127,16 @@ class TestFastWeightPlasticityLearning:
         initial_acts = forward_pass(js.substrate, js.geometry, x)
         free_state = SystemState(x=x, y=y)
         free_state.activations = initial_acts
-        free_state = js.dynamics.settle(free_state, js.geometry, js.substrate, target=None)
+        free_state = js.dynamics.settle(
+            free_state, js.geometry, js.substrate, target=None
+        )
 
         # Run nudged phase
         nudged_state = SystemState(x=x, y=y)
         nudged_state.activations = initial_acts
-        nudged_state = js.dynamics.settle(nudged_state, js.geometry, js.substrate, target=y)
+        nudged_state = js.dynamics.settle(
+            nudged_state, js.geometry, js.substrate, target=y
+        )
 
         # They should differ (nudged receives beta * (target - output))
         free_logits = free_state.activations[-1]
@@ -138,9 +144,13 @@ class TestFastWeightPlasticityLearning:
         diff = (nudged_logits - free_logits).abs().mean().item()
 
         # With beta=0.5 and 3 settling steps, there should be a measurable difference
-        assert diff > 1e-6, "Free and nudged states should differ with EnergyMinimizationDynamics"
+        assert diff > 1e-6, (
+            "Free and nudged states should differ with EnergyMinimizationDynamics"
+        )
 
-    def test_thermodynamic_contrast_produces_nonzero_gradients(self, fast_weight_model, mnist_batch):
+    def test_thermodynamic_contrast_produces_nonzero_gradients(
+        self, fast_weight_model, mnist_batch
+    ):
         """Verify ThermodynamicContrast produces non-zero pseudo-gradients."""
         x, y = mnist_batch
         js = fast_weight_model.joint_system
@@ -152,11 +162,15 @@ class TestFastWeightPlasticityLearning:
 
         free_state = SystemState(x=x, y=y)
         free_state.activations = initial_acts
-        free_state = js.dynamics.settle(free_state, js.geometry, js.substrate, target=None)
+        free_state = js.dynamics.settle(
+            free_state, js.geometry, js.substrate, target=None
+        )
 
         nudged_state = SystemState(x=x, y=y)
         nudged_state.activations = initial_acts
-        nudged_state = js.dynamics.settle(nudged_state, js.geometry, js.substrate, target=y)
+        nudged_state = js.dynamics.settle(
+            nudged_state, js.geometry, js.substrate, target=y
+        )
 
         states = {Phase.FREE: free_state, Phase.NUDGED: nudged_state}
 
@@ -206,11 +220,15 @@ class TestRunContinualTrainStep:
         x, y = mnist_batch
 
         # Step 1
-        _, psi1 = run_continual_train_step(fast_weight_model.joint_system, x, y, task_id=0, psi=None)
+        _, psi1 = run_continual_train_step(
+            fast_weight_model.joint_system, x, y, task_id=0, psi=None
+        )
         assert psi1 is not None, "psi should not be None after first step"
 
         # Step 2 with same x,y (should update psi)
-        _, psi2 = run_continual_train_step(fast_weight_model.joint_system, x, y, task_id=0, psi=psi1)
+        _, psi2 = run_continual_train_step(
+            fast_weight_model.joint_system, x, y, task_id=0, psi=psi1
+        )
         assert psi2 is not None, "psi should not be None after second step"
 
         # Fast weights should change (decay + outer product update)
@@ -226,9 +244,13 @@ class TestRunContinualTrainStep:
         y1 = torch.tensor([0, 1, 0, 1], device=device)  # Task 1 labels (local 0,1)
 
         # Train on task 0
-        metrics0, psi = run_continual_train_step(fast_weight_model.joint_system, x, y0, task_id=0, psi=None)
+        metrics0, psi = run_continual_train_step(
+            fast_weight_model.joint_system, x, y0, task_id=0, psi=None
+        )
         # Train on task 1
-        metrics1, psi = run_continual_train_step(fast_weight_model.joint_system, x, y1, task_id=1, psi=psi)
+        metrics1, psi = run_continual_train_step(
+            fast_weight_model.joint_system, x, y1, task_id=1, psi=psi
+        )
 
         # Both should work without error
         assert "loss" in metrics0 and "loss" in metrics1
@@ -256,7 +278,9 @@ class TestContinualJointSystem:
 
         # Get psi after some training
         y = torch.randint(0, 2, (4,), device=device)
-        _, psi = run_continual_train_step(fast_weight_model.joint_system, x, y, task_id=0, psi=None)
+        _, psi = run_continual_train_step(
+            fast_weight_model.joint_system, x, y, task_id=0, psi=None
+        )
 
         fast_weight_model._psi = psi
         logits_with = fast_weight_model(x, task_id=0)
@@ -268,7 +292,9 @@ class TestContinualJointSystem:
         diff = (logits_with - logits_without).abs().max().item()
         assert diff > 1e-4, "Fast weight modulation should change logits"
 
-    def test_train_step_uses_joint_system_pipeline(self, fast_weight_model, mnist_batch):
+    def test_train_step_uses_joint_system_pipeline(
+        self, fast_weight_model, mnist_batch
+    ):
         """Test that ContinualJointSystem.train_step uses the joint system pipeline."""
         x, y = mnist_batch
         fast_weight_model.set_task(0)
@@ -308,6 +334,7 @@ class TestOtherArms:
         model, update = create_ewc_arm(device=str(device))
         assert isinstance(model, ContinualJointSystem)
         from computronium.core.ontology import ElasticConsolidationUpdate
+
         assert isinstance(update, ElasticConsolidationUpdate)
 
     def test_backprop_arm_creation(self, device):
@@ -315,6 +342,7 @@ class TestOtherArms:
         model = create_backprop_arm(device=str(device))
         assert isinstance(model, ContinualJointSystem)
         from computronium.core.ontology import BackpropCredit
+
         assert isinstance(model.joint_system.credit, BackpropCredit)
         assert model.joint_system.credit.requires_autograd is True
 
@@ -418,15 +446,17 @@ class TestCLMetrics:
         # Create dummy task loaders
         task_loaders = []
         for task_id in range(CL_NUM_TASKS):
-            dataset = TensorDataset(
-                torch.randn(20, 784), torch.randint(0, 2, (20,))
-            )
+            dataset = TensorDataset(torch.randn(20, 784), torch.randint(0, 2, (20,)))
             task_loaders.append(DataLoader(dataset, batch_size=4))
 
         fast_weight_model.set_task(0)
         # Pass a dummy accuracy matrix for proper testing
-        accuracy_matrix = [[0.0 for _ in range(CL_NUM_TASKS)] for _ in range(CL_NUM_TASKS)]
-        metrics = compute_cl_metrics(fast_weight_model, task_loaders, 0, accuracy_matrix)
+        accuracy_matrix = [
+            [0.0 for _ in range(CL_NUM_TASKS)] for _ in range(CL_NUM_TASKS)
+        ]
+        metrics = compute_cl_metrics(
+            fast_weight_model, task_loaders, 0, accuracy_matrix
+        )
 
         assert isinstance(metrics, CLMetrics)
         assert len(metrics.final_accuracies) == CL_NUM_TASKS
@@ -436,9 +466,7 @@ class TestCLMetrics:
         """Test forgetting computation."""
         task_loaders = []
         for task_id in range(CL_NUM_TASKS):
-            dataset = TensorDataset(
-                torch.randn(20, 784), torch.randint(0, 2, (20,))
-            )
+            dataset = TensorDataset(torch.randn(20, 784), torch.randint(0, 2, (20,)))
             task_loaders.append(DataLoader(dataset, batch_size=4))
 
         # Create an accuracy matrix with forgetting
@@ -450,7 +478,9 @@ class TestCLMetrics:
             [0.0, 0.0, 0.0, 0.0, 0.9],  # Task 4
         ]
 
-        metrics = compute_cl_metrics(fast_weight_model, task_loaders, 4, accuracy_matrix)
+        metrics = compute_cl_metrics(
+            fast_weight_model, task_loaders, 4, accuracy_matrix
+        )
 
         # Forgetting for each task = max(acc_so_far) - final_acc
         # Task 0: max=0.9, final=0.5 -> forgetting=0.4
@@ -468,21 +498,21 @@ class TestCLMetrics:
         """Test backward transfer computation."""
         task_loaders = []
         for task_id in range(CL_NUM_TASKS):
-            dataset = TensorDataset(
-                torch.randn(20, 784), torch.randint(0, 2, (20,))
-            )
+            dataset = TensorDataset(torch.randn(20, 784), torch.randint(0, 2, (20,)))
             task_loaders.append(DataLoader(dataset, batch_size=4))
 
         # Accuracy matrix where later tasks improve earlier tasks
         accuracy_matrix = [
             [0.8, 0.85, 0.9, 0.92, 0.93],  # Task 0 improves
-            [0.0, 0.8, 0.85, 0.88, 0.9],   # Task 1 improves
-            [0.0, 0.0, 0.8, 0.85, 0.88],   # Task 2
-            [0.0, 0.0, 0.0, 0.8, 0.85],    # Task 3
-            [0.0, 0.0, 0.0, 0.0, 0.8],     # Task 4
+            [0.0, 0.8, 0.85, 0.88, 0.9],  # Task 1 improves
+            [0.0, 0.0, 0.8, 0.85, 0.88],  # Task 2
+            [0.0, 0.0, 0.0, 0.8, 0.85],  # Task 3
+            [0.0, 0.0, 0.0, 0.0, 0.8],  # Task 4
         ]
 
-        metrics = compute_cl_metrics(fast_weight_model, task_loaders, 4, accuracy_matrix)
+        metrics = compute_cl_metrics(
+            fast_weight_model, task_loaders, 4, accuracy_matrix
+        )
 
         # BWT = mean(acc_after_all - acc_after_own_task)
         # Task 0: 0.93 - 0.8 = 0.13
@@ -503,7 +533,9 @@ class TestStabilityGuard:
 
     def test_create_stability_guard(self):
         """Test stability guard creation."""
-        guard = create_stability_guard(threshold=1.029, statistic="fast_proxy", window=10)
+        guard = create_stability_guard(
+            threshold=1.029, statistic="fast_proxy", window=10
+        )
         assert isinstance(guard, StabilityGuard)
         assert guard.threshold == 1.029
 
@@ -575,7 +607,9 @@ class TestContinualLearningIntegration:
         )
 
         # Run single task
-        metrics = run_continual_learning("fast_weights", config, protocol="task_incremental")
+        metrics = run_continual_learning(
+            "fast_weights", config, protocol="task_incremental"
+        )
 
         # Should complete without error
         assert metrics.total_time_s > 0
@@ -605,7 +639,9 @@ class TestContinualLearningIntegration:
             seed=42,
         )
 
-        metrics = run_continual_learning("backprop", config, protocol="task_incremental")
+        metrics = run_continual_learning(
+            "backprop", config, protocol="task_incremental"
+        )
 
         assert metrics.total_time_s > 0
 

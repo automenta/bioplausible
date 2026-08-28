@@ -35,6 +35,7 @@ def _instantiate_model(model_cls, name: str):
     # Try with ModelConfig if available
     try:
         from computronium.zoo.models.base import ModelConfig
+
         config = ModelConfig(input_dim=32, hidden_dim=32, output_dim=10)
         return model_cls(config)
     except Exception:
@@ -84,7 +85,9 @@ def main() -> None:
             if not result["passed"]:
                 for key, diff in result.get("differences", {}).items():
                     if isinstance(diff, dict) and "rel_diff" in diff:
-                        print(f"    {key}: rel_diff={diff['rel_diff']:.4f}, abs_diff={diff['abs_diff']:.4f}")
+                        print(
+                            f"    {key}: rel_diff={diff['rel_diff']:.4f}, abs_diff={diff['abs_diff']:.4f}"
+                        )
 
         except Exception as e:
             print(f"  ERROR: {e}")

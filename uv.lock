@@ -384,15 +384,10 @@ name = "computronium"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [
-    { name = "cupy-cuda13x" },
-    { name = "nicegui" },
     { name = "numpy" },
     { name = "omegaconf" },
-    { name = "optuna" },
-    { name = "plotly" },
     { name = "pydantic" },
     { name = "rich" },
-    { name = "snntorch" },
     { name = "torch" },
     { name = "tqdm" },
 ]
@@ -404,7 +399,6 @@ analysis = [
 ]
 deploy = [
     { name = "fastapi" },
-    { name = "onnxruntime" },
     { name = "uvicorn" },
 ]
 dev = [
@@ -414,7 +408,6 @@ dev = [
     { name = "fastapi" },
     { name = "gymnasium" },
     { name = "hypothesis" },
-    { name = "kademlia" },
     { name = "matplotlib" },
     { name = "nicegui" },
     { name = "onnxruntime" },
@@ -429,7 +422,6 @@ dev = [
     { name = "pytest-cov" },
     { name = "pytest-mock" },
     { name = "pytest-xdist" },
-    { name = "pytorch-lightning" },
     { name = "ruff" },
     { name = "scikit-learn" },
     { name = "scipy" },
@@ -441,10 +433,12 @@ dev = [
 ]
 export = [
     { name = "onnx" },
+    { name = "onnxruntime" },
     { name = "onnxscript" },
 ]
 full = [
     { name = "botorch" },
+    { name = "cupy-cuda13x" },
     { name = "datasets" },
     { name = "fastapi" },
     { name = "gpytorch" },
@@ -454,12 +448,14 @@ full = [
     { name = "kademlia" },
     { name = "matplotlib" },
     { name = "networkx" },
+    { name = "nicegui" },
     { name = "onnx" },
     { name = "onnxruntime" },
     { name = "onnxscript" },
     { name = "openai" },
     { name = "optuna" },
     { name = "pandas" },
+    { name = "plotly" },
     { name = "psutil" },
     { name = "pyqt6" },
     { name = "pyqtgraph" },
@@ -511,15 +507,18 @@ p2p = [
 ]
 plot = [
     { name = "matplotlib" },
+    { name = "plotly" },
     { name = "seaborn" },
 ]
 rl = [
     { name = "gymnasium" },
 ]
 spiking = [
+    { name = "cupy-cuda13x" },
     { name = "snntorch" },
 ]
 ui = [
+    { name = "nicegui" },
     { name = "pyqt6" },
     { name = "pyqtgraph" },
 ]
@@ -539,9 +538,9 @@ dev = [
 requires-dist = [
     { name = "botorch", marker = "extra == 'knowledgebase'" },
     { name = "build", marker = "extra == 'dev'" },
-    { name = "computronium", extras = ["vision", "lm", "rl", "lightning", "analysis", "ml", "plot", "deploy", "export", "p2p", "ui", "monitoring", "knowledgebase", "graphs", "spiking", "llm"], marker = "extra == 'full'" },
+    { name = "computronium", extras = ["vision", "lm", "rl", "spiking", "lightning", "analysis", "ml", "plot", "deploy", "export", "p2p", "ui", "monitoring", "knowledgebase", "graphs", "llm", "nn", "stability"], marker = "extra == 'full'" },
     { name = "cryptography", marker = "extra == 'dev'", specifier = "==50.0.0" },
-    { name = "cupy-cuda13x", specifier = ">=14.1.1" },
+    { name = "cupy-cuda13x", marker = "extra == 'spiking'", specifier = ">=14.1.1" },
     { name = "datasets", marker = "extra == 'dev'" },
     { name = "datasets", marker = "extra == 'lm'" },
     { name = "fastapi", marker = "extra == 'deploy'" },
@@ -552,28 +551,26 @@ requires-dist = [
     { name = "gymnasium", marker = "extra == 'dev'" },
     { name = "gymnasium", marker = "extra == 'rl'" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.0" },
-    { name = "kademlia", marker = "extra == 'dev'" },
     { name = "kademlia", marker = "extra == 'p2p'" },
     { name = "matplotlib", marker = "extra == 'dev'" },
     { name = "matplotlib", marker = "extra == 'plot'" },
     { name = "networkx", marker = "extra == 'graphs'" },
-    { name = "nicegui", specifier = ">=3.16.0" },
     { name = "nicegui", marker = "extra == 'dev'", specifier = ">=3.16.0" },
+    { name = "nicegui", marker = "extra == 'ui'", specifier = ">=3.16.0" },
     { name = "numpy" },
     { name = "omegaconf", specifier = ">=2.3" },
     { name = "onnx", marker = "extra == 'export'" },
-    { name = "onnxruntime", marker = "extra == 'deploy'" },
     { name = "onnxruntime", marker = "extra == 'dev'" },
+    { name = "onnxruntime", marker = "extra == 'export'" },
     { name = "onnxscript", marker = "extra == 'export'" },
     { name = "openai", marker = "extra == 'llm'", specifier = ">=1.0" },
-    { name = "optuna", specifier = ">=4.9.0" },
     { name = "optuna", marker = "extra == 'analysis'" },
     { name = "optuna", marker = "extra == 'dev'" },
     { name = "pandas", marker = "extra == 'dev'" },
     { name = "pandas", marker = "extra == 'ml'" },
     { name = "pip-audit", marker = "extra == 'dev'" },
-    { name = "plotly", specifier = ">=6.9.0" },
     { name = "plotly", marker = "extra == 'dev'", specifier = ">=6.9.0" },
+    { name = "plotly", marker = "extra == 'plot'", specifier = ">=6.9.0" },
     { name = "pre-commit", marker = "extra == 'dev'" },
     { name = "psutil", marker = "extra == 'dev'" },
     { name = "psutil", marker = "extra == 'monitoring'" },
@@ -585,7 +582,6 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pytest-mock", marker = "extra == 'dev'" },
     { name = "pytest-xdist", marker = "extra == 'dev'" },
-    { name = "pytorch-lightning", marker = "extra == 'dev'", specifier = ">=2.0.0" },
     { name = "pytorch-lightning", marker = "extra == 'lightning'", specifier = ">=2.0.0" },
     { name = "rich" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
@@ -595,13 +591,12 @@ requires-dist = [
     { name = "scipy", marker = "extra == 'ml'" },
     { name = "seaborn", marker = "extra == 'dev'" },
     { name = "seaborn", marker = "extra == 'plot'" },
-    { name = "snntorch", specifier = ">=0.8" },
     { name = "snntorch", marker = "extra == 'spiking'", specifier = ">=0.8" },
     { name = "sympy", marker = "extra == 'knowledgebase'" },
     { name = "tabulate", marker = "extra == 'analysis'", specifier = ">=0.9" },
     { name = "tabulate", marker = "extra == 'dev'", specifier = ">=0.9" },
     { name = "tokenizers", marker = "extra == 'lm'" },
-    { name = "torch", specifier = ">=2.0.0" },
+    { name = "torch", specifier = ">=2.5" },
     { name = "torch-geometric", marker = "extra == 'graphs'", specifier = ">=2.5" },
     { name = "torchvision", marker = "extra == 'dev'" },
     { name = "torchvision", marker = "extra == 'vision'" },

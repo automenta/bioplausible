@@ -266,14 +266,27 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "muon_backprop": ("computronium.zoo.mep.presets", "muon_backprop"),
     "smep": ("computronium.zoo.mep.presets", "smep"),
     "smep_fast": ("computronium.zoo.mep.presets", "smep_fast"),
+    # NN Layers (CP-C)
+    "ComputroniumLinear": ("computronium.nn", "ComputroniumLinear"),
+    "replace_linear_with_computronium": (
+        "computronium.nn",
+        "replace_linear_with_computronium",
+    ),
+    "CreditRule": ("computronium.nn", "CreditRule"),
+    "CreditRuleConfig": ("computronium.nn", "CreditRuleConfig"),
+    "PlasticityType": ("computronium.nn", "PlasticityType"),
+    "PlasticityConfig": ("computronium.nn", "PlasticityConfig"),
 }
 
 __all__ = [
     "AnalogSubstrate",
     "BackpropCredit",
+    "ComputroniumLinear",
     "CompositeState",
     "CoupledTransition",
     "CreditAssignmentConfig",
+    "CreditRule",
+    "CreditRuleConfig",
     "DigitalSubstrate",
     "ElasticConsolidationUpdate",
     "EnergyMinimizationDynamics",
@@ -290,6 +303,7 @@ __all__ = [
     "OpticalSubstrate",
     "ParameterUpdateConfig",
     "PlasticityConfig",
+    "PlasticityType",
     "PredictiveSettlingDynamics",
     "QuantumSubstrate",
     "RandomProjectionsCredit",

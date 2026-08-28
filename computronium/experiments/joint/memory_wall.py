@@ -51,9 +51,11 @@ __all__ = [
 # Configuration
 # ──────────────────────────────────────────────
 
+
 @dataclass(frozen=True, slots=True)
 class EnvelopeConfig:
     """Memory envelope configuration (simulated/accounting-tier)."""
+
     name: str
     ceiling_mb: float
     hidden_dim: int
@@ -68,15 +70,19 @@ class EnvelopeConfig:
 @dataclass(frozen=True, slots=True)
 class ArmConfig:
     """Arm configuration for benchmark."""
+
     name: str
     factory_name: str  # 'fa', 'eqprop', 'hebbian', 'backprop'
-    use_optimizer_state: bool  # True for backprop+Adam, False for local rules (SGD only)
+    use_optimizer_state: (
+        bool  # True for backprop+Adam, False for local rules (SGD only)
+    )
     local_rule: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkResult:
     """Single benchmark run result."""
+
     arm_name: str
     envelope_name: str
     seed: int
@@ -105,7 +111,9 @@ LOCAL_RULE_ARMS = (
     ArmConfig("EqProp", "eqprop", use_optimizer_state=False, local_rule=True),
 )
 
-CONTROL_ARM = ArmConfig("Backprop", "backprop", use_optimizer_state=True, local_rule=False)
+CONTROL_ARM = ArmConfig(
+    "Backprop", "backprop", use_optimizer_state=True, local_rule=False
+)
 
 ALL_ARMS = LOCAL_RULE_ARMS + (CONTROL_ARM,)
 
@@ -121,6 +129,7 @@ FACTORY_MAP = {
 # ──────────────────────────────────────────────
 # Model Wrappers with Memory Accounting
 # ──────────────────────────────────────────────
+
 
 class MemoryAccountedModel:
     """Wrapper that tracks peak activation memory during forward/backward.
@@ -141,6 +150,7 @@ class MemoryAccountedModel:
 
     def _register_hooks(self) -> None:
         """Register forward hooks on the geometry to track activation memory."""
+
         def hook(module: nn.Module, inp, output):
             if isinstance(output, torch.Tensor):
                 bytes_used = output.numel() * output.element_size()
@@ -149,12 +159,16 @@ class MemoryAccountedModel:
                 for t in output:
                     if isinstance(t, torch.Tensor):
                         bytes_used = t.numel() * t.element_size()
-                        self.peak_activation_bytes = max(self.peak_activation_bytes, bytes_used)
+                        self.peak_activation_bytes = max(
+                            self.peak_activation_bytes, bytes_used
+                        )
 
         # Hook the geometry (which is an nn.Module)
         geometry = self.system.geometry
         for module in geometry.modules():
-            if isinstance(module, (nn.Linear, nn.Conv2d, nn.ReLU, nn.GELU, nn.Tanh, nn.Sigmoid)):
+            if isinstance(
+                module, (nn.Linear, nn.Conv2d, nn.ReLU, nn.GELU, nn.Tanh, nn.Sigmoid)
+            ):
                 self._hooks.append(module.register_forward_hook(hook))
 
     def remove_hooks(self) -> None:
@@ -179,7 +193,9 @@ class MemoryAccountedModel:
 
         if self.device == "cuda":
             torch.cuda.synchronize()
-            self.peak_memory_mb = max(self.peak_memory_mb, torch.cuda.max_memory_allocated() / (1024 * 1024))
+            self.peak_memory_mb = max(
+                self.peak_memory_mb, torch.cuda.max_memory_allocated() / (1024 * 1024)
+            )
 
         return metrics
 
@@ -202,14 +218,19 @@ class MemoryAccountedModel:
         """Check if model exceeds memory envelope."""
         peak_mb = self.peak_activation_bytes / (1024 * 1024)
         if peak_mb > self.envelope.ceiling_mb:
-            return True, f"Peak activation {peak_mb:.2f} MB exceeds envelope {self.envelope.ceiling_mb} MB"
+            return (
+                True,
+                f"Peak activation {peak_mb:.2f} MB exceeds envelope {self.envelope.ceiling_mb} MB",
+            )
         return False, None
 
     def get_resource_usage(self) -> ResourceUsage:
         """Get resource usage record."""
         geometry = self.system.geometry
         param_count = sum(p.numel() for p in geometry.parameters())
-        param_memory_mb = sum(p.numel() * p.element_size() for p in geometry.parameters()) / (1024 * 1024)
+        param_memory_mb = sum(
+            p.numel() * p.element_size() for p in geometry.parameters()
+        ) / (1024 * 1024)
 
         # Estimate optimizer memory
         optimizer_memory_mb = 0.0
@@ -236,7 +257,9 @@ class MemoryAccountedModel:
         return self.system.forward(x)
 
 
-def create_model_for_arm(arm: ArmConfig, envelope: EnvelopeConfig, device: str) -> MemoryAccountedModel:
+def create_model_for_arm(
+    arm: ArmConfig, envelope: EnvelopeConfig, device: str
+) -> MemoryAccountedModel:
     """Create a model for the given arm and envelope."""
     factory = FACTORY_MAP[arm.factory_name]
 
@@ -267,12 +290,15 @@ def create_model_for_arm(arm: ArmConfig, envelope: EnvelopeConfig, device: str) 
     # Apply ternary quantization if needed (for 2MB envelope backprop)
     if envelope.use_ternary and arm.factory_name == "backprop":
         from computronium.deployment import quantize_model_ternary_inplace
+
         quantize_model_ternary_inplace(system.geometry, threshold=0.5)
 
     return MemoryAccountedModel(system, envelope, arm, device)
 
 
-def create_optimizer(model: MemoryAccountedModel, envelope: EnvelopeConfig, arm: ArmConfig) -> torch.optim.Optimizer | None:
+def create_optimizer(
+    model: MemoryAccountedModel, envelope: EnvelopeConfig, arm: ArmConfig
+) -> torch.optim.Optimizer | None:
     """Create optimizer based on envelope and arm config."""
     # Get the geometry's parameters
     geometry = model.system.geometry
@@ -289,6 +315,7 @@ def create_optimizer(model: MemoryAccountedModel, envelope: EnvelopeConfig, arm:
 # ──────────────────────────────────────────────
 # Gradient Checkpointing Wrapper (Control Floor)
 # ──────────────────────────────────────────────
+
 
 class GradientCheckpointedModel(MemoryAccountedModel):
     """Backprop model with gradient checkpointing for memory-efficient training."""
@@ -307,6 +334,7 @@ class GradientCheckpointedModel(MemoryAccountedModel):
 
     def _register_hooks(self) -> None:
         """Register forward hooks on the geometry to track activation memory."""
+
         def hook(module: nn.Module, inp, output):
             if isinstance(output, torch.Tensor):
                 bytes_used = output.numel() * output.element_size()
@@ -315,11 +343,15 @@ class GradientCheckpointedModel(MemoryAccountedModel):
                 for t in output:
                     if isinstance(t, torch.Tensor):
                         bytes_used = t.numel() * t.element_size()
-                        self.peak_activation_bytes = max(self.peak_activation_bytes, bytes_used)
+                        self.peak_activation_bytes = max(
+                            self.peak_activation_bytes, bytes_used
+                        )
 
         geometry = self.system.geometry
         for module in geometry.modules():
-            if isinstance(module, (nn.Linear, nn.Conv2d, nn.ReLU, nn.GELU, nn.Tanh, nn.Sigmoid)):
+            if isinstance(
+                module, (nn.Linear, nn.Conv2d, nn.ReLU, nn.GELU, nn.Tanh, nn.Sigmoid)
+            ):
                 self._hooks.append(module.register_forward_hook(hook))
 
     def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
@@ -346,7 +378,9 @@ class GradientCheckpointedModel(MemoryAccountedModel):
 
         if self.device == "cuda":
             torch.cuda.synchronize()
-            self.peak_memory_mb = max(self.peak_memory_mb, torch.cuda.max_memory_allocated() / (1024 * 1024))
+            self.peak_memory_mb = max(
+                self.peak_memory_mb, torch.cuda.max_memory_allocated() / (1024 * 1024)
+            )
 
         return {
             "loss": loss.item(),
@@ -372,14 +406,19 @@ class GradientCheckpointedModel(MemoryAccountedModel):
         """Check if model exceeds memory envelope."""
         peak_mb = self.peak_activation_bytes / (1024 * 1024)
         if peak_mb > self.envelope.ceiling_mb:
-            return True, f"Peak activation {peak_mb:.2f} MB exceeds envelope {self.envelope.ceiling_mb} MB"
+            return (
+                True,
+                f"Peak activation {peak_mb:.2f} MB exceeds envelope {self.envelope.ceiling_mb} MB",
+            )
         return False, None
 
     def get_resource_usage(self) -> ResourceUsage:
         """Get resource usage record."""
         geometry = self.system.geometry
         param_count = sum(p.numel() for p in geometry.parameters())
-        param_memory_mb = sum(p.numel() * p.element_size() for p in geometry.parameters()) / (1024 * 1024)
+        param_memory_mb = sum(
+            p.numel() * p.element_size() for p in geometry.parameters()
+        ) / (1024 * 1024)
 
         return ResourceUsage(
             coordinate=f"{self.arm.name}/{self.envelope.name}",
@@ -403,6 +442,7 @@ class GradientCheckpointedModel(MemoryAccountedModel):
 # ──────────────────────────────────────────────
 # Benchmark Runner
 # ──────────────────────────────────────────────
+
 
 def run_single_benchmark(
     arm: ArmConfig,
@@ -431,6 +471,7 @@ def run_single_benchmark(
         # Move geometry to device
         base_system.geometry.to(device)
         from computronium.deployment import quantize_model_ternary_inplace
+
         quantize_model_ternary_inplace(base_system.geometry, threshold=0.5)
         # Move again after quantization (it creates new layers)
         base_system.geometry.to(device)
@@ -536,7 +577,9 @@ def run_memory_wall_benchmark(
     # Filter arms
     selected_arms = [a for a in ALL_ARMS if arms is None or a.name in arms]
     # Filter envelopes
-    selected_envelopes = [e for e in ENVELOPES if envelopes is None or e.name in envelopes]
+    selected_envelopes = [
+        e for e in ENVELOPES if envelopes is None or e.name in envelopes
+    ]
 
     all_results: dict = {}
 
@@ -560,22 +603,35 @@ def run_memory_wall_benchmark(
                     "disqualification_reason": result.disqualification_reason,
                     "wall_time_s": result.wall_time_s,
                     "epochs_completed": result.epochs_completed,
-                    "resource_usage": result.resource_usage.to_dict() if result.resource_usage else None,
+                    "resource_usage": result.resource_usage.to_dict()
+                    if result.resource_usage
+                    else None,
                 })
-                status = "DNF" if result.disqualified else f"acc={result.best_accuracy:.4f}"
-                print(f"    {status} (peak={result.peak_activation_bytes / 1024 / 1024:.2f} MB)")
+                status = (
+                    "DNF" if result.disqualified else f"acc={result.best_accuracy:.4f}"
+                )
+                print(
+                    f"    {status} (peak={result.peak_activation_bytes / 1024 / 1024:.2f} MB)"
+                )
 
             # Aggregate across seeds
             seeds_list = all_results[arm.name][envelope.name]["seeds"]
             if seeds_list:
-                for key in ["final_accuracy", "best_accuracy", "peak_memory_mb", "wall_time_s"]:
+                for key in [
+                    "final_accuracy",
+                    "best_accuracy",
+                    "peak_memory_mb",
+                    "wall_time_s",
+                ]:
                     vals = [float(s[key]) for s in seeds_list if not s["disqualified"]]
                     if vals:
                         mean_val = sum(vals) / len(vals)
                         all_results[arm.name][envelope.name][f"mean_{key}"] = mean_val
                         all_results[arm.name][envelope.name][f"std_{key}"] = (
-                            sum((v - mean_val) ** 2 for v in vals) / len(vals)
-                        ) ** 0.5 if len(vals) > 1 else 0.0
+                            (sum((v - mean_val) ** 2 for v in vals) / len(vals)) ** 0.5
+                            if len(vals) > 1
+                            else 0.0
+                        )
 
     # Save results
     results_file = output_dir / "memory_wall_results.json"
@@ -590,6 +646,7 @@ def run_memory_wall_benchmark(
 # Frontier Chart Generation
 # ──────────────────────────────────────────────
 
+
 def generate_frontier_chart(
     results: dict,
     output_dir: str | Path = "benchmark_results/memory_wall",
@@ -597,6 +654,7 @@ def generate_frontier_chart(
     """Generate memory-accuracy frontier chart."""
     try:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError:
@@ -631,7 +689,9 @@ def generate_frontier_chart(
                 continue
 
             # Check if any seed was disqualified
-            dnf_count = sum(1 for s in env_data.get("seeds", []) if s.get("disqualified", False))
+            dnf_count = sum(
+                1 for s in env_data.get("seeds", []) if s.get("disqualified", False)
+            )
             if dnf_count > 0:
                 dnf_envelopes.append((env.ceiling_mb, dnf_count))
 
@@ -641,20 +701,40 @@ def generate_frontier_chart(
 
         if x_vals:
             ax.errorbar(
-                x_vals, y_vals, yerr=y_err,
-                color=color, marker=marker, linestyle=linestyle,
-                label=arm_name, linewidth=2, markersize=8, capsize=5
+                x_vals,
+                y_vals,
+                yerr=y_err,
+                color=color,
+                marker=marker,
+                linestyle=linestyle,
+                label=arm_name,
+                linewidth=2,
+                markersize=8,
+                capsize=5,
             )
 
         # Mark DNFs
         for mb, count in dnf_envelopes:
             ax.plot(mb, 0, "x", color=color, markersize=12, markeredgewidth=3)
-            ax.annotate(f"DNF ({count})", (mb, 0.02), color=color, fontsize=8, ha="center")
+            ax.annotate(
+                f"DNF ({count})", (mb, 0.02), color=color, fontsize=8, ha="center"
+            )
 
     # Envelope ceiling lines
     for env in ENVELOPES:
-        ax.axvline(x=env.ceiling_mb, color="gray", linestyle=":", alpha=0.5, linewidth=1)
-        ax.text(env.ceiling_mb, 1.02, f"{env.name} ceiling", rotation=90, va="bottom", ha="right", fontsize=8, color="gray")
+        ax.axvline(
+            x=env.ceiling_mb, color="gray", linestyle=":", alpha=0.5, linewidth=1
+        )
+        ax.text(
+            env.ceiling_mb,
+            1.02,
+            f"{env.name} ceiling",
+            rotation=90,
+            va="bottom",
+            ha="right",
+            fontsize=8,
+            color="gray",
+        )
 
     ax.set_xlabel("Activation Memory Ceiling (MB)", fontsize=12)
     ax.set_ylabel("Best Test Accuracy", fontsize=12)
@@ -669,9 +749,12 @@ def generate_frontier_chart(
     # Annotate structural advantage
     ax.annotate(
         "Local rules: no optimizer state,\nno stored backward graph",
-        xy=(0.02, 0.98), xycoords="axes fraction",
-        fontsize=9, va="top", ha="left",
-        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5)
+        xy=(0.02, 0.98),
+        xycoords="axes fraction",
+        fontsize=9,
+        va="top",
+        ha="left",
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
     )
 
     plt.tight_layout()
@@ -686,6 +769,7 @@ def generate_frontier_chart(
 # ──────────────────────────────────────────────
 # Deployment Artifact Export
 # ──────────────────────────────────────────────
+
 
 def export_deployment_artifacts(
     results: dict,
@@ -732,7 +816,9 @@ def export_deployment_artifacts(
                         model_params=model_params,
                         output_dir=str(export_dir / model_name),
                         formats=["onnx", "pt2", "config", "state"],
-                        training_metrics={"best_accuracy": env_data["mean_best_accuracy"]},
+                        training_metrics={
+                            "best_accuracy": env_data["mean_best_accuracy"]
+                        },
                         verbose=False,
                     )
                     exported[arm_name].append(str(export_dir / model_name))
@@ -747,6 +833,7 @@ def export_deployment_artifacts(
 # CLI
 # ──────────────────────────────────────────────
 
+
 def main():
     parser = argparse.ArgumentParser(description="Phase 3 Memory-Wall Benchmark")
     parser.add_argument("--arms", nargs="+", default=[a.name for a in ALL_ARMS])
@@ -758,7 +845,9 @@ def main():
     parser.add_argument("--device", default="auto")
     parser.add_argument("--quick", action="store_true", help="Quick smoke test")
     parser.add_argument("--no-chart", action="store_true", help="Skip chart generation")
-    parser.add_argument("--no-export", action="store_true", help="Skip deployment export")
+    parser.add_argument(
+        "--no-export", action="store_true", help="Skip deployment export"
+    )
     args = parser.parse_args()
 
     if args.quick:
@@ -796,7 +885,9 @@ def main():
 
     # Export deployment artifacts
     if not args.no_export and not args.quick:
-        export_deployment_artifacts(results, args.output_dir, args.device if args.device != "auto" else "cpu")
+        export_deployment_artifacts(
+            results, args.output_dir, args.device if args.device != "auto" else "cpu"
+        )
 
     print("\n" + "=" * 60)
     print("Memory-Wall Benchmark Complete")

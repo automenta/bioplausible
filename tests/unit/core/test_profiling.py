@@ -15,7 +15,7 @@ class TestResourceUsage:
     def test_peak_activation_bytes_field_exists(self):
         """ResourceUsage has peak_activation_bytes field."""
         usage = ResourceUsage()
-        assert hasattr(usage, 'peak_activation_bytes')
+        assert hasattr(usage, "peak_activation_bytes")
         assert usage.peak_activation_bytes == 0
 
     def test_peak_activation_bytes_serialization(self):
@@ -50,10 +50,10 @@ class TestResourceUsage:
             nn.Linear(256, 10),
         )
         x = torch.randn(64, 784)
-        
+
         usage = ResourceUsage.measure(model, x)
-        
-        assert hasattr(usage, 'peak_activation_bytes')
+
+        assert hasattr(usage, "peak_activation_bytes")
         # On CPU, may be 0, but field should exist
         assert isinstance(usage.peak_activation_bytes, int)
 
@@ -66,6 +66,7 @@ class TestMemoryAccountedModel:
         # This is tested in the memory_accounting audit script
         # Just verify the import works
         from computronium.experiments.joint.memory_wall import MemoryAccountedModel
+
         assert MemoryAccountedModel is not None
 
 

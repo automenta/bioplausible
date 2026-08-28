@@ -40,7 +40,11 @@ def run_continual_learning(
     protocol: str = "task_incremental",
 ) -> CLMetrics:
     """Run continual learning for one arm."""
-    device_str = "cuda" if config.device == "auto" and torch.cuda.is_available() else config.device
+    device_str = (
+        "cuda"
+        if config.device == "auto" and torch.cuda.is_available()
+        else config.device
+    )
     device = torch.device(device_str)
     torch.manual_seed(config.seed)
     random.seed(config.seed)
@@ -48,13 +52,23 @@ def run_continual_learning(
     # Create task loaders
     task_loaders = []
     for task_id in range(CL_NUM_TASKS):
-        task = SplitMNIST(task_id=task_id, batch_size=config.batch_size, device=device_str, num_workers=config.num_workers)
+        task = SplitMNIST(
+            task_id=task_id,
+            batch_size=config.batch_size,
+            device=device_str,
+            num_workers=config.num_workers,
+        )
         task.setup()
         task_loaders.append(task.get_dataloader(TaskSplit.TRAIN))
 
     test_loaders = []
     for task_id in range(CL_NUM_TASKS):
-        task = SplitMNIST(task_id=task_id, batch_size=config.batch_size, device=device_str, num_workers=config.num_workers)
+        task = SplitMNIST(
+            task_id=task_id,
+            batch_size=config.batch_size,
+            device=device_str,
+            num_workers=config.num_workers,
+        )
         task.setup()
         test_loaders.append(task.get_dataloader(TaskSplit.TEST))
 
@@ -62,20 +76,40 @@ def run_continual_learning(
     model: ContinualJointSystem
     extra: dict[str, object] = {}
     if arm_name == "fast_weights":
-        model = create_fast_weight_arm(config.input_dim, config.hidden_dim, config.output_dim, device_str)
+        model = create_fast_weight_arm(
+            config.input_dim, config.hidden_dim, config.output_dim, device_str
+        )
     elif arm_name == "ewc":
-        model, update = create_ewc_arm(config.input_dim, config.hidden_dim, config.output_dim, device_str, config.ewc_lambda)
+        model, update = create_ewc_arm(
+            config.input_dim,
+            config.hidden_dim,
+            config.output_dim,
+            device_str,
+            config.ewc_lambda,
+        )
         extra["update"] = update
     elif arm_name == "backprop":
-        model = create_backprop_arm(config.input_dim, config.hidden_dim, config.output_dim, device_str)
+        model = create_backprop_arm(
+            config.input_dim, config.hidden_dim, config.output_dim, device_str
+        )
     elif arm_name == "replay":
-        model, buffer = create_replay_arm(config.input_dim, config.hidden_dim, config.output_dim, device_str, config.replay_capacity)
+        model, buffer = create_replay_arm(
+            config.input_dim,
+            config.hidden_dim,
+            config.output_dim,
+            device_str,
+            config.replay_capacity,
+        )
         extra["buffer"] = buffer
     elif arm_name == "lwf":
-        model, lwf_loss = create_lwf_arm(config.input_dim, config.hidden_dim, config.output_dim, device_str)
+        model, lwf_loss = create_lwf_arm(
+            config.input_dim, config.hidden_dim, config.output_dim, device_str
+        )
         extra["lwf_loss"] = lwf_loss
     elif arm_name == "si":
-        model, si = create_si_arm(config.input_dim, config.hidden_dim, config.output_dim, device_str)
+        model, si = create_si_arm(
+            config.input_dim, config.hidden_dim, config.output_dim, device_str
+        )
         extra["si"] = si
     else:
         raise ValueError(f"Unknown arm: {arm_name}")
@@ -135,7 +169,13 @@ def run_continual_learning(
                         metrics = model.train_step(x, y, task_id=task_id)
 
                     # Stability check
-                    verdict = check_stability(guard, transition_fn, x, step=epoch * len(loader) + batch_idx, context=guard_context)
+                    verdict = check_stability(
+                        guard,
+                        transition_fn,
+                        x,
+                        step=epoch * len(loader) + batch_idx,
+                        context=guard_context,
+                    )
                     stability_verdicts.append(verdict)
 
                     # Replay buffer update
@@ -180,7 +220,9 @@ def run_continual_learning(
                         local_y = y % 2
                         correct += (pred == local_y).sum().item()
                         total += y.shape[0]
-                accuracy_matrix[eval_task_id][task_id] = correct / total if total > 0 else 0.0
+                accuracy_matrix[eval_task_id][task_id] = (
+                    correct / total if total > 0 else 0.0
+                )
 
     elif protocol == "task_free":
         # No task boundaries - gradual shift (simulate by mixing tasks)
@@ -202,7 +244,9 @@ def run_continual_learning(
 
             model.train_step(x, y, task_id=task_id)
 
-            verdict = check_stability(guard, transition_fn, x, step=batch_idx, context=guard_context)
+            verdict = check_stability(
+                guard, transition_fn, x, step=batch_idx, context=guard_context
+            )
             stability_verdicts.append(verdict)
 
             if arm_name == "replay":
@@ -238,19 +282,27 @@ def run_continual_learning(
                                 local_ey = ey % 2
                                 correct += (epred == local_ey).sum().item()
                                 total += ey.shape[0]
-                        accuracy_matrix[eval_task_id][eval_task] = correct / total if total > 0 else 0.0
+                        accuracy_matrix[eval_task_id][eval_task] = (
+                            correct / total if total > 0 else 0.0
+                        )
 
     total_time = time.perf_counter() - start_time
 
     # Final evaluation on all tasks
-    final_metrics = compute_cl_metrics(model, test_loaders, CL_NUM_TASKS - 1, accuracy_matrix)
+    final_metrics = compute_cl_metrics(
+        model, test_loaders, CL_NUM_TASKS - 1, accuracy_matrix
+    )
     final_metrics.total_time_s = total_time
     final_metrics.stability_verdicts = stability_verdicts
-    final_metrics.max_spectral_radius = max(v.statistic for v in stability_verdicts) if stability_verdicts else 0.0
+    final_metrics.max_spectral_radius = (
+        max(v.statistic for v in stability_verdicts) if stability_verdicts else 0.0
+    )
 
     # Memory footprint
     if hasattr(model.plasticity, "fast_weight_dim"):
-        final_metrics.plastic_state_bytes = model.plasticity.fast_weight_dim * 4 * config.batch_size
+        final_metrics.plastic_state_bytes = (
+            model.plasticity.fast_weight_dim * 4 * config.batch_size
+        )
     if arm_name == "replay" and "buffer" in extra:
         final_metrics.replay_buffer_bytes = extra["buffer"].memory_bytes()
 
@@ -268,7 +320,11 @@ def run_continual_learning_suite(
     config = config or CLConfig()
     output_dir = Path(output_dir)
 
-    device = "cuda" if config.device == "auto" and torch.cuda.is_available() else config.device
+    device = (
+        "cuda"
+        if config.device == "auto" and torch.cuda.is_available()
+        else config.device
+    )
     config.device = device
 
     all_results: dict[str, dict[str, dict[str, object]]] = {}
@@ -277,7 +333,9 @@ def run_continual_learning_suite(
         all_results[arm] = {}
         for protocol in protocols:
             print(f"\n=== {arm} / {protocol} ===")
-            arm_results: dict[str, list[dict[str, float | int]] | dict[str, float]] = {"seeds": []}
+            arm_results: dict[str, list[dict[str, float | int]] | dict[str, float]] = {
+                "seeds": []
+            }
 
             for seed in range(seeds):
                 print(f"  Seed {seed}...")
@@ -294,19 +352,35 @@ def run_continual_learning_suite(
                     "plastic_state_bytes": metrics.plastic_state_bytes,
                     "replay_buffer_bytes": metrics.replay_buffer_bytes,
                     "max_spectral_radius": metrics.max_spectral_radius,
-                    "stability_kills": sum(1 for v in metrics.stability_verdicts if getattr(v, "kill", False)),
+                    "stability_kills": sum(
+                        1
+                        for v in metrics.stability_verdicts
+                        if getattr(v, "kill", False)
+                    ),
                     "total_time_s": metrics.total_time_s,
                 })
-                print(f"    Avg forgetting: {metrics.avg_forgetting:.4f}, BWT: {metrics.backward_transfer:.4f}")
+                print(
+                    f"    Avg forgetting: {metrics.avg_forgetting:.4f}, BWT: {metrics.backward_transfer:.4f}"
+                )
 
             # Aggregate across seeds
             seeds_list = arm_results["seeds"]
             if seeds_list:
-                for key in ["avg_forgetting", "backward_transfer", "forward_transfer", "max_spectral_radius", "total_time_s"]:
+                for key in [
+                    "avg_forgetting",
+                    "backward_transfer",
+                    "forward_transfer",
+                    "max_spectral_radius",
+                    "total_time_s",
+                ]:
                     vals = [float(s[key]) for s in seeds_list]
                     mean_val = sum(vals) / len(vals)
                     arm_results[f"mean_{key}"] = mean_val
-                    arm_results[f"std_{key}"] = (sum((v - mean_val)**2 for v in vals) / len(vals))**0.5 if len(vals) > 1 else 0.0
+                    arm_results[f"std_{key}"] = (
+                        (sum((v - mean_val) ** 2 for v in vals) / len(vals)) ** 0.5
+                        if len(vals) > 1
+                        else 0.0
+                    )
 
             all_results[arm][protocol] = arm_results
 

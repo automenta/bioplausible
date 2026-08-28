@@ -95,11 +95,11 @@ def _process_file(path: pathlib.Path) -> bool:
             new_lines.append(line)
             continue
 
-        prefix = match.group(1)   # logger.info(
-        _ = match.group(2)        # quote character
-        body = match.group(3)     # f-string body
+        prefix = match.group(1)  # logger.info(
+        _ = match.group(2)  # quote character
+        body = match.group(3)  # f-string body
         exc_info_str = (match.group(4) or "").strip()  # , exc_info=True
-        suffix = match.group(5)   # )
+        suffix = match.group(5)  # )
 
         fmt, args = _parse_fstring_args(body)
         if not args and not exc_info_str:
@@ -122,7 +122,7 @@ def _process_file(path: pathlib.Path) -> bool:
         else:
             inner = f'"{fmt}", {exc_part.removeprefix(",").strip()}'
 
-        new_line = f'{prefix}{inner}{suffix}'
+        new_line = f"{prefix}{inner}{suffix}"
         indent = re.match(r"^\s*", line).group()
         new_lines.append(indent + new_line)
         modified = True

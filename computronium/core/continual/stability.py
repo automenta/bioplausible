@@ -16,6 +16,7 @@ def create_stability_guard(
     """Create stability guard."""
     from computronium.core.stability import StabilityGuard
     from computronium.core.stability.spectral_radius import SpectralRadiusEstimator
+
     estimator = SpectralRadiusEstimator(fast_mode=True)
     return StabilityGuard(
         threshold=threshold,
@@ -30,6 +31,7 @@ def make_transition_fn(model: torch.nn.Module):
 
     Returns a CompositeState with activity, plastic, and substrate.
     """
+
     def transition_fn(state, context=None):
         """Transition function that takes a CompositeState and returns CompositeState."""
         x = state.activity.get("x")
@@ -43,6 +45,7 @@ def make_transition_fn(model: torch.nn.Module):
             plastic={},
             substrate={},
         )
+
     return transition_fn
 
 

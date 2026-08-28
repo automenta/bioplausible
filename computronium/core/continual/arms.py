@@ -30,6 +30,7 @@ from computronium.core.plasticity import create_fast_weight_plasticity
 def _get_compose_joint_system():
     """Lazy import to avoid circular dependency."""
     from computronium.core.system_trainer import compose_joint_system
+
     return compose_joint_system
 
 
@@ -74,7 +75,9 @@ def create_fast_weight_arm(
         PlasticityConfig.fast_weights(fast_weight_dim=512, decay=0.9, learning_rate=0.1)
     )
 
-    joint = compose_joint_system(substrate, geometry, dynamics, plasticity, credit, update)
+    joint = compose_joint_system(
+        substrate, geometry, dynamics, plasticity, credit, update
+    )
     return ContinualJointSystem.from_joint_system(joint).to(device)
 
 
@@ -152,11 +155,11 @@ def create_backprop_arm(
 
     credit = BackpropCredit(CreditAssignmentConfig.gradient())
 
-    update = EuclideanUpdate(
-        ParameterUpdateConfig.euclidean(step_size=0.001)
-    )
+    update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.001))
 
-    joint = compose_joint_system(substrate, geometry, dynamics, NullPlasticity(), credit, update)
+    joint = compose_joint_system(
+        substrate, geometry, dynamics, NullPlasticity(), credit, update
+    )
     return ContinualJointSystem.from_joint_system(joint).to(device)
 
 

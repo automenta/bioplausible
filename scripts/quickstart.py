@@ -137,7 +137,9 @@ def main():
 
     # Load MNIST data
     print("\nLoading MNIST...")
-    train_loader, val_loader, task = make_dataloaders("mnist", batch_size=64, device=device)
+    train_loader, val_loader, task = make_dataloaders(
+        "mnist", batch_size=64, device=device
+    )
 
     # Get input/output dimensions
     input_dim = task.input_dim
@@ -198,7 +200,11 @@ def main():
     )
     with _current_trainer:
         history = _current_trainer.fit()
-    backprop_acc = history[-1].get("val_acc", history[-1].get("train_acc", 0.0)) * 100 if history else 0.0
+    backprop_acc = (
+        history[-1].get("val_acc", history[-1].get("train_acc", 0.0)) * 100
+        if history
+        else 0.0
+    )
     bp_time = time.time() - start_time
     print(f"  Time: {bp_time:.1f}s")
     print(f"  Final Accuracy: {backprop_acc:.1f}%")
@@ -223,7 +229,11 @@ def main():
     )
     with _current_trainer:
         history = _current_trainer.fit()
-    ff_acc = history[-1].get("val_acc", history[-1].get("train_acc", 0.0)) * 100 if history else 0.0
+    ff_acc = (
+        history[-1].get("val_acc", history[-1].get("train_acc", 0.0)) * 100
+        if history
+        else 0.0
+    )
     ff_time = time.time() - start_time
     print(f"  Time: {ff_time:.1f}s")
     print(f"  Final Accuracy: {ff_acc:.1f}%")

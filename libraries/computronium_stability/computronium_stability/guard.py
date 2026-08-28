@@ -153,10 +153,7 @@ class StabilityGuard:
                 next_activity = self._extract_activity(nxt)
                 if next_activity is None:
                     break
-                growth = (
-                    float(torch.linalg.vector_norm(next_activity))
-                    / float(base_norm)
-                )
+                growth = float(torch.linalg.vector_norm(next_activity)) / float(base_norm)
                 peak = max(peak, growth)
                 current = nxt
         return peak
@@ -209,9 +206,7 @@ class StabilityGuard:
         max_stat = max(max_stat, stat)
 
         # Always also compute the other statistic for visibility
-        other_kind = (
-            "fast_proxy" if self.statistic == "windowed_growth" else "windowed_growth"
-        )
+        other_kind = "fast_proxy" if self.statistic == "windowed_growth" else "windowed_growth"
         other_guard = StabilityGuard(
             threshold=self.threshold,
             estimator=self.estimator,
@@ -289,6 +284,7 @@ def attach(
                 break
     """
     if transition_fn is None:
+
         def default_transition(state: StepState) -> StepState:
             x = state.get("x")
             if x is None:

@@ -26,7 +26,7 @@ classifiers = [
 ]
 dependencies = [
     # Core ML framework
-    "torch>=2.0.0",
+    "torch>=2.5",
     # Numerical
     "numpy",
     # CLI / progress / output
@@ -35,12 +35,6 @@ dependencies = [
     # Configuration & validation
     "pydantic>=2.0",
     "omegaconf>=2.3",
-    # Spiking neural networks (LIF kinetics for SpikingSTDP)
-    "snnTorch>=0.8",
-    "cupy-cuda13x>=14.1.1",
-    "nicegui>=3.16.0",
-    "optuna>=4.9.0",
-    "plotly>=6.9.0",
 ]
 
 [project.optional-dependencies]
@@ -59,8 +53,7 @@ dev = [
     "build",
     "twine",
     "pip-audit",
-    # All packages needed by test suite (domain imports cascade widely)
-    "pytorch-lightning>=2.0.0",
+    # Test dependencies
     "torchvision",
     "scikit-learn",
     "scipy",
@@ -73,7 +66,6 @@ dev = [
     "gymnasium",
     "fastapi",
     "uvicorn",
-    "kademlia",
     "onnxruntime",
     "datasets",
     "nicegui>=3.16.0",
@@ -81,10 +73,15 @@ dev = [
     "cryptography==50.0.0",
 ]
 
+# --- Core feature groups ---
+nn = []  # ComputroniumLinear, pluggable credit rules — zero extra deps
+stability = []  # Stability guard, spectral radius — zero extra deps
+
 # --- Domain / data ---
 vision = ["torchvision"]
 lm = ["transformers", "datasets", "tokenizers"]
 rl = ["gymnasium"]
+spiking = ["snnTorch>=0.8", "cupy-cuda13x>=14.1.1"]
 
 # --- Training infrastructure ---
 lightning = ["pytorch-lightning>=2.0.0"]
@@ -94,17 +91,17 @@ analysis = ["optuna", "tabulate>=0.9"]
 ml = ["scikit-learn", "pandas", "scipy"]
 
 # --- Plotting & visualization ---
-plot = ["matplotlib", "seaborn"]
+plot = ["matplotlib", "seaborn", "plotly>=6.9.0"]
 
 # --- Deployment & serving ---
-deploy = ["fastapi", "uvicorn", "onnxruntime"]
-export = ["onnx", "onnxscript"]
+deploy = ["fastapi", "uvicorn"]
+export = ["onnx", "onnxscript", "onnxruntime"]
 
 # --- Networking ---
 p2p = ["kademlia", "grpcio>=1.62", "grpcio-tools>=1.62"]
 
 # --- Desktop UI ---
-ui = ["PyQt6", "pyqtgraph"]
+ui = ["PyQt6", "pyqtgraph", "nicegui>=3.16.0"]
 
 # --- System monitoring ---
 monitoring = ["psutil"]
@@ -112,12 +109,11 @@ monitoring = ["psutil"]
 # --- Existing optional groups ---
 knowledgebase = ["gpytorch", "botorch", "sympy"]
 graphs = ["torch-geometric>=2.5", "networkx"]
-spiking = ["snnTorch>=0.8"]
 llm = ["openai>=1.0"]
 
 # --- Full install ---
 full = [
-    "computronium[vision,lm,rl,lightning,analysis,ml,plot,deploy,export,p2p,ui,monitoring,knowledgebase,graphs,spiking,llm]",
+    "computronium[vision,lm,rl,spiking,lightning,analysis,ml,plot,deploy,export,p2p,ui,monitoring,knowledgebase,graphs,llm,nn,stability]",
 ]
 
 [project.urls]
@@ -225,12 +221,6 @@ line-ending = "lf"
 quote-style = "double"
 
 [tool.pyright]
-# Relaxed from `strict = true` to a per-rule config: noisy inference-by-flow
-# rules (reportUnknown*, reportMissingType*, reportMissingParameterType)
-# are downgraded to warnings to reduce churn on a fast-moving research
-# codebase.  Hard correctness rules (reportMissingImports,
-# reportMissingModuleSource, reportInvalidTypeForm, reportInvalidTypeVarUse)
-# stay as errors.
 reportMissingImports = "error"
 reportMissingModuleSource = "error"
 reportMissingTypeStubs = "warning"
@@ -268,7 +258,6 @@ pythonVersion = "3.14"
 targetVersion = "3.14"
 
 [tool.hypothesis]
-# Property-based testing configuration
 database = {file = ".hypothesis/example.db"}
 verbosity = "verbose"
 phases = ["generate", "shrink", "explain"]

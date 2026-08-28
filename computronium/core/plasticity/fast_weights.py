@@ -91,9 +91,8 @@ class FastWeightPlasticity:
             generator = torch.Generator(device=device)
             generator.manual_seed(outer_dim * 12345 + 42)
             proj = torch.randn(
-                self.fast_weight_dim, outer_dim,
-                generator=generator, device=device
-            ) / (outer_dim ** 0.5)
+                self.fast_weight_dim, outer_dim, generator=generator, device=device
+            ) / (outer_dim**0.5)
             self._proj_matrices[outer_dim] = proj
         return self._proj_matrices[outer_dim]
 
