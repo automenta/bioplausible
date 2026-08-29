@@ -3,7 +3,20 @@ Spiking Neural Network Models
 =============================
 
 SpikingSTDP model for the model zoo.
+
+.. deprecated:: 1.0
+   The legacy spiking models are deprecated. Use native compositions instead:
+   - ``native_tile_snn`` for tile-based Spiking Neural Network
+   - ``TileAlgorithm.from_snn()`` for generic tile SNN
 """
+
+import warnings
+warnings.warn(
+    "computronium.zoo.models.spiking is deprecated. "
+    "Use native compositions: native_tile_snn or TileAlgorithm.from_snn() instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import math
 

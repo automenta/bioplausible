@@ -1,10 +1,23 @@
+from __future__ import annotations
+
 """O1Memory Model with SettleProtocol integration.
 
 Wraps the O1MemoryEPv2 analytic settling into a BioModel that
 implements SettleProtocol for unified convergence instrumentation.
+
+.. deprecated:: 1.0
+   The legacy O1Memory models are deprecated. Use native compositions instead:
+   - ``native_eqprop_mlp`` for Equilibrium Propagation
+   - ``TileAlgorithm`` with appropriate configuration
 """
 
-from __future__ import annotations
+import warnings
+warnings.warn(
+    "computronium.zoo.models.o1memory is deprecated. "
+    "Use native compositions: native_eqprop_mlp or TileAlgorithm instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import torch
 import torch.nn.functional as F

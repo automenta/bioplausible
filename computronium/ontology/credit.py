@@ -373,6 +373,17 @@ class RandomProjectionsCredit:
             grads.append(torch.randn(1))
         return grads
 
+    def surrogate_objective(
+        self,
+        free_state: SystemState,
+        nudged_state: SystemState,
+        geometry: Geometry,
+    ) -> Tensor:
+        """Surrogate objective not defined for RandomProjectionsCredit."""
+        raise NotImplementedError(
+            "Surrogate objective not defined for RandomProjectionsCredit"
+        )
+
 
 class LocalGoodnessCredit:
     """Layer-local contrastive objective (Forward-Forward, PEPITA)."""

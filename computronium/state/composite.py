@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import cast
 
 import torch
 from torch import Tensor
+
+type ActivityValue = Tensor | list[Tensor] | float | dict[str, float]
 
 
 @dataclass(frozen=False, slots=True)
@@ -19,7 +20,7 @@ class CompositeState:
         substrate: σ_t — substrate-owned state (e.g., memristor conductance, analog noise)
     """
 
-    activity: dict[str, Tensor | list[Tensor] | float | dict[str, float]]
+    activity: dict[str, ActivityValue]
     plastic: dict[str, Tensor]
     substrate: dict[str, Tensor]
 
@@ -119,52 +120,13 @@ class CompositeState:
         else:
             self.activity["metrics"] = value
 
-    def clone(self) -> CompositeState:
-        """Create a deep copy with cloned tensors (detached from graph)."""
-        new_activity: dict[str, Tensor | list[Tensor] | float | dict[str, float]] = {}
-        for k, v in self.activity.items():
-            if isinstance(v, Tensor):
-                new_activity[k] = v.detach().clone()  # pyright: ignore[reportAttributeAccessIssue]
-            else:
-                new_activity[k] = v
-        return CompositeState(
-            activity=new_activity,
-            plastic={k: v.detach().clone() for k, v in self.plastic.items()},
-            substrate={k: v.detach().clone() for k, v in self.substrate.items()},
-        )
-
-    def detach_(self) -> CompositeState:
-        """Detach all tensors in-place (for stopping gradient flow)."""
-        for v in self.activity.values():
-            if isinstance(v, Tensor):
-                v.detach_()  # pyright: ignore[reportAttributeAccessIssue]
-        for v in self.plastic.values():
-            v.detach_()
-        for v in self.substrate.values():
-            v.detach_()
-        return self
-
-    def to(self, device: torch.device | str) -> CompositeState:
-        """Move all tensors to device."""
-        new_activity: dict[str, Tensor | list[Tensor] | float | dict[str, float]] = {}
-        for k, v in self.activity.items():
-            if isinstance(v, Tensor):
-                new_activity[k] = v.to(device)  # pyright: ignore[reportAttributeAccessIssue]
-            else:
-                new_activity[k] = v
-        return CompositeState(
-            activity=new_activity,
-            plastic={k: v.to(device) for k, v in self.plastic.items()},
-            substrate={k: v.to(device) for k, v in self.substrate.items()},
-        )
-
     def __post_init__(self) -> None:
         # Ensure mappings are mutable dicts for in-place updates during stepping
-        if not isinstance(self.activity, dict):
+        if not isinstance(self.activity, dict):  # pyright: ignore[reportUnnecessaryIsInstance]
             object.__setattr__(self, "activity", dict(self.activity))
-        if not isinstance(self.plastic, dict):
+        if not isinstance(self.plastic, dict):  # pyright: ignore[reportUnnecessaryIsInstance]
             object.__setattr__(self, "plastic", dict(self.plastic))
-        if not isinstance(self.substrate, dict):
+        if not isinstance(self.substrate, dict):  # pyright: ignore[reportUnnecessaryIsInstance]
             object.__setattr__(self, "substrate", dict(self.substrate))
 
     @classmethod
@@ -174,8 +136,16 @@ class CompositeState:
 
     def clone(self) -> CompositeState:
         """Create a deep copy with cloned tensors (detached from graph)."""
+        new_activity: dict[str, ActivityValue] = {}
+        for k, v in self.activity.items():
+            if isinstance(v, Tensor):
+                new_activity[k] = v.detach().clone()
+            elif isinstance(v, list):
+                new_activity[k] = [t.detach().clone() for t in v]
+            else:
+                new_activity[k] = v
         return CompositeState(
-            activity={k: v.detach().clone() for k, v in self.activity.items()},
+            activity=new_activity,
             plastic={k: v.detach().clone() for k, v in self.plastic.items()},
             substrate={k: v.detach().clone() for k, v in self.substrate.items()},
         )
@@ -183,7 +153,11 @@ class CompositeState:
     def detach_(self) -> CompositeState:
         """Detach all tensors in-place (for stopping gradient flow)."""
         for v in self.activity.values():
-            v.detach_()
+            if isinstance(v, Tensor):
+                v.detach_()
+            elif isinstance(v, list):
+                for t in v:
+                    t.detach_()
         for v in self.plastic.values():
             v.detach_()
         for v in self.substrate.values():
@@ -192,8 +166,16 @@ class CompositeState:
 
     def to(self, device: torch.device | str) -> CompositeState:
         """Move all tensors to device."""
+        new_activity: dict[str, ActivityValue] = {}
+        for k, v in self.activity.items():
+            if isinstance(v, Tensor):
+                new_activity[k] = v.to(device)
+            elif isinstance(v, list):
+                new_activity[k] = [t.to(device) for t in v]
+            else:
+                new_activity[k] = v
         return CompositeState(
-            activity={k: v.to(device) for k, v in self.activity.items()},
+            activity=new_activity,
             plastic={k: v.to(device) for k, v in self.plastic.items()},
             substrate={k: v.to(device) for k, v in self.substrate.items()},
         )

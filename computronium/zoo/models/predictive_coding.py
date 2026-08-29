@@ -1,11 +1,24 @@
+from __future__ import annotations
+
 """
 Combined Predictive Coding Models
-==================================
+=================================
 
 Aggregates all predictive coding models into a single module for the model zoo.
+
+.. deprecated:: 1.0
+   The legacy predictive coding models are deprecated. Use native compositions instead:
+   - ``native_tile_pc`` for tile-based Predictive Coding
+   - ``TileAlgorithm.from_pc()`` for generic tile PC
 """
 
-from __future__ import annotations
+import warnings
+warnings.warn(
+    "computronium.zoo.models.predictive_coding is deprecated. "
+    "Use native compositions: native_tile_pc or TileAlgorithm.from_pc() instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import torch
 from torch import nn

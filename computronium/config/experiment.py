@@ -6,7 +6,7 @@ Replaces fragmented configs in:
 - config/omegaconf.py (ExperimentSchemaConfig, RunConfig, etc.)
 - core/trainer.py (TrainerConfig, LMTrainingConfig)
 - zoo/models/deployments/base.py (DeploymentConfig, ConvDeploymentConfig, etc.)
-- core/local_learning/algorithm.py (TileAlgorithmConfig)
+- core/local_learning/builder.py (TileAlgorithmConfig)
 
 ALL FIELDS ARE REQUIRED - NO DEFAULTS.
 Experiments must specify every parameter explicitly via YAML or programmatic construction.
@@ -445,8 +445,8 @@ def to_deployment_config(config: ExperimentConfig):
 
 
 def to_tile_algorithm_config(config: ExperimentConfig):
-    """Convert to core.local_learning.algorithm.TileAlgorithmConfig."""
-    from computronium.core.local_learning.algorithm import TileAlgorithmConfig
+    """Convert to core.local_learning.builder.TileAlgorithmConfig."""
+    from computronium.core.local_learning.builder import TileAlgorithmConfig
 
     return TileAlgorithmConfig(
         input_dim=config.model.input_dim,

@@ -549,6 +549,56 @@ class Registry:
         return compat
 
     @classmethod
+    def query_axis(
+        cls,
+        substrate: str | list[str] | None = None,
+        geometry: str | list[str] | None = None,
+        dynamics: str | list[str] | None = None,
+        credit: str | list[str] | None = None,
+        update: str | list[str] | None = None,
+        category: ComponentCategory | str | None = None,
+        min_bio_score: float | None = None,
+        max_bio_score: float | None = None,
+    ) -> list[dict[str, object]]:
+        """Query the registry by explicit 5-D ontology axis values.
+
+        This is the primary interface for the AutoScientist to discover
+        models along specific ontology axes. Uses the explicit `ontology_*`
+        fields on ComponentMetadata for native models, with heuristic
+        fallback for legacy models.
+
+        Args:
+            substrate: Substrate axis value(s) (e.g., "DigitalSubstrate", "SparseSubstrate")
+            geometry: Geometry axis value(s) (e.g., "RecurrentGeometry", "TileGeometry")
+            dynamics: Dynamics axis value(s) (e.g., "EnergyMinimizationDynamics", "InstantaneousDynamics")
+            credit: Credit axis value(s) (e.g., "ThermodynamicContrast", "RandomProjectionsCredit")
+            update: Update axis value(s) (e.g., "EuclideanUpdate", "RiemannianOrthogonalUpdate")
+            category: Optional category filter
+            min_bio_score: Minimum bio-plausibility score
+            max_bio_score: Maximum bio-plausibility score
+
+        Returns:
+            List of matching components with their 5-D layer assignments.
+        """
+        fixed: dict[str, str | list[str]] = {}
+        if substrate is not None:
+            fixed["substrate"] = substrate
+        if geometry is not None:
+            fixed["geometry"] = geometry
+        if dynamics is not None:
+            fixed["dynamics"] = dynamics
+        if credit is not None:
+            fixed["credit"] = credit
+        if update is not None:
+            fixed["update"] = update
+
+        return cls.query_ontology(
+            fixed=fixed if fixed else None,
+            category=category,
+            min_bio_score=min_bio_score,
+        )
+
+    @classmethod
     def to_system(cls, model_name: str, **model_kwargs) -> System:
         """Project a registered model into the 5-D ontology as a System.
 
@@ -683,10 +733,19 @@ class Registry:
         layer_value_map = {
             "substrate": {
                 "Digital": [ComputeProfile.GPU, ComputeProfile.CPU],
+                "DigitalSubstrate": [ComputeProfile.GPU, ComputeProfile.CPU],
                 "Memristive": [ComputeProfile.MEMRISTOR],
+                "MemristiveSubstrate": [ComputeProfile.MEMRISTOR],
                 "Neuromorphic": [ComputeProfile.NEUROMORPHIC],
+                "NeuromorphicSubstrate": [ComputeProfile.NEUROMORPHIC],
                 "Optical": [ComputeProfile.OPTICAL],
+                "OpticalSubstrate": [ComputeProfile.OPTICAL],
                 "Quantum": [ComputeProfile.ANALOG],
+                "QuantumSubstrate": [ComputeProfile.ANALOG],
+                "Sparse": [ComputeProfile.GPU],
+                "SparseSubstrate": [ComputeProfile.GPU],
+                "Ternary": [ComputeProfile.GPU],
+                "TernarySubstrate": [ComputeProfile.GPU],
             },
             "geometry": {
                 "Feedforward": [
@@ -697,16 +756,31 @@ class Registry:
                     "target_prop",
                     "mep",
                 ],
+                "FeedforwardGeometry": [
+                    "backprop",
+                    "fa",
+                    "forward_only",
+                    "hebbian",
+                    "target_prop",
+                    "mep",
+                ],
                 "Recurrent": ["eqprop", "recurrent", "equilibrium", "ep", "chl"],
-                "TileMesh": ["tile"],
+                "RecurrentGeometry": ["eqprop", "recurrent", "equilibrium", "ep", "chl"],
+                "TileMesh": ["tile", "equitile"],
+                "TileGeometry": ["tile", "equitile"],
                 "Neuromorphic": ["neuromorphic", "fabric"],
                 "SpatialLattice": ["spatial_lattice", "neural_cube", "3d"],
             },
             "dynamics": {
                 "Instantaneous": [LocalityLevel.FORWARD_ONLY, LocalityLevel.GLOBAL],
+                "InstantaneousDynamics": [LocalityLevel.FORWARD_ONLY, LocalityLevel.GLOBAL],
                 "EnergyMinimization": [LocalityLevel.EQUILIBRIUM],
+                "EnergyMinimizationDynamics": [LocalityLevel.EQUILIBRIUM],
                 "PredictiveSettling": [LocalityLevel.EQUILIBRIUM],
+                "PredictiveSettlingDynamics": [LocalityLevel.EQUILIBRIUM],
                 "SpikeIntegration": [LocalityLevel.LOCAL],
+                "SpikeIntegrationDynamics": [LocalityLevel.LOCAL],
+                "DiffusionDynamics": [LocalityLevel.EQUILIBRIUM],
             },
             "credit": {
                 "ThermodynamicContrast": ["equilibrium", "hebbian", "gradient"],
@@ -716,16 +790,32 @@ class Registry:
                     "target",
                     "gradient",
                 ],
+                "RandomProjectionsCredit": [
+                    "feedback_alignment",
+                    "random_projections",
+                    "target",
+                    "gradient",
+                ],
                 "LocalGoodness": ["forward_only", "hebbian", "gradient"],
+                "LocalGoodnessCredit": ["forward_only", "hebbian", "gradient"],
                 "TemporalTrace": ["spiking", "temporal_trace", "gradient"],
+                "TemporalTraceCredit": ["spiking", "temporal_trace", "gradient"],
                 "TargetInversion": ["target", "target_inversion", "gradient"],
+                "TargetInversionCredit": ["target", "target_inversion", "gradient"],
+                "HomeostaticCredit": ["hebbian", "homeostatic"],
+                "BackpropCredit": ["gradient", "backprop"],
             },
             "update": {
                 "Euclidean": ["sgd", "adam", "adamw", "plain", "gradient"],
+                "EuclideanUpdate": ["sgd", "adam", "adamw", "plain", "gradient"],
                 "RiemannianOrthogonal": ["muon", "riemannian"],
+                "RiemannianOrthogonalUpdate": ["muon", "riemannian"],
                 "SpectralConstrained": ["spectral"],
+                "SpectralConstrainedUpdate": ["spectral"],
                 "NaturalGradient": ["fisher", "natural"],
+                "NaturalGradientUpdate": ["fisher", "natural"],
                 "ElasticConsolidation": ["ewc", "elastic"],
+                "ElasticConsolidationUpdate": ["ewc", "elastic"],
             },
         }
 

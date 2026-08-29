@@ -3,7 +3,22 @@ Combined Feedback Alignment Models
 ===================================
 
 Aggregates all FA-family models into a single module for the model zoo.
+
+.. deprecated:: 1.0
+   The legacy FA models are deprecated. Use native compositions instead:
+   - ``native_fa_mlp`` for standard Feedback Alignment
+   - ``native_tile_fa`` for tile-based FA
+   - ``TileAlgorithm.from_fa()`` for generic tile FA
 """
+
+import warnings
+warnings.warn(
+    "computronium.zoo.models.fa is deprecated. "
+    "Use native compositions: native_fa_mlp, native_tile_fa, "
+    "or TileAlgorithm.from_fa() instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import torch
 import torch.nn.functional as F

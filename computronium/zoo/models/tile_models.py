@@ -17,15 +17,12 @@ from computronium.core.local_learning import (
     TaskHandler,
     TileAlgorithm,
     TileAlgorithmConfig,
-)
-from computronium.core.local_learning.algorithm import (
     WeightLookup,
-    _contrastive_weight_update,
-    _ep_activity_update,
-    _spiking_activity_update,
-    _symmetric_feedback,
-    compute_activity_update,
 )
+from computronium.core.local_learning.weight_update import contrastive_weight_update
+from computronium.core.local_learning.activity import ep_activity_update, spiking_activity_update
+from computronium.core.local_learning.feedback import symmetric_feedback
+from computronium.core.tile.kernels import compute_activity_update
 from computronium.core.model_status import status_tag
 from computronium.core.registry import LocalityLevel, register_model
 

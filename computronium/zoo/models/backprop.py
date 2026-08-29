@@ -3,7 +3,22 @@ Combined Backprop Models
 =========================
 
 Aggregates all standard backprop-based models into a single module for the model zoo.
+
+.. deprecated:: 1.0
+   The legacy backprop models are deprecated. Use native compositions instead:
+   - ``native_backprop_mlp`` for standard backprop MLP
+   - ``native_pepita_mlp`` for PEPITA (forward-only)
+   - ``TileAlgorithm.from_fa()`` for feedback alignment variants
 """
+
+import warnings
+warnings.warn(
+    "computronium.zoo.models.backprop is deprecated. "
+    "Use native compositions: native_backprop_mlp, native_pepita_mlp, "
+    "or TileAlgorithm.from_fa() instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import math
 

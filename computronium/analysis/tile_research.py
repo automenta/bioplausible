@@ -14,7 +14,7 @@ import torch
 
 from computronium.config.unified import ExperimentConfig
 from computronium.core.checkpoint import save_checkpoint
-from computronium.core.local_learning.algorithm import TileAlgorithm
+from computronium.core.local_learning.builder import TileAlgorithm
 
 __all__ = [
     "AblationConfig",

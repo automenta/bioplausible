@@ -30,7 +30,7 @@ class PlasticityConfig:
 
     plasticity_type: str = "null"
     plastic_state_dims: dict[str, int] | None = None
-    consolidation_config: dict | None = None
+    consolidation_config: dict[str, object] | None = None
 
     @classmethod
     def null(cls) -> PlasticityConfig:
@@ -38,7 +38,7 @@ class PlasticityConfig:
         return cls(plasticity_type="null")
 
     @classmethod
-    def routing(cls, gate_dim: int = 64, **kwargs) -> PlasticityConfig:
+    def routing(cls, gate_dim: int = 64, **kwargs: object) -> PlasticityConfig:
         """Routing plasticity: state-dependent pathway gating."""
         return cls(
             plasticity_type="routing",
@@ -47,7 +47,9 @@ class PlasticityConfig:
         )
 
     @classmethod
-    def fast_weights(cls, fast_weight_dim: int = 512, **kwargs) -> PlasticityConfig:
+    def fast_weights(
+        cls, fast_weight_dim: int = 512, **kwargs: object
+    ) -> PlasticityConfig:
         """Fast weight plasticity: episode-local associative memory."""
         return cls(
             plasticity_type="fast_weights",
@@ -56,7 +58,7 @@ class PlasticityConfig:
         )
 
     @classmethod
-    def substrate_coupled(cls, **kwargs) -> PlasticityConfig:
+    def substrate_coupled(cls, **kwargs: object) -> PlasticityConfig:
         """Substrate-coupled plasticity: reuse substrate adapters as physical plasticity."""
         return cls(
             plasticity_type="substrate_coupled",
@@ -65,7 +67,7 @@ class PlasticityConfig:
         )
 
     @classmethod
-    def rule_state(cls, num_operators: int = 8, **kwargs) -> PlasticityConfig:
+    def rule_state(cls, num_operators: int = 8, **kwargs: object) -> PlasticityConfig:
         """Rule state plasticity (Z3): operator selection via ψ."""
         return cls(
             plasticity_type="rule_state",

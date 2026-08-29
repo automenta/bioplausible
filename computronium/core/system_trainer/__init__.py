@@ -7,14 +7,8 @@ This package provides:
 """
 
 from computronium.core.system_trainer.config import (
-    JointSystem,
     SystemTrainerConfig,
     _DataProvider,
-    TS,
-    TG,
-    TD,
-    TC,
-    TU,
 )
 from computronium.core.system_trainer.factory import (
     compose_system,
@@ -29,6 +23,18 @@ from computronium.core.system_trainer.joint import (
     compose_joint_system_from_configs,
     create_routing_eqprop_system,
     create_fast_weight_eqprop_system,
+)
+from computronium.core.system_trainer.protocol import (
+    JointSystem,
+    TS,
+    TG,
+    TD,
+    TC,
+    TU,
+)
+from computronium.core.system_trainer.spec import (
+    compose_joint_system_from_configs as _compose_joint_system_from_configs_spec,
+    compose_system_from_configs as _compose_system_from_configs_spec,
 )
 from computronium.core.system_trainer.trainer import SystemTrainer
 
@@ -68,6 +74,7 @@ from computronium.core.continual import (
 __all__ = [
     "SystemTrainer",
     "SystemTrainerConfig",
+    "JointSystem",
     "compose_joint_system",
     "compose_joint_system_from_configs",
     "compose_system",
@@ -78,6 +85,12 @@ __all__ = [
     "create_routing_eqprop_system",
     "create_fast_weight_eqprop_system",
     "extract_config",
+    "_DataProvider",
+    "TS",
+    "TG",
+    "TD",
+    "TC",
+    "TU",
     # Continual Learning re-exports
     "CL_CLASSES_PER_TASK",
     "CL_NUM_TASKS",

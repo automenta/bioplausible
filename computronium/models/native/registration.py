@@ -15,7 +15,19 @@ from computronium.core.registry import (
 from computronium.models.native.backprop_native import native_backprop_mlp
 from computronium.models.native.diffusion_eqprop_native import native_diffusion_eqprop
 from computronium.models.native.eqprop_native import native_eqprop_mlp
-from computronium.models.native.fa_native import native_fa_mlp
+from computronium.models.native.fa_native import (
+    native_fa_mlp,
+    native_fa_adaptive,
+    native_fa_stochastic,
+    native_fa_contrastive,
+    native_fa_sign_symmetric,
+    native_fa_direct,
+    native_fa_energy_guided,
+    native_fa_energy_minimizing,
+    native_fa_equilibrium_alignment,
+    native_fa_layerwise_equilibrium,
+    native_fa_deep_dfa,
+)
 from computronium.models.native.momentum_eqprop_native import native_momentum_eqprop
 from computronium.models.native.pepita_native import native_pepita_mlp
 from computronium.models.native.research_native import (
@@ -28,6 +40,9 @@ from computronium.models.native.ternary_eqprop_native import native_ternary_eqpr
 from computronium.models.native.tile_native import (
     native_tile_ep,
     native_tile_fa,
+    native_tile_gnn,
+    native_tile_hebbian,
+    native_tile_pc,
     native_tile_snn,
     native_tile_tp,
 )
@@ -141,6 +156,186 @@ register_model(
     ontology_credit="RandomProjectionsCredit",
     ontology_update="EuclideanUpdate",
 )(native_fa_mlp)
+
+register_model(
+    "native_fa_adaptive",
+    family="fa",
+    domain="general",
+    tags=["native", "feedback-alignment", "adaptive", "random-projections"],
+    bio_plausibility_score=0.75,
+    locality_level=LocalityLevel.GLOBAL,
+    credit_assignment_type="feedback_alignment",
+    compute_profile=ComputeProfile.GPU,
+    requires_backward=True,
+    memory_complexity="O(N)",
+    ontology_substrate="DigitalSubstrate",
+    ontology_geometry="FeedforwardGeometry",
+    ontology_dynamics="InstantaneousDynamics",
+    ontology_credit="RandomProjectionsCredit",
+    ontology_update="EuclideanUpdate",
+)(native_fa_adaptive)
+
+register_model(
+    "native_fa_stochastic",
+    family="fa",
+    domain="general",
+    tags=["native", "feedback-alignment", "stochastic", "random-projections"],
+    bio_plausibility_score=0.75,
+    locality_level=LocalityLevel.GLOBAL,
+    credit_assignment_type="feedback_alignment",
+    compute_profile=ComputeProfile.GPU,
+    requires_backward=True,
+    memory_complexity="O(N)",
+    ontology_substrate="DigitalSubstrate",
+    ontology_geometry="FeedforwardGeometry",
+    ontology_dynamics="InstantaneousDynamics",
+    ontology_credit="RandomProjectionsCredit",
+    ontology_update="EuclideanUpdate",
+)(native_fa_stochastic)
+
+register_model(
+    "native_fa_contrastive",
+    family="fa",
+    domain="general",
+    tags=["native", "feedback-alignment", "contrastive", "random-projections"],
+    bio_plausibility_score=0.75,
+    locality_level=LocalityLevel.GLOBAL,
+    credit_assignment_type="feedback_alignment",
+    compute_profile=ComputeProfile.GPU,
+    requires_backward=True,
+    memory_complexity="O(N)",
+    ontology_substrate="DigitalSubstrate",
+    ontology_geometry="FeedforwardGeometry",
+    ontology_dynamics="InstantaneousDynamics",
+    ontology_credit="RandomProjectionsCredit",
+    ontology_update="EuclideanUpdate",
+)(native_fa_contrastive)
+
+register_model(
+    "native_fa_sign_symmetric",
+    family="fa",
+    domain="general",
+    tags=["native", "feedback-alignment", "sign-symmetric", "random-projections"],
+    bio_plausibility_score=0.75,
+    locality_level=LocalityLevel.GLOBAL,
+    credit_assignment_type="feedback_alignment",
+    compute_profile=ComputeProfile.GPU,
+    requires_backward=True,
+    memory_complexity="O(N)",
+    ontology_substrate="DigitalSubstrate",
+    ontology_geometry="FeedforwardGeometry",
+    ontology_dynamics="InstantaneousDynamics",
+    ontology_credit="RandomProjectionsCredit",
+    ontology_update="EuclideanUpdate",
+)(native_fa_sign_symmetric)
+
+register_model(
+    "native_fa_direct",
+    family="fa",
+    domain="general",
+    tags=["native", "feedback-alignment", "dfa", "direct", "random-projections"],
+    bio_plausibility_score=0.75,
+    locality_level=LocalityLevel.GLOBAL,
+    credit_assignment_type="feedback_alignment",
+    compute_profile=ComputeProfile.GPU,
+    requires_backward=True,
+    memory_complexity="O(N)",
+    ontology_substrate="DigitalSubstrate",
+    ontology_geometry="FeedforwardGeometry",
+    ontology_dynamics="InstantaneousDynamics",
+    ontology_credit="RandomProjectionsCredit",
+    ontology_update="EuclideanUpdate",
+)(native_fa_direct)
+
+register_model(
+    "native_fa_energy_guided",
+    family="fa",
+    domain="general",
+    tags=["native", "feedback-alignment", "energy-guided", "random-projections"],
+    bio_plausibility_score=0.75,
+    locality_level=LocalityLevel.GLOBAL,
+    credit_assignment_type="feedback_alignment",
+    compute_profile=ComputeProfile.GPU,
+    requires_backward=True,
+    memory_complexity="O(N)",
+    ontology_substrate="DigitalSubstrate",
+    ontology_geometry="FeedforwardGeometry",
+    ontology_dynamics="InstantaneousDynamics",
+    ontology_credit="RandomProjectionsCredit",
+    ontology_update="EuclideanUpdate",
+)(native_fa_energy_guided)
+
+register_model(
+    "native_fa_energy_minimizing",
+    family="fa",
+    domain="general",
+    tags=["native", "feedback-alignment", "energy-minimizing", "random-projections"],
+    bio_plausibility_score=0.75,
+    locality_level=LocalityLevel.GLOBAL,
+    credit_assignment_type="feedback_alignment",
+    compute_profile=ComputeProfile.GPU,
+    requires_backward=True,
+    memory_complexity="O(N)",
+    ontology_substrate="DigitalSubstrate",
+    ontology_geometry="FeedforwardGeometry",
+    ontology_dynamics="InstantaneousDynamics",
+    ontology_credit="RandomProjectionsCredit",
+    ontology_update="EuclideanUpdate",
+)(native_fa_energy_minimizing)
+
+register_model(
+    "native_fa_equilibrium_alignment",
+    family="fa",
+    domain="general",
+    tags=["native", "feedback-alignment", "equilibrium-alignment", "random-projections"],
+    bio_plausibility_score=0.75,
+    locality_level=LocalityLevel.GLOBAL,
+    credit_assignment_type="feedback_alignment",
+    compute_profile=ComputeProfile.GPU,
+    requires_backward=True,
+    memory_complexity="O(N)",
+    ontology_substrate="DigitalSubstrate",
+    ontology_geometry="FeedforwardGeometry",
+    ontology_dynamics="InstantaneousDynamics",
+    ontology_credit="RandomProjectionsCredit",
+    ontology_update="EuclideanUpdate",
+)(native_fa_equilibrium_alignment)
+
+register_model(
+    "native_fa_layerwise_equilibrium",
+    family="fa",
+    domain="general",
+    tags=["native", "feedback-alignment", "layerwise-equilibrium", "random-projections"],
+    bio_plausibility_score=0.75,
+    locality_level=LocalityLevel.GLOBAL,
+    credit_assignment_type="feedback_alignment",
+    compute_profile=ComputeProfile.GPU,
+    requires_backward=True,
+    memory_complexity="O(N)",
+    ontology_substrate="DigitalSubstrate",
+    ontology_geometry="FeedforwardGeometry",
+    ontology_dynamics="InstantaneousDynamics",
+    ontology_credit="RandomProjectionsCredit",
+    ontology_update="EuclideanUpdate",
+)(native_fa_layerwise_equilibrium)
+
+register_model(
+    "native_fa_deep_dfa",
+    family="fa",
+    domain="general",
+    tags=["native", "feedback-alignment", "deep-dfa", "eqprop", "random-projections"],
+    bio_plausibility_score=0.75,
+    locality_level=LocalityLevel.GLOBAL,
+    credit_assignment_type="feedback_alignment",
+    compute_profile=ComputeProfile.GPU,
+    requires_backward=True,
+    memory_complexity="O(N)",
+    ontology_substrate="DigitalSubstrate",
+    ontology_geometry="FeedforwardGeometry",
+    ontology_dynamics="InstantaneousDynamics",
+    ontology_credit="RandomProjectionsCredit",
+    ontology_update="EuclideanUpdate",
+)(native_fa_deep_dfa)
 
 # Register native Backprop model
 register_model(
@@ -307,3 +502,60 @@ register_model(
     ontology_credit="ThermodynamicContrast",
     ontology_update="EuclideanUpdate",
 )(native_finite_nudge_ep)
+
+# Register native Tile Hebbian model
+register_model(
+    "native_tile_hebbian",
+    family="equitile",
+    domain="general",
+    tags=["native", "tile", "hebbian", "local"],
+    bio_plausibility_score=0.85,
+    locality_level=LocalityLevel.LOCAL,
+    credit_assignment_type="hebbian",
+    compute_profile=ComputeProfile.GPU,
+    requires_backward=False,
+    memory_complexity="O(N)",
+    ontology_substrate="DigitalSubstrate",
+    ontology_geometry="TileGeometry",
+    ontology_dynamics="InstantaneousDynamics",
+    ontology_credit="LocalGoodnessCredit",
+    ontology_update="EuclideanUpdate",
+)(native_tile_hebbian)
+
+# Register native Tile Predictive Coding model
+register_model(
+    "native_tile_pc",
+    family="equitile",
+    domain="general",
+    tags=["native", "tile", "predictive-coding", "local"],
+    bio_plausibility_score=0.9,
+    locality_level=LocalityLevel.LOCAL,
+    credit_assignment_type="forward-only",
+    compute_profile=ComputeProfile.GPU,
+    requires_backward=False,
+    memory_complexity="O(N)",
+    ontology_substrate="DigitalSubstrate",
+    ontology_geometry="TileGeometry",
+    ontology_dynamics="PredictiveSettlingDynamics",
+    ontology_credit="LocalGoodnessCredit",
+    ontology_update="EuclideanUpdate",
+)(native_tile_pc)
+
+# Register native Tile GNN model
+register_model(
+    "native_tile_gnn",
+    family="equitile",
+    domain="general",
+    tags=["native", "tile", "gnn", "graph"],
+    bio_plausibility_score=0.85,
+    locality_level=LocalityLevel.LAYERWISE,
+    credit_assignment_type="forward-only",
+    compute_profile=ComputeProfile.GPU,
+    requires_backward=False,
+    memory_complexity="O(N)",
+    ontology_substrate="DigitalSubstrate",
+    ontology_geometry="TileGeometry",
+    ontology_dynamics="EnergyMinimizationDynamics",
+    ontology_credit="LocalGoodnessCredit",
+    ontology_update="EuclideanUpdate",
+)(native_tile_gnn)

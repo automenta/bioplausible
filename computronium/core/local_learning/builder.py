@@ -37,6 +37,7 @@ from computronium.core.local_learning.mixins import (
     LocalLearningConfigProtocol,
     MultiOptimizerMixin,
 )
+from computronium.core.local_learning.registry import tile_algorithm
 from computronium.core.local_learning.protocols import (
     ActivityUpdateFn,
     FeedbackFn,
@@ -62,6 +63,7 @@ from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
 __all__ = [
     "TileAlgorithm",
     "TileAlgorithmConfig",
+    "tile_algorithm",
 ]
 
 
@@ -656,7 +658,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         steps: int | None = None,
         return_trajectory: bool = False,
         return_dynamics: bool = False,
-    ) -> Tensor:
+    ) -> Tensor | tuple[Tensor, dict[str, object]]:
         """Feedforward through the tile graph to logits."""
         if return_dynamics:
             out, steps_taken, converged, telemetry = self._run_settle_universal(
@@ -677,7 +679,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
                 }
             else:
                 dynamics = {}
-            return out  # Return just the tensor when dynamics requested
+            return out, dynamics
 
         self._clamp_input(x, detach_input=detach_input)
         self._settle(1, nudged=False)
@@ -703,7 +705,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         steps: int | None = None,
         return_trajectory: bool = False,
         return_dynamics: bool = False,
-    ) -> Tensor:
+    ) -> Tensor | tuple[Tensor, dict[str, object]]:
         """Feedforward through the tile graph to logits."""
         return self.forward_logits(
             x,
@@ -945,6 +947,18 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         )
 
     @classmethod
+    @tile_algorithm(
+        name="ep",
+        algorithm="ep",
+        mode="ep",
+        description="Equilibrium Propagation (EquiTile)",
+        default_beta=0.1,
+        requires_beta=True,
+        credit_assignment_type="equilibrium",
+        locality_level="equilibrium",
+        bio_plausibility_score=0.9,
+        tags=["equilibrium", "energy-based", "contrastive"],
+    )
     def from_ep(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
         cls,
         input_dim: int,
@@ -976,6 +990,18 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         )
 
     @classmethod
+    @tile_algorithm(
+        name="fa",
+        algorithm="fa",
+        mode="fa",
+        description="Feedback Alignment (fixed random backward feedback)",
+        default_beta=None,
+        requires_beta=False,
+        credit_assignment_type="feedback_alignment",
+        locality_level="global",
+        bio_plausibility_score=0.75,
+        tags=["feedback-alignment", "random-projections"],
+    )
     def from_fa(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
         cls,
         input_dim: int,
@@ -1006,6 +1032,18 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         )
 
     @classmethod
+    @tile_algorithm(
+        name="hebbian",
+        algorithm="hebbian",
+        mode="ep",
+        description="Pure local Hebbian (single-pass settling, no feedback)",
+        default_beta=None,
+        requires_beta=False,
+        credit_assignment_type="hebbian",
+        locality_level="local",
+        bio_plausibility_score=0.85,
+        tags=["hebbian", "local", "forward-only"],
+    )
     def from_hebbian(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
         cls,
         input_dim: int,
@@ -1036,6 +1074,18 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         )
 
     @classmethod
+    @tile_algorithm(
+        name="pc",
+        algorithm="pc",
+        mode="ep",
+        description="Predictive Coding (prediction-error activity dynamics)",
+        default_beta=0.1,
+        requires_beta=True,
+        credit_assignment_type="forward-only",
+        locality_level="local",
+        bio_plausibility_score=0.9,
+        tags=["predictive-coding", "local", "prediction-error"],
+    )
     def from_pc(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
         cls,
         input_dim: int,
@@ -1067,6 +1117,18 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         )
 
     @classmethod
+    @tile_algorithm(
+        name="tp",
+        algorithm="tp",
+        mode="ep",
+        description="Target Propagation (target-driven feedback)",
+        default_beta=0.1,
+        requires_beta=True,
+        credit_assignment_type="target",
+        locality_level="layerwise",
+        bio_plausibility_score=0.8,
+        tags=["target-prop", "predictive", "layerwise"],
+    )
     def from_tp(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
         cls,
         input_dim: int,
@@ -1098,6 +1160,18 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         )
 
     @classmethod
+    @tile_algorithm(
+        name="snn",
+        algorithm="snn",
+        mode="ep",
+        description="Spiking Neural Network (threshold-and-reset activity dynamics)",
+        default_beta=0.1,
+        requires_beta=True,
+        credit_assignment_type="spiking",
+        locality_level="local",
+        bio_plausibility_score=0.95,
+        tags=["spiking", "neuromorphic", "threshold"],
+    )
     def from_snn(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
         cls,
         input_dim: int,
@@ -1129,6 +1203,18 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         )
 
     @classmethod
+    @tile_algorithm(
+        name="gnn",
+        algorithm="gnn",
+        mode="ep",
+        description="Graph Neural Network (message-passing across tile edges)",
+        default_beta=0.1,
+        requires_beta=True,
+        credit_assignment_type="forward-only",
+        locality_level="layerwise",
+        bio_plausibility_score=0.85,
+        tags=["gnn", "graph", "message-passing"],
+    )
     def from_gnn(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
         cls,
         input_dim: int,
@@ -1157,4 +1243,45 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
                 beta=beta,
                 **kwargs,
             )
+        )
+
+    @classmethod
+    def from_config(cls, config: TileAlgorithmConfig) -> TileAlgorithm:
+        """Create a TileAlgorithm from a configuration object.
+
+        This is the single entry point for config-driven composition,
+        enabling AutoScientist and HPO to construct TileAlgorithm instances
+        without knowing the specific variant factory methods.
+
+        Args:
+            config: TileAlgorithmConfig with algorithm field specifying the variant.
+
+        Returns:
+            A TileAlgorithm instance configured for the specified algorithm.
+
+        Raises:
+            ValueError: If the algorithm variant is not registered.
+        """
+        from computronium.core.local_learning.registry import (
+            get_tile_algorithm_factory,
+            get_tile_algorithm_metadata,
+        )
+
+        metadata = get_tile_algorithm_metadata(config.algorithm)
+        factory = get_tile_algorithm_factory(config.algorithm)
+
+        kwargs = dict(config.extra)
+        if metadata.requires_beta:
+            kwargs["beta"] = config.beta
+
+        return factory(
+            cls,
+            input_dim=config.input_dim,
+            output_dim=config.output_dim,
+            num_layers=config.num_hidden_layers,
+            neurons_per_tile=config.neurons_per_tile,
+            tiles_per_layer=config.tiles_per_layer,
+            learning_rate=config.learning_rate,
+            importance_lr=config.importance_lr,
+            **kwargs,
         )

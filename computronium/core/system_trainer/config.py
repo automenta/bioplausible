@@ -1,66 +1,20 @@
-"""Configuration and protocols for SystemTrainer."""
+"""Configuration for SystemTrainer.
+
+This module contains only the SystemTrainerConfig dataclass.
+Protocols are in protocol.py, serialization utilities are in spec.py.
+"""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol, TypeVar
+from dataclasses import dataclass
+from typing import Protocol, TYPE_CHECKING
 
 import torch
 from torch import Tensor
 
-from computronium.core.joint.transition import PlasticityConfig, PlasticityPrimitive
-from computronium.ontology import (
-    CreditAssignment,
-    CreditAssignmentConfig,
-    Geometry,
-    GeometryConfig,
-    ParameterUpdate,
-    ParameterUpdateConfig,
-    StateDynamics,
-    StateDynamicsConfig,
-    Substrate,
-    SubstrateConfig,
-    System,
-    substrate_from_config,
-)
-from computronium.state import StateVariable, SystemContext
-
 if TYPE_CHECKING:
     from types import TracebackType
-
-
-class JointSystem[
-    TS: Substrate,
-    TG: Geometry,
-    TD: StateDynamics,
-    TP: PlasticityPrimitive,
-    TC: CreditAssignment,
-    TU: ParameterUpdate,
-](Protocol):
-    """Protocol for 6-D joint systems."""
-
-    substrate: TS
-    geometry: TG
-    dynamics: TD
-    plasticity: TP
-    credit: TC
-    update: TU
-
-    def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]: ...
-    def forward(self, x: Tensor) -> Tensor: ...
-    @property
-    def context(self) -> SystemContext: ...
-    def to_spec(self) -> dict[str, object]: ...
-    @classmethod
-    def from_spec(cls, spec: dict) -> JointSystem: ...
-
-
-TS = TypeVar("TS", bound=Substrate)
-TG = TypeVar("TG", bound=Geometry)
-TD = TypeVar("TD", bound=StateDynamics)
-TC = TypeVar("TC", bound=CreditAssignment)
-TU = TypeVar("TU", bound=ParameterUpdate)
 
 
 @dataclass(slots=True)
@@ -102,12 +56,6 @@ class _DataProvider(Protocol):
 
 
 __all__ = [
-    "JointSystem",
     "SystemTrainerConfig",
     "_DataProvider",
-    "TS",
-    "TG",
-    "TD",
-    "TC",
-    "TU",
 ]

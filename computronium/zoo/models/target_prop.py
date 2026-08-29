@@ -1,9 +1,22 @@
 """
 Target Propagation Models
-==========================
+=========================
 
 Difference Target Propagation model for the model zoo.
+
+.. deprecated:: 1.0
+   The legacy target propagation models are deprecated. Use native compositions instead:
+   - ``native_tile_tp`` for tile-based Target Propagation
+   - ``TileAlgorithm.from_tp()`` for generic tile TP
 """
+
+import warnings
+warnings.warn(
+    "computronium.zoo.models.target_prop is deprecated. "
+    "Use native compositions: native_tile_tp or TileAlgorithm.from_tp() instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import math
 

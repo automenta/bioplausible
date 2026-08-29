@@ -6,13 +6,10 @@ from computronium.core.local_learning.activity import (
     hebbian_activity_update,
     spiking_activity_update,
 )
-from computronium.core.local_learning.algorithm import (
-    TileAlgorithm,
-    TileAlgorithmConfig,
-)
 from computronium.core.local_learning.builder import (
     TileAlgorithm,
     TileAlgorithmConfig,
+    tile_algorithm,
 )
 from computronium.core.local_learning.feedback import (
     no_feedback,
@@ -27,6 +24,12 @@ from computronium.core.local_learning.protocols import (
     FeedbackFn,
     WeightLookup,
     WeightUpdateFn,
+)
+from computronium.core.local_learning.registry import (
+    get_tile_algorithm_factory,
+    get_tile_algorithm_metadata,
+    list_tile_algorithms,
+    list_tile_algorithms_with_metadata,
 )
 from computronium.core.local_learning.task import TaskHandler
 from computronium.core.local_learning.weight_update import (
@@ -52,4 +55,9 @@ __all__ = [
     "rules",
     "spiking_activity_update",
     "symmetric_feedback",
+    "tile_algorithm",
+    "get_tile_algorithm_factory",
+    "get_tile_algorithm_metadata",
+    "list_tile_algorithms",
+    "list_tile_algorithms_with_metadata",
 ]

@@ -1,3 +1,4 @@
+# pyright: ignore[reportUnsupportedDunderAll]
 """
 Bioplausible: Unified Platform for Bio-Plausible Learning Research
 
@@ -105,7 +106,10 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     # Core 5-D Ontology (new decomposed modules)
     "AnalogSubstrate": ("computronium.ontology.substrate", "AnalogSubstrate"),
     "BackpropCredit": ("computronium.ontology.credit", "BackpropCredit"),
-    "CreditAssignmentConfig": ("computronium.ontology.credit", "CreditAssignmentConfig"),
+    "CreditAssignmentConfig": (
+        "computronium.ontology.credit",
+        "CreditAssignmentConfig",
+    ),
     "DigitalSubstrate": ("computronium.ontology.substrate", "DigitalSubstrate"),
     "ElasticConsolidationUpdate": (
         "computronium.ontology.update",
@@ -118,11 +122,17 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "EuclideanUpdate": ("computronium.ontology.update", "EuclideanUpdate"),
     "FeedforwardGeometry": ("computronium.ontology.geometry", "FeedforwardGeometry"),
     "GeometryConfig": ("computronium.ontology.geometry", "GeometryConfig"),
-    "InstantaneousDynamics": ("computronium.ontology.dynamics", "InstantaneousDynamics"),
+    "InstantaneousDynamics": (
+        "computronium.ontology.dynamics",
+        "InstantaneousDynamics",
+    ),
     "LocalGoodnessCredit": ("computronium.ontology.credit", "LocalGoodnessCredit"),
     "MemristiveSubstrate": ("computronium.ontology.substrate", "MemristiveSubstrate"),
     "NaturalGradientUpdate": ("computronium.ontology.update", "NaturalGradientUpdate"),
-    "NeuromorphicSubstrate": ("computronium.ontology.substrate", "NeuromorphicSubstrate"),
+    "NeuromorphicSubstrate": (
+        "computronium.ontology.substrate",
+        "NeuromorphicSubstrate",
+    ),
     "OpticalSubstrate": ("computronium.ontology.substrate", "OpticalSubstrate"),
     "ParameterUpdateConfig": ("computronium.ontology.update", "ParameterUpdateConfig"),
     "PredictiveSettlingDynamics": (
@@ -162,7 +172,10 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     ),
     "TileGeometry": ("computronium.ontology.geometry", "TileGeometry"),
     # Plasticity Primitives (from computronium.state)
-    "FastWeightPlasticity": ("computronium.ontology.plasticity", "FastWeightPlasticity"),
+    "FastWeightPlasticity": (
+        "computronium.ontology.plasticity",
+        "FastWeightPlasticity",
+    ),
     "NullPlasticity": ("computronium.state", "NullPlasticity"),
     "PlasticityConfig": ("computronium.state", "PlasticityConfig"),
     "RoutingPlasticity": ("computronium.ontology.plasticity", "RoutingPlasticity"),
@@ -333,8 +346,8 @@ __all__ = [
     "PlasticityConfig",
     "PlasticityType",
     "PredictiveSettlingDynamics",
-    "QuantumSubstrate",
     "QuantizedSubstrate",
+    "QuantumSubstrate",
     "RandomProjectionsCredit",
     "RecurrentGeometry",
     "RiemannianOrthogonalUpdate",
@@ -395,11 +408,11 @@ __all__ = [
 ]
 
 
-# ruff: file-ignore[raise-vanilla-args]
+# ruff: file-ignore[raise-vanilla-args, RUF022]
 def __getattr__(name: str) -> object:
     """Lazily import a top-level symbol on first access."""
     if name not in _LAZY:
-        raise AttributeError("cannot find")
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     module_name, attr = _LAZY[name]
     module = __import__(module_name, fromlist=[attr] if attr else ["*"])
     value: object = module if attr is None else getattr(module, attr)

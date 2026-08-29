@@ -3,7 +3,20 @@ Combined Hebbian Models
 =======================
 
 Aggregates all Hebbian-family models into a single module for the model zoo.
+
+.. deprecated:: 1.0
+   The legacy hebbian models are deprecated. Use native compositions instead:
+   - ``native_tile_hebbian`` for tile-based Hebbian
+   - ``TileAlgorithm.from_hebbian()`` for generic tile Hebbian
 """
+
+import warnings
+warnings.warn(
+    "computronium.zoo.models.hebbian is deprecated. "
+    "Use native compositions: native_tile_hebbian or TileAlgorithm.from_hebbian() instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import math
 

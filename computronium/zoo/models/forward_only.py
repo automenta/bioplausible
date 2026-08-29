@@ -3,7 +3,22 @@ Combined Forward-Only Models
 =============================
 
 Aggregates all forward-only learning models into a single module for the model zoo.
+
+.. deprecated:: 1.0
+   The legacy forward-only models are deprecated. Use native compositions instead:
+   - ``native_pepita_mlp`` for PEPITA
+   - ``native_tile_hebbian`` for tile-based forward-only (LocalGoodness)
+   - ``TileAlgorithm.from_hebbian()`` for generic tile forward-only
 """
+
+import warnings
+warnings.warn(
+    "computronium.zoo.models.forward_only is deprecated. "
+    "Use native compositions: native_pepita_mlp, native_tile_hebbian, "
+    "or TileAlgorithm.from_hebbian() instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import math
 

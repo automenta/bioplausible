@@ -1,4 +1,23 @@
-"""Equilibrium Propagation Model Zoo Subpackage."""
+"""Equilibrium Propagation Model Zoo Subpackage.
+
+.. deprecated:: 1.0
+   The legacy eqprop models are deprecated. Use native compositions instead:
+   - ``native_eqprop_mlp``, ``native_diffusion_eqprop``, ``native_momentum_eqprop``
+   - ``native_sparse_eqprop``, ``native_ternary_eqprop``
+   - ``native_holomorphic_ep``, ``native_directed_ep``, ``native_finite_nudge_ep``
+   - ``native_tile_ep`` for tile-based EqProp
+"""
+
+import warnings
+warnings.warn(
+    "computronium.zoo.models.eqprop is deprecated. "
+    "Use native compositions: native_eqprop_mlp, native_diffusion_eqprop, "
+    "native_momentum_eqprop, native_sparse_eqprop, native_ternary_eqprop, "
+    "native_holomorphic_ep, native_directed_ep, native_finite_nudge_ep, "
+    "native_tile_ep instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import types
 

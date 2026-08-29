@@ -126,7 +126,7 @@ class StateRegistry:
                     raise ValueError(
                         f"Fast plastic variable {name!r} missing from plastic"
                     )
-                if not isinstance(z.plastic[name], Tensor):
+                if not isinstance(z.plastic[name], Tensor):  # pyright: ignore[reportUnnecessaryIsInstance]
                     raise ValueError(f"Fast plastic variable {name!r} must be Tensor")
 
         # Check substrate-owned variables (σ)
@@ -136,7 +136,7 @@ class StateRegistry:
                     raise ValueError(
                         f"Substrate-owned variable {name!r} missing from substrate"
                     )
-                if not isinstance(z.substrate[name], Tensor):
+                if not isinstance(z.substrate[name], Tensor):  # pyright: ignore[reportUnnecessaryIsInstance]
                     raise ValueError(
                         f"Substrate-owned variable {name!r} must be Tensor"
                     )

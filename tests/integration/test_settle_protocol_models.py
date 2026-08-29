@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 import torch
 
-from computronium.core.local_learning.algorithm import (
+from computronium.core.local_learning.builder import (
     TileAlgorithm,
     TileAlgorithmConfig,
 )

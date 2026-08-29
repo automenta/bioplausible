@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 import torch
 import torch.nn.functional as F
 
-from computronium.core.local_learning.algorithm import TileAlgorithm
+from computronium.core.local_learning.builder import TileAlgorithm
 from computronium.core.logging import get_logger
 from computronium.core.registry import LocalityLevel, register_controller
 

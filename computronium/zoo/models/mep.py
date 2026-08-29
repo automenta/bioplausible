@@ -1,10 +1,23 @@
+from __future__ import annotations
+
 """MEP Model with SettleProtocol integration.
 
 Wraps the MEP Settler and EPGradient strategies into a BioModel that
 implements SettleProtocol for unified convergence instrumentation.
+
+.. deprecated:: 1.0
+   The legacy MEP models are deprecated. Use native compositions instead:
+   - ``TileAlgorithm`` with appropriate configuration for MEP variants
+   - ``native_eqprop_mlp`` for Equilibrium Propagation
 """
 
-from __future__ import annotations
+import warnings
+warnings.warn(
+    "computronium.zoo.models.mep is deprecated. "
+    "Use native compositions: TileAlgorithm or native_eqprop_mlp instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import torch
 import torch.nn.functional as F
