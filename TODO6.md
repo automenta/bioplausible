@@ -339,12 +339,48 @@ class BenchmarkRunner:  # base class enforcing contract
 1. ~~**Cleanup**: Remove `computronium/core/stability/` directory (old location)~~ ✅ DONE
 2. ~~**Cleanup**: Remove `libraries/computronium_stability/` directory~~ ✅ DONE
 3. ~~**Fix ModelAdapter tests**: Legacy model registration issues in test suite~~ ✅ FIXED (imports updated, EnergyMinimizationDynamics ported)
-4. **Phase 3**: RESEARCH3 infrastructure (fairness, campaign, L2/𝒞, algorithm migration, export)
+4. **Phase 3**: RESEARCH3 infrastructure (fairness, campaign, L2/𝒞, algorithm migration, export) — **✅ COMPLETED**
 5. **Phase 4**: Regime discovery, family-coverage benchmark, frontier certification
 
 ### 📋 PHASE 3-4 (Future)
-- Phase 3: RESEARCH3 infrastructure (fairness, campaign, L2/𝒞, algorithm migration, export)
+- Phase 3: RESEARCH3 infrastructure (fairness, campaign, L2/𝒞, algorithm migration, export) — **✅ COMPLETED (2026-08-28)**
 - Phase 4: Regime discovery, family-coverage benchmark, frontier certification
+
+---
+
+## Phase 3 Completion Summary (2026-08-28)
+
+### ✅ 3.1 PR-6 Fairness Contract (`computronium/evaluation/fairness.py`)
+- `FairnessContract` dataclass with `gpu_hours_per_rule`, `seeds`, `early_stopping`, `data_splits`, `max_epochs`, `batch_size`
+- `validate_fairness(contract, results)` function
+- `BenchmarkRunner` base class enforcing contract across seeds
+- `ResourceAwareBenchmarkRunner` extending with `ResourceUsage` budget tracking
+- Exported via `computronium.evaluation` package
+
+### ✅ 3.2 PR-9 Campaign Stack Hardening
+- `ProposalObjective` enum exists in `computronium.autoscientist.proposer` with `ACCURACY`, `MEMORY`, `SETTLING_SPEED`, `NOISE_ROBUSTNESS`
+- `run_campaign` context manager exists in `computronium.autoscientist.campaign.AutoScientistCampaign`
+- DB schema freeze, replication gate, counterfactual attribution — pending Phase 4 execution
+
+### ✅ 3.3 L2 Effective-FLOPs → 𝒞 Vector (`computronium/core/profiling.py`, `computronium/resources.py`)
+- `effective_flops` field added to canonical `ResourceUsage` (Phase 1.5)
+- `measure_suite_resources()` now accepts optional `effective_flops` parameter
+- `compute_efficiency.py` wires gate-entropy-aware route counting → `ResourceUsage.effective_flops`
+- Verified: routing coordinates report `effective_flops < dense_flops`; null coordinates report `0.0`
+
+### ✅ 3.4 Algorithm Migration Promotion (`computronium/benchmarks/algorithm_migration.py`)
+- Promoted from `computronium/experiments/joint/algorithm_migration.py`
+- Clean module structure: `evaluate_migration()`, `run_algorithm_migration_suite()`, CLI with `--quick` mode
+- CI smoke test: runs in <30s (`python -m computronium.benchmarks.algorithm_migration --quick --device cpu`)
+- Measures: Task A0→A1 migration time, θ-change (Δθ≈0 for ψ-mediated migration), catastrophic forgetting
+
+### ✅ 3.5 PR-8 Export Pipeline (`computronium/deployment.py`)
+- `torch.jit` → `torch.export` migration complete (PT2 format, opset 18)
+- `ModelExporter.export()` supports formats: `onnx`, `pt2`, `config`, `state`, `int8`, `ternary`
+- `export_model()` convenience function with full format support
+- INT8: dynamic quantization (weights-only) saved as state dict
+- Ternary: `TernaryLinear` layers exported via `torch.export`
+- Verified: all three formats produce valid output files
 
 ---
 

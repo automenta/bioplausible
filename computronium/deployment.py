@@ -63,6 +63,8 @@ class ModelExporter:
     - PT2: Serialized ``torch.export`` program (replaces TorchScript)
     - State dict: PyTorch checkpoint
     - JSON config: Model configuration
+    - INT8: Post-training quantized INT8 model
+    - Ternary: Ternary quantized weights {-1, 0, +1}
 
     Example usage:
         exporter = ModelExporter()
@@ -73,7 +75,7 @@ class ModelExporter:
             model_name='looped_mlp',
             model_params={'input_dim': 784, 'hidden_dim': 256, 'output_dim': 10},
             output_dir='./exports',
-            formats=['onnx', 'pt2', 'config'],
+            formats=['onnx', 'pt2', 'config', 'int8', 'ternary'],
         )
     """
 
@@ -158,6 +160,22 @@ class ModelExporter:
         if "state" in formats:
             path = self._export_state(model, optimizer, output_dir, verbose)
             export_paths["state"] = path
+
+        if "int8" in formats:
+            try:
+                path = self._export_int8(model, output_dir, input_shape, verbose)
+                export_paths["int8"] = path
+            except Exception as e:
+                if verbose:
+                    logger.warning("INT8 export failed: %s", e)
+
+        if "ternary" in formats:
+            try:
+                path = self._export_ternary(model, output_dir, input_shape, verbose)
+                export_paths["ternary"] = path
+            except Exception as e:
+                if verbose:
+                    logger.warning("Ternary export failed: %s", e)
 
         # Create model info
         info = ModelInfo(
@@ -308,6 +326,70 @@ class ModelExporter:
 
         if verbose:
             logger.info("  ✓ State: %s", path)
+
+        return path
+
+    def _export_int8(
+        self,
+        model: nn.Module,
+        output_dir: str,
+        input_shape: tuple[int, ...],
+        verbose: bool,
+    ) -> str:
+        """Export INT8 quantized model state dict.
+
+        Dynamic quantization quantizes weights to INT8 at runtime while keeping
+        activations in FP32. The quantized model is saved as a state dict
+        since quantized modules are not compatible with torch.export.
+        """
+        from computronium.deployment import quantize_model_dynamic_int8
+        from computronium.core.checkpoint import save_checkpoint
+
+        path = str(Path(output_dir) / "model_int8.pt")
+
+        # Quantize model with dynamic quantization (weights only)
+        quantized_model = quantize_model_dynamic_int8(model)
+        quantized_model.eval()
+
+        # Save quantized model state dict
+        ckpt = {
+            "model_state_dict": quantized_model.state_dict(),
+            "model_config": {
+                "quantization": "dynamic_int8",
+                "input_shape": input_shape,
+            },
+        }
+        save_checkpoint(path, ckpt, mkdir=True)
+
+        if verbose:
+            logger.info("  ✓ INT8 (dynamic, state dict): %s", path)
+
+        return path
+
+    def _export_ternary(
+        self,
+        model: nn.Module,
+        output_dir: str,
+        input_shape: tuple[int, ...],
+        verbose: bool,
+    ) -> str:
+        """Export ternary quantized model."""
+        from computronium.deployment import quantize_model_ternary
+
+        path = str(Path(output_dir) / "model_ternary.pt2")
+
+        # Quantize model
+        quantized_model = quantize_model_ternary(model)
+        quantized_model.eval()
+
+        # Export quantized model using torch.export
+        dummy_input = torch.randn(input_shape, device=self.device)
+        quantized_model = quantized_model.to(self.device)
+        program = torch.export.export(quantized_model, (dummy_input,))
+        torch.export.save(program, path)
+
+        if verbose:
+            logger.info("  ✓ Ternary: %s", path)
 
         return path
 

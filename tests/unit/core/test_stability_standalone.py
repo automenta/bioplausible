@@ -85,7 +85,9 @@ class MockTransition:
         batch_size = x.shape[0]
         new_x = self.rho * x
         # Create a simple CompositeState-like object with clone method
-        return make_state(activity={"x": new_x}, plastic=z.plastic, substrate=z.substrate)
+        return make_state(
+            activity={"x": new_x}, plastic=z.plastic, substrate=z.substrate
+        )
 
 
 class MockContractingTransition:
@@ -100,39 +102,49 @@ class MockContractingTransition:
         if self._fixed_point is None:
             self._fixed_point = torch.zeros_like(x)
         new_x = self._fixed_point + self.rate * (x - self._fixed_point)
-        return make_state(activity={"x": new_x}, plastic=z.plastic, substrate=z.substrate)
+        return make_state(
+            activity={"x": new_x}, plastic=z.plastic, substrate=z.substrate
+        )
 
 
 @pytest.fixture
 def mock_context():
     """Create a minimal SystemContext-like object for testing."""
-    registry = type("StateRegistry", (), {
-        "register": lambda self, var: None
-    })()
+    registry = type("StateRegistry", (), {"register": lambda self, var: None})()
     registry.register(type("StateVariable", (), {"name": "x", "persistent": True})())
 
-    return type("SystemContext", (), {
-        "theta": {"W": torch.randn(32, 32, requires_grad=True)},
-        "geometry": type("Geometry", (), {})(),
-        "substrate": type("Substrate", (), {})(),
-        "substrate_config": type("SubstrateConfig", (), {})(),
-        "geometry_config": type("GeometryConfig", (), {})(),
-        "dynamics_config": type("StateDynamicsConfig", (), {})(),
-        "credit_config": type("CreditAssignmentConfig", (), {})(),
-        "update_config": type("ParameterUpdateConfig", (), {})(),
-        "plasticity_config": type("PlasticityConfig", (), {"plasticity_type": "null"})(),
-        "registry": registry,
-    })()
+    return type(
+        "SystemContext",
+        (),
+        {
+            "theta": {"W": torch.randn(32, 32, requires_grad=True)},
+            "geometry": type("Geometry", (), {})(),
+            "substrate": type("Substrate", (), {})(),
+            "substrate_config": type("SubstrateConfig", (), {})(),
+            "geometry_config": type("GeometryConfig", (), {})(),
+            "dynamics_config": type("StateDynamicsConfig", (), {})(),
+            "credit_config": type("CreditAssignmentConfig", (), {})(),
+            "update_config": type("ParameterUpdateConfig", (), {})(),
+            "plasticity_config": type(
+                "PlasticityConfig", (), {"plasticity_type": "null"}
+            )(),
+            "registry": registry,
+        },
+    )()
 
 
 @pytest.fixture
 def initial_state():
     """Create initial state-like object."""
-    return type("CompositeState", (), {
-        "activity": {"x": torch.randn(4, 32)},
-        "plastic": {},
-        "substrate": {},
-    })()
+    return type(
+        "CompositeState",
+        (),
+        {
+            "activity": {"x": torch.randn(4, 32)},
+            "plastic": {},
+            "substrate": {},
+        },
+    )()
 
 
 # ============================================================
@@ -446,7 +458,9 @@ class TestSettlingTime:
                 else:
                     new_x = x * 0.9
                 self.step_count += 1
-                return make_state(activity={"x": new_x}, plastic=z.plastic, substrate=z.substrate)
+                return make_state(
+                    activity={"x": new_x}, plastic=z.plastic, substrate=z.substrate
+                )
 
         transition = OscillatingTransition()
         z = make_state(activity={"x": torch.randn(4, 32)})
@@ -796,23 +810,29 @@ class TestDeviceManagement:
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_cuda_consistency(self):
         """All estimators should work on CUDA if available."""
-        registry = type("StateRegistry", (), {
-            "register": lambda self, var: None
-        })()
-        registry.register(type("StateVariable", (), {"name": "x", "persistent": True})())
+        registry = type("StateRegistry", (), {"register": lambda self, var: None})()
+        registry.register(
+            type("StateVariable", (), {"name": "x", "persistent": True})()
+        )
 
-        context = type("SystemContext", (), {
-            "theta": {"W": torch.randn(32, 32, requires_grad=True, device="cuda")},
-            "geometry": type("Geometry", (), {})(),
-            "substrate": type("Substrate", (), {})(),
-            "substrate_config": type("SubstrateConfig", (), {})(),
-            "geometry_config": type("GeometryConfig", (), {})(),
-            "dynamics_config": type("StateDynamicsConfig", (), {})(),
-            "credit_config": type("CreditAssignmentConfig", (), {})(),
-            "update_config": type("ParameterUpdateConfig", (), {})(),
-            "plasticity_config": type("PlasticityConfig", (), {"plasticity_type": "null"})(),
-            "registry": registry,
-        })()
+        context = type(
+            "SystemContext",
+            (),
+            {
+                "theta": {"W": torch.randn(32, 32, requires_grad=True, device="cuda")},
+                "geometry": type("Geometry", (), {})(),
+                "substrate": type("Substrate", (), {})(),
+                "substrate_config": type("SubstrateConfig", (), {})(),
+                "geometry_config": type("GeometryConfig", (), {})(),
+                "dynamics_config": type("StateDynamicsConfig", (), {})(),
+                "credit_config": type("CreditAssignmentConfig", (), {})(),
+                "update_config": type("ParameterUpdateConfig", (), {})(),
+                "plasticity_config": type(
+                    "PlasticityConfig", (), {"plasticity_type": "null"}
+                )(),
+                "registry": registry,
+            },
+        )()
 
         z = make_state(activity={"x": torch.randn(4, 32, device="cuda")})
 

@@ -166,5 +166,6 @@ __all__ = [
     "PlasticityConfig",
     "PlasticityPrimitive",
     "CoupledTransition",
-    "TransitionFn", "SystemPhase",
+    "TransitionFn",
+    "SystemPhase",
 ]

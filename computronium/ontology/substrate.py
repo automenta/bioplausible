@@ -676,7 +676,9 @@ def substrate_from_config(config: SubstrateConfig) -> Substrate:
             return TernarySubstrate(config)
         case _:
             # Complex substrate uses DIGITAL type with special config
-            if config.precision == "float32" and getattr(config, "_complex_emulated", False):
+            if config.precision == "float32" and getattr(
+                config, "_complex_emulated", False
+            ):
                 return ComplexSubstrate(config)
             return DigitalSubstrate(config)
 

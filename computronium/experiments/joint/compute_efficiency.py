@@ -291,6 +291,16 @@ def evaluate_compute_efficiency(
     )
     flops_reduction = 1.0 - (routing_flops / dense_flops) if dense_flops > 0 else 0
 
+    elapsed = time.perf_counter() - start_time
+    resources = measure_suite_resources(
+        model=model,
+        coordinate=coordinate,
+        device=str(device),
+        batch_size=batch_size,
+        elapsed_s=elapsed,
+        effective_flops=routing_flops if plasticity_type == "routing" else None,
+    )
+
     return {
         "claims_scope": CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED,
         "coordinate": coordinate,
@@ -304,13 +314,7 @@ def evaluate_compute_efficiency(
         "losses": losses,
         "active_routes_history": active_routes_history,
         "gate_entropy_history": gate_entropy_history,
-        "resources": measure_suite_resources(
-            model=model,
-            coordinate=coordinate,
-            device=str(device),
-            batch_size=batch_size,
-            elapsed_s=time.perf_counter() - start_time,
-        ).to_dict(),
+        "resources": resources.to_dict(),
     }
 
 

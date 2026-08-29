@@ -866,7 +866,11 @@ class ModelAdapter:
 
     def _infer_geometry(self) -> Geometry:
         # Simplified: return FeedforwardGeometry
-        return FeedforwardGeometry(GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=(256, 128)))
+        return FeedforwardGeometry(
+            GeometryConfig.feedforward(
+                input_dim=784, output_dim=10, hidden_dims=(256, 128)
+            )
+        )
 
     def _infer_dynamics(self) -> StateDynamics:
         # Simplified: return InstantaneousDynamics
@@ -1099,7 +1103,9 @@ def substrate_from_config(config: SubstrateConfig) -> Substrate:
             return TernarySubstrate(config)
         case _:
             # Complex substrate uses DIGITAL type with special config
-            if config.precision == "float32" and getattr(config, "_complex_emulated", False):
+            if config.precision == "float32" and getattr(
+                config, "_complex_emulated", False
+            ):
                 from computronium.ontology.substrate import ComplexSubstrate
 
                 return ComplexSubstrate(config)

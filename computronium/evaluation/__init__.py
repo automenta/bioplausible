@@ -22,6 +22,12 @@ from computronium.evaluation.cross_domain import (
     CrossDomainBenchmarkSuite,
     run_cross_domain_benchmark,
 )
+from computronium.evaluation.fairness import (
+    BenchmarkRunner,
+    FairnessContract,
+    ResourceAwareBenchmarkRunner,
+    validate_fairness,
+)
 
 __all__ = [
     # Base
@@ -43,4 +49,9 @@ __all__ = [
     "BenchmarkSuiteResult",
     "CrossDomainBenchmarkSuite",
     "run_cross_domain_benchmark",
+    # Fairness (PR-6)
+    "FairnessContract",
+    "validate_fairness",
+    "BenchmarkRunner",
+    "ResourceAwareBenchmarkRunner",
 ]

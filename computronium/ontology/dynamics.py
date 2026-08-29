@@ -229,9 +229,7 @@ class StateDynamics(Protocol):
 # ============================================================
 
 
-def _compute_hopfield_energy(
-    all_acts: list[Tensor], geometry: Geometry
-) -> Tensor:
+def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tensor:
     """Compute Hopfield energy for the current state.
 
     E = 0.5 * sum(h_i^2) - sum_{i,j} W_{ij} h_i h_j - sum_i b_i h_i
@@ -496,7 +494,9 @@ class EnergyMinimizationDynamics:
                     * hidden_size
                     * 4  # fp32 bytes
                 )
-                est_total = (total_params * 4 * 3) + est_activation_mem  # params + optimizer + activations
+                est_total = (
+                    total_params * 4 * 3
+                ) + est_activation_mem  # params + optimizer + activations
                 if est_total > free_vram * 0.8:
                     use_checkpointing = True
             except Exception:
@@ -629,7 +629,9 @@ class PredictiveSettlingDynamics:
             # Predictive coding update
             prediction = geometry.route(h)
             error = x - prediction
-            h = h + self.config.step_size * op(error, geometry.params.get("weight", torch.eye(h.shape[-1])))
+            h = h + self.config.step_size * op(
+                error, geometry.params.get("weight", torch.eye(h.shape[-1]))
+            )
 
         new_activity = {**state.activity, "x": x, "output": h}
         new_state = CompositeState(
@@ -647,7 +649,11 @@ class PredictiveSettlingDynamics:
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
         if state.activations is not None:
-            acts = state.activations if isinstance(state.activations, list) else [state.activations]
+            acts = (
+                state.activations
+                if isinstance(state.activations, list)
+                else [state.activations]
+            )
             h = acts[-1] if acts else torch.zeros(1)
         else:
             h = state.activity.get("output", torch.zeros(1))
@@ -696,7 +702,11 @@ class SpikeIntegrationDynamics:
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
         if state.activations is not None:
-            acts = state.activations if isinstance(state.activations, list) else [state.activations]
+            acts = (
+                state.activations
+                if isinstance(state.activations, list)
+                else [state.activations]
+            )
             h = acts[-1] if acts else torch.zeros(1)
         else:
             h = state.activity.get("output", torch.zeros(1))
@@ -787,14 +797,22 @@ class DiffusionDynamics:
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
         if state.activations is not None:
-            acts = state.activations if isinstance(state.activations, list) else [state.activations]
+            acts = (
+                state.activations
+                if isinstance(state.activations, list)
+                else [state.activations]
+            )
             h = acts[-1] if acts else torch.zeros(1)
         else:
             h = state.activity.get("output", torch.zeros(1))
         # Use a default substrate for energy computation if not available
         substrate_obj = state.substrate.get("substrate")
         if substrate_obj is None:
-            from computronium.ontology.substrate import DigitalSubstrate, SubstrateConfig
+            from computronium.ontology.substrate import (
+                DigitalSubstrate,
+                SubstrateConfig,
+            )
+
             substrate = DigitalSubstrate(SubstrateConfig.digital())
         else:
             substrate = substrate_obj  # type: ignore[assignment]

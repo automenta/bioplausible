@@ -168,3 +168,97 @@ class ResourceUsage:
             substrate_overhead=float(data.get("substrate_overhead", 0.0)),
             effective_flops=float(data.get("effective_flops", 0.0)),
         )
+
+    @classmethod
+    def measure(
+        cls,
+        model: nn.Module,
+        input_tensor: torch.Tensor,
+        plastic_state: dict[str, torch.Tensor] | None = None,
+        device: str | None = None,
+    ) -> ResourceUsage:
+        """Measure resource usage for one forward/backward pass.
+
+        ``device=None`` infers from the model's parameters so CPU-only callers
+        are measured honestly instead of silently requiring CUDA.
+        """
+        import time
+        import torch
+        from torch import nn
+
+        from computronium.utils import count_parameters
+
+        device = device or next(model.parameters()).device.type
+        model.eval()
+        model.to(device)
+        input_tensor = input_tensor.to(device)
+
+        if plastic_state:
+            plastic_state = {k: v.to(device) for k, v in plastic_state.items()}
+
+        with torch.no_grad():
+            for _ in range(3):
+                _ = model(input_tensor)
+
+        if device == "cuda":
+            torch.cuda.synchronize()
+
+        start = time.perf_counter()
+        output = model(input_tensor)
+        if device == "cuda":
+            torch.cuda.synchronize()
+        forward_time = time.perf_counter() - start
+
+        loss = output.sum()
+        start = time.perf_counter()
+        loss.backward()
+        if device == "cuda":
+            torch.cuda.synchronize()
+        backward_time = time.perf_counter() - start
+
+        if device == "cuda":
+            peak_memory = torch.cuda.max_memory_allocated() / (1024 * 1024)
+            torch.cuda.reset_peak_memory_stats()
+        else:
+            peak_memory = 0.0
+
+        param_count = sum(p.numel() for p in model.parameters())
+
+        plastic_capacity = 0.0
+        if plastic_state:
+            plastic_capacity = sum(
+                p.numel() * p.element_size() for p in plastic_state.values()
+            )
+
+        forward_flops = 0
+        for module in model.modules():
+            if isinstance(module, nn.Linear):
+                forward_flops += (
+                    2 * module.in_features * module.out_features * input_tensor.shape[0]
+                )
+            elif isinstance(module, nn.Conv2d):
+                forward_flops += (
+                    2
+                    * module.in_channels
+                    * module.out_channels
+                    * module.kernel_size[0]
+                    * module.kernel_size[1]
+                    * input_tensor.shape[2]
+                    * input_tensor.shape[3]
+                    * input_tensor.shape[0]
+                )
+
+        backward_flops = forward_flops * 2
+
+        return cls(
+            compute=forward_flops + backward_flops,
+            memory=peak_memory,
+            energy=peak_memory * 1e-9 * (forward_time + backward_time),
+            latency=forward_time + backward_time,
+            plastic_state_capacity=plastic_capacity,
+            device=device,
+            batch_size=input_tensor.shape[0],
+            forward_flops=forward_flops,
+            backward_flops=backward_flops,
+            param_count=param_count,
+        )
