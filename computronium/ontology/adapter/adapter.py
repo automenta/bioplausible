@@ -5,7 +5,6 @@ This is the primary facade for the Strangler Fig migration pattern.
 
 from __future__ import annotations
 
-import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -17,15 +16,10 @@ from computronium.core.registry import ComponentMetadata
 if TYPE_CHECKING:
     from computronium.ontology import (
         CreditAssignment,
-        CreditAssignmentConfig,
         Geometry,
-        GeometryConfig,
         ParameterUpdate,
-        ParameterUpdateConfig,
         StateDynamics,
-        StateDynamicsConfig,
         Substrate,
-        SubstrateConfig,
         System,
     )
 
@@ -76,7 +70,7 @@ class ModelAdapter:
         self._credit_inferer: CreditInferer | None = None
         self._update_inferer: UpdateInferer | None = None
 
-    def to_system(self) -> "System":
+    def to_system(self) -> System:
         """Project model into 5-D ontology (best-effort inference)."""
         substrate = self._infer_substrate()
         geometry = self._infer_geometry()
@@ -93,83 +87,115 @@ class ModelAdapter:
             model=self.model,
         )
 
-    def _infer_substrate(self) -> "Substrate":
+    def _infer_substrate(self) -> Substrate:
         inferer = self._get_substrate_inferer()
         return inferer.infer(self.model, self._metadata)
 
-    def _infer_geometry(self) -> "Geometry":
+    def _infer_geometry(self) -> Geometry:
         inferer = self._get_geometry_inferer()
         return inferer.infer(self.model, self._metadata)
 
-    def _infer_dynamics(self) -> "StateDynamics":
+    def _infer_dynamics(self) -> StateDynamics:
         inferer = self._get_dynamics_inferer()
         return inferer.infer(self.model, self._metadata)
 
-    def _infer_credit(self) -> "CreditAssignment":
+    def _infer_credit(self) -> CreditAssignment:
         inferer = self._get_credit_inferer()
         return inferer.infer(self.model, self._metadata)
 
-    def _infer_update(self) -> "ParameterUpdate":
+    def _infer_update(self) -> ParameterUpdate:
         inferer = self._get_update_inferer()
         return inferer.infer(self.model, self._metadata)
 
-    def _get_substrate_inferer(self) -> "SubstrateInferer":
+    def _get_substrate_inferer(self) -> SubstrateInferer:
         if self._substrate_inferer is not None:
             return self._substrate_inferer
 
-        if self._config.prefer_native and self._metadata and self._metadata.ontology_substrate:
+        if (
+            self._config.prefer_native
+            and self._metadata
+            and self._metadata.ontology_substrate
+        ):
             from computronium.ontology.adapter.inference import NativeSubstrateInferer
+
             self._substrate_inferer = NativeSubstrateInferer()
         else:
-            from computronium.ontology.adapter.inference import HeuristicSubstrateInferer
+            from computronium.ontology.adapter.inference import (
+                HeuristicSubstrateInferer,
+            )
+
             self._substrate_inferer = HeuristicSubstrateInferer()
         return self._substrate_inferer
 
-    def _get_geometry_inferer(self) -> "GeometryInferer":
+    def _get_geometry_inferer(self) -> GeometryInferer:
         if self._geometry_inferer is not None:
             return self._geometry_inferer
 
-        if self._config.prefer_native and self._metadata and self._metadata.ontology_geometry:
+        if (
+            self._config.prefer_native
+            and self._metadata
+            and self._metadata.ontology_geometry
+        ):
             from computronium.ontology.adapter.inference import NativeGeometryInferer
+
             self._geometry_inferer = NativeGeometryInferer()
         else:
             from computronium.ontology.adapter.inference import HeuristicGeometryInferer
+
             self._geometry_inferer = HeuristicGeometryInferer()
         return self._geometry_inferer
 
-    def _get_dynamics_inferer(self) -> "DynamicsInferer":
+    def _get_dynamics_inferer(self) -> DynamicsInferer:
         if self._dynamics_inferer is not None:
             return self._dynamics_inferer
 
-        if self._config.prefer_native and self._metadata and self._metadata.ontology_dynamics:
+        if (
+            self._config.prefer_native
+            and self._metadata
+            and self._metadata.ontology_dynamics
+        ):
             from computronium.ontology.adapter.inference import NativeDynamicsInferer
+
             self._dynamics_inferer = NativeDynamicsInferer()
         else:
             from computronium.ontology.adapter.inference import HeuristicDynamicsInferer
+
             self._dynamics_inferer = HeuristicDynamicsInferer()
         return self._dynamics_inferer
 
-    def _get_credit_inferer(self) -> "CreditInferer":
+    def _get_credit_inferer(self) -> CreditInferer:
         if self._credit_inferer is not None:
             return self._credit_inferer
 
-        if self._config.prefer_native and self._metadata and self._metadata.ontology_credit:
+        if (
+            self._config.prefer_native
+            and self._metadata
+            and self._metadata.ontology_credit
+        ):
             from computronium.ontology.adapter.inference import NativeCreditInferer
+
             self._credit_inferer = NativeCreditInferer()
         else:
             from computronium.ontology.adapter.inference import HeuristicCreditInferer
+
             self._credit_inferer = HeuristicCreditInferer()
         return self._credit_inferer
 
-    def _get_update_inferer(self) -> "UpdateInferer":
+    def _get_update_inferer(self) -> UpdateInferer:
         if self._update_inferer is not None:
             return self._update_inferer
 
-        if self._config.prefer_native and self._metadata and self._metadata.ontology_update:
+        if (
+            self._config.prefer_native
+            and self._metadata
+            and self._metadata.ontology_update
+        ):
             from computronium.ontology.adapter.inference import NativeUpdateInferer
+
             self._update_inferer = NativeUpdateInferer()
         else:
             from computronium.ontology.adapter.inference import HeuristicUpdateInferer
+
             self._update_inferer = HeuristicUpdateInferer()
         return self._update_inferer
 
@@ -208,7 +234,9 @@ class ModelAdapter:
 
         # Use family-specific tolerances if not explicitly provided
         if rtol is None or atol is None:
-            family_rtol, family_atol = get_family_tolerances(self._metadata.family if self._metadata else None)
+            family_rtol, family_atol = get_family_tolerances(
+                self._metadata.family if self._metadata else None
+            )
             rtol = rtol if rtol is not None else family_rtol
             atol = atol if atol is not None else family_atol
 
@@ -276,7 +304,9 @@ class ModelAdapter:
             legacy_val = legacy.get(key)
             system_val = system.get(key)
             if legacy_val is not None and system_val is not None:
-                if isinstance(legacy_val, (int, float)) and isinstance(system_val, (int, float)):
+                if isinstance(legacy_val, (int, float)) and isinstance(
+                    system_val, (int, float)
+                ):
                     diff = abs(legacy_val - system_val)
                     rel_diff = diff / (abs(legacy_val) + atol)
                     differences[key] = {
@@ -315,11 +345,11 @@ class _AdaptedSystem:
 
     def __init__(
         self,
-        substrate: "Substrate",
-        geometry: "Geometry",
-        dynamics: "StateDynamics",
-        credit: "CreditAssignment",
-        update: "ParameterUpdate",
+        substrate: Substrate,
+        geometry: Geometry,
+        dynamics: StateDynamics,
+        credit: CreditAssignment,
+        update: ParameterUpdate,
         model: nn.Module,
     ):
         self.substrate = substrate
@@ -349,16 +379,16 @@ class _AdaptedSystem:
         }
 
     @classmethod
-    def from_spec(cls, spec: dict) -> "System":
+    def from_spec(cls, spec: dict) -> System:
         raise NotImplementedError("Cannot reconstruct adapted system from spec")
 
 
 # Re-export inferrer protocols for external use
 from computronium.ontology.adapter.inference import (
-    SubstrateInferer,
-    GeometryInferer,
-    DynamicsInferer,
     CreditInferer,
+    DynamicsInferer,
+    GeometryInferer,
+    SubstrateInferer,
     UpdateInferer,
 )
 

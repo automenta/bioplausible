@@ -5,7 +5,10 @@ Execution strategy lifecycle: planning next experiments and batching.
 import random
 from dataclasses import dataclass
 
-from computronium.execution.candidate_gen import CandidateGenerator, ExecutionStrategyConfig
+from computronium.execution.candidate_gen import (
+    CandidateGenerator,
+    ExecutionStrategyConfig,
+)
 from computronium.execution.task import ExperimentTask
 
 
@@ -18,7 +21,7 @@ class ExecutionStrategy:
     generator: CandidateGenerator
 
     @classmethod
-    def from_config(cls, config: ExecutionStrategyConfig) -> "ExecutionStrategy":
+    def from_config(cls, config: ExecutionStrategyConfig) -> ExecutionStrategy:
         return cls(generator=CandidateGenerator(config))
 
     def plan_next(self) -> ExperimentTask | None:
@@ -47,6 +50,7 @@ class ExecutionStrategy:
 
             if boost_applied:
                 from computronium.core.logging import get_logger
+
                 logger = get_logger("AutoScientist")
                 logger.info(
                     "Calibration Mode Active: Boosted Standard Tier"

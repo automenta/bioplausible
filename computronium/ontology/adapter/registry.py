@@ -5,19 +5,12 @@ Extracts ontology axis information from ComponentMetadata for native models.
 
 from __future__ import annotations
 
-from dataclasses import fields
 from typing import TYPE_CHECKING
 
 from computronium.core.registry import ComponentMetadata
 
 if TYPE_CHECKING:
-    from computronium.ontology import (
-        CreditAssignmentConfig,
-        GeometryConfig,
-        ParameterUpdateConfig,
-        StateDynamicsConfig,
-        SubstrateConfig,
-    )
+    pass
 
 
 def extract_ontology_axes(metadata: ComponentMetadata) -> dict[str, str]:

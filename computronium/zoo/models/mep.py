@@ -12,6 +12,7 @@ implements SettleProtocol for unified convergence instrumentation.
 """
 
 import warnings
+
 warnings.warn(
     "computronium.zoo.models.mep is deprecated. "
     "Use native compositions: TileAlgorithm or native_eqprop_mlp instead.",

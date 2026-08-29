@@ -47,7 +47,9 @@ TIER_ORDER = {
 }
 
 
-def calculate_future_boost(task_name: str, current_weight: float, curriculum: CurriculumManager) -> float:
+def calculate_future_boost(
+    task_name: str, current_weight: float, curriculum: CurriculumManager
+) -> float:
     """Calculate priority boost based on future tasks in curriculum tracks."""
     future_boost = 0.0
     for track_name, track_tasks in curriculum.TRACKS.items():

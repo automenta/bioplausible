@@ -424,7 +424,7 @@ substrate = DigitalSubstrate(SubstrateConfig.digital(device="cpu"))
 )
 """
     else:
-        code += f"""# Tile mesh geometry not shown for brevity
+        code += """# Tile mesh geometry not shown for brevity
 geometry = FeedforwardGeometry(
     GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=[256, 128])
 )
@@ -480,7 +480,7 @@ geometry = FeedforwardGeometry(
         code += f"# {selection['update']} update - see docs\n"
         code += "update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))  # placeholder\n"
 
-    code += f"""
+    code += """
 # Compose joint system
 system = compose_joint_system(
     substrate=substrate,
@@ -495,7 +495,7 @@ system = compose_joint_system(
 x = torch.randn(32, 784)
 y = torch.randint(0, 10, (32,))
 metrics = system.train_step(x, y)
-print(f"Loss: {{metrics['loss']:.4f}}, Energy: {{metrics['energy']:.4f}}")
+print(f"Loss: {metrics['loss']:.4f}, Energy: {metrics['energy']:.4f}")
 """
     return code
 

@@ -19,12 +19,9 @@ from computronium.core.local_learning import (
     TileAlgorithmConfig,
     WeightLookup,
 )
-from computronium.core.local_learning.weight_update import contrastive_weight_update
-from computronium.core.local_learning.activity import ep_activity_update, spiking_activity_update
-from computronium.core.local_learning.feedback import symmetric_feedback
-from computronium.core.tile.kernels import compute_activity_update
 from computronium.core.model_status import status_tag
 from computronium.core.registry import LocalityLevel, register_model
+from computronium.core.tile.kernels import compute_activity_update
 
 if TYPE_CHECKING:
     from computronium.core.tile import TileGraph, TileState

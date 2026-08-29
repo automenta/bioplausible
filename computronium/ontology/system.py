@@ -30,10 +30,6 @@ from computronium.ontology.update import (
     ParameterUpdateConfig,
 )
 from computronium.state import PlasticityConfig
-from computronium.ontology.utils import (
-    _layer_stack,
-    _recurrent_weight,
-)
 
 # ============================================================
 # Helper Functions

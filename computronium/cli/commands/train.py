@@ -148,19 +148,18 @@ def run_from_yaml(args: argparse.Namespace) -> None:
     )
 
     # Build system from config (import substrate modules to register them)
-    import computronium.ontology.substrate  # noqa: F401
-    import computronium.ontology.geometry  # noqa: F401
-    import computronium.ontology.dynamics  # noqa: F401
     import computronium.ontology.credit  # noqa: F401
+    import computronium.ontology.dynamics  # noqa: F401
+    import computronium.ontology.geometry  # noqa: F401
+    import computronium.ontology.substrate  # noqa: F401
     import computronium.ontology.update  # noqa: F401
-
     from computronium.ontology import (
-        SubstrateConfig,
-        GeometryConfig,
-        StateDynamicsConfig,
-        PlasticityConfig,
         CreditAssignmentConfig,
+        GeometryConfig,
         ParameterUpdateConfig,
+        PlasticityConfig,
+        StateDynamicsConfig,
+        SubstrateConfig,
         substrate_from_config,
     )
 
@@ -177,13 +176,18 @@ def run_from_yaml(args: argparse.Namespace) -> None:
 
     # Import geometry classes dynamically
     from importlib import import_module
+
     geometry_module = import_module("computronium.ontology.geometry")
-    geometry_class = getattr(geometry_module, geometry_config.geometry_type.capitalize() + "Geometry")
+    geometry_class = getattr(
+        geometry_module, geometry_config.geometry_type.capitalize() + "Geometry"
+    )
     geometry = geometry_class(geometry_config)
 
     # Import dynamics classes dynamically
     dynamics_module = import_module("computronium.ontology.dynamics")
-    dynamics_class = getattr(dynamics_module, dynamics_config.dynamics_type + "Dynamics")
+    dynamics_class = getattr(
+        dynamics_module, dynamics_config.dynamics_type + "Dynamics"
+    )
     dynamics = dynamics_class(dynamics_config)
 
     # Create the system

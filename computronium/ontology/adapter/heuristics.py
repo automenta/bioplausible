@@ -6,27 +6,19 @@ is missing or incomplete. Used for backward compatibility with legacy models.
 
 from __future__ import annotations
 
-import warnings
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-import torch
-from torch import Tensor, nn
+from torch import nn
 
-from computronium.core.registry import ComponentMetadata, LocalityLevel
+from computronium.core.registry import ComponentMetadata
 
 if TYPE_CHECKING:
     from computronium.ontology import (
         CreditAssignment,
-        CreditAssignmentConfig,
         Geometry,
-        GeometryConfig,
         ParameterUpdate,
-        ParameterUpdateConfig,
         StateDynamics,
-        StateDynamicsConfig,
         Substrate,
-        SubstrateConfig,
     )
 
 # Family-specific tolerances for validation (copied from system.py)
@@ -72,7 +64,9 @@ def get_family_tolerances(family: str | None) -> tuple[float, float]:
     return FAMILY_TOLERANCES["default"]
 
 
-def infer_substrate_from_metadata(metadata: ComponentMetadata | None) -> "Substrate | None":
+def infer_substrate_from_metadata(
+    metadata: ComponentMetadata | None,
+) -> Substrate | None:
     """Infer substrate from registry metadata compute_profile."""
     if not (metadata and metadata.compute_profile):
         return None
@@ -91,23 +85,27 @@ def infer_substrate_from_metadata(metadata: ComponentMetadata | None) -> "Substr
     if profile == ComputeProfile.ANALOG:
         return AnalogSubstrate(SubstrateConfig.analog(device="cpu"))
     if profile == ComputeProfile.OPTICAL:
-        return OpticalSubstrate(SubstrateConfig(
-            substrate_type=SubstrateType.OPTICAL,
-            precision="float32",
-            noise_level=0.0,
-            weight_bounds=None,
-            sparsity=0.0,
-            device="cpu",
-        ))
+        return OpticalSubstrate(
+            SubstrateConfig(
+                substrate_type=SubstrateType.OPTICAL,
+                precision="float32",
+                noise_level=0.0,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            )
+        )
     if profile == ComputeProfile.MEMRISTOR:
-        return MemristiveSubstrate(SubstrateConfig(
-            substrate_type=SubstrateType.MEMRISTIVE,
-            precision="float32",
-            noise_level=0.0,
-            weight_bounds=None,
-            sparsity=0.0,
-            device="cpu",
-        ))
+        return MemristiveSubstrate(
+            SubstrateConfig(
+                substrate_type=SubstrateType.MEMRISTIVE,
+                precision="float32",
+                noise_level=0.0,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            )
+        )
     if profile == ComputeProfile.NEUROMORPHIC:
         return NeuromorphicSubstrate(SubstrateConfig.neuromorphic(device="cpu"))
 
@@ -115,7 +113,7 @@ def infer_substrate_from_metadata(metadata: ComponentMetadata | None) -> "Substr
     return DigitalSubstrate(SubstrateConfig.digital())
 
 
-def infer_substrate_from_backend(model: nn.Module) -> "Substrate | None":
+def infer_substrate_from_backend(model: nn.Module) -> Substrate | None:
     """Infer substrate from model backend attribute."""
     if not hasattr(model, "backend"):
         return None
@@ -123,7 +121,6 @@ def infer_substrate_from_backend(model: nn.Module) -> "Substrate | None":
     backend = getattr(model, "backend", "").lower()
     from computronium.ontology.substrate import (
         AnalogSubstrate,
-        DigitalSubstrate,
         MemristiveSubstrate,
         NeuromorphicSubstrate,
         OpticalSubstrate,
@@ -135,44 +132,56 @@ def infer_substrate_from_backend(model: nn.Module) -> "Substrate | None":
     if "analog" in backend:
         return AnalogSubstrate(SubstrateConfig.analog(device="cpu"))
     if "memrist" in backend:
-        return MemristiveSubstrate(SubstrateConfig(
-            substrate_type=SubstrateType.MEMRISTIVE,
-            precision="float32",
-            noise_level=0.0,
-            weight_bounds=None,
-            sparsity=0.0,
-            device="cpu",
-        ))
+        return MemristiveSubstrate(
+            SubstrateConfig(
+                substrate_type=SubstrateType.MEMRISTIVE,
+                precision="float32",
+                noise_level=0.0,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            )
+        )
     if "neuromorph" in backend:
         return NeuromorphicSubstrate(SubstrateConfig.neuromorphic(device="cpu"))
     if "optical" in backend or "photonic" in backend:
-        return OpticalSubstrate(SubstrateConfig(
-            substrate_type=SubstrateType.OPTICAL,
-            precision="float32",
-            noise_level=0.0,
-            weight_bounds=None,
-            sparsity=0.0,
-            device="cpu",
-        ))
+        return OpticalSubstrate(
+            SubstrateConfig(
+                substrate_type=SubstrateType.OPTICAL,
+                precision="float32",
+                noise_level=0.0,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            )
+        )
     if "quantum" in backend:
-        return QuantumSubstrate(SubstrateConfig(
-            substrate_type=SubstrateType.QUANTUM,
-            precision="complex64",
-            noise_level=0.0,
-            weight_bounds=None,
-            sparsity=0.0,
-            device="cpu",
-        ))
+        return QuantumSubstrate(
+            SubstrateConfig(
+                substrate_type=SubstrateType.QUANTUM,
+                precision="complex64",
+                noise_level=0.0,
+                weight_bounds=None,
+                sparsity=0.0,
+                device="cpu",
+            )
+        )
 
     return None
 
 
-def infer_substrate_from_family(metadata: ComponentMetadata | None) -> "Substrate | None":
+def infer_substrate_from_family(
+    metadata: ComponentMetadata | None,
+) -> Substrate | None:
     """Infer substrate from family tag."""
     if not (metadata and metadata.family):
         return None
 
-    from computronium.ontology.substrate import DigitalSubstrate, NeuromorphicSubstrate, SubstrateConfig
+    from computronium.ontology.substrate import (
+        DigitalSubstrate,
+        NeuromorphicSubstrate,
+        SubstrateConfig,
+    )
 
     family = metadata.family.lower()
     if "spiking" in family or "snn" in family or "stdp" in family:
@@ -183,7 +192,9 @@ def infer_substrate_from_family(metadata: ComponentMetadata | None) -> "Substrat
     return None
 
 
-def infer_geometry_from_metadata(metadata: ComponentMetadata | None) -> "Geometry | None":
+def infer_geometry_from_metadata(
+    metadata: ComponentMetadata | None,
+) -> Geometry | None:
     """Infer geometry from metadata - simplified fallback."""
     if not metadata:
         return None
@@ -191,32 +202,46 @@ def infer_geometry_from_metadata(metadata: ComponentMetadata | None) -> "Geometr
     from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
 
     # Default to feedforward
-    return FeedforwardGeometry(GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=(256, 128)))
+    return FeedforwardGeometry(
+        GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=(256, 128))
+    )
 
 
-def infer_dynamics_from_metadata(metadata: ComponentMetadata | None) -> "StateDynamics | None":
+def infer_dynamics_from_metadata(
+    metadata: ComponentMetadata | None,
+) -> StateDynamics | None:
     """Infer dynamics from metadata - simplified fallback."""
     if not metadata:
         return None
 
-    from computronium.ontology.dynamics import InstantaneousDynamics, StateDynamicsConfig
+    from computronium.ontology.dynamics import (
+        InstantaneousDynamics,
+        StateDynamicsConfig,
+    )
 
     # Default to instantaneous
     return InstantaneousDynamics(StateDynamicsConfig.instantaneous())
 
 
-def infer_credit_from_metadata(metadata: ComponentMetadata | None) -> "CreditAssignment | None":
+def infer_credit_from_metadata(
+    metadata: ComponentMetadata | None,
+) -> CreditAssignment | None:
     """Infer credit assignment from metadata - simplified fallback."""
     if not metadata:
         return None
 
-    from computronium.ontology.credit import CreditAssignmentConfig, ThermodynamicContrast
+    from computronium.ontology.credit import (
+        CreditAssignmentConfig,
+        ThermodynamicContrast,
+    )
 
     # Default to thermodynamic contrast (works with energy-based dynamics)
     return ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast())
 
 
-def infer_update_from_metadata(metadata: ComponentMetadata | None) -> "ParameterUpdate | None":
+def infer_update_from_metadata(
+    metadata: ComponentMetadata | None,
+) -> ParameterUpdate | None:
     """Infer parameter update from metadata - simplified fallback."""
     if not metadata:
         return None
@@ -231,11 +256,11 @@ def infer_all_axes(
     model: nn.Module,
     metadata: ComponentMetadata | None,
 ) -> tuple[
-    "Substrate",
-    "Geometry",
-    "StateDynamics",
-    "CreditAssignment",
-    "ParameterUpdate",
+    Substrate,
+    Geometry,
+    StateDynamics,
+    CreditAssignment,
+    ParameterUpdate,
 ]:
     """Infer all 5 ontology axes using heuristic fallbacks.
 
@@ -268,26 +293,39 @@ def infer_all_axes(
     return substrate, geometry, dynamics, credit, update
 
 
-def _default_substrate() -> "Substrate":
+def _default_substrate() -> Substrate:
     from computronium.ontology.substrate import DigitalSubstrate, SubstrateConfig
+
     return DigitalSubstrate(SubstrateConfig.digital())
 
 
-def _default_geometry() -> "Geometry":
+def _default_geometry() -> Geometry:
     from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
-    return FeedforwardGeometry(GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=(256, 128)))
+
+    return FeedforwardGeometry(
+        GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=(256, 128))
+    )
 
 
-def _default_dynamics() -> "StateDynamics":
-    from computronium.ontology.dynamics import InstantaneousDynamics, StateDynamicsConfig
+def _default_dynamics() -> StateDynamics:
+    from computronium.ontology.dynamics import (
+        InstantaneousDynamics,
+        StateDynamicsConfig,
+    )
+
     return InstantaneousDynamics(StateDynamicsConfig.instantaneous())
 
 
-def _default_credit() -> "CreditAssignment":
-    from computronium.ontology.credit import CreditAssignmentConfig, ThermodynamicContrast
+def _default_credit() -> CreditAssignment:
+    from computronium.ontology.credit import (
+        CreditAssignmentConfig,
+        ThermodynamicContrast,
+    )
+
     return ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast())
 
 
-def _default_update() -> "ParameterUpdate":
+def _default_update() -> ParameterUpdate:
     from computronium.ontology.update import EuclideanUpdate, ParameterUpdateConfig
+
     return EuclideanUpdate(ParameterUpdateConfig.euclidean())

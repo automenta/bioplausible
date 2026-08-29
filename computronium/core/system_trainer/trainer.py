@@ -7,10 +7,8 @@ from dataclasses import field
 from typing import TYPE_CHECKING
 
 import torch
-from torch import Tensor
 
 from computronium.core.logging import get_logger
-from computronium.core.pipeline import run_forward, run_train_step
 from computronium.ontology import System
 
 if TYPE_CHECKING:
@@ -32,9 +30,9 @@ class SystemTrainer:
     """
 
     system: System
-    config: "SystemTrainerConfig"
-    train_data: "_DataProvider"
-    val_data: "_DataProvider | None" = None
+    config: SystemTrainerConfig
+    train_data: _DataProvider
+    val_data: _DataProvider | None = None
 
     # Training state
     current_epoch: int = field(default=0, init=False)

@@ -15,15 +15,15 @@ from computronium.zoo.models.deployments.base import (
     build_tile_head,
 )
 from computronium.zoo.models.deployments.deployment import (
-    create_deployment_model,
-    create_vision_model,
-    create_rl_model,
-    create_timeseries_model,
-    create_graph_model,
-    register_deployment_variants,
+    DeploymentDomain,
     FeatureExtractor,
     TileDeploymentModel,
-    DeploymentDomain,
+    create_deployment_model,
+    create_graph_model,
+    create_rl_model,
+    create_timeseries_model,
+    create_vision_model,
+    register_deployment_variants,
 )
 from computronium.zoo.models.deployments.graph import (
     GraphAttentionLayer,
@@ -32,12 +32,14 @@ from computronium.zoo.models.deployments.graph import (
     GraphTileNetLayer,
     add_self_loops,
     aggregate_messages,
-    create_graph_model as _create_graph_model,
     create_molecule_model,
     create_social_graph_model,
     scatter_max,
     scatter_mean,
     scatter_sum,
+)
+from computronium.zoo.models.deployments.graph import (
+    create_graph_model as _create_graph_model,
 )
 from computronium.zoo.models.deployments.rl import (
     RecurrentRLTileNet,
@@ -48,6 +50,8 @@ from computronium.zoo.models.deployments.rl import (
     create_atari_model,
     create_mujoco_model,
     create_recurrent_rl_model,
+)
+from computronium.zoo.models.deployments.rl import (
     create_rl_model as _create_rl_model,
 )
 from computronium.zoo.models.deployments.timeseries import (
@@ -68,6 +72,8 @@ from computronium.zoo.models.deployments.vision import (
     create_cifar_model,
     create_imagenet_model,
     create_mnist_model,
+)
+from computronium.zoo.models.deployments.vision import (
     create_vision_model as _create_vision_model,
 )
 
@@ -120,5 +126,5 @@ __all__ = [
     "register_deployment_variants",
     "scatter_max",
     "scatter_mean",
-    "scatter_sum",
+    "scatter_sum", "_create_graph_model", "_create_rl_model", "_create_vision_model",
 ]

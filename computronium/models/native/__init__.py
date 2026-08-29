@@ -1,5 +1,7 @@
 """Native models using 5-D Ontology composition."""
 
+# Trigger native model registration with explicit ontology axes
+from computronium.models.native import registration  # noqa: F401
 from computronium.models.native.backprop_native import (
     create_native_backprop_mlp,
     native_backprop_mlp,
@@ -56,9 +58,6 @@ from computronium.models.native.tile_native import (
     native_tile_snn,
     native_tile_tp,
 )
-
-# Trigger native model registration with explicit ontology axes
-from computronium.models.native import registration  # noqa: F401
 
 __all__ = [
     "create_native_backprop_mlp",

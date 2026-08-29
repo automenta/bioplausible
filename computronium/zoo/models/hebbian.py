@@ -11,6 +11,7 @@ Aggregates all Hebbian-family models into a single module for the model zoo.
 """
 
 import warnings
+
 warnings.warn(
     "computronium.zoo.models.hebbian is deprecated. "
     "Use native compositions: native_tile_hebbian or TileAlgorithm.from_hebbian() instead.",

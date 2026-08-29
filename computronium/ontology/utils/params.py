@@ -1,8 +1,7 @@
 """Shared parameter utilities for ontology modules."""
 
-from typing import Callable
+from collections.abc import Callable
 
-import torch
 from torch import Tensor
 
 

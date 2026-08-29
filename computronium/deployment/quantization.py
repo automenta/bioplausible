@@ -13,7 +13,14 @@ import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.quantization import convert, get_default_qat_qconfig, get_default_qconfig, prepare, prepare_qat, quantize_dynamic
+from torch.quantization import (
+    convert,
+    get_default_qat_qconfig,
+    get_default_qconfig,
+    prepare,
+    prepare_qat,
+    quantize_dynamic,
+)
 
 
 def quantize_model_int8_ptq(

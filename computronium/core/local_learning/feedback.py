@@ -6,14 +6,17 @@ Provides standard feedback mechanisms for the tile algorithm:
 - No feedback for pure feedforward Hebbian / single-pass settling
 """
 
-from computronium.core.local_learning.protocols import FeedbackFn, TileGraph, TileState, WeightLookup
+from computronium.core.local_learning.protocols import (
+    TileGraph,
+    TileState,
+    WeightLookup,
+)
 
 
-def symmetric_feedback(
-    tile: TileState, graph: TileGraph, lookup: WeightLookup
-) -> list:
+def symmetric_feedback(tile: TileState, graph: TileGraph, lookup: WeightLookup) -> list:
     """Symmetric (transpose) backward projection; EP/PC/TB/Hebbian default."""
     from torch import Tensor
+
     feedback: list[Tensor] = []
     for dst_id in tile.fwd_neighbors:
         dst = graph.tiles[dst_id]
@@ -24,9 +27,7 @@ def symmetric_feedback(
     return feedback
 
 
-def no_feedback(
-    tile: TileState, graph: TileGraph, lookup: WeightLookup
-) -> list:
+def no_feedback(tile: TileState, graph: TileGraph, lookup: WeightLookup) -> list:
     """No downstream coupling (pure feedforward Hebbian / single-pass settling)."""
     return []
 

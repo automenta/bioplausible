@@ -21,7 +21,6 @@ loop (free phase -> nudged phase -> contrastive update) without autograd;
 
 import math
 from dataclasses import dataclass, field
-from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -37,13 +36,12 @@ from computronium.core.local_learning.mixins import (
     LocalLearningConfigProtocol,
     MultiOptimizerMixin,
 )
-from computronium.core.local_learning.registry import tile_algorithm
 from computronium.core.local_learning.protocols import (
     ActivityUpdateFn,
     FeedbackFn,
-    WeightLookup,
     WeightUpdateFn,
 )
+from computronium.core.local_learning.registry import tile_algorithm
 from computronium.core.local_learning.settling import (
     SettleConfig,
     SettleProtocol,
@@ -58,7 +56,6 @@ from computronium.core.local_learning.weight_update import (
 from computronium.core.losses import compute_accuracy
 from computronium.core.tile import TileGraph, TileState
 from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
-
 
 __all__ = [
     "TileAlgorithm",

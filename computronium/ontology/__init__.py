@@ -47,6 +47,16 @@ from computronium.ontology.geometry import (
     RecurrentGeometry,
     TileGeometry,
 )
+from computronium.ontology.plasticity import (
+    FastWeightPlasticity,
+    NullPlasticity,
+    PlasticityConfig,
+    PlasticityPrimitive,
+    RoutingPlasticity,
+    RuleStatePlasticity,
+    SubstrateCoupledPlasticity,
+    TransitionFn,
+)
 from computronium.ontology.substrate import (
     AnalogSubstrate,
     ComplexSubstrate,
@@ -55,8 +65,8 @@ from computronium.ontology.substrate import (
     NeuromorphicSubstrate,
     NoisySubstrate,
     OpticalSubstrate,
-    QuantumSubstrate,
     QuantizedSubstrate,
+    QuantumSubstrate,
     SparseSubstrate,
     Substrate,
     SubstrateConfig,
@@ -83,15 +93,24 @@ from computronium.ontology.update import (
     RiemannianOrthogonalUpdate,
     SpectralConstrainedUpdate,
 )
-from computronium.ontology.plasticity import (
-    FastWeightPlasticity,
-    NullPlasticity,
-    PlasticityConfig,
-    PlasticityPrimitive,
-    RoutingPlasticity,
-    RuleStatePlasticity,
-    SubstrateCoupledPlasticity,
-    TransitionFn,
+
+# Utility functions
+from computronium.ontology.utils import (
+    ConfigFactory,
+    StateProtocol,
+    _get_state_activations,
+    _get_state_activity,
+    _get_state_free_state,
+    _get_state_loss,
+    _get_state_metrics,
+    _get_state_nudged_state,
+    _get_state_x,
+    _is_composite_state,
+    _layer_stack,
+    _learnable_weight_names,
+    _recurrent_weight,
+    _set_param_name,
+    apply_pseudo_gradients,
 )
 
 # Re-export transition types from state module for convenience
@@ -101,25 +120,6 @@ from computronium.state import (
     StateRegistry,
     StateVariable,
     SystemContext,
-)
-
-# Utility functions
-from computronium.ontology.utils import (
-    _learnable_weight_names,
-    _set_param_name,
-    apply_pseudo_gradients,
-    _layer_stack,
-    _recurrent_weight,
-    _is_composite_state,
-    _get_state_x,
-    _get_state_activations,
-    _get_state_free_state,
-    _get_state_nudged_state,
-    _get_state_loss,
-    _get_state_metrics,
-    _get_state_activity,
-    StateProtocol,
-    ConfigFactory,
 )
 
 __all__ = [

@@ -14,7 +14,6 @@ import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import torch
@@ -308,8 +307,8 @@ class ModelExporter:
         verbose: bool,
     ) -> str:
         """Export INT8 quantized model state dict."""
-        from computronium.deployment.quantization import quantize_model_dynamic_int8
         from computronium.core.checkpoint import save_checkpoint
+        from computronium.deployment.quantization import quantize_model_dynamic_int8
 
         path = str(Path(output_dir) / "model_int8.pt")
 
@@ -818,7 +817,6 @@ class InferenceServer:
 
     async def _process_batch(self, requests: list) -> None:
         """Process a batch of inference requests."""
-        import time
 
         start_time = time.perf_counter()
 
@@ -870,7 +868,6 @@ class InferenceServer:
 
     def predict_sync(self, request: BatchInferenceRequest) -> InferenceResponse:
         """Synchronous prediction (bypasses batching queue)."""
-        import time
 
         start_time = time.perf_counter()
 

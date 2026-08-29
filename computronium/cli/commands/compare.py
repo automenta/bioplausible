@@ -45,9 +45,8 @@ def add_compare_subparsers(subparsers: argparse._SubParsersAction) -> None:
 
 def run_compare(args: argparse.Namespace) -> None:
     """Rank families from completed HPO studies into a CSV."""
-    import optuna
-    from computronium.hyperopt.comparison import compute_algorithm_rankings
     from computronium.cli.shared import _DB_PATH, _STORAGE_URL, _set_storage
+    from computronium.hyperopt.comparison import compute_algorithm_rankings
 
     if getattr(args, "db", None):
         _DB_PATH, _STORAGE_URL = _set_storage(args.db)
@@ -58,6 +57,7 @@ def run_compare(args: argparse.Namespace) -> None:
     else:
         # Discover studies from storage
         from computronium.hyperopt.storage import list_studies
+
         all_studies = list_studies(_STORAGE_URL)
         if args.family:
             all_studies = [s for s in all_studies if args.family in s]
@@ -70,14 +70,32 @@ def run_compare(args: argparse.Namespace) -> None:
         return
 
     logger.info("Comparing %d studies", len(study_names))
-    rankings = compute_algorithm_rankings(study_names, metric=args.metric, storage=_STORAGE_URL)
+    rankings = compute_algorithm_rankings(
+        study_names, metric=args.metric, storage=_STORAGE_URL
+    )
 
     # Write CSV
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
     with open(args.output, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["rank", "study", "model", "family", "task", "value", "n_trials"])
+        writer.writerow([
+            "rank",
+            "study",
+            "model",
+            "family",
+            "task",
+            "value",
+            "n_trials",
+        ])
         for i, row in enumerate(rankings, 1):
-            writer.writerow([i, row["study"], row["model"], row["family"], row["task"], row["value"], row["n_trials"]])
+            writer.writerow([
+                i,
+                row["study"],
+                row["model"],
+                row["family"],
+                row["task"],
+                row["value"],
+                row["n_trials"],
+            ])
 
     logger.info("Comparison written to %s", args.output)

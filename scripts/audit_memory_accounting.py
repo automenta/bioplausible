@@ -11,7 +11,7 @@ Verifies:
 
 import json
 import sys
-from typing import Any, Dict
+from typing import Any
 
 import torch
 from torch import nn
@@ -27,7 +27,7 @@ from computronium.experiments.joint.memory_wall import (
 from computronium.resources import ResourceUsage
 
 
-def test_resourceusage_peak_activation_bytes() -> Dict[str, Any]:
+def test_resourceusage_peak_activation_bytes() -> dict[str, Any]:
     """Test ResourceUsage captures peak_activation_bytes during forward/backward."""
     print("\n" + "=" * 60)
     print("Test: ResourceUsage peak_activation_bytes Capture")
@@ -77,7 +77,7 @@ def test_resourceusage_peak_activation_bytes() -> Dict[str, Any]:
             print(f"  FAIL: Missing field: {field}")
 
     if all_passed:
-        print(f"  PASS: All required fields present")
+        print("  PASS: All required fields present")
         print(
             f"    compute: {usage.compute}, memory: {usage.memory}, peak_activation_bytes: {usage.peak_activation_bytes}"
         )
@@ -87,9 +87,9 @@ def test_resourceusage_peak_activation_bytes() -> Dict[str, Any]:
     usage2 = ResourceUsage.from_dict(d)
     if usage.peak_activation_bytes != usage2.peak_activation_bytes:
         all_passed = False
-        print(f"  FAIL: Serialization round-trip failed for peak_activation_bytes")
+        print("  FAIL: Serialization round-trip failed for peak_activation_bytes")
     else:
-        print(f"  PASS: Serialization round-trip works")
+        print("  PASS: Serialization round-trip works")
 
     print(f"Result: {'PASS' if all_passed else 'FAIL'}")
 
@@ -103,7 +103,7 @@ def test_resourceusage_peak_activation_bytes() -> Dict[str, Any]:
     }
 
 
-def test_gradient_checkpointing_peak() -> Dict[str, Any]:
+def test_gradient_checkpointing_peak() -> dict[str, Any]:
     """Test gradient checkpointing peak includes recomputed segment."""
     print("\n" + "=" * 60)
     print("Test: Gradient Checkpointing Peak Memory Capture")
@@ -164,7 +164,7 @@ def test_gradient_checkpointing_peak() -> Dict[str, Any]:
     ru = gc_model.get_resource_usage()
     if ru.peak_activation_bytes != gc_model.peak_activation_bytes:
         all_passed = False
-        print(f"  FAIL: ResourceUsage peak_activation_bytes mismatch")
+        print("  FAIL: ResourceUsage peak_activation_bytes mismatch")
     else:
         print("  PASS: ResourceUsage matches model peak_activation_bytes")
 
@@ -181,7 +181,7 @@ def test_gradient_checkpointing_peak() -> Dict[str, Any]:
     }
 
 
-def test_plastic_state_bytes() -> Dict[str, Any]:
+def test_plastic_state_bytes() -> dict[str, Any]:
     """Test CLMetrics.plastic_state_bytes matches actual ψ tensor size."""
     print("\n" + "=" * 60)
     print("Test: Plastic State Bytes Matching")
@@ -220,11 +220,11 @@ def test_plastic_state_bytes() -> Dict[str, Any]:
             # Allow small difference due to batch size handling
             if abs(actual_bytes - expected_bytes) / expected_bytes > 0.1:
                 all_passed = False
-                print(f"  FAIL: Plastic state bytes mismatch")
+                print("  FAIL: Plastic state bytes mismatch")
             else:
-                print(f"  PASS: Plastic state bytes match (within 10%)")
+                print("  PASS: Plastic state bytes match (within 10%)")
         else:
-            print(f"  PASS: Plastic state bytes exact match")
+            print("  PASS: Plastic state bytes exact match")
     else:
         all_passed = False
         print("  FAIL: _psi not initialized or missing fast_weights")
@@ -242,7 +242,7 @@ def test_plastic_state_bytes() -> Dict[str, Any]:
     }
 
 
-def test_replay_buffer_bytes() -> Dict[str, Any]:
+def test_replay_buffer_bytes() -> dict[str, Any]:
     """Test ReplayBuffer.memory_bytes() matches capacity × (input_dim * 4 + label_bytes)."""
     print("\n" + "=" * 60)
     print("Test: Replay Buffer Bytes Calculation")
@@ -280,9 +280,9 @@ def test_replay_buffer_bytes() -> Dict[str, Any]:
 
     if actual_bytes != expected_bytes:
         all_passed = False
-        print(f"  FAIL: Replay buffer bytes mismatch")
+        print("  FAIL: Replay buffer bytes mismatch")
     else:
-        print(f"  PASS: Replay buffer bytes exact match")
+        print("  PASS: Replay buffer bytes exact match")
 
     # Test when buffer is full
     x2 = torch.randn(capacity, input_dim, device=device)
@@ -317,7 +317,7 @@ def test_replay_buffer_bytes() -> Dict[str, Any]:
     }
 
 
-def test_envelope_enforcement() -> Dict[str, Any]:
+def test_envelope_enforcement() -> dict[str, Any]:
     """Test MemoryWall benchmark marks DNF when exceeding ceiling."""
     print("\n" + "=" * 60)
     print("Test: Envelope Enforcement (DNF Tracking)")
@@ -363,7 +363,7 @@ def test_envelope_enforcement() -> Dict[str, Any]:
     if final_exceeded:
         print(f"  PASS: Envelope exceeded detected: {final_reason}")
     else:
-        print(f"  WARNING: Large model did not exceed 2MB envelope (may be OK on CPU)")
+        print("  WARNING: Large model did not exceed 2MB envelope (may be OK on CPU)")
         # On CPU, we can't easily test this, so don't fail
 
     # Test 2: Run a small model that should stay within envelope
@@ -389,7 +389,7 @@ def test_envelope_enforcement() -> Dict[str, Any]:
             break
 
     if not exceeded:
-        print(f"  PASS: Small model stays within 32MB envelope")
+        print("  PASS: Small model stays within 32MB envelope")
 
     # Test 3: Verify DNF tracking in benchmark results
     # We can't run full benchmark here, but verify the structure
@@ -424,7 +424,7 @@ def test_envelope_enforcement() -> Dict[str, Any]:
     }
 
 
-def test_memory_accounted_model_hooks() -> Dict[str, Any]:
+def test_memory_accounted_model_hooks() -> dict[str, Any]:
     """Test MemoryAccountedModel hooks capture activation memory correctly."""
     print("\n" + "=" * 60)
     print("Test: MemoryAccountedModel Hook Coverage")
@@ -470,7 +470,7 @@ def test_memory_accounted_model_hooks() -> Dict[str, Any]:
             f"  FAIL: Not all target layers have hooks ({hook_count} < {target_layers})"
         )
     else:
-        print(f"  PASS: Hooks on all target layers")
+        print("  PASS: Hooks on all target layers")
 
     # Test hook capture during forward
     x = torch.randn(64, 784, device=device)
@@ -480,7 +480,7 @@ def test_memory_accounted_model_hooks() -> Dict[str, Any]:
 
     peak_act_bytes = model.peak_activation_bytes
     if peak_act_bytes == 0:
-        print(f"  WARNING: Peak activation bytes = 0 (may be CPU)")
+        print("  WARNING: Peak activation bytes = 0 (may be CPU)")
     else:
         print(
             f"  PASS: Peak activation captured: {peak_act_bytes / 1024 / 1024:.2f} MB"
@@ -490,9 +490,9 @@ def test_memory_accounted_model_hooks() -> Dict[str, Any]:
     model.remove_hooks()
     if len(model._hooks) != 0:
         all_passed = False
-        print(f"  FAIL: Hooks not cleared after remove_hooks()")
+        print("  FAIL: Hooks not cleared after remove_hooks()")
     else:
-        print(f"  PASS: Hooks properly removed")
+        print("  PASS: Hooks properly removed")
 
     print(f"Result: {'PASS' if all_passed else 'FAIL'}")
 
@@ -545,7 +545,7 @@ def main():
     with open("audit_results/memory_accounting_audit.json", "w") as f:
         json.dump(output, f, indent=2)
 
-    print(f"\nResults written to audit_results/memory_accounting_audit.json")
+    print("\nResults written to audit_results/memory_accounting_audit.json")
 
     return 0 if all_passed else 1
 

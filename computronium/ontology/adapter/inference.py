@@ -6,27 +6,19 @@ and its registry metadata. Each inferrer handles one of the 5-D axes.
 
 from __future__ import annotations
 
-from abc import abstractmethod
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
-import torch
-from torch import Tensor, nn
+from torch import nn
 
 from computronium.core.registry import ComponentMetadata
 
 if TYPE_CHECKING:
     from computronium.ontology import (
         CreditAssignment,
-        CreditAssignmentConfig,
         Geometry,
-        GeometryConfig,
         ParameterUpdate,
-        ParameterUpdateConfig,
         StateDynamics,
-        StateDynamicsConfig,
         Substrate,
-        SubstrateConfig,
     )
 
 
@@ -38,7 +30,9 @@ if TYPE_CHECKING:
 class SubstrateInferer(Protocol):
     """Protocol for inferring Substrate from model and metadata."""
 
-    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> "Substrate":
+    def infer(
+        self, model: nn.Module, metadata: ComponentMetadata | None
+    ) -> Substrate:
         """Infer the substrate for a model."""
         ...
 
@@ -46,7 +40,7 @@ class SubstrateInferer(Protocol):
 class GeometryInferer(Protocol):
     """Protocol for inferring Geometry from model and metadata."""
 
-    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> "Geometry":
+    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> Geometry:
         """Infer the geometry for a model."""
         ...
 
@@ -54,7 +48,9 @@ class GeometryInferer(Protocol):
 class DynamicsInferer(Protocol):
     """Protocol for inferring StateDynamics from model and metadata."""
 
-    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> "StateDynamics":
+    def infer(
+        self, model: nn.Module, metadata: ComponentMetadata | None
+    ) -> StateDynamics:
         """Infer the dynamics for a model."""
         ...
 
@@ -62,7 +58,9 @@ class DynamicsInferer(Protocol):
 class CreditInferer(Protocol):
     """Protocol for inferring CreditAssignment from model and metadata."""
 
-    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> "CreditAssignment":
+    def infer(
+        self, model: nn.Module, metadata: ComponentMetadata | None
+    ) -> CreditAssignment:
         """Infer the credit assignment for a model."""
         ...
 
@@ -70,7 +68,9 @@ class CreditInferer(Protocol):
 class UpdateInferer(Protocol):
     """Protocol for inferring ParameterUpdate from model and metadata."""
 
-    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> "ParameterUpdate":
+    def infer(
+        self, model: nn.Module, metadata: ComponentMetadata | None
+    ) -> ParameterUpdate:
         """Infer the parameter update for a model."""
         ...
 
@@ -83,7 +83,9 @@ class UpdateInferer(Protocol):
 class NativeSubstrateInferer:
     """Infer substrate from explicit ontology_axes metadata."""
 
-    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> "Substrate":
+    def infer(
+        self, model: nn.Module, metadata: ComponentMetadata | None
+    ) -> Substrate:
         from computronium.ontology.substrate import (
             SubstrateConfig,
             substrate_from_config,
@@ -102,12 +104,11 @@ class NativeSubstrateInferer:
 class NativeGeometryInferer:
     """Infer geometry from explicit ontology_axes metadata."""
 
-    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> "Geometry":
+    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> Geometry:
         from computronium.ontology.geometry import (
             FeedforwardGeometry,
             GeometryConfig,
             RecurrentGeometry,
-            TileGeometry,
         )
 
         if not metadata or not metadata.ontology_geometry:
@@ -115,12 +116,24 @@ class NativeGeometryInferer:
 
         geometry_type = metadata.ontology_geometry
         if geometry_type == "FeedforwardGeometry":
-            return FeedforwardGeometry(GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=(256, 128)))
+            return FeedforwardGeometry(
+                GeometryConfig.feedforward(
+                    input_dim=784, output_dim=10, hidden_dims=(256, 128)
+                )
+            )
         elif geometry_type == "RecurrentGeometry":
-            return RecurrentGeometry(GeometryConfig.recurrent(input_dim=784, output_dim=10, hidden_dims=(256,)))
+            return RecurrentGeometry(
+                GeometryConfig.recurrent(
+                    input_dim=784, output_dim=10, hidden_dims=(256,)
+                )
+            )
         elif geometry_type == "TileGeometry":
             # Use feedforward as TileGeometry config might not have tile method
-            return FeedforwardGeometry(GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=(256, 128)))
+            return FeedforwardGeometry(
+                GeometryConfig.feedforward(
+                    input_dim=784, output_dim=10, hidden_dims=(256, 128)
+                )
+            )
 
         raise ValueError(f"Unknown geometry type: {geometry_type}")
 
@@ -128,7 +141,9 @@ class NativeGeometryInferer:
 class NativeDynamicsInferer:
     """Infer dynamics from explicit ontology_axes metadata."""
 
-    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> "StateDynamics":
+    def infer(
+        self, model: nn.Module, metadata: ComponentMetadata | None
+    ) -> StateDynamics:
         from computronium.ontology.dynamics import (
             EnergyMinimizationDynamics,
             InstantaneousDynamics,
@@ -156,7 +171,9 @@ class NativeDynamicsInferer:
 class NativeCreditInferer:
     """Infer credit assignment from explicit ontology_axes metadata."""
 
-    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> "CreditAssignment":
+    def infer(
+        self, model: nn.Module, metadata: ComponentMetadata | None
+    ) -> CreditAssignment:
         from computronium.ontology.credit import (
             CreditAssignmentConfig,
             ThermodynamicContrast,
@@ -173,7 +190,9 @@ class NativeCreditInferer:
 class NativeUpdateInferer:
     """Infer parameter update from explicit ontology_axes metadata."""
 
-    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> "ParameterUpdate":
+    def infer(
+        self, model: nn.Module, metadata: ComponentMetadata | None
+    ) -> ParameterUpdate:
         from computronium.ontology.update import (
             ElasticConsolidationUpdate,
             EuclideanUpdate,
@@ -190,13 +209,19 @@ class NativeUpdateInferer:
         if update_type == "EuclideanUpdate":
             return EuclideanUpdate(ParameterUpdateConfig.euclidean())
         elif update_type == "RiemannianOrthogonalUpdate":
-            return RiemannianOrthogonalUpdate(ParameterUpdateConfig.riemannian_orthogonal())
+            return RiemannianOrthogonalUpdate(
+                ParameterUpdateConfig.riemannian_orthogonal()
+            )
         elif update_type == "SpectralConstrainedUpdate":
-            return SpectralConstrainedUpdate(ParameterUpdateConfig.spectral_constrained())
+            return SpectralConstrainedUpdate(
+                ParameterUpdateConfig.spectral_constrained()
+            )
         elif update_type == "NaturalGradientUpdate":
             return NaturalGradientUpdate(ParameterUpdateConfig.natural_gradient())
         elif update_type == "ElasticConsolidationUpdate":
-            return ElasticConsolidationUpdate(ParameterUpdateConfig.elastic_consolidation())
+            return ElasticConsolidationUpdate(
+                ParameterUpdateConfig.elastic_consolidation()
+            )
 
         raise ValueError(f"Unknown update type: {update_type}")
 
@@ -209,11 +234,20 @@ class NativeUpdateInferer:
 class HeuristicSubstrateInferer:
     """Infer substrate using heuristic fallbacks."""
 
-    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> "Substrate":
-        from computronium.ontology.adapter.heuristics import infer_substrate_from_metadata
+    def infer(
+        self, model: nn.Module, metadata: ComponentMetadata | None
+    ) -> Substrate:
+        from computronium.ontology.adapter.heuristics import (
+            infer_substrate_from_metadata,
+        )
+
         result = infer_substrate_from_metadata(metadata)
         if result is None:
-            from computronium.ontology.substrate import DigitalSubstrate, SubstrateConfig
+            from computronium.ontology.substrate import (
+                DigitalSubstrate,
+                SubstrateConfig,
+            )
+
             return DigitalSubstrate(SubstrateConfig.digital())
         return result
 
@@ -221,23 +255,43 @@ class HeuristicSubstrateInferer:
 class HeuristicGeometryInferer:
     """Infer geometry using heuristic fallbacks."""
 
-    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> "Geometry":
-        from computronium.ontology.adapter.heuristics import infer_geometry_from_metadata
+    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> Geometry:
+        from computronium.ontology.adapter.heuristics import (
+            infer_geometry_from_metadata,
+        )
+
         result = infer_geometry_from_metadata(metadata)
         if result is None:
-            from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
-            return FeedforwardGeometry(GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=(256, 128)))
+            from computronium.ontology.geometry import (
+                FeedforwardGeometry,
+                GeometryConfig,
+            )
+
+            return FeedforwardGeometry(
+                GeometryConfig.feedforward(
+                    input_dim=784, output_dim=10, hidden_dims=(256, 128)
+                )
+            )
         return result
 
 
 class HeuristicDynamicsInferer:
     """Infer dynamics using heuristic fallbacks."""
 
-    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> "StateDynamics":
-        from computronium.ontology.adapter.heuristics import infer_dynamics_from_metadata
+    def infer(
+        self, model: nn.Module, metadata: ComponentMetadata | None
+    ) -> StateDynamics:
+        from computronium.ontology.adapter.heuristics import (
+            infer_dynamics_from_metadata,
+        )
+
         result = infer_dynamics_from_metadata(metadata)
         if result is None:
-            from computronium.ontology.dynamics import InstantaneousDynamics, StateDynamicsConfig
+            from computronium.ontology.dynamics import (
+                InstantaneousDynamics,
+                StateDynamicsConfig,
+            )
+
             return InstantaneousDynamics(StateDynamicsConfig.instantaneous())
         return result
 
@@ -245,22 +299,38 @@ class HeuristicDynamicsInferer:
 class HeuristicCreditInferer:
     """Infer credit using heuristic fallbacks."""
 
-    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> "CreditAssignment":
+    def infer(
+        self, model: nn.Module, metadata: ComponentMetadata | None
+    ) -> CreditAssignment:
         from computronium.ontology.adapter.heuristics import infer_credit_from_metadata
+
         result = infer_credit_from_metadata(metadata)
         if result is None:
-            from computronium.ontology.credit import CreditAssignmentConfig, ThermodynamicContrast
-            return ThermodynamicContrast(CreditAssignmentConfig.thermodynamic_contrast())
+            from computronium.ontology.credit import (
+                CreditAssignmentConfig,
+                ThermodynamicContrast,
+            )
+
+            return ThermodynamicContrast(
+                CreditAssignmentConfig.thermodynamic_contrast()
+            )
         return result
 
 
 class HeuristicUpdateInferer:
     """Infer update using heuristic fallbacks."""
 
-    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> "ParameterUpdate":
+    def infer(
+        self, model: nn.Module, metadata: ComponentMetadata | None
+    ) -> ParameterUpdate:
         from computronium.ontology.adapter.heuristics import infer_update_from_metadata
+
         result = infer_update_from_metadata(metadata)
         if result is None:
-            from computronium.ontology.update import EuclideanUpdate, ParameterUpdateConfig
+            from computronium.ontology.update import (
+                EuclideanUpdate,
+                ParameterUpdateConfig,
+            )
+
             return EuclideanUpdate(ParameterUpdateConfig.euclidean())
         return result

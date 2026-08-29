@@ -4,7 +4,6 @@ Model Exporter - High-level export interface.
 
 from dataclasses import dataclass
 
-import torch
 from torch import nn
 
 from computronium.deployment.serialization import ModelExporter, ModelInfo

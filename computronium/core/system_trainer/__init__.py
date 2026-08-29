@@ -6,38 +6,6 @@ This package provides:
 - Configuration classes and protocols
 """
 
-from computronium.core.system_trainer.config import (
-    SystemTrainerConfig,
-    _DataProvider,
-)
-from computronium.core.system_trainer.factory import (
-    compose_system,
-    compose_system_from_configs,
-    create_backprop_system,
-    create_eqprop_system,
-    create_fa_system,
-    extract_config,
-)
-from computronium.core.system_trainer.joint import (
-    compose_joint_system,
-    compose_joint_system_from_configs,
-    create_routing_eqprop_system,
-    create_fast_weight_eqprop_system,
-)
-from computronium.core.system_trainer.protocol import (
-    JointSystem,
-    TS,
-    TG,
-    TD,
-    TC,
-    TU,
-)
-from computronium.core.system_trainer.spec import (
-    compose_joint_system_from_configs as _compose_joint_system_from_configs_spec,
-    compose_system_from_configs as _compose_system_from_configs_spec,
-)
-from computronium.core.system_trainer.trainer import SystemTrainer
-
 # Continual Learning (extracted to computronium.core.continual)
 # Re-export for backward compatibility
 from computronium.core.continual import (
@@ -70,6 +38,39 @@ from computronium.core.continual import (
     run_continual_learning_suite,
     run_continual_train_step,
 )
+from computronium.core.system_trainer.config import (
+    SystemTrainerConfig,
+    _DataProvider,
+)
+from computronium.core.system_trainer.factory import (
+    compose_system,
+    compose_system_from_configs,
+    create_backprop_system,
+    create_eqprop_system,
+    create_fa_system,
+    extract_config,
+)
+from computronium.core.system_trainer.joint import (
+    compose_joint_system,
+    compose_joint_system_from_configs,
+    create_fast_weight_eqprop_system,
+    create_routing_eqprop_system,
+)
+from computronium.core.system_trainer.protocol import (
+    TC,
+    TD,
+    TG,
+    TS,
+    TU,
+    JointSystem,
+)
+from computronium.core.system_trainer.spec import (
+    compose_joint_system_from_configs as _compose_joint_system_from_configs_spec,
+)
+from computronium.core.system_trainer.spec import (
+    compose_system_from_configs as _compose_system_from_configs_spec,
+)
+from computronium.core.system_trainer.trainer import SystemTrainer
 
 __all__ = [
     "SystemTrainer",
@@ -119,5 +120,5 @@ __all__ = [
     "make_transition_fn",
     "run_continual_learning",
     "run_continual_learning_suite",
-    "run_continual_train_step",
+    "run_continual_train_step", "_compose_joint_system_from_configs_spec", "_compose_system_from_configs_spec",
 ]

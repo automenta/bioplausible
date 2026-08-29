@@ -11,6 +11,8 @@ from torch import Tensor
 from computronium.core.joint.transition import NullPlasticity, PlasticityConfig
 from computronium.core.plasticity import (
     NullPlasticity as _NullPlasticity,
+)
+from computronium.core.plasticity import (
     create_fast_weight_plasticity,
     create_routing_plasticity,
     create_rule_state_plasticity,
@@ -40,6 +42,7 @@ from computronium.ontology import (
 )
 
 if TYPE_CHECKING:
+    from computronium.core.system_trainer.config import JointSystem
     from computronium.ontology import (
         CreditAssignment,
         Geometry,
@@ -48,7 +51,6 @@ if TYPE_CHECKING:
         StateDynamics,
         Substrate,
     )
-    from computronium.core.system_trainer.config import JointSystem
 
 
 def _credit_from_config(config: CreditAssignmentConfig):
@@ -60,7 +62,6 @@ def _credit_from_config(config: CreditAssignmentConfig):
         RandomProjectionsCredit,
         TargetInversionCredit,
         TemporalTraceCredit,
-        ThermodynamicContrast,
     )
 
     match config.credit_type.lower():
@@ -195,7 +196,7 @@ def compose_joint_system[
 
             return run_forward(self.substrate, self.geometry, self.dynamics, x)
 
-        def _make_context(self) -> "SystemContext":
+        def _make_context(self) -> SystemContext:
             """Create SystemContext from this joint system."""
             from computronium.core.joint.transition import PlasticityConfig
             from computronium.state import StateRegistry, StateVariable, SystemContext
@@ -253,7 +254,7 @@ def compose_joint_system[
             )
 
         @property
-        def context(self) -> "SystemContext":
+        def context(self) -> SystemContext:
             """SystemContext bound to the current θ and component configs."""
             return self._make_context()
 
@@ -334,11 +335,11 @@ def compose_joint_system[
                 return self._system.forward(x)
 
             @property
-            def context(self) -> "SystemContext":
+            def context(self) -> SystemContext:
                 """SystemContext bound to the current θ and component configs."""
                 return self._make_context()
 
-            def _make_context(self) -> "SystemContext":
+            def _make_context(self) -> SystemContext:
                 from computronium.core.joint.transition import PlasticityConfig
                 from computronium.state import (
                     StateRegistry,
@@ -532,12 +533,11 @@ def create_routing_eqprop_system(
     lr: float = 0.01,
     gate_dim: int = 64,
     gate_init_scale: float = 0.1,
-) -> "JointSystem":
+) -> JointSystem:
     """Create an EqProp system with RoutingPlasticity (6-D coordinate)."""
     from computronium.core.plasticity import RoutingPlasticity
     from computronium.ontology import (
         CreditAssignmentConfig,
-        DigitalSubstrate,
         EnergyMinimizationDynamics,
         EuclideanUpdate,
         GeometryConfig,
@@ -545,7 +545,6 @@ def create_routing_eqprop_system(
         RecurrentGeometry,
         StateDynamicsConfig,
         SubstrateConfig,
-        ThermodynamicContrast,
     )
 
     substrate = DigitalSubstrate(
@@ -622,14 +621,13 @@ def create_fast_weight_eqprop_system(
     settle_steps: int = 30,
     lr: float = 0.01,
     fast_weight_dim: int = 512,
-) -> "JointSystem":
+) -> JointSystem:
     """Create an EqProp system with FastWeightPlasticity (6-D coordinate)."""
     from computronium.core.plasticity import (
         FastWeightPlasticity,
     )
     from computronium.ontology import (
         CreditAssignmentConfig,
-        DigitalSubstrate,
         EnergyMinimizationDynamics,
         EuclideanUpdate,
         GeometryConfig,
@@ -637,7 +635,6 @@ def create_fast_weight_eqprop_system(
         RecurrentGeometry,
         StateDynamicsConfig,
         SubstrateConfig,
-        ThermodynamicContrast,
     )
 
     substrate = DigitalSubstrate(

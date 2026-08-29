@@ -2,30 +2,22 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
-from collections.abc import Iterator
-
-from computronium.core.joint.transition import PlasticityConfig, PlasticityPrimitive
+from computronium.core.joint.transition import PlasticityPrimitive
 from computronium.ontology import (
     CreditAssignment,
-    CreditAssignmentConfig,
     Geometry,
-    GeometryConfig,
     ParameterUpdate,
-    ParameterUpdateConfig,
     StateDynamics,
-    StateDynamicsConfig,
     Substrate,
-    SubstrateConfig,
-    System,
-    substrate_from_config,
 )
-from computronium.state import StateVariable, SystemContext
+from computronium.state import SystemContext
 
 if TYPE_CHECKING:
-    from types import TracebackType
+    pass
 
 
 class JointSystem[

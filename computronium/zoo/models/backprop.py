@@ -12,6 +12,7 @@ Aggregates all standard backprop-based models into a single module for the model
 """
 
 import warnings
+
 warnings.warn(
     "computronium.zoo.models.backprop is deprecated. "
     "Use native compositions: native_backprop_mlp, native_pepita_mlp, "

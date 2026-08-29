@@ -23,11 +23,11 @@ Usage:
 from __future__ import annotations
 
 import warnings
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, Callable, Protocol, TypeVar
+from typing import TYPE_CHECKING, Protocol, TypeVar
 
-import torch
 from torch import nn
 
 from computronium.config.unified import ModelConfig
@@ -43,9 +43,7 @@ from computronium.core.tile.feature_extractors import (
     ConvFeatureExtractor,
     GraphFeatureExtractor,
     TemporalFeatureExtractor,
-    TileModelFactory,
 )
-from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
 from computronium.zoo.models.deployments._feature_extractors import tile_model_factory
 
 if TYPE_CHECKING:
@@ -315,7 +313,9 @@ def get_feature_extractor(domain: str, config: DeploymentConfig) -> FeatureExtra
     domain_enum = DeploymentDomain(domain.lower())
     extractor_cls = _FEATURE_EXTRACTORS.get(domain, default_extractors.get(domain_enum))
     if extractor_cls is None:
-        raise ValueError(f"Unknown domain: {domain}. Available: {list(default_extractors.keys())}")
+        raise ValueError(
+            f"Unknown domain: {domain}. Available: {list(default_extractors.keys())}"
+        )
     return extractor_cls(config)
 
 
@@ -335,7 +335,11 @@ def build_tile_head(
     extra.update(kwargs)
     algorithm = getattr(config, "algorithm", config.mode)
     # TaskHandler expects Literal["classification", "regression", "binary", "multilabel"]
-    task_type = config.task_type if config.task_type in ("classification", "regression", "binary", "multilabel") else "classification"
+    task_type = (
+        config.task_type
+        if config.task_type in ("classification", "regression", "binary", "multilabel")
+        else "classification"
+    )
     head_config = TileAlgorithmConfig(
         input_dim=input_dim,
         output_dim=output_dim,
@@ -384,7 +388,11 @@ class TileDeploymentModel(BioModel):
         if input_dim is None and hasattr(config, "input_channels"):
             input_dim = config.input_channels * config.input_size * config.input_size  # type: ignore[attr-defined]
 
-        output_dim = getattr(config, "num_classes", getattr(config, "action_dim", getattr(config, "output_dim", None)))
+        output_dim = getattr(
+            config,
+            "num_classes",
+            getattr(config, "action_dim", getattr(config, "output_dim", None)),
+        )
         if output_dim is None and hasattr(config, "pred_len"):
             output_dim = config.pred_len * config.output_dim  # type: ignore[attr-defined]
 
@@ -396,7 +404,7 @@ class TileDeploymentModel(BioModel):
                 **model_kwargs,
             )
         )
-        
+
         self.domain = domain
         self.config = config
         self.feature_extractor = feature_extractor
@@ -619,13 +627,33 @@ def register_deployment_variants(
                     config = config_class(**config_dict)
 
                 feature_extractor = get_feature_extractor(domain, config)
-                head_output_dim = getattr(config, "num_classes", getattr(config, "action_dim", getattr(config, "output_dim", getattr(config, "num_classes", 0))))
-                if domain == "timeseries" and getattr(config, "model_type", "") == "forecasting":
-                    head_output_dim = getattr(config, "pred_len", 10) * getattr(config, "output_dim", 1)
-                elif domain == "timeseries" and getattr(config, "model_type", "") == "anomaly_detection":
+                head_output_dim = getattr(
+                    config,
+                    "num_classes",
+                    getattr(
+                        config,
+                        "action_dim",
+                        getattr(
+                            config, "output_dim", getattr(config, "num_classes", 0)
+                        ),
+                    ),
+                )
+                if (
+                    domain == "timeseries"
+                    and getattr(config, "model_type", "") == "forecasting"
+                ):
+                    head_output_dim = getattr(config, "pred_len", 10) * getattr(
+                        config, "output_dim", 1
+                    )
+                elif (
+                    domain == "timeseries"
+                    and getattr(config, "model_type", "") == "anomaly_detection"
+                ):
                     head_output_dim = getattr(config, "input_dim", 10)
 
-                head = build_tile_head(config, feature_extractor.output_dim, head_output_dim)
+                head = build_tile_head(
+                    config, feature_extractor.output_dim, head_output_dim
+                )
                 super().__init__(domain, config, feature_extractor, head)
 
 

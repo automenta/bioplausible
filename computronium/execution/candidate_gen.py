@@ -44,7 +44,7 @@ def _model_specs() -> list[_ModelSpec]:
     try:
         for entry in Registry.query(category=ComponentCategory.MODEL):
             specs.append(_ModelSpec(entry["name"]))
-    except (KeyError, AttributeError, ValueError):  # pragma: no cover - registry empty
+    except KeyError, AttributeError, ValueError:  # pragma: no cover - registry empty
         logger.exception("Failed to enumerate models from Registry")
     _model_specs.cache = specs
     return specs
@@ -75,7 +75,9 @@ class CandidateGenerator:
         )
         self.task_filter = config.task_filter
         self.tier_limit = config.tier_limit.lower() if config.tier_limit else None
-        self.model_filter = set(config.model_filter.split(",")) if config.model_filter else set()
+        self.model_filter = (
+            set(config.model_filter.split(",")) if config.model_filter else set()
+        )
         self._logged_events: set[str] = set()
         self.curriculum = CurriculumManager()
 
@@ -198,9 +200,7 @@ class CandidateGenerator:
             return candidates
 
         shallow_stats = self._get_stats(progress, model, task, PatientLevel.SHALLOW)
-        if not check_criterion(
-            PatientLevel.SHALLOW, task, shallow_stats["best_acc"]
-        ):
+        if not check_criterion(PatientLevel.SHALLOW, task, shallow_stats["best_acc"]):
             self._log(
                 f"stagnated_shallow_{model}_{task}",
                 "STAGNATION",
@@ -226,9 +226,7 @@ class CandidateGenerator:
         if std_stats["count"] < 20:
             return candidates
 
-        if not check_criterion(
-            PatientLevel.STANDARD, task, std_stats["best_acc"]
-        ):
+        if not check_criterion(PatientLevel.STANDARD, task, std_stats["best_acc"]):
             return candidates
 
         # 4. DEEP
@@ -769,7 +767,6 @@ class CandidateGenerator:
         """
         Check if we are allowed to run this task based on curriculum.
         """
-        from computronium.execution.task_weights import TASK_GROUPS
 
         track = None
         for t_list in self.curriculum.TRACKS.values():
@@ -830,9 +827,7 @@ class CandidateGenerator:
     def _check_ablation_needed(
         self, stats, progress, model, task
     ) -> ExperimentTask | None:
-        return check_ablation_needed(
-            stats, progress, model, task, check_criterion
-        )
+        return check_ablation_needed(stats, progress, model, task, check_criterion)
 
     def _check_robustness_needed(
         self, deep_stats, progress, model, task
@@ -849,9 +844,7 @@ class CandidateGenerator:
     def _check_verification_needed(
         self, stats, model, task, tier
     ) -> ExperimentTask | None:
-        return check_verification_needed(
-            stats, model, task, tier, check_criterion
-        )
+        return check_verification_needed(stats, model, task, tier, check_criterion)
 
     def _make_task(self, model, task, tier, priority):
         return ExperimentTask(
@@ -864,6 +857,7 @@ class CandidateGenerator:
 
     def _tier_order(self):
         from computronium.execution.task_weights import TIER_ORDER
+
         return {PatientLevel[k.upper()]: v for k, v in TIER_ORDER.items()}
 
 

@@ -14,8 +14,8 @@ def create_stability_guard(
     window: int = 10,
 ):
     """Create stability guard."""
-    from computronium.stability.spectral_radius import SpectralRadiusEstimator
     from computronium.stability import StabilityGuard
+    from computronium.stability.spectral_radius import SpectralRadiusEstimator
 
     estimator = SpectralRadiusEstimator(fast_mode=True)
     return StabilityGuard(

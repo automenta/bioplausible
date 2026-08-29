@@ -9,8 +9,6 @@ import time
 import uuid
 from dataclasses import dataclass
 
-import numpy as np
-
 from computronium.core._paths import db_path
 from computronium.core.exceptions import KnowledgeBaseError
 from computronium.core.logging import get_logger
@@ -160,7 +158,7 @@ class SurrogateManager:
             logger.info("Trained surrogate %s with R2=%s", surrogate_id, score)
             return surrogate_id
 
-        except (Exception) as e:
+        except Exception as e:
             logger.exception("Surrogate training failed")
             raise KnowledgeBaseError("Surrogate training failed") from e
 

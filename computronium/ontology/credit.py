@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
 import torch
 from torch import Tensor
 
-from computronium.ontology.utils import _learnable_weight_names, apply_pseudo_gradients
+from computronium.ontology.utils import _learnable_weight_names
 
 if TYPE_CHECKING:
     from computronium.ontology.geometry import Geometry

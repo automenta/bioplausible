@@ -342,8 +342,8 @@ class ModelExporter:
         activations in FP32. The quantized model is saved as a state dict
         since quantized modules are not compatible with torch.export.
         """
-        from computronium.deployment import quantize_model_dynamic_int8
         from computronium.core.checkpoint import save_checkpoint
+        from computronium.deployment import quantize_model_dynamic_int8
 
         path = str(Path(output_dir) / "model_int8.pt")
 

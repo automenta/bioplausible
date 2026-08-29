@@ -765,7 +765,13 @@ class Registry:
                     "mep",
                 ],
                 "Recurrent": ["eqprop", "recurrent", "equilibrium", "ep", "chl"],
-                "RecurrentGeometry": ["eqprop", "recurrent", "equilibrium", "ep", "chl"],
+                "RecurrentGeometry": [
+                    "eqprop",
+                    "recurrent",
+                    "equilibrium",
+                    "ep",
+                    "chl",
+                ],
                 "TileMesh": ["tile", "equitile"],
                 "TileGeometry": ["tile", "equitile"],
                 "Neuromorphic": ["neuromorphic", "fabric"],
@@ -773,7 +779,10 @@ class Registry:
             },
             "dynamics": {
                 "Instantaneous": [LocalityLevel.FORWARD_ONLY, LocalityLevel.GLOBAL],
-                "InstantaneousDynamics": [LocalityLevel.FORWARD_ONLY, LocalityLevel.GLOBAL],
+                "InstantaneousDynamics": [
+                    LocalityLevel.FORWARD_ONLY,
+                    LocalityLevel.GLOBAL,
+                ],
                 "EnergyMinimization": [LocalityLevel.EQUILIBRIUM],
                 "EnergyMinimizationDynamics": [LocalityLevel.EQUILIBRIUM],
                 "PredictiveSettling": [LocalityLevel.EQUILIBRIUM],
@@ -909,13 +918,20 @@ class Registry:
         otherwise falls back to heuristic inference from metadata.
         """
         # If explicit ontology axes are provided, use them directly
-        if meta.ontology_substrate or meta.ontology_geometry or meta.ontology_dynamics or meta.ontology_credit or meta.ontology_update:
+        if (
+            meta.ontology_substrate
+            or meta.ontology_geometry
+            or meta.ontology_dynamics
+            or meta.ontology_credit
+            or meta.ontology_update
+        ):
             return {
                 "substrate": meta.ontology_substrate or meta.compute_profile.value,
                 "geometry": meta.ontology_geometry or (meta.family or "feedforward"),
                 "dynamics": meta.ontology_dynamics or meta.locality_level.value,
                 "credit": meta.ontology_credit or meta.credit_assignment_type,
-                "update": meta.ontology_update or (",".join(meta.tags) if meta.tags else "euclidean"),
+                "update": meta.ontology_update
+                or (",".join(meta.tags) if meta.tags else "euclidean"),
             }
 
         # Heuristic fallback for legacy models

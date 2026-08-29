@@ -13,6 +13,7 @@ Aggregates all predictive coding models into a single module for the model zoo.
 """
 
 import warnings
+
 warnings.warn(
     "computronium.zoo.models.predictive_coding is deprecated. "
     "Use native compositions: native_tile_pc or TileAlgorithm.from_pc() instead.",

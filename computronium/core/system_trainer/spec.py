@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import dataclasses
 from typing import TYPE_CHECKING
 
 import torch
-from torch import Tensor
 
 from computronium.core.joint.transition import PlasticityConfig, PlasticityPrimitive
 from computronium.ontology import (
@@ -38,6 +36,7 @@ from computronium.ontology import (
 )
 
 if TYPE_CHECKING:
+    from computronium.core.system_trainer.protocol import JointSystem
     from computronium.ontology import (
         CreditAssignment,
         Geometry,
@@ -46,7 +45,6 @@ if TYPE_CHECKING:
         Substrate,
         System,
     )
-    from computronium.core.system_trainer.protocol import JointSystem
 
 
 def extract_config(system: System) -> dict[str, object]:

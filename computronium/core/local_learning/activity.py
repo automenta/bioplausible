@@ -8,10 +8,9 @@ Provides standard activity settling dynamics for the tile algorithm:
 """
 
 import torch
-import torch.nn.functional as F
 from torch import Tensor
 
-from computronium.core.local_learning.protocols import ActivityUpdateFn, TileState
+from computronium.core.local_learning.protocols import TileState
 from computronium.core.tile.kernels import compute_activity_update
 
 

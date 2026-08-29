@@ -5,7 +5,6 @@ deterministic 5-D ontology layer assignments that bypass ModelAdapter heuristics
 """
 
 from computronium.core.registry import (
-    ComponentCategory,
     ComputeProfile,
     LocalityLevel,
     register_model,
@@ -16,17 +15,17 @@ from computronium.models.native.backprop_native import native_backprop_mlp
 from computronium.models.native.diffusion_eqprop_native import native_diffusion_eqprop
 from computronium.models.native.eqprop_native import native_eqprop_mlp
 from computronium.models.native.fa_native import (
-    native_fa_mlp,
     native_fa_adaptive,
-    native_fa_stochastic,
     native_fa_contrastive,
-    native_fa_sign_symmetric,
+    native_fa_deep_dfa,
     native_fa_direct,
     native_fa_energy_guided,
     native_fa_energy_minimizing,
     native_fa_equilibrium_alignment,
     native_fa_layerwise_equilibrium,
-    native_fa_deep_dfa,
+    native_fa_mlp,
+    native_fa_sign_symmetric,
+    native_fa_stochastic,
 )
 from computronium.models.native.momentum_eqprop_native import native_momentum_eqprop
 from computronium.models.native.pepita_native import native_pepita_mlp
@@ -287,7 +286,12 @@ register_model(
     "native_fa_equilibrium_alignment",
     family="fa",
     domain="general",
-    tags=["native", "feedback-alignment", "equilibrium-alignment", "random-projections"],
+    tags=[
+        "native",
+        "feedback-alignment",
+        "equilibrium-alignment",
+        "random-projections",
+    ],
     bio_plausibility_score=0.75,
     locality_level=LocalityLevel.GLOBAL,
     credit_assignment_type="feedback_alignment",
@@ -305,7 +309,12 @@ register_model(
     "native_fa_layerwise_equilibrium",
     family="fa",
     domain="general",
-    tags=["native", "feedback-alignment", "layerwise-equilibrium", "random-projections"],
+    tags=[
+        "native",
+        "feedback-alignment",
+        "layerwise-equilibrium",
+        "random-projections",
+    ],
     bio_plausibility_score=0.75,
     locality_level=LocalityLevel.GLOBAL,
     credit_assignment_type="feedback_alignment",

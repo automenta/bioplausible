@@ -6,14 +6,13 @@ Handles SQL-based filtering, conditional queries, and flagship selection.
 
 import json
 import sqlite3
-import time
 from dataclasses import dataclass
 
 from pydantic import ValidationError
-from computronium.core._paths import db_path
-from computronium.core.exceptions import ConditionalQueryError, KnowledgeBaseError
-from computronium.core.logging import get_logger
 
+from computronium.core._paths import db_path
+from computronium.core.exceptions import ConditionalQueryError
+from computronium.core.logging import get_logger
 from computronium.knowledge.entries import (
     ConditionalQuery,
     ConditionalResult,

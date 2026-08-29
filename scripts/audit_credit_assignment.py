@@ -11,7 +11,7 @@ Verifies pseudo-grad correctness against ground truth:
 
 import json
 import sys
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 import torch
@@ -44,8 +44,8 @@ def get_activations(geometry, substrate, x):
 
 
 def cosine_similarity(
-    grads1: List[torch.Tensor], grads2: List[torch.Tensor]
-) -> List[float]:
+    grads1: list[torch.Tensor], grads2: list[torch.Tensor]
+) -> list[float]:
     """Compute cosine similarity between two lists of gradients."""
     similarities = []
     for g1, g2 in zip(grads1, grads2):
@@ -60,8 +60,8 @@ def cosine_similarity(
 
 
 def relative_error(
-    grads1: List[torch.Tensor], grads2: List[torch.Tensor]
-) -> List[float]:
+    grads1: list[torch.Tensor], grads2: list[torch.Tensor]
+) -> list[float]:
     """Compute relative error between two lists of gradients."""
     errors = []
     for g1, g2 in zip(grads1, grads2):
@@ -74,7 +74,7 @@ def relative_error(
     return errors
 
 
-def test_thermodynamic_vs_backprop_linear() -> Dict[str, Any]:
+def test_thermodynamic_vs_backprop_linear() -> dict[str, Any]:
     """Test ThermodynamicContrast vs BackpropCredit on linear regression (known θ)."""
     print("\n" + "=" * 60)
     print("Test: ThermodynamicContrast vs BackpropCredit (Linear Regression)")
@@ -216,7 +216,7 @@ def test_thermodynamic_vs_backprop_linear() -> Dict[str, Any]:
     }
 
 
-def test_thermodynamic_vs_backprop_mlp() -> Dict[str, Any]:
+def test_thermodynamic_vs_backprop_mlp() -> dict[str, Any]:
     """Test ThermodynamicContrast vs BackpropCredit on MLP (small)."""
     print("\n" + "=" * 60)
     print("Test: ThermodynamicContrast vs BackpropCredit (MLP)")
@@ -341,7 +341,7 @@ def test_thermodynamic_vs_backprop_mlp() -> Dict[str, Any]:
     }
 
 
-def test_fa_theoretical() -> Dict[str, Any]:
+def test_fa_theoretical() -> dict[str, Any]:
     """Test RandomProjectionsCredit (FA) vs theoretical expectation."""
     print("\n" + "=" * 60)
     print("Test: RandomProjectionsCredit (FA) vs Theoretical")
@@ -446,7 +446,7 @@ def test_fa_theoretical() -> Dict[str, Any]:
     }
 
 
-def test_dfa_theoretical() -> Dict[str, Any]:
+def test_dfa_theoretical() -> dict[str, Any]:
     """Test RandomProjectionsCredit (DFA) vs theoretical expectation."""
     print("\n" + "=" * 60)
     print("Test: RandomProjectionsCredit (DFA) vs Theoretical")
@@ -563,7 +563,7 @@ def test_dfa_theoretical() -> Dict[str, Any]:
     }
 
 
-def test_backprop_identity() -> Dict[str, Any]:
+def test_backprop_identity() -> dict[str, Any]:
     """Test BackpropCredit matches autograd exactly (bitwise)."""
     print("\n" + "=" * 60)
     print("Test: BackpropCredit Identity Check (vs autograd)")
@@ -636,7 +636,7 @@ def test_backprop_identity() -> Dict[str, Any]:
     }
 
 
-def test_energy_gap_sign() -> Dict[str, Any]:
+def test_energy_gap_sign() -> dict[str, Any]:
     """Verify free < nudged energy on 100/100 random batches."""
     print("\n" + "=" * 60)
     print("Test: Energy Gap Sign (100 random batches)")
@@ -709,7 +709,7 @@ def test_energy_gap_sign() -> Dict[str, Any]:
     }
 
 
-def test_settling_convergence() -> Dict[str, Any]:
+def test_settling_convergence() -> dict[str, Any]:
     """Verify energy decreases monotonically and converges within max_steps."""
     print("\n" + "=" * 60)
     print("Test: Settling Convergence (EnergyMonotonic + Convergence)")
@@ -831,7 +831,7 @@ def main():
     with open("audit_results/credit_assignment_audit.json", "w") as f:
         json.dump(output, f, indent=2)
 
-    print(f"\nResults written to audit_results/credit_assignment_audit.json")
+    print("\nResults written to audit_results/credit_assignment_audit.json")
 
     return 0 if all_passed else 1
 

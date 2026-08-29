@@ -183,10 +183,9 @@ class ResourceUsage:
         are measured honestly instead of silently requiring CUDA.
         """
         import time
+
         import torch
         from torch import nn
-
-        from computronium.utils import count_parameters
 
         device = device or next(model.parameters()).device.type
         model.eval()

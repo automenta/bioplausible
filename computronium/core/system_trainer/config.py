@@ -8,13 +8,12 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Protocol, TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
-import torch
 from torch import Tensor
 
 if TYPE_CHECKING:
-    from types import TracebackType
+    pass
 
 
 @dataclass(slots=True)

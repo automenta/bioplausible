@@ -14,7 +14,7 @@ Verifies:
 import copy
 import json
 import sys
-from typing import Any, Dict
+from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -38,7 +38,7 @@ from computronium.core.continual.training import (
 )
 
 
-def test_task_masking() -> Dict[str, Any]:
+def test_task_masking() -> dict[str, Any]:
     """Test task masking: loss computed only on task's 2 classes; gradient zero outside slice."""
     print("\n" + "=" * 60)
     print("Test: Task Masking Gradient Check")
@@ -103,7 +103,7 @@ def test_task_masking() -> Dict[str, Any]:
     }
 
 
-def test_replay_buffer() -> Dict[str, Any]:
+def test_replay_buffer() -> dict[str, Any]:
     """Test replay buffer: capacity respected; balanced eviction; sampling returns correct shapes."""
     print("\n" + "=" * 60)
     print("Test: Replay Buffer Capacity, Eviction, Sampling")
@@ -179,7 +179,7 @@ def test_replay_buffer() -> Dict[str, Any]:
     }
 
 
-def test_replay_training() -> Dict[str, Any]:
+def test_replay_training() -> dict[str, Any]:
     """Test replay training: replay samples trigger train_step with correct task_id from buffer."""
     print("\n" + "=" * 60)
     print("Test: Replay Training with Correct Task ID")
@@ -238,7 +238,7 @@ def test_replay_training() -> Dict[str, Any]:
     }
 
 
-def test_lwf_distillation() -> Dict[str, Any]:
+def test_lwf_distillation() -> dict[str, Any]:
     """Test LwF distillation: prev_model frozen; distillation loss added; affects θ."""
     print("\n" + "=" * 60)
     print("Test: LwF Distillation")
@@ -293,7 +293,7 @@ def test_lwf_distillation() -> Dict[str, Any]:
     )
     if distill is None:
         all_passed = False
-        print(f"  FAIL: distill_only returned None")
+        print("  FAIL: distill_only returned None")
     elif distill.item() <= 0:
         all_passed = False
         print(f"  FAIL: distill_only returned {distill.item():.6f} (expected > 0)")
@@ -339,7 +339,7 @@ def test_lwf_distillation() -> Dict[str, Any]:
     }
 
 
-def test_si_importance() -> Dict[str, Any]:
+def test_si_importance() -> dict[str, Any]:
     """Test SI importance: pseudo-grads accumulated per task; regularization uses accumulated importance."""
     print("\n" + "=" * 60)
     print("Test: Synaptic Intelligence Importance Tracking")
@@ -407,7 +407,7 @@ def test_si_importance() -> Dict[str, Any]:
     }
 
 
-def test_ewc_consolidation() -> Dict[str, Any]:
+def test_ewc_consolidation() -> dict[str, Any]:
     """Test EWC consolidation: Fisher computed at task boundary; penalty applied in subsequent tasks."""
     print("\n" + "=" * 60)
     print("Test: EWC Consolidation")
@@ -505,7 +505,7 @@ def test_ewc_consolidation() -> Dict[str, Any]:
     }
 
 
-def test_stability_guard_integration() -> Dict[str, Any]:
+def test_stability_guard_integration() -> dict[str, Any]:
     """Test stability guard integration: guard called per step; windowed_growth computed; kill triggers on divergence."""
     print("\n" + "=" * 60)
     print("Test: Stability Guard Integration")
@@ -538,7 +538,7 @@ def test_stability_guard_integration() -> Dict[str, Any]:
         all_passed = False
         print("  FAIL: Verdicts missing required attributes")
     else:
-        print(f"  PASS: All verdicts have kill, statistic, threshold")
+        print("  PASS: All verdicts have kill, statistic, threshold")
 
     # Check windowed_growth is computed (statistic should be non-negative)
     stats = [v.statistic for v in verdicts]
@@ -556,7 +556,7 @@ def test_stability_guard_integration() -> Dict[str, Any]:
         all_passed = False
         print(f"  FAIL: Thresholds incorrect: {thresholds}")
     else:
-        print(f"  PASS: All thresholds = 1.029")
+        print("  PASS: All thresholds = 1.029")
 
     # Test that kill triggers on known divergent behavior (by using a high threshold for stability)
     # We can't easily create divergence without breaking the model, so just verify the mechanism exists
@@ -619,7 +619,7 @@ def main():
     with open("audit_results/cl_pipeline_audit.json", "w") as f:
         json.dump(output, f, indent=2)
 
-    print(f"\nResults written to audit_results/cl_pipeline_audit.json")
+    print("\nResults written to audit_results/cl_pipeline_audit.json")
 
     return 0 if all_passed else 1
 

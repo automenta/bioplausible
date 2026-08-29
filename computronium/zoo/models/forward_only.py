@@ -12,6 +12,7 @@ Aggregates all forward-only learning models into a single module for the model z
 """
 
 import warnings
+
 warnings.warn(
     "computronium.zoo.models.forward_only is deprecated. "
     "Use native compositions: native_pepita_mlp, native_tile_hebbian, "

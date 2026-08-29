@@ -12,6 +12,7 @@ Aggregates all FA-family models into a single module for the model zoo.
 """
 
 import warnings
+
 warnings.warn(
     "computronium.zoo.models.fa is deprecated. "
     "Use native compositions: native_fa_mlp, native_tile_fa, "

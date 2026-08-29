@@ -11,7 +11,7 @@ Verifies:
 
 import json
 import sys
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -40,7 +40,7 @@ def get_activations(geometry, substrate, x):
         return [x, geometry.forward(x, substrate)]
 
 
-def test_energy_fixed_point() -> Dict[str, Any]:
+def test_energy_fixed_point() -> dict[str, Any]:
     """Test EnergyMinimizationDynamics settles to fixed point (‖∇E‖ < 1e-4)."""
     print("\n" + "=" * 60)
     print("Test: EnergyMinimizationDynamics Fixed Point")
@@ -125,7 +125,7 @@ def test_energy_fixed_point() -> Dict[str, Any]:
     }
 
 
-def test_instantaneous_vs_autograd() -> Dict[str, Any]:
+def test_instantaneous_vs_autograd() -> dict[str, Any]:
     """Test InstantaneousDynamics single step matches autograd forward exactly."""
     print("\n" + "=" * 60)
     print("Test: InstantaneousDynamics vs Autograd Forward")
@@ -181,7 +181,7 @@ def test_instantaneous_vs_autograd() -> Dict[str, Any]:
     }
 
 
-def test_predictive_settling_error_decreases() -> Dict[str, Any]:
+def test_predictive_settling_error_decreases() -> dict[str, Any]:
     """Test PredictiveSettlingDynamics prediction error decreases over steps."""
     print("\n" + "=" * 60)
     print("Test: PredictiveSettlingDynamics Error Decrease")
@@ -267,7 +267,7 @@ def test_predictive_settling_error_decreases() -> Dict[str, Any]:
     }
 
 
-def scan_inplace_ops(module: nn.Module, path: str = "") -> List[Tuple[str, str]]:
+def scan_inplace_ops(module: nn.Module, path: str = "") -> list[tuple[str, str]]:
     """Recursively scan module for in-place operations on parameters/buffers.
 
     Returns list of (location, description) for any in-place ops found.
@@ -318,7 +318,7 @@ def scan_inplace_ops(module: nn.Module, path: str = "") -> List[Tuple[str, str]]
     return issues
 
 
-def test_inplace_op_audit() -> Dict[str, Any]:
+def test_inplace_op_audit() -> dict[str, Any]:
     """Scan RecurrentGeometry and all dynamics for in-place ops that break autograd."""
     print("\n" + "=" * 60)
     print("Test: In-Place Operation Audit")
@@ -582,7 +582,7 @@ def test_inplace_op_audit() -> Dict[str, Any]:
     }
 
 
-def test_device_consistency() -> Dict[str, Any]:
+def test_device_consistency() -> dict[str, Any]:
     """Test CPU vs CUDA consistency for all dynamics types.
 
     Creates models and data on CPU first, then moves to CUDA to ensure
@@ -707,7 +707,7 @@ def test_device_consistency() -> Dict[str, Any]:
 
     match = torch.allclose(out_cpu, out_cuda, rtol=1e-5, atol=1e-7)
     if match:
-        print(f"    EnergyMinimizationDynamics: PASS")
+        print("    EnergyMinimizationDynamics: PASS")
     else:
         diff = (out_cpu - out_cuda).abs().max().item()
         print(f"    EnergyMinimizationDynamics: FAIL (max diff = {diff:.2e})")
@@ -755,7 +755,7 @@ def test_device_consistency() -> Dict[str, Any]:
 
     match = torch.allclose(out_cpu, out_cuda, rtol=1e-5, atol=1e-7)
     if match:
-        print(f"    InstantaneousDynamics: PASS")
+        print("    InstantaneousDynamics: PASS")
     else:
         diff = (out_cpu - out_cuda).abs().max().item()
         print(f"    InstantaneousDynamics: FAIL (max diff = {diff:.2e})")
@@ -815,7 +815,7 @@ def test_device_consistency() -> Dict[str, Any]:
 
     match = torch.allclose(out_cpu, out_cuda, rtol=1e-5, atol=1e-7)
     if match:
-        print(f"    PredictiveSettlingDynamics: PASS")
+        print("    PredictiveSettlingDynamics: PASS")
     else:
         diff = (out_cpu - out_cuda).abs().max().item()
         print(f"    PredictiveSettlingDynamics: FAIL (max diff = {diff:.2e})")
@@ -869,7 +869,7 @@ def main():
     with open("audit_results/dynamics_audit.json", "w") as f:
         json.dump(output, f, indent=2)
 
-    print(f"\nResults written to audit_results/dynamics_audit.json")
+    print("\nResults written to audit_results/dynamics_audit.json")
 
     return 0 if all_passed else 1
 

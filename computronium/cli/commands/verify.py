@@ -41,6 +41,7 @@ def add_verify_subparsers(subparsers: argparse._SubParsersAction) -> None:
 def run_verify(args: argparse.Namespace) -> None:
     """Re-run top-k configs of a study with n seeds."""
     import optuna
+
     from computronium.cli.shared import _DB_PATH, _STORAGE_URL, _set_storage
 
     if getattr(args, "db", None):
@@ -50,7 +51,9 @@ def run_verify(args: argparse.Namespace) -> None:
 
     # Get top-k trials
     completed = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
-    completed.sort(key=lambda t: t.value if t.value is not None else -float("inf"), reverse=True)
+    completed.sort(
+        key=lambda t: t.value if t.value is not None else -float("inf"), reverse=True
+    )
     top_trials = completed[: args.top_k]
 
     logger.info("Verifying top %d trials from %s", args.top_k, args.study)
@@ -62,14 +65,19 @@ def run_verify(args: argparse.Namespace) -> None:
         task_name = trial.user_attrs.get("task", args.task)
         family = trial.user_attrs.get("family")
 
-        logger.info("  Trial %d: value=%.4f, model=%s", trial.number, trial.value, model_name)
+        logger.info(
+            "  Trial %d: value=%.4f, model=%s", trial.number, trial.value, model_name
+        )
 
         for seed_offset in range(args.seeds):
             seed = args.seed + seed_offset * 1000 + trial.number
 
             # Run verification
+            from computronium.hyperopt.eval_tiers import (
+                PatientLevel,
+                get_evaluation_config,
+            )
             from computronium.hyperopt.experiment import run_single_trial
-            from computronium.hyperopt.eval_tiers import get_evaluation_config, PatientLevel
 
             eval_cfg = get_evaluation_config(PatientLevel.STANDARD)
             if args.epochs:

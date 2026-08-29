@@ -6,7 +6,6 @@ composite state objects across different dynamics implementations.
 
 from typing import Protocol
 
-import torch
 from torch import Tensor
 
 

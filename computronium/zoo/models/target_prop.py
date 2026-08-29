@@ -11,6 +11,7 @@ Difference Target Propagation model for the model zoo.
 """
 
 import warnings
+
 warnings.warn(
     "computronium.zoo.models.target_prop is deprecated. "
     "Use native compositions: native_tile_tp or TileAlgorithm.from_tp() instead.",

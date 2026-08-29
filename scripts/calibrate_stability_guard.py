@@ -20,13 +20,13 @@ import numpy as np
 import torch
 
 from computronium.core.joint.transition import PlasticityConfig
-from computronium.stability.guard import ProbeSpec
 from computronium.stability import (
     StabilityGuard,
     calibrate_threshold,
     measure_guard_overhead,
     quantify_proxy_disagreement,
 )
+from computronium.stability.guard import ProbeSpec
 from computronium.state import CompositeState, SystemContext
 
 if TYPE_CHECKING:

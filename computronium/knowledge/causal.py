@@ -6,7 +6,6 @@ failure manifold mapping, and algorithm phylogeny.
 """
 
 import json
-import time
 from dataclasses import dataclass
 
 import numpy as np
@@ -100,7 +99,7 @@ class CausalAnalyzer:
                 "ranked_factors": sorted_corr,
                 "n_samples": len(records),
             }
-        except (Exception) as e:
+        except Exception as e:
             logger.exception("Causal analysis failed")
             raise KnowledgeBaseError("Causal analysis failed") from e
 

@@ -12,6 +12,7 @@ implements SettleProtocol for unified convergence instrumentation.
 """
 
 import warnings
+
 warnings.warn(
     "computronium.zoo.models.o1memory is deprecated. "
     "Use native compositions: native_eqprop_mlp or TileAlgorithm instead.",

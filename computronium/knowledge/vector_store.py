@@ -6,8 +6,6 @@ Provides FAISS-based semantic search and embedding generation.
 
 import json
 import pathlib
-import sqlite3
-import time
 from dataclasses import dataclass
 
 import numpy as np
@@ -173,7 +171,8 @@ class VectorStore:
                 with ids_path.open() as f:
                     self.vector_ids = json.load(f)
                 logger.info(
-                    "Loaded persisted vector index with %d vectors", len(self.vector_ids)
+                    "Loaded persisted vector index with %d vectors",
+                    len(self.vector_ids),
                 )
                 return True
             except (OSError, RuntimeError, ValueError) as e:

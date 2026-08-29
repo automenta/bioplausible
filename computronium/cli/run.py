@@ -20,12 +20,17 @@ import json
 import logging
 from pathlib import Path
 
-from computronium.cli.commands.train import add_train_subparsers, run_training, run_core_train, run_from_yaml
-from computronium.cli.commands.search import add_search_subparsers, run_search
-from computronium.cli.commands.compare import add_compare_subparsers, run_compare
-from computronium.cli.commands.verify import add_verify_subparsers, run_verify
 from computronium.cli.benchmark import main as run_benchmark_cli
-from computronium.core.registry import Registry, ComponentCategory
+from computronium.cli.commands.compare import add_compare_subparsers, run_compare
+from computronium.cli.commands.search import add_search_subparsers, run_search
+from computronium.cli.commands.train import (
+    add_train_subparsers,
+    run_core_train,
+    run_from_yaml,
+    run_training,
+)
+from computronium.cli.commands.verify import add_verify_subparsers, run_verify
+from computronium.core.registry import ComponentCategory, Registry
 
 
 def add_pareto_subparsers(subparsers: argparse._SubParsersAction) -> None:
@@ -108,12 +113,14 @@ def list_models(_args: argparse.Namespace) -> None:
 def run_pareto(args: argparse.Namespace) -> None:
     """Generate Pareto frontier plots/data for a study."""
     import optuna
+
     from computronium.cli.shared import _set_storage
 
     if args.db:
         _set_storage(args.db)
 
     from computronium.cli.shared import _STORAGE_URL
+
     study = optuna.load_study(study_name=args.study, storage=_STORAGE_URL)
 
     trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
@@ -147,6 +154,7 @@ def run_portfolio(args: argparse.Namespace) -> None:
     """Build Phase 1 portfolio ranking table."""
     if args.db:
         from computronium.cli.shared import _set_storage
+
         _set_storage(args.db)
 
     from computronium.cli.shared import _STORAGE_URL
@@ -177,6 +185,7 @@ def run_benchmark(args: argparse.Namespace) -> None:
     """Run cross-domain benchmark suite - delegates to biopl benchmark."""
     # Delegate to the biopl benchmark CLI
     import sys
+
     sys.argv = ["biopl", "benchmark"] + sys.argv[2:]
     run_benchmark_cli()
 
@@ -208,6 +217,7 @@ def main() -> None:
 
     if getattr(args, "db", None):
         from computronium.cli.shared import _set_storage
+
         _set_storage(args.db)
 
     command_map = {

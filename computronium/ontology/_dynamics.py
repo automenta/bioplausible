@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
+import math
 from abc import abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-import math
 import torch
-from torch import Tensor
 from torch import Tensor
 
 if TYPE_CHECKING:

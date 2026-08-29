@@ -17,11 +17,11 @@ Usage:
 
 from computronium.ontology.adapter.adapter import (
     AdapterConfig,
+    CreditInferer,
+    DynamicsInferer,
+    GeometryInferer,
     ModelAdapter,
     SubstrateInferer,
-    GeometryInferer,
-    DynamicsInferer,
-    CreditInferer,
     UpdateInferer,
 )
 

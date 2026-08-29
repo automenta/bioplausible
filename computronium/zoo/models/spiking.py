@@ -11,6 +11,7 @@ SpikingSTDP model for the model zoo.
 """
 
 import warnings
+
 warnings.warn(
     "computronium.zoo.models.spiking is deprecated. "
     "Use native compositions: native_tile_snn or TileAlgorithm.from_snn() instead.",

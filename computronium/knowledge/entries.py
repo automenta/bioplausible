@@ -3,12 +3,10 @@ Knowledge base entry types and query/result data structures.
 """
 
 import time
-import uuid
 from dataclasses import asdict, dataclass, field
 from typing import TypedDict
 
-import numpy as np
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,6 +1,5 @@
 """Shared CLI utilities and constants."""
 
-import argparse
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -10,31 +9,13 @@ import optuna
 from computronium.core._paths import db_path
 from computronium.core.logging import get_logger
 from computronium.core.registry import ComponentCategory, Registry
-from computronium.hyperopt import (
-    create_optuna_space,
-    create_study,
-)
-from computronium.hyperopt.comparison import (
-    ComparisonMetric,
-    compute_algorithm_rankings,
-    generate_comparison_summary,
-    group_trials_by_family,
-)
 from computronium.hyperopt.eval_tiers import (
     EvaluationConfig,
     PatientLevel,
-    get_evaluation_config,
 )
-from computronium.hyperopt.experiment import run_single_trial_task
-from computronium.hyperopt.portfolio import (
-    PortfolioRow,
-    regime_advantage_label,
-)
-from computronium.ontology import PredictiveSettlingDynamics
-from computronium.zoo import get_model_spec
 
 if TYPE_CHECKING:
-    import pandas as pd
+    pass
 
 __all__ = [
     "FAMILY_MAP",

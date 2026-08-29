@@ -10,7 +10,6 @@ These protocols define the three algorithm-specific injection points:
 from collections.abc import Callable
 from typing import Protocol
 
-import torch
 from torch import Tensor
 
 from computronium.core.tile import TileGraph, TileState

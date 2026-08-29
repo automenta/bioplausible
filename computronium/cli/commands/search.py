@@ -2,18 +2,14 @@
 
 import argparse
 import json
-import optuna
-from pathlib import Path
 
 from computronium.cli.shared import (
     FAMILY_MAP,
-    _DB_PATH,
-    _STORAGE_URL,
-    _TrialContext,
     _make_objective,
     _resolve_targets,
     _set_storage,
     _tier_for_args,
+    _TrialContext,
     logger,
 )
 
@@ -94,8 +90,7 @@ def add_search_subparsers(subparsers: argparse._SubParsersAction) -> None:
 
 def run_search(args: argparse.Namespace) -> None:
     """Compute-matched HPO across a propagator family."""
-    from computronium.cli.shared import FAMILY_MAP
-    from computronium.hyperopt import create_study, create_optuna_space
+    from computronium.hyperopt import create_optuna_space, create_study
     from computronium.hyperopt.eval_tiers import get_evaluation_config
 
     # Override storage if --db provided
@@ -143,10 +138,13 @@ def run_search(args: argparse.Namespace) -> None:
             trials = study.trials
             with open(args.output, "w") as f:
                 for t in trials:
-                    f.write(json.dumps({
-                        "number": t.number,
-                        "value": t.value,
-                        "params": t.params,
-                        "user_attrs": t.user_attrs,
-                    }) + "\n")
+                    f.write(
+                        json.dumps({
+                            "number": t.number,
+                            "value": t.value,
+                            "params": t.params,
+                            "user_attrs": t.user_attrs,
+                        })
+                        + "\n"
+                    )
             logger.info("Exported %d trials to %s", len(trials), args.output)

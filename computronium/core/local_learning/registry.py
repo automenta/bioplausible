@@ -6,8 +6,8 @@ with metadata, enabling config-driven composition via TileAlgorithm.from_config(
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 
 @dataclass(frozen=True, slots=True)

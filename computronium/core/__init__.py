@@ -56,21 +56,30 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "SubstrateConfig": ("computronium.ontology.substrate", "SubstrateConfig"),
     "GeometryConfig": ("computronium.ontology.geometry", "GeometryConfig"),
     "StateDynamicsConfig": ("computronium.ontology.dynamics", "StateDynamicsConfig"),
-    "CreditAssignmentConfig": ("computronium.ontology.credit", "CreditAssignmentConfig"),
+    "CreditAssignmentConfig": (
+        "computronium.ontology.credit",
+        "CreditAssignmentConfig",
+    ),
     "ParameterUpdateConfig": ("computronium.ontology.update", "ParameterUpdateConfig"),
     # Reference implementations
     "DigitalSubstrate": ("computronium.ontology.substrate", "DigitalSubstrate"),
     "FeedforwardGeometry": ("computronium.ontology.geometry", "FeedforwardGeometry"),
     "RecurrentGeometry": ("computronium.ontology.geometry", "RecurrentGeometry"),
     "TileGeometry": ("computronium.ontology.geometry", "TileGeometry"),
-    "InstantaneousDynamics": ("computronium.ontology.dynamics", "InstantaneousDynamics"),
+    "InstantaneousDynamics": (
+        "computronium.ontology.dynamics",
+        "InstantaneousDynamics",
+    ),
     "ThermodynamicContrast": ("computronium.ontology.credit", "ThermodynamicContrast"),
     "EuclideanUpdate": ("computronium.ontology.update", "EuclideanUpdate"),
     "ModelAdapter": ("computronium.ontology.system", "ModelAdapter"),
     # Hardware substrates
     "AnalogSubstrate": ("computronium.ontology.substrate", "AnalogSubstrate"),
     "MemristiveSubstrate": ("computronium.ontology.substrate", "MemristiveSubstrate"),
-    "NeuromorphicSubstrate": ("computronium.ontology.substrate", "NeuromorphicSubstrate"),
+    "NeuromorphicSubstrate": (
+        "computronium.ontology.substrate",
+        "NeuromorphicSubstrate",
+    ),
     "OpticalSubstrate": ("computronium.ontology.substrate", "OpticalSubstrate"),
     "QuantumSubstrate": ("computronium.ontology.substrate", "QuantumSubstrate"),
     "QuantizedSubstrate": ("computronium.ontology.substrate", "QuantizedSubstrate"),

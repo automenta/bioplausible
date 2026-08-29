@@ -10,29 +10,19 @@ import pathlib
 import sqlite3
 import time
 import uuid
-from dataclasses import dataclass, field
-
-import numpy as np
-from pydantic import BaseModel, Field, ValidationError
+from dataclasses import dataclass
 
 from computronium.core._paths import db_path
-from computronium.core.exceptions import ConditionalQueryError, KnowledgeBaseError
+from computronium.core.exceptions import KnowledgeBaseError
 from computronium.core.logging import get_logger
-
+from computronium.knowledge.causal import CausalAnalyzer, CausalConfig
 from computronium.knowledge.entries import (
     ConditionalQuery,
     ConditionalResult,
     FlagshipCandidate,
     FlagshipDecision,
     KnowledgeEntry,
-    _ConditionalQueryModel,
-    _entry_accuracy,
-    _entry_flops,
-    _entry_memory,
-    _entry_substrate,
-    _entry_task,
 )
-from computronium.knowledge.causal import CausalAnalyzer, CausalConfig
 from computronium.knowledge.query import QueryConfig, QueryEngine
 from computronium.knowledge.surrogate import SurrogateConfig, SurrogateManager
 from computronium.knowledge.vector_store import VectorStore, VectorStoreConfig
@@ -70,10 +60,12 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
         self.config = config or KnowledgeBaseConfig()
 
         # Initialize components
-        self.query_engine = QueryEngine(QueryConfig(
-            db_path=self.config.db_path,
-            default_limit=self.config.default_limit,
-        ))
+        self.query_engine = QueryEngine(
+            QueryConfig(
+                db_path=self.config.db_path,
+                default_limit=self.config.default_limit,
+            )
+        )
         self.vector_store = VectorStore(
             db_path=self.config.db_path,
             config=VectorStoreConfig(
@@ -82,16 +74,20 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
                 auto_embed=self.config.auto_embed,
             ),
         )
-        self.surrogate_manager = SurrogateManager(SurrogateConfig(
-            db_path=self.config.db_path,
-            min_experiments=self.config.min_experiments,
-            min_records=self.config.min_records,
-        ))
-        self.causal_analyzer = CausalAnalyzer(CausalConfig(
-            db_path=self.config.db_path,
-            min_experiments=self.config.min_experiments,
-            min_records=self.config.min_records,
-        ))
+        self.surrogate_manager = SurrogateManager(
+            SurrogateConfig(
+                db_path=self.config.db_path,
+                min_experiments=self.config.min_experiments,
+                min_records=self.config.min_records,
+            )
+        )
+        self.causal_analyzer = CausalAnalyzer(
+            CausalConfig(
+                db_path=self.config.db_path,
+                min_experiments=self.config.min_experiments,
+                min_records=self.config.min_records,
+            )
+        )
 
         # Initialize SQLite
         self._init_db()
@@ -336,7 +332,9 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
         """Query knowledge base with structured filters."""
         return self.query_engine.query(**kwargs)
 
-    def query_conditionals(self, query: ConditionalQuery, limit: int = 100) -> list[ConditionalResult]:
+    def query_conditionals(
+        self, query: ConditionalQuery, limit: int = 100
+    ) -> list[ConditionalResult]:
         """Return verified positive conditionals matching a P2 read-half query."""
         return self.query_engine.query_conditionals(query, limit)
 
@@ -568,7 +566,9 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
             "total_experiments": exp_total,
             "experiments_by_model": exp_by_model,
             "experiments_by_task": exp_by_task,
-            "vector_index_size": len(self.vector_store.vector_ids) if self.vector_store.vector_index else 0,
+            "vector_index_size": len(self.vector_store.vector_ids)
+            if self.vector_store.vector_index
+            else 0,
             "has_embeddings": self.vector_store.embedding_model is not None,
         }
 

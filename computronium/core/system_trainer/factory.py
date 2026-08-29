@@ -50,7 +50,6 @@ def _credit_from_config(config: CreditAssignmentConfig):
         RandomProjectionsCredit,
         TargetInversionCredit,
         TemporalTraceCredit,
-        ThermodynamicContrast,
     )
 
     match config.credit_type.lower():
@@ -160,19 +159,8 @@ def compose_system[
 
             from computronium.ontology import (
                 CreditAssignmentConfig,
-                ElasticConsolidationUpdate,
-                EnergyMinimizationDynamics,
-                EuclideanUpdate,
-                FeedforwardGeometry,
                 GeometryConfig,
-                InstantaneousDynamics,
-                NaturalGradientUpdate,
                 ParameterUpdateConfig,
-                PredictiveSettlingDynamics,
-                RecurrentGeometry,
-                RiemannianOrthogonalUpdate,
-                SpectralConstrainedUpdate,
-                SpikeIntegrationDynamics,
                 StateDynamicsConfig,
                 SubstrateConfig,
             )
@@ -295,15 +283,10 @@ def create_eqprop_system(
     """Create an Equilibrium Propagation system (classic EqProp coordinate)."""
     from computronium.ontology import (
         CreditAssignmentConfig,
-        DigitalSubstrate,
-        EnergyMinimizationDynamics,
-        EuclideanUpdate,
         GeometryConfig,
         ParameterUpdateConfig,
-        RecurrentGeometry,
         StateDynamicsConfig,
         SubstrateConfig,
-        ThermodynamicContrast,
     )
 
     substrate = DigitalSubstrate(
@@ -376,11 +359,7 @@ def create_backprop_system(
     from computronium.ontology import (
         BackpropCredit,
         CreditAssignmentConfig,
-        DigitalSubstrate,
-        EuclideanUpdate,
-        FeedforwardGeometry,
         GeometryConfig,
-        InstantaneousDynamics,
         ParameterUpdateConfig,
         StateDynamicsConfig,
         SubstrateConfig,
@@ -448,11 +427,7 @@ def create_fa_system(
     """Create a Feedback Alignment system."""
     from computronium.ontology import (
         CreditAssignmentConfig,
-        DigitalSubstrate,
-        EuclideanUpdate,
-        FeedforwardGeometry,
         GeometryConfig,
-        InstantaneousDynamics,
         ParameterUpdateConfig,
         RandomProjectionsCredit,
         StateDynamicsConfig,
@@ -547,19 +522,6 @@ def compose_system_from_configs(
     Returns:
         A composed System with default implementations for each layer.
     """
-    from computronium.ontology import (
-        ElasticConsolidationUpdate,
-        EnergyMinimizationDynamics,
-        EuclideanUpdate,
-        FeedforwardGeometry,
-        InstantaneousDynamics,
-        NaturalGradientUpdate,
-        PredictiveSettlingDynamics,
-        RecurrentGeometry,
-        RiemannianOrthogonalUpdate,
-        SpectralConstrainedUpdate,
-        SpikeIntegrationDynamics,
-    )
 
     # Instantiate substrate from config (class named by the explicit type tag)
     substrate_instance = substrate_from_config(substrate)

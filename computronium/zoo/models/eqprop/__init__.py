@@ -9,6 +9,7 @@
 """
 
 import warnings
+
 warnings.warn(
     "computronium.zoo.models.eqprop is deprecated. "
     "Use native compositions: native_eqprop_mlp, native_diffusion_eqprop, "

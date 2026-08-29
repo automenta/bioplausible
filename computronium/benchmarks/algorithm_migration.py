@@ -24,7 +24,6 @@ from torch import Tensor, nn
 
 from computronium.core.profiling import measure_suite_resources
 
-
 CLAIMS_SCOPE = "plumbing_only"
 
 
