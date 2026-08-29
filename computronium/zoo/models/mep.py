@@ -46,7 +46,7 @@ from computronium.zoo.mep.optimizers.strategies.gradient import EPGradient
     locality_level=LocalityLevel.EQUILIBRIUM,
     tags=["mep", "equilibrium", "ep", status_tag("experimental")],
 )
-class MEPEqPropModel(BioModel, SettleProtocol):
+class MEPEqPropModel(BioModel):
     """MEP Equilibrium Propagation model with SettleProtocol support.
 
     Uses the MEP Settler for energy-based settling and EPGradient
@@ -106,7 +106,7 @@ class MEPEqPropModel(BioModel, SettleProtocol):
                 },
             )
 
-        super().__init__(config, **kwargs)
+        super().__init__(config)
 
         self.beta = beta
         self.settle_steps = settle_steps

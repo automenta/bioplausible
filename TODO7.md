@@ -158,7 +158,7 @@
 - `tests/unit/core/test_system_spec.py` — 13 passed
 - `tests/unit/validation/` — 22 passed
 - `tests/property/joint/` — 129 passed, 10 skipped
-- `tests/integration/test_settle_protocol_models.py::TestTileAlgorithmSettleProtocol` — 7 passed
+- `tests/integration/test_settle_protocol_models.py` — 29 passed (was 7, fixed MRO issue in MEPEqPropModel, O1MemoryModel, PredictiveCodingHybrid)
 - `tests/unit/core/test_stability_standalone.py` — 55 passed (wheel verified)
 - All imports verified working
 - Native model imports and registry registration verified
@@ -168,6 +168,7 @@
 - Fixed `computronium/state/composite.py`: Removed duplicate methods, added type alias, fixed isinstance warnings
 - Fixed `computronium/state/transitions.py`: Added type arguments for `dict`, typed `**kwargs` as `object`
 - Fixed `computronium/state/registry.py`: Suppressed unnecessary isinstance warnings
+- Fixed `computronium/zoo/models/mep.py`, `o1memory.py`, `predictive_coding.py`: Removed `SettleProtocol` from inheritance (structural subtyping via `@runtime_checkable` works without inheritance); fixed `super().__init__(config, **kwargs)` → `super().__init__(config)`; added missing `ModelConfig` creation in `PredictiveCodingHybrid`
 - State module: 0 errors, 0 warnings
 - computronium/__init__.py: 0 errors (warnings suppressed)
 
@@ -350,11 +351,12 @@ Week 2:             Documentation + Migration Guide
 - ✅ **Async Support for KnowledgeBase** — Added 7 async methods (`aquery`, `aquery_conditionals`, `asearch`, `aadd_entry`, `aadd_experiment`, `aget_stats`, `aget_meta_analysis_summary`)
 - ✅ **CLI Refactoring** — Moved `pareto`, `portfolio`, `list` commands to `cli/commands/`
 - ✅ **Pyright Cleanup** — Fixed `computronium/__init__.py` lazy import warnings; added `reportUnsupportedDunderAll = "none"` to pyproject.toml
+- ✅ **SettleProtocol MRO Fix** — Removed `SettleProtocol` from inheritance in `MEPEqPropModel`, `O1MemoryModel`, `PredictiveCodingHybrid` (structural subtyping via `@runtime_checkable` works without inheritance); fixed `super().__init__(config, **kwargs)` → `super().__init__(config)`; all 29 settle protocol tests now pass
 
 **Test Results:**
 - Core unit tests: 172 passed
 - Property tests: 17 passed  
-- Integration (settle protocol): 7 passed
+- Integration (settle protocol): 29 passed (was 7, fixed MRO issue in zoo models)
 - Stability standalone: 55 passed
 - Coverage: 17.64% (≥15% floor met, legacy zoo excluded)
 

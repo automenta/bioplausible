@@ -48,7 +48,7 @@ from computronium.zoo.mep.optimizers.o1_memory_v2 import (
     locality_level=LocalityLevel.EQUILIBRIUM,
     tags=["mep", "o1memory", "equilibrium", "ep", status_tag("experimental")],
 )
-class O1MemoryModel(BioModel, SettleProtocol):
+class O1MemoryModel(BioModel):
     """O(1) Memory EP model with SettleProtocol support.
 
     Uses analytic state gradients for true O(1) activation memory
@@ -108,7 +108,7 @@ class O1MemoryModel(BioModel, SettleProtocol):
                 },
             )
 
-        super().__init__(config, **kwargs)
+        super().__init__(config)
 
         self.beta = beta
         self.settle_steps = settle_steps

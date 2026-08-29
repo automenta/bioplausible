@@ -215,7 +215,7 @@ class FabricPCGraphPCN(BioModel):
     locality_level=LocalityLevel.LOCAL,
     tags=["predictive-coding", "hybrid", status_tag("experimental")],
 )
-class PredictiveCodingHybrid(BioModel, SettleProtocol):
+class PredictiveCodingHybrid(BioModel):
     """Layers predict inputs; FA propagates prediction errors.
 
     Implements SettleProtocol (Family B: activations list) for unified
@@ -236,7 +236,23 @@ class PredictiveCodingHybrid(BioModel, SettleProtocol):
             convergence_threshold = kwargs.get("convergence_threshold", 1e-4)
             convergence_start = kwargs.get("convergence_start", 5)
 
-        super().__init__(config, **kwargs)
+            # Build config if not provided
+            config = ModelConfig(
+                name=self.algorithm_name,
+                input_dim=kwargs.get("input_dim", 784),
+                output_dim=kwargs.get("output_dim", 10),
+                hidden_dims=[kwargs.get("hidden_dim", 256)],
+                learning_rate=kwargs.get("learning_rate", 0.001),
+                max_steps=infer_steps,
+                extra={
+                    "infer_steps": infer_steps,
+                    "eta_infer": eta_infer,
+                    "convergence_threshold": convergence_threshold,
+                    "convergence_start": convergence_start,
+                },
+            )
+
+        super().__init__(config)
 
         if not hasattr(self, "layers") or not self.layers:
             self.layers = nn.ModuleList()
