@@ -232,36 +232,64 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     ),
     # Native Models
     "native_eqprop_mlp": (
-        "computronium.models.native.eqprop_native",
+        "computronium.models.native",
         "native_eqprop_mlp",
     ),
     "native_backprop_mlp": (
-        "computronium.models.native.backprop_native",
+        "computronium.models.native",
         "native_backprop_mlp",
     ),
     "native_fa_mlp": (
-        "computronium.models.native.fa_native",
+        "computronium.models.native",
         "native_fa_mlp",
     ),
     "native_pepita_mlp": (
-        "computronium.models.native.pepita_native",
+        "computronium.models.native",
         "native_pepita_mlp",
     ),
     "native_tile_ep": (
-        "computronium.models.native.tile_native",
+        "computronium.models.native",
         "native_tile_ep",
     ),
     "native_tile_fa": (
-        "computronium.models.native.tile_native",
+        "computronium.models.native",
         "native_tile_fa",
     ),
     "native_tile_tp": (
-        "computronium.models.native.tile_native",
+        "computronium.models.native",
         "native_tile_tp",
     ),
     "native_tile_snn": (
-        "computronium.models.native.tile_native",
+        "computronium.models.native",
         "native_tile_snn",
+    ),
+    "native_diffusion_eqprop": (
+        "computronium.models.native",
+        "native_diffusion_eqprop",
+    ),
+    "native_momentum_eqprop": (
+        "computronium.models.native",
+        "native_momentum_eqprop",
+    ),
+    "native_sparse_eqprop": (
+        "computronium.models.native",
+        "native_sparse_eqprop",
+    ),
+    "native_ternary_eqprop": (
+        "computronium.models.native",
+        "native_ternary_eqprop",
+    ),
+    "native_holomorphic_ep": (
+        "computronium.models.native",
+        "native_holomorphic_ep",
+    ),
+    "native_directed_ep": (
+        "computronium.models.native",
+        "native_directed_ep",
+    ),
+    "native_finite_nudge_ep": (
+        "computronium.models.native",
+        "native_finite_nudge_ep",
     ),
     # MEP Presets
     "muon_backprop": ("computronium.zoo.mep.presets", "muon_backprop"),
@@ -349,6 +377,21 @@ __all__ = [
     "create_snn_mlp",
     "create_tp_mlp",
     "extract_config",
+    "native_backprop_mlp",
+    "native_diffusion_eqprop",
+    "native_directed_ep",
+    "native_eqprop_mlp",
+    "native_fa_mlp",
+    "native_finite_nudge_ep",
+    "native_holomorphic_ep",
+    "native_momentum_eqprop",
+    "native_pepita_mlp",
+    "native_sparse_eqprop",
+    "native_ternary_eqprop",
+    "native_tile_ep",
+    "native_tile_fa",
+    "native_tile_snn",
+    "native_tile_tp",
 ]
 
 

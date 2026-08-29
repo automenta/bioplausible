@@ -70,8 +70,6 @@ from computronium.ontology.system import (
     System,
     SystemConfig,
     SystemState,
-    _learnable_weight_names,
-    apply_pseudo_gradients,
 )
 from computronium.ontology.system import (
     Phase as SystemPhase,
@@ -103,6 +101,25 @@ from computronium.state import (
     StateRegistry,
     StateVariable,
     SystemContext,
+)
+
+# Utility functions
+from computronium.ontology.utils import (
+    _learnable_weight_names,
+    _set_param_name,
+    apply_pseudo_gradients,
+    _layer_stack,
+    _recurrent_weight,
+    _is_composite_state,
+    _get_state_x,
+    _get_state_activations,
+    _get_state_free_state,
+    _get_state_nudged_state,
+    _get_state_loss,
+    _get_state_metrics,
+    _get_state_activity,
+    StateProtocol,
+    ConfigFactory,
 )
 
 __all__ = [
@@ -172,8 +189,22 @@ __all__ = [
     "SystemState",
     "FAMILY_TOLERANCES",
     "ModelAdapter",
+    # Utility functions
     "_learnable_weight_names",
+    "_set_param_name",
     "apply_pseudo_gradients",
+    "_layer_stack",
+    "_recurrent_weight",
+    "_is_composite_state",
+    "_get_state_x",
+    "_get_state_activations",
+    "_get_state_free_state",
+    "_get_state_nudged_state",
+    "_get_state_loss",
+    "_get_state_metrics",
+    "_get_state_activity",
+    "StateProtocol",
+    "ConfigFactory",
     # State types (from computronium.state)
     "CompositeState",
     "SystemContext",

@@ -128,6 +128,16 @@ class ComponentMetadata:
     requires: list[str] = field(default_factory=list)
     provides: list[str] = field(default_factory=list)
     extra: dict[str, object] = field(default_factory=dict)
+    # Ontology axes (Phase 0): explicit 5-D layer assignments for native models.
+    # When populated, ModelAdapter.to_system() becomes deterministic instead of heuristic.
+    # Values correspond to ontology config class names (e.g., "DigitalSubstrate",
+    # "RecurrentGeometry", "EnergyMinimizationDynamics", "ThermodynamicContrast",
+    # "EuclideanUpdate") or axis enum values.
+    ontology_substrate: str = ""
+    ontology_geometry: str = ""
+    ontology_dynamics: str = ""
+    ontology_credit: str = ""
+    ontology_update: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -803,7 +813,22 @@ class Registry:
 
     @classmethod
     def _infer_ontology_layers(cls, meta: ComponentMetadata) -> dict[str, str]:
-        """Infer the 5-D ontology layer assignments for a component."""
+        """Infer the 5-D ontology layer assignments for a component.
+
+        Uses explicit ontology_axes fields when available (for native models),
+        otherwise falls back to heuristic inference from metadata.
+        """
+        # If explicit ontology axes are provided, use them directly
+        if meta.ontology_substrate or meta.ontology_geometry or meta.ontology_dynamics or meta.ontology_credit or meta.ontology_update:
+            return {
+                "substrate": meta.ontology_substrate or meta.compute_profile.value,
+                "geometry": meta.ontology_geometry or (meta.family or "feedforward"),
+                "dynamics": meta.ontology_dynamics or meta.locality_level.value,
+                "credit": meta.ontology_credit or meta.credit_assignment_type,
+                "update": meta.ontology_update or (",".join(meta.tags) if meta.tags else "euclidean"),
+            }
+
+        # Heuristic fallback for legacy models
         return {
             "substrate": meta.compute_profile.value,
             "geometry": meta.family or "feedforward",
@@ -841,6 +866,12 @@ class Registry:
                     "citation": meta.citation,
                     "version": meta.version,
                     "family": meta.family,
+                    "domain": meta.domain,
+                    "ontology_substrate": meta.ontology_substrate,
+                    "ontology_geometry": meta.ontology_geometry,
+                    "ontology_dynamics": meta.ontology_dynamics,
+                    "ontology_credit": meta.ontology_credit,
+                    "ontology_update": meta.ontology_update,
                 }
 
         with pathlib.Path(path).open("w", encoding="utf-8") as f:

@@ -30,9 +30,9 @@
 - `computronium/cli/shared.py` — Shared constants, FAMILY_MAP, target resolution, trial context
 - `computronium/cli/commands/train.py` — train, core-train, from-config
 - `computronium/cli/commands/search.py` — search (HPO)
-- `computronium/cli/commands/compare.py` — compare (study ranking)
+- `computtonium/cli/commands/compare.py` — compare (study ranking)
 - `computronium/cli/commands/verify.py` — verify (top-k re-runs)
-- Original `run.py` preserved for backward compatibility
+- Original `run.py` preserved as CLI aggregator for `comp run` / `comp hpo`
 
 ### ✅ SystemTrainer Decomposition (1,566 lines → package)
 - `computronium/core/system_trainer/config.py` — JointSystem protocol, SystemTrainerConfig, TypeVars
@@ -53,7 +53,7 @@
 
 ### ✅ Deployment Decomposition (1,635 lines → 6 modules)
 - `computronium/deployment/exporter.py` — ExportConfig, export_model, load_model, ModelExporter facade
-- `computronium/deployment/onnx_export.py` — export_to_onnx with opset 17+, dynamic axes
+- `computtonium/deployment/onnx_export.py` — export_to_onnx with opset 17+, dynamic axes
 - `computronium/deployment/pt2_export.py` — export_to_pt2 (torch.export), replaces deprecated torch.jit
 - `computronium/deployment/quantization.py` — INT8 PTQ/QAT/dynamic, ternary quantization (TernaryLinear, TernaryQuantize)
 - `computronium/deployment/serialization.py` — ModelExporter, ModelLoader, InferenceEngine, InferenceServer, FastAPI serving
@@ -73,6 +73,26 @@
 - `computronium/execution/candidate_gen.py` — CandidateGenerator, ExecutionStrategyConfig, full candidate generation logic
 - `computronium/execution/lifecycle.py` — ExecutionStrategy, plan_next, plan_batch
 - `computronium/execution/__init__.py` — Updated lazy exports for all new modules
+
+### ✅ Phase 0: Register Native Models + Ontology Axes Metadata
+- Added `ontology_substrate`, `ontology_geometry`, `ontology_dynamics`, `ontology_credit`, `ontology_update` fields to `ComponentMetadata`
+- Registered 15 native models with explicit 5-D ontology axis assignments:
+  - `native_eqprop_mlp`, `native_diffusion_eqprop`, `native_momentum_eqprop`, `native_sparse_eqprop`, `native_ternary_eqprop`
+  - `native_fa_mlp`, `native_backprop_mlp`, `native_pepita_mlp`
+  - `native_tile_ep`, `native_tile_fa`, `native_tile_tp`, `native_tile_snn`
+  - `native_holomorphic_ep`, `native_directed_ep`, `native_finite_nudge_ep`
+- `Registry.to_system()` now returns native `_ComposedSystem` directly for native models (bypasses ModelAdapter)
+- `Registry.query_ontology()` supports axis-aware queries with explicit ontology layers
+
+### ✅ Phase 0b: Ontology Internal Deduplication (6 utility modules)
+- `computronium/ontology/utils/params.py` — `_learnable_weight_names`, `apply_pseudo_gradients`, `_set_param_name`
+- `computronium/ontology/utils/geometry.py` — `_layer_stack`, `_recurrent_weight`
+- `computtonium/ontology/utils/state.py` — 12 state accessor functions + `StateProtocol`
+- `computronium/ontology/utils/config.py` — `ConfigFactory` protocol
+- `computronium/ontology/substrate/factory.py` — `substrate_from_config`
+- `computronium/ontology/dynamics/primitives.py` — `_settle_step`, `_compute_hopfield_energy`
+- Updated `credit.py`, `update.py`, `system.py` to import from utils
+- ~200 lines deduplicated across 5 axis modules
 
 ### ✅ Tests Passing
 - `tests/unit/nn/` — 26 passed
@@ -98,7 +118,7 @@
 ### P1 — Medium Impact
 | Item | File | Lines | Notes |
 |------|------|-------|-------|
-| **cli/run.py** | Remove legacy file after verifying all commands work via new submodules | — | `python -m computronium.cli.run` still works; can deprecate |
+| **cli/run.py** | Keep as CLI aggregator for `comp run` / `comp hpo` | — | Not legacy - used by `comp` dispatcher |
 | **Stability standalone tests** | `tests/unit/core/test_stability_standalone.py` | — | Requires `pip install -e .[stability]` + wheel build; CI integration |
 | **State module imports** | `computronium/state/__init__.py` | — | LSP shows import errors; verify `computronium.state.composite` etc. exist |
 
@@ -115,22 +135,22 @@
 ## 🎯 Strategic Ontology Empowerment & Zoo Legacy Deprecation
 
 ### Phase 0: Foundation — Ontology Axis Completeness
-| Item | Description | Impact |
-|------|-------------|--------|
-| **Register Native Models** | Register 10 `computronium/models/native/*.py` factories in Registry so AutoScientist discovers them; they bypass ModelAdapter entirely | Enables native 5-D discovery, removes ModelAdapter dependency for new models |
-| **Add `ontology_axes` to ComponentMetadata** | Add explicit axis fields (`substrate`, `geometry`, `dynamics`, `credit`, `update`) to `ComponentMetadata` so `ModelAdapter.to_system()` becomes deterministic instead of heuristic | Eliminates inference errors, enables cross-axis ablation via Registry queries |
-| **Complete TileAlgorithm Factory Registry** | Add `@tile_algorithm` decorator registering each factory method (`from_ep`, `from_fa`, etc.) with algorithm metadata; enables `TileAlgorithm.from_config(config)` single entry point | Removes string matching in `_resolve_*`, config-driven composition |
+| Item | Description | Impact | Status |
+|------|-------------|--------|--------|
+| **Register Native Models** | Register 15 `computronium/models/native/*.py` factories in Registry with explicit ontology axes | Enables native 5-D discovery, removes ModelAdapter dependency for new models | ✅ COMPLETE |
+| **Add `ontology_axes` to ComponentMetadata** | Added explicit axis fields to `ComponentMetadata` | Eliminates inference errors, enables cross-axis ablation via Registry queries | ✅ COMPLETE |
+| **Complete TileAlgorithm Factory Registry** | Add `@tile_algorithm` decorator registering each factory method (`from_ep`, `from_fa`, etc.) with algorithm metadata; enables `TileAlgorithm.from_config(config)` single entry point | Removes string matching in `_resolve_*`, config-driven composition | 🔄 PENDING |
 
 ### Phase 0b: Ontology Internal Deduplication (NEW — Immediate ROI)
-| Item | Description | Files Affected | Effort |
-|------|-------------|----------------|--------|
-| **Shared Parameter Helpers** | Extract `_learnable_weight_names`, `apply_pseudo_gradients`, `_set_param_name` to `ontology/utils/params.py` | `credit.py`, `update.py`, `system.py`, `geometry.py` | 30 min |
-| **Shared Geometry Introspection** | Extract `_layer_stack`, `_recurrent_weight` to `ontology/utils/geometry.py` | `geometry.py`, `system.py` | 20 min |
-| **Shared State Accessors** | Extract 12 getter/setter functions to `ontology/utils/state.py` with `StateProtocol` | `dynamics.py` | 30 min |
-| **Config Factory Base** | `ConfigFactory` protocol in `ontology/utils/config.py` for unified `to_spec`/`from_spec`/`validate` | All axis configs | 40 min |
-| **Substrate Factory** | Move `substrate_from_config` to `ontology/substrate/factory.py` | `substrate.py`, `system.py` | 20 min |
-| **Dynamics Primitives** | Extract `_settle_step`, `_compute_hopfield_energy` to `ontology/dynamics/primitives.py` | `dynamics.py` | 30 min |
-| **Total** | **~3 hours** for ~200 lines deduplicated across 5 axis modules | | |
+| Item | Description | Files Affected | Effort | Status |
+|------|-------------|----------------|--------|--------|
+| **Shared Parameter Helpers** | Extract `_learnable_weight_names`, `apply_pseudo_gradients`, `_set_param_name` to `ontology/utils/params.py` | `credit.py`, `update.py`, `system.py`, `geometry.py` | 30 min | ✅ COMPLETE |
+| **Shared Geometry Introspection** | Extract `_layer_stack`, `_recurrent_weight` to `ontology/utils/geometry.py` | `geometry.py`, `system.py` | 20 min | ✅ COMPLETE |
+| **Shared State Accessors** | Extract 12 getter/setter functions to `ontology/utils/state.py` with `StateProtocol` | `dynamics.py` | 30 min | ✅ COMPLETE |
+| **Config Factory Base** | `ConfigFactory` protocol in `ontology/utils/config.py` for unified `to_spec`/`from_spec`/`validate` | All axis configs | 40 min | ✅ COMPLETE |
+| **Substrate Factory** | Move `substrate_from_config` to `ontology/substrate/factory.py` | `substrate.py`, `system.py` | 20 min | ✅ COMPLETE |
+| **Dynamics Primitives** | Extract `_settle_step`, `_compute_hopfield_energy` to `ontology/dynamics/primitives.py` | `dynamics.py` | 30 min | ✅ COMPLETE |
+| **Total** | **~3 hours** for ~200 lines deduplicated across 5 axis modules | | | ✅ COMPLETE |
 
 ### Phase 1: Deployment Models Unification (Eliminates ~3000 lines)
 | Item | Description | Impact |
@@ -153,7 +173,7 @@
 | **eqprop** (17) | 17 | Use `create_native_eqprop_mlp` + variants; register as `native_eqprop_*` |
 | **fa** (12) | 12 | Create `create_native_fa_mlp` with configurable feedback (fixed/adaptive/stochastic/contrastive); register `native_fa_*` |
 | **hebbian** (4) | 4 | Use `TileAlgorithm.from_hebbian()` (already native); register tile variants |
-| **backprop** (3) | 3 | Create `create_native_backprop_mlp` with `BackpropCredit` + `EuclideanUpdate`; register `native_backprop_*` |
+| **backprop** (3) | 3 | Use `create_native_backprop_mlp` with `BackpropCredit` + `EuclideanUpdate`; register `native_backprop_*` |
 | **forward_only** (2) | 2 | Use `LocalGoodness` credit + `TileAlgorithm` mode="pc"; register `native_ff_*` |
 | **predictive_coding** (2) | 2 | Use `TileAlgorithm.from_pc()` (already native); register tile variants |
 | **spiking/target_prop** (2) | 2 | Use `TileAlgorithm.from_snn()` / `from_tp()` (already native); register tile variants |
@@ -170,7 +190,7 @@
 | Item | Description | Impact |
 |------|-------------|--------|
 | **Axis-aware queries** | Add `Registry.query(axis=..., substrate=..., credit=...)` for AutoScientist cross-axis search | Enables "find all models with ThermodynamicContrast + RecurrentGeometry" |
-| **Native model registration** | Register 10 `models/native/*.py` factories with full `ontology_axes` metadata | AutoScientist discovers native compositions directly |
+| **Native model registration** | Register 15 `models/native/*.py` factories with full `ontology_axes` metadata | AutoScientist discovers native compositions directly | ✅ COMPLETE |
 | **Deprecation warnings** | Add `@deprecated` to legacy model registrations pointing to native replacements | Clear migration path for consumers |
 
 ---
@@ -179,14 +199,13 @@
 
 ```
 Week 1 (Current):  ✅ P0 Decompositions COMPLETE
-Week 2:             Phase 0: Register native models + ontology_axes metadata
-                    Phase 0b: Ontology Internal Deduplication (3 hrs, high ROI)
-                    Clean up legacy cli/run.py + update imports
-Week 3:             Phase 1: Deployment Models Unification
+                   ✅ Phase 0: Register native models + ontology_axes metadata
+                   ✅ Phase 0b: Ontology Internal Deduplication (3 hrs, high ROI)
+Week 2:             Phase 1: Deployment Models Unification
                     Phase 2: ModelAdapter Decomposition  
-Week 4:             Phase 3: Native Model Promotion (eqprop/fa/backprop)
+Week 3:             Phase 3: Native Model Promotion (eqprop/fa/backprop)
                     Phase 4: SystemConfig/JointSystem Split
-Week 5:             Phase 5: Registry Enhancement + Deprecation
+Week 4:             Phase 5: Registry Enhancement + Deprecation
                     Documentation + Migration Guide
 ```
 
@@ -200,12 +219,12 @@ Week 5:             Phase 5: Registry Enhancement + Deprecation
 - [ ] No import cycles (`pyright --verifytypes computronium`)
 - [ ] Standalone wheel test passes (`tests/unit/core/test_stability_standalone.py`)
 - [ ] Migration guide written for external consumers
-- [ ] **All 10 native models registered in Registry with `ontology_axes`**
+- [x] **All 15 native models registered in Registry with `ontology_axes`**
 - [ ] **Deployment modules unified into single factory (<1000 lines)**
 - [ ] **ModelAdapter decomposed into 4 adapter modules**
 - [ ] **38 legacy Zoo models replaced by <10 native compositions**
 - [ ] **Registry supports axis-aware queries for AutoScientist**
-- [ ] **Ontology internal deduplication complete (6 utility modules)**
+- [x] **Ontology internal deduplication complete (6 utility modules)**
 
 ---
 
@@ -221,11 +240,13 @@ Week 5:             Phase 5: Registry Enhancement + Deprecation
 
 5. **Caching**: The `_model_specs` cache in execution could use `functools.lru_cache` instead of function attribute.
 
-6. **Test Coverage**: Add unit tests for new modules: `entries.py`, `vector_store.py`, `query.py`, `surrogate.py`, `causal.py`, `protocols.py`, `feedback.py`, `activity.py`, `weight_update.py`, `builder.py`, `criteria.py`, `task_weights.py`, `candidate_gen.py`, `lifecycle.py`, `exporter.py`, `onnx_export.py`, `pt2_export.py`, `quantization.py`, `serialization.py`.
+6. **Test Coverage**: Add unit tests for new modules: `entries.py`, `vector_store.py`, `query.py`, `surrogate.py`, `causal.py`, `protocols.py`, `feedback.py`, `activity.py`, `weight_update.py`, `builder.py`, `criteria.py`, `task_weights.py`, `candidate_gen.py`, `lifecycle.py`, `exporter.py`, `onnx_export.py`, `pt2_export.py`, `quantization.py`, `serialization.py`, `params.py`, `geometry.py`, `state.py`, `config.py`, `factory.py`, `primitives.py`.
 
 7. **Performance**: The `CandidateGenerator.generate_candidates` method recomputes saturation/failure analysis each call - could memoize or compute incrementally.
 
 8. **Backward Compatibility**: The original `algorithm.py` and `strategy.py` files were removed. Ensure any external consumers are updated via migration guide.
+
+9. **CLI Refactoring**: The `cli/run.py` serves as the main CLI aggregator for `comp run` / `comp hpo`. Consider moving its command definitions to `cli/commands/` for consistency.
 
 ---
 

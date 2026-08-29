@@ -30,6 +30,10 @@ from computronium.ontology.update import (
     ParameterUpdateConfig,
 )
 from computronium.state import PlasticityConfig
+from computronium.ontology.utils import (
+    _layer_stack,
+    _recurrent_weight,
+)
 
 # ============================================================
 # Helper Functions
@@ -72,18 +76,6 @@ def apply_pseudo_gradients(
     for name, grad in zip(_learnable_weight_names(params), pseudo_grads):
         updated[name] = transform(name, params[name], grad.detach())
     return updated
-
-
-def _layer_stack(geometry: Geometry) -> nn.ModuleList | None:
-    """Return the geometry's ordered module stack if it is layer-based."""
-    layers = getattr(geometry, "_layers", None)
-    return layers if isinstance(layers, nn.ModuleList) else None
-
-
-def _recurrent_weight(geometry: Geometry) -> Tensor | None:
-    """Return the geometry's recurrent weight matrix if present."""
-    weight = getattr(geometry, "_recurrent_weight", None)
-    return weight if isinstance(weight, Tensor) else None
 
 
 # ============================================================
