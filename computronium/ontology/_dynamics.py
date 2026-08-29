@@ -811,6 +811,26 @@ class PredictiveSettlingDynamics:
         if x is None:
             raise ValueError("State must contain input 'x'")
 
+        # For TileGeometry, the forward pass already does the complete tile mesh
+        # propagation. Use forward_with_intermediates to get all layer activations.
+        if hasattr(geometry, "_graph"):
+            # TileGeometry or similar mesh-based geometry
+            acts = geometry.forward_with_intermediates(x, substrate)
+            if not acts:
+                return state
+            # Last activation is the output
+            h = acts[-1] if isinstance(acts, list) else acts
+            new_state = _create_output_state(
+                state,
+                x=x,
+                output=h,
+                free_state=acts if target is None else None,
+                nudged_state=acts if target is not None else None,
+                activations=acts,
+            )
+            return new_state
+
+        # Standard predictive coding settling for recurrent/feedforward geometries
         h = substrate.initial_state(x)
         op = substrate.get_forward_operator()
 

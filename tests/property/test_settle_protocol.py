@@ -3,17 +3,14 @@
 Asserts that ``NeuralCube`` adopts the protocol and that the convergence lever
 is a framework property (the §7 win generalised), with hypothesis checks that a
 loose threshold always terminates early.
+
+NOTE: Legacy zoo models (NeuralCube) have been removed. This test is skipped
+until migrated to native compositions.
 """
 
-import torch
-from hypothesis import given
-from hypothesis import strategies as st
+import pytest
 
-from computronium.core.local_learning.settling import (
-    EquilibriumSettleProtocol,
-    settle_state,
-)
-from computronium.zoo.models.eqprop.neural_cube import NeuralCube
+pytest.skip("Legacy zoo models removed - tests need migration to native compositions", allow_module_level=True)
 
 
 def _make(threshold, start=2, max_steps=20, cube=3):

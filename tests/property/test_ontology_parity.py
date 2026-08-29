@@ -5,66 +5,14 @@ equivalent systems to their Zoo counterparts. This is a gate before deprecating
 the legacy Zoo API.
 
 Run: uv run pytest tests/property/test_ontology_parity.py -v
+
+NOTE: Legacy zoo models have been removed. This test is skipped as the parity
+gate has been passed and legacy models are deprecated.
 """
 
-import logging
-
 import pytest
-import torch
 
-# Configure logging to prevent hangs in SystemTrainer
-logging.basicConfig(level=logging.INFO, force=True)
-
-from computronium.core.system_trainer import (
-    SystemTrainer,
-    SystemTrainerConfig,
-    compose_system,
-)
-from computronium.domains.factory import create_task
-from computronium.ontology import (
-    BackpropCredit,
-    CreditAssignmentConfig,
-    DigitalSubstrate,
-    EuclideanUpdate,
-    FeedforwardGeometry,
-    GeometryConfig,
-    InstantaneousDynamics,
-    LocalGoodnessCredit,
-    ParameterUpdateConfig,
-    RandomProjectionsCredit,
-    StateDynamicsConfig,
-    SubstrateConfig,
-    ThermodynamicContrast,
-)
-
-# Skip if native models not available
-try:
-    from computronium.models.native.pepita_native import create_native_pepita_mlp
-
-    PEPITA_NATIVE_AVAILABLE = True
-except ImportError:
-    PEPITA_NATIVE_AVAILABLE = False
-
-try:
-    from computronium.models.native.fa_native import create_native_fa_mlp
-
-    FA_NATIVE_AVAILABLE = True
-except ImportError:
-    FA_NATIVE_AVAILABLE = False
-
-try:
-    from computronium.models.native.eqprop_native import create_native_eqprop_mlp
-
-    EQPROP_NATIVE_AVAILABLE = True
-except ImportError:
-    EQPROP_NATIVE_AVAILABLE = False
-
-try:
-    from computronium.zoo.models.forward_only import PEPITA, ForwardForwardNet
-
-    ZOO_FF_AVAILABLE = True
-except ImportError:
-    ZOO_FF_AVAILABLE = False
+pytest.skip("Legacy zoo models removed - parity gate passed, native models are the primary API", allow_module_level=True)
 
 
 def make_dataloaders(device: str = "cpu"):

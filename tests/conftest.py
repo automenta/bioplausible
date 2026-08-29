@@ -177,12 +177,10 @@ def mnist_quick_task():
 
 @pytest.fixture
 def eqprop_model():
-    """Minimal EquilibriumMLP for settling/contrastive tests."""
-    from computronium.config.unified import ModelConfig
-    from computronium.zoo.models.eqprop._energy import EquilibriumMLP
+    """Minimal native_eqprop_mlp for settling/contrastive tests."""
+    from computronium.models.native.eqprop_native import native_eqprop_mlp
 
-    config = ModelConfig(name="test", input_dim=64, output_dim=10, max_steps=5)
-    return EquilibriumMLP(config=config)
+    return native_eqprop_mlp(input_dim=64, hidden_dim=32, output_dim=10, num_layers=1, beta=0.5, settle_steps=5)
 
 
 # --- Sprint 4.3.4 Synthetic Fixtures (zero I/O, zero download) ---

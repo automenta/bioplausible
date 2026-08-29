@@ -316,39 +316,18 @@ def test_infer_metadata_regular_field():
 
 
 def test_runtime_checkable_transition_graph():
-    """All registered EqProp models expose transition_modules()."""
-    from computronium.config.unified import ModelConfig
-    from computronium.zoo.models.eqprop._energy import EquilibriumMLP
+    """All registered EqProp models expose transition_modules() via geometry."""
+    from computronium.models.native.eqprop_native import native_eqprop_mlp
 
-    # Test the consolidated EquilibriumMLP engine
-    config = ModelConfig(
-        name="eqprop_mlp",
-        input_dim=4,
-        output_dim=4,
-        hidden_dims=[8],
-        learning_rate=0.01,
-        beta=0.5,
-        max_steps=2,
-        convergence_threshold=1e-4,
-        convergence_start=1,
-        use_spectral_norm=True,
-        spectral_norm_power_iterations=5,
-        activation="tanh",
-        lipschitz_mode="power_iteration",
-        output_scaling_mode="uniform",
-        extra={
-            "gradient_method": "contrastive",
-            "backend": "pytorch",
-        },
+    system = native_eqprop_mlp(input_dim=4, hidden_dim=8, output_dim=4, num_layers=1, beta=0.5, settle_steps=2)
+    # Check for transition_modules method on geometry (replaces TransitionGraph protocol)
+    assert hasattr(system.geometry, "transition_modules"), (
+        f"{system.geometry.__class__.__name__} has no transition_modules()"
     )
-    model = EquilibriumMLP(config=config)
-    # Check for transition_modules method (replaces TransitionGraph protocol)
-    assert hasattr(model, "transition_modules"), (
-        f"{model.__class__.__name__} has no transition_modules()"
-    )
-    modules = model.transition_modules()
-    assert len(modules) > 0
-    assert all(isinstance(m, nn.Module) for m in modules)
+    modules = system.geometry.transition_modules()
+    assert len(modules) >= 1
+    for m in modules:
+        assert isinstance(m, nn.Module)
 
 
 def test_all_models_have_transition_modules_or_override():
