@@ -9,6 +9,8 @@ Key Components:
     - ExperimentState: Tracks progress and historical results
     - ExperimentTask: Individual experiment specification
     - DecisionLogger: Records scientific decisions
+    - CandidateGenerator: Generates experiment candidates
+    - Task weights, criteria, and lifecycle management
 
 Usage:
     from computronium.execution import ExecutionEngine
@@ -33,12 +35,21 @@ _LAZY: dict[str, tuple[str, str | None]] = {
         "computronium.execution.callbacks",
         "BaseExecutionCallback",
     ),
+    "CandidateGenerator": ("computronium.execution.candidate_gen", "CandidateGenerator"),
     "DecisionLogger": ("computronium.execution._state", "DecisionLogger"),
     "ExecutionCallback": ("computronium.execution.callbacks", "ExecutionCallback"),
     "ExecutionEngine": ("computronium.execution.engine", "ExecutionEngine"),
-    "ExecutionStrategy": ("computronium.execution.strategy", "ExecutionStrategy"),
+    "ExecutionStrategy": ("computronium.execution.lifecycle", "ExecutionStrategy"),
     "ExperimentState": ("computronium.execution._state", "ExperimentState"),
     "ExperimentTask": ("computronium.execution.task", "ExperimentTask"),
+    "ExecutionStrategyConfig": ("computronium.execution.candidate_gen", "ExecutionStrategyConfig"),
+    "check_criterion": ("computronium.execution.criteria", "check_criterion"),
+    "CRITERIA": ("computronium.execution.criteria", "CRITERIA"),
+    "TASK_WEIGHTS": ("computronium.execution.task_weights", "TASK_WEIGHTS"),
+    "TASK_GROUPS": ("computronium.execution.task_weights", "TASK_GROUPS"),
+    "TIER_ORDER": ("computronium.execution.task_weights", "TIER_ORDER"),
+    "calculate_complexity_penalty": ("computronium.execution.task_weights", "calculate_complexity_penalty"),
+    "calculate_future_boost": ("computronium.execution.task_weights", "calculate_future_boost"),
 }
 
 __all__ = sorted(_LAZY)

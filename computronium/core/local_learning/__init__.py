@@ -1,21 +1,55 @@
 """Generic local-learning infrastructure: task handling, multi-optimizer mixins."""
 
 from computronium.core.local_learning import rules  # trigger propagator registration
+from computronium.core.local_learning.activity import (
+    ep_activity_update,
+    hebbian_activity_update,
+    spiking_activity_update,
+)
 from computronium.core.local_learning.algorithm import (
     TileAlgorithm,
     TileAlgorithmConfig,
+)
+from computronium.core.local_learning.builder import (
+    TileAlgorithm,
+    TileAlgorithmConfig,
+)
+from computronium.core.local_learning.feedback import (
+    no_feedback,
+    symmetric_feedback,
 )
 from computronium.core.local_learning.mixins import (
     LocalLearningConfigProtocol,
     MultiOptimizerMixin,
 )
+from computronium.core.local_learning.protocols import (
+    ActivityUpdateFn,
+    FeedbackFn,
+    WeightLookup,
+    WeightUpdateFn,
+)
 from computronium.core.local_learning.task import TaskHandler
+from computronium.core.local_learning.weight_update import (
+    contrastive_weight_update,
+    hebbian_weight_update,
+)
 
 __all__ = [
+    "ActivityUpdateFn",
+    "FeedbackFn",
     "LocalLearningConfigProtocol",
     "MultiOptimizerMixin",
     "TaskHandler",
     "TileAlgorithm",
     "TileAlgorithmConfig",
+    "WeightLookup",
+    "WeightUpdateFn",
+    "contrastive_weight_update",
+    "ep_activity_update",
+    "hebbian_activity_update",
+    "hebbian_weight_update",
+    "no_feedback",
     "rules",
+    "spiking_activity_update",
+    "symmetric_feedback",
 ]
