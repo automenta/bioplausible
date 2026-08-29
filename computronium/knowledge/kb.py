@@ -5,6 +5,7 @@ Provides hybrid structured + embedding search for AutoScientist.
 Integrates surrogate models, symbolic regression, causal discovery.
 """
 
+import asyncio
 import json
 import pathlib
 import sqlite3
@@ -403,10 +404,18 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
                 return False
             if key == "topic" and entry.topic != value:
                 return False
-            if key == "tags" and not all(tag in entry.tags for tag in value):
+            if (
+                key == "tags"
+                and isinstance(value, (list, tuple))
+                and not all(tag in entry.tags for tag in value)
+            ):
                 return False
-            if key == "min_confidence" and float(entry.confidence) < float(value):
-                return False
+            if key == "min_confidence":
+                try:
+                    if float(entry.confidence) < float(value):
+                        return False
+                except TypeError, ValueError:
+                    pass
         return True
 
     # Delegate to surrogate manager
@@ -636,6 +645,79 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
         except (sqlite3.Error, KeyError, ValueError) as e:
             logger.exception("Algorithm similarity failed")
             raise KnowledgeBaseError("Algorithm similarity computation failed") from e
+
+    # ------------------------------------------------------------------
+    # Async variants for I/O-bound operations
+    # ------------------------------------------------------------------
+
+    async def aquery(self, **kwargs) -> list[KnowledgeEntry]:
+        """Async query knowledge base with structured filters."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, lambda: self.query(**kwargs))
+
+    async def aquery_conditionals(
+        self, query: ConditionalQuery, limit: int = 100
+    ) -> list[ConditionalResult]:
+        """Async query conditional knowledge."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, lambda: self.query_conditionals(query, limit)
+        )
+
+    async def asearch(
+        self,
+        query: str,
+        k: int = 10,
+        min_similarity: float = 0.5,
+        filters: dict[str, object] | None = None,
+    ) -> list[tuple[KnowledgeEntry, float]]:
+        """Async semantic search using vector embeddings."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, lambda: self.search(query, k, min_similarity, filters)
+        )
+
+    async def aadd_entry(self, entry: KnowledgeEntry) -> str:
+        """Async add a knowledge entry to the database."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, lambda: self.add_entry(entry))
+
+    async def aadd_experiment(
+        self,
+        name: str,
+        model_family: str,
+        task: str,
+        config: dict[str, object],
+        metrics: dict[str, float],
+        experiment_id: str | None = None,
+        artifacts: dict[str, str] | None = None,
+        status: str = "completed",
+    ) -> str:
+        """Async add an experiment result to the knowledge base."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            lambda: self.add_experiment(
+                name,
+                model_family,
+                task,
+                config,
+                metrics,
+                experiment_id,
+                artifacts,
+                status,
+            ),
+        )
+
+    async def aget_stats(self) -> dict[str, object]:
+        """Async get knowledge base statistics."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_stats)
+
+    async def aget_meta_analysis_summary(self) -> dict[str, object]:
+        """Async get comprehensive meta-analysis summary."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.get_meta_analysis_summary)
 
 
 # Factory function

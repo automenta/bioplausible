@@ -1,4 +1,3 @@
-# pyright: ignore[reportUnsupportedDunderAll]
 """
 Bioplausible: Unified Platform for Bio-Plausible Learning Research
 

@@ -306,25 +306,25 @@ Week 2:             Documentation + Migration Guide
 
 ## New Improvement Opportunities (Discovered During Decomposition)
 
-1. **Type Hint Improvements**: Several modules have `object` type annotations that could be made more specific using `TypedDict` or `Protocol`.
+1. **Type Hint Improvements**: Several modules have `object` type annotations that could be made more specific using `TypedDict` or `Protocol`. **PARTIAL** - Fixed pyright warnings in `computronium/__init__.py` (lazy imports), added `reportUnsupportedDunderAll = "none"` to pyproject.toml.
 
-2. **Config Classes**: Each decomposed module now has its own config class (e.g., `VectorStoreConfig`, `SurrogateConfig`, `CausalConfig`). Consider creating a unified config hierarchy.
+2. **Config Classes**: Each decomposed module now has its own config class (e.g., `VectorStoreConfig`, `SurrogateConfig`, `CausalConfig`). Consider creating a unified config hierarchy. **PENDING**
 
-3. **Error Handling**: Some modules catch broad `Exception` - could be more specific.
+3. **Error Handling**: Some modules catch broad `Exception` - could be more specific. **PENDING**
 
-4. **Async Support**: The `InferenceServer` has async batching but `KnowledgeBase` methods are synchronous. Consider async variants for I/O-bound operations.
+4. **Async Support**: The `InferenceServer` has async batching but `KnowledgeBase` methods are synchronous. Consider async variants for I/O-bound operations. **COMPLETE** - Added async variants (`aquery`, `aquery_conditionals`, `asearch`, `aadd_entry`, `aadd_experiment`, `aget_stats`, `aget_meta_analysis_summary`) to `KnowledgeBase` in `computronium/knowledge/kb.py`.
 
-5. **Caching**: The `_model_specs` cache in execution could use `functools.lru_cache` instead of function attribute.
+5. **Caching**: The `_model_specs` cache in execution could use `functools.lru_cache` instead of function attribute. **PENDING**
 
-6. **Test Coverage**: Add unit tests for new modules: `entries.py`, `vector_store.py`, `query.py`, `surrogate.py`, `causal.py`, `protocols.py`, `feedback.py`, `activity.py`, `weight_update.py`, `builder.py`, `criteria.py`, `task_weights.py`, `candidate_gen.py`, `lifecycle.py`, `exporter.py`, `onnx_export.py`, `pt2_export.py`, `quantization.py`, `serialization.py`, `params.py`, `geometry.py`, `state.py`, `config.py`, `factory.py`, `primitives.py`, `registry.py` (local_learning), `spec.py` (system_trainer).
+6. **Test Coverage**: Add unit tests for new modules: `entries.py`, `vector_store.py`, `query.py`, `surrogate.py`, `causal.py`, `protocols.py`, `feedback.py`, `activity.py`, `weight_update.py`, `builder.py`, `criteria.py`, `task_weights.py`, `candidate_gen.py`, `lifecycle.py`, `exporter.py`, `onnx_export.py`, `pt2_export.py`, `quantization.py`, `serialization.py`, `params.py`, `geometry.py`, `state.py`, `config.py`, `factory.py`, `primitives.py`, `registry.py` (local_learning), `spec.py` (system_trainer). **PENDING**
 
-7. **Performance**: The `CandidateGenerator.generate_candidates` method recomputes saturation/failure analysis each call - could memoize or compute incrementally.
+7. **Performance**: The `CandidateGenerator.generate_candidates` method recomputes saturation/failure analysis each call - could memoize or compute incrementally. **PENDING**
 
 8. **Backward Compatibility**: The original `algorithm.py` and `strategy.py` files were removed. (SKIPPED - AGENTS.md: "Backwards compatibility: NONE")
 
-9. **CLI Refactoring**: The `cli/run.py` serves as the main CLI aggregator for `comp run` / `comp hpo`. Consider moving its command definitions to `cli/commands/` for consistency.
+9. **CLI Refactoring**: The `cli/run.py` serves as the main CLI aggregator for `comp run` / `comp hpo`. Consider moving its command definitions to `cli/commands/` for consistency. **COMPLETE** - Created `cli/commands/pareto.py`, `cli/commands/portfolio.py`, `cli/commands/list.py`. Updated `cli/run.py` to import from these modules.
 
-10. **FA Native Variants**: The 12 FA variants share the same base implementation. Future work should implement algorithmic differences in `RandomProjectionsCredit` for each variant.
+10. **FA Native Variants**: The 12 FA variants share the same base implementation. Future work should implement algorithmic differences in `RandomProjectionsCredit` for each variant. **PENDING**
 
 ---
 
@@ -335,7 +335,7 @@ Week 2:             Documentation + Migration Guide
 | Workstream | Before | After | Status |
 |------------|--------|-------|--------|
 | Ontology | 5,680 lines (1 file) | 8 modules | ✅ |
-| CLI | 2,011 lines (1 file) | 5 modules | ✅ |
+| CLI | 2,011 lines (1 file) | 8 modules (5 + 3 new command modules) | ✅ |
 | SystemTrainer | 1,566 lines (1 file) | 7 modules | ✅ |
 | Knowledge Base | 1,642 lines (1 file) | 6 modules | ✅ |
 | Deployment | 1,635 lines (1 file) | 6 modules | ✅ |
@@ -345,6 +345,11 @@ Week 2:             Documentation + Migration Guide
 | Native Models | 0 | 29 registered | ✅ |
 | Tile Variants | 4 | 7 (all registered) | ✅ |
 | Ontology Utils | Duplicated | 6 utility modules | ✅ |
+
+**Improvement Opportunities Completed This Session:**
+- ✅ **Async Support for KnowledgeBase** — Added 7 async methods (`aquery`, `aquery_conditionals`, `asearch`, `aadd_entry`, `aadd_experiment`, `aget_stats`, `aget_meta_analysis_summary`)
+- ✅ **CLI Refactoring** — Moved `pareto`, `portfolio`, `list` commands to `cli/commands/`
+- ✅ **Pyright Cleanup** — Fixed `computronium/__init__.py` lazy import warnings; added `reportUnsupportedDunderAll = "none"` to pyproject.toml
 
 **Test Results:**
 - Core unit tests: 172 passed

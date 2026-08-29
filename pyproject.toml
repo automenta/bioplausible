@@ -255,6 +255,7 @@ reportUnusedCoroutine = "warning"
 reportUnusedImport = "warning"
 reportUnusedExcept = "warning"
 reportUnusedExpression = "warning"
+reportUnsupportedDunderAll = "none"
 pythonVersion = "3.14"
 targetVersion = "3.14"
 

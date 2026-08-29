@@ -19,6 +19,7 @@ logger = get_logger()
 __all__ = [
     "HyperoptStorage",
     "logger",
+    "list_studies",
 ]
 
 
@@ -500,3 +501,11 @@ class HyperoptStorage:
         """Close database connection."""
         if self.conn:
             self.conn.close()
+
+
+def list_studies(storage_url: str) -> list[str]:
+    """List all Optuna study names in the given storage."""
+    import optuna
+
+    storage = optuna.storages.RDBStorage(url=storage_url)
+    return storage.get_all_study_names()
