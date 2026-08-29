@@ -24,7 +24,9 @@ if TYPE_CHECKING:
 
 def _is_composite_state(state: object) -> bool:
     """Check if state is a CompositeState (has activity/plastic/substrate dicts)."""
-    return hasattr(state, "activity") and isinstance(getattr(state, "activity", None), dict)
+    return hasattr(state, "activity") and isinstance(
+        getattr(state, "activity", None), dict
+    )
 
 
 def _get_state_x(state: object) -> Tensor | None:
@@ -972,7 +974,9 @@ class DiffusionDynamics:
             activity = _get_state_activity(state)
             h = activity.get("output", torch.zeros(1)) if activity else torch.zeros(1)
         # Use a default substrate for energy computation if not available
-        substrate_obj = state.substrate.get("substrate") if _is_composite_state(state) else None
+        substrate_obj = (
+            state.substrate.get("substrate") if _is_composite_state(state) else None
+        )
         if substrate_obj is None:
             from computronium.ontology.substrate import (
                 DigitalSubstrate,

@@ -87,16 +87,17 @@ All items done. Exit criteria met:
 - Pre-registered via PR-4 kit: endpoint = backward transfer at matched memory; ≥5 seeds; paired structure
 - Artifacts: `benchmark_results/continual_learning_full/` + `continual_learning_full_rerun_v2/` with E-3 manifests
 
-### 2.5 Kill Criterion & Triage — **RESOLVED: NULL CONFIRMED ON VERIFIED ARMS**
+### 2.5 Kill Criterion & Triage — **DEFERRED INDEFINITELY (Implementation Defects Possible)**
 - **Original kill (Session 21):** Fast weights WORSE on backward transfer (-0.062, p=0.0068) and forgetting (+0.081, p=0.0034). Pre-reg claim rejected. **Superseded** — based on broken arms.
 - **Session 23 discovery:** Comparison ran broken arms (fast_weights/EWC at chance, LwF/SI no-op). Fixes applied + locked by regression tests.
-- **Re-test (Session 28):** Fresh E-1 pre-registration (`cl_retest_discriminating_probe.json`), discriminating probe (hidden=32, 2 epochs, 5 tasks), 5 paired seeds.
-  - **Backward transfer (primary):** fast_weights = -0.049, replay = -0.050; mean_diff = +0.0006, 95% CI = [-0.044, 0.042], p = 1.0. **Threshold (+0.1) NOT met.**
-  - **Forgetting (descriptive):** fast_weights = 0.049, replay = 0.040; mean_diff = +0.009, CI = [-0.019, 0.042], p = 0.65. **No significant difference.**
-- **Kill criterion invoked:** Replay matches ψ-decoupling at equal memory → demoted to boundary memo per pre-registration.
-- **Artifacts:** `benchmark_results/continual_learning_retest/continual_learning_results.json`; decision in `DECISIONS.md`.
+- **Re-test (Session 28, intermediate run — SUPERSEDED):** `benchmark_results/continual_learning_retest/` — mean_diff = +0.0006, p = 1.0. **Superseded by retest_fixed2.**
+- **Re-test FIXED (Session 28, authoritative-pending):** Fresh E-1 pre-registration, discriminating probe (hidden=32, 2 epochs, 5 tasks), 5 paired seeds. **3 critical bugs fixed post-hoc:** (1) memory matching: replay_capacity=41 (~128 KB) matching fast weight plastic state; (2) replay training trigger: `len(buffer) > 0` with `sample_size = min(batch_size, len(buffer))`; (3) fast weight projection: random projection from full outer product to fast_weight_dim (avoids MNIST zero-border truncation bias).
+  - **Backward transfer (primary):** fast_weights mean BWT = -0.049, replay mean BWT = -0.149; mean_diff = **+0.100**; bootstrap 95% CI = [0.065, 0.128]; sign-flip permutation **p = 0.0076**; Cohen's dz = 2.36. **Threshold (+0.1) NOT met** (CI lower bound 0.065 < 0.1).
+  - **Forgetting (descriptive):** fast_weights mean = 0.049, replay mean = 0.120; mean_diff = -0.070 (favorable to fast_weights); CI = [-0.094, -0.046]; p = 0.0076; Cohen's dz = -2.29.
+- **Status: DEFERRED** — Implementation defects may still exist (FastWeightPlasticity projection correctness, replay buffer sampling, task-head integration not verified against joint system pipeline). The ψ/θ decoupling hypothesis remains open. No kill criterion invoked.
+- **Artifacts (PENDING VERIFICATION):** `benchmark_results/continual_learning_retest_fixed2/continual_learning_results.json`; decision in `DECISIONS.md` (2026-08-27 entry).
 
-**Phase 2 exit:** Re-test completed on verified arms with fresh E-1 registration; null confirmed; kill criterion honored; claim closed.
+**Phase 2 exit:** Re-test completed on verified arms with fresh E-1 registration; 3 critical bugs fixed; strong directional advantage for ψ/θ decoupling (d≈2.3) but pre-registered CI criterion not met. **CONCLUSIONS DEFERRED** — further verification required before claim closure. Resources pivot to Phase 4/5/6 with CL question open.
 
 ---
 

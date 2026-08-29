@@ -107,7 +107,7 @@ class TestStabilityGuard:
         assert guard.decide(1.01).kill is True
 
     def test_call_probes_and_kills(self, context, state):
-        guard = StabilityGuard(threshold=0.5)
+        guard = StabilityGuard(threshold=0.5, window=1)
         decision = guard(_scaling_transition(2.0), state, context)
         assert decision.kill is True
         assert decision.statistic == pytest.approx(2.0, rel=0.05)

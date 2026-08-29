@@ -330,7 +330,7 @@ class Registry:
             # _name is guaranteed to be str at this point
             assert _name is not None
             if _name in cls._components[category]:
-                logger.debug("Overwriting component %s/%s", category.value, _name)
+                logger.info("Overwriting component %s/%s", category.value, _name)
             metadata = ComponentMetadata(
                 name=_name, category=category, **metadata_kwargs
             )
