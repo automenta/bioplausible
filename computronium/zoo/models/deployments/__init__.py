@@ -126,5 +126,8 @@ __all__ = [
     "register_deployment_variants",
     "scatter_max",
     "scatter_mean",
-    "scatter_sum", "_create_graph_model", "_create_rl_model", "_create_vision_model",
+    "scatter_sum",
+    "_create_graph_model",
+    "_create_rl_model",
+    "_create_vision_model",
 ]

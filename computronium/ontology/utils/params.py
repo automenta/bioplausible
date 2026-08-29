@@ -34,7 +34,8 @@ def apply_pseudo_gradients(
     """
     updated = dict(params)
     for name, grad in zip(_learnable_weight_names(params), pseudo_grads):
-        updated[name] = transform(name, params[name], grad.detach())
+        param = params[name]
+        updated[name] = transform(name, param, grad.detach().to(param.device))
     return updated
 
 

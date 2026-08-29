@@ -120,5 +120,7 @@ __all__ = [
     "make_transition_fn",
     "run_continual_learning",
     "run_continual_learning_suite",
-    "run_continual_train_step", "_compose_joint_system_from_configs_spec", "_compose_system_from_configs_spec",
+    "run_continual_train_step",
+    "_compose_joint_system_from_configs_spec",
+    "_compose_system_from_configs_spec",
 ]

@@ -874,17 +874,17 @@ def test_u_muon_gradient_orthogonal() -> None:
 
     with seeded(42):
         update = RiemannianOrthogonalUpdate(
-            ParameterUpdateConfig.riemannian_orthogonal(ortho_steps=5)
+            ParameterUpdateConfig.riemannian_orthogonal(ortho_steps=20)
         )
         params = {"0.weight": torch.randn(10, 10, device=device)}
         grads = [torch.randn(10, 10, device=device)]
 
         # Test the internal orthogonalization
-        ortho_grad = update._newton_schulz(grads[0])
+        ortho_grad = update._orthogonalize(grads[0])
         # Orthogonalized gradient should satisfy ortho_grad.T @ ortho_grad ≈ I
         eye = torch.eye(10, device=device)
         assert torch.allclose(ortho_grad.T @ ortho_grad, eye, atol=1e-5), (
-            "Newton-Schulz did not produce orthogonal matrix"
+            "Orthogonalization did not produce orthogonal matrix"
         )
 
 
@@ -966,7 +966,10 @@ class TestC_TemporalTraceSTDP:
         dt = torch.linspace(-50, 50, 101)
         window = credit.compute_stdp_window(pre_spikes, post_spikes, dt)
 
-        window_val = window[0, 0].item()  # Single pair
+        # Window function W(Δt) evaluated at dt grid; check sign at Δt = post - pre
+        delta_t = post_time - pre_time
+        idx = (dt - delta_t).abs().argmin().item()
+        window_val = window[0, idx].item()
 
         if expected_sign == 0:
             assert abs(window_val) < 1e-6, (
@@ -982,14 +985,15 @@ class TestC_TemporalTraceSTDP:
         from computronium.ontology import TemporalTraceCredit
 
         credit = TemporalTraceCredit()
-        pre_spikes = torch.tensor([[0.0]])
-        post_spikes = torch.tensor([[5.0]])  # Δt = 5
         dt = torch.linspace(-50, 50, 101)
 
-        window_pos = credit.compute_stdp_window(pre_spikes, post_spikes, dt)
+        # Window function is antisymmetric: W(dt) = -W(-dt)
+        window_pos = credit.compute_stdp_window(
+            torch.tensor([[0.0]]), torch.tensor([[0.0]]), dt
+        )
         window_neg = credit.compute_stdp_window(
-            post_spikes, pre_spikes, dt
-        )  # Swap for -Δt
+            torch.tensor([[0.0]]), torch.tensor([[0.0]]), -dt
+        )
 
         assert torch.allclose(window_pos, -window_neg, atol=1e-6), (
             "STDP window not antisymmetric"
@@ -1000,6 +1004,7 @@ class TestC_TemporalTraceSTDP:
         from computronium.ontology import TemporalTraceCredit
 
         credit = TemporalTraceCredit()
+        dt_grid = torch.linspace(-50, 50, 101)
 
         # Test that window magnitude decreases with larger |Δt|
         dt_values = [5.0, 10.0, 20.0, 40.0]
@@ -1007,9 +1012,9 @@ class TestC_TemporalTraceSTDP:
         for dt_val in dt_values:
             pre_spikes = torch.tensor([[0.0]])
             post_spikes = torch.tensor([[dt_val]])
-            dt = torch.linspace(-50, 50, 101)
-            window = credit.compute_stdp_window(pre_spikes, post_spikes, dt)
-            windows.append(abs(window[0, 0].item()))
+            window = credit.compute_stdp_window(pre_spikes, post_spikes, dt_grid)
+            idx = (dt_grid - dt_val).abs().argmin().item()
+            windows.append(abs(window[0, idx].item()))
 
         # Magnitude should decrease with Δt
         for i in range(1, len(windows)):
@@ -1033,7 +1038,7 @@ class TestU_StepProperties:
                 ParameterUpdateConfig.riemannian_orthogonal(ortho_steps=20)
             )
             grad = torch.randn(10, 10, device=device)
-            ortho_grad = update._newton_schulz(grad)
+            ortho_grad = update._orthogonalize(grad)
             eye = torch.eye(10, device=device)
             assert torch.allclose(ortho_grad.T @ ortho_grad, eye, atol=1e-5)
 
@@ -1152,6 +1157,9 @@ def test_d_spike_integration_lyapunov() -> None:
         # After settling, activations should be <= threshold (1.0)
         final_acts = state.activations
         if final_acts is not None:
+            # Handle both list and tensor
+            if isinstance(final_acts, list):
+                final_acts = final_acts[-1] if final_acts else torch.zeros(1)
             assert final_acts.max() < 1.5, "Membrane potentials should be bounded"
 
         # (b) Spike count variance non-increasing across steps

@@ -30,9 +30,7 @@ if TYPE_CHECKING:
 class SubstrateInferer(Protocol):
     """Protocol for inferring Substrate from model and metadata."""
 
-    def infer(
-        self, model: nn.Module, metadata: ComponentMetadata | None
-    ) -> Substrate:
+    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> Substrate:
         """Infer the substrate for a model."""
         ...
 
@@ -83,9 +81,7 @@ class UpdateInferer(Protocol):
 class NativeSubstrateInferer:
     """Infer substrate from explicit ontology_axes metadata."""
 
-    def infer(
-        self, model: nn.Module, metadata: ComponentMetadata | None
-    ) -> Substrate:
+    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> Substrate:
         from computronium.ontology.substrate import (
             SubstrateConfig,
             substrate_from_config,
@@ -234,9 +230,7 @@ class NativeUpdateInferer:
 class HeuristicSubstrateInferer:
     """Infer substrate using heuristic fallbacks."""
 
-    def infer(
-        self, model: nn.Module, metadata: ComponentMetadata | None
-    ) -> Substrate:
+    def infer(self, model: nn.Module, metadata: ComponentMetadata | None) -> Substrate:
         from computronium.ontology.adapter.heuristics import (
             infer_substrate_from_metadata,
         )

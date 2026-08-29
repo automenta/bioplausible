@@ -157,6 +157,7 @@ def _create_output_state(
     free_state: list[Tensor] | Tensor | None = None,
     nudged_state: list[Tensor] | Tensor | None = None,
     activations: list[Tensor] | Tensor | None = None,
+    spike_counts: list[Tensor] | None = None,
 ) -> object:
     """Create a new state of the same type with updated fields."""
     if _is_composite_state(state):
@@ -173,6 +174,8 @@ def _create_output_state(
             activity["nudged_state"] = nudged_state
         if activations is not None:
             activity["activations"] = activations
+        if spike_counts is not None:
+            activity["spike_counts"] = spike_counts
         return CompositeState(
             activity=activity,
             plastic=state.plastic,
@@ -198,7 +201,9 @@ def _create_output_state(
             energy=getattr(state, "energy", None),
             loss=getattr(state, "loss", None),
             metrics=dict(getattr(state, "metrics", {}) or {}),
-            spike_counts=getattr(state, "spike_counts", None),
+            spike_counts=spike_counts
+            if spike_counts is not None
+            else getattr(state, "spike_counts", None),
         )
 
 
@@ -801,7 +806,7 @@ class PredictiveSettlingDynamics:
         substrate: Substrate,
         target: Tensor | None = None,
     ) -> CompositeState:
-        # Simplified predictive settling
+        # Predictive coding settling: minimize prediction error
         x = _get_state_x(state)
         if x is None:
             raise ValueError("State must contain input 'x'")
@@ -812,9 +817,19 @@ class PredictiveSettlingDynamics:
         for step in range(self.config.max_steps):
             # Predictive coding update
             prediction = geometry.route(h)
+            # Ensure prediction matches input dimension for shape-safe error computation
+            if prediction.shape[-1] != h.shape[-1]:
+                if prediction.shape[-1] >= h.shape[-1]:
+                    prediction = prediction[..., : h.shape[-1]]
+                else:
+                    pad_size = h.shape[-1] - prediction.shape[-1]
+                    prediction = torch.nn.functional.pad(prediction, (0, pad_size)).to(
+                        prediction.device
+                    )
             error = x - prediction
             h = h + self.config.step_size * op(
-                error, geometry.params.get("weight", torch.eye(h.shape[-1]))
+                error,
+                geometry.params.get("weight", torch.eye(h.shape[-1], device=h.device)),
             )
 
         new_state = _create_output_state(
@@ -857,12 +872,19 @@ class SpikeIntegrationDynamics:
             raise ValueError("State must contain input 'x'")
 
         h = substrate.initial_state(x)
-        # op = substrate.get_forward_operator()  # Unused in this simplified implementation
+
+        spike_counts = []
+        threshold = 1.0  # Spike threshold
 
         for _step in range(self.config.max_steps):
             # LIF dynamics: tau * dh/dt = -h + I_syn
             I_syn = geometry.route(h)
             h = h + self.config.step_size * (-h + I_syn)
+            # Count spikes: neurons where membrane potential crosses threshold
+            spikes = (h > threshold).float()
+            spike_counts.append(spikes.sum(dim=1))  # [batch]
+            # Reset spiking neurons
+            h = torch.where(h > threshold, torch.zeros_like(h), h)
 
         new_state = _create_output_state(
             state,
@@ -871,6 +893,7 @@ class SpikeIntegrationDynamics:
             free_state=[h] if target is None else None,
             nudged_state=[h] if target is not None else None,
             activations=[h],
+            spike_counts=spike_counts,
         )
 
         return new_state

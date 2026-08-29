@@ -245,6 +245,22 @@ class RiemannianOrthogonalUpdate:
     def __init__(self, config: ParameterUpdateConfig | None = None):
         self.config = config or ParameterUpdateConfig.riemannian_orthogonal()
 
+    def _orthogonalize(self, grad: Tensor) -> Tensor:
+        """Orthogonalize gradient via QR decomposition (generalizes Newton-Schulz to non-square).
+
+        For square matrices, this approximates the polar factor.
+        For non-square: returns Q from QR with orthonormal columns (tall) or rows (wide).
+        """
+        m, n = grad.shape
+        if m >= n:
+            # Tall matrix: QR with orthonormal columns
+            Q, _ = torch.linalg.qr(grad, mode="reduced")
+            return Q
+        else:
+            # Wide matrix: QR of transpose for orthonormal rows
+            Q, _ = torch.linalg.qr(grad.T, mode="reduced")
+            return Q.T
+
     def step(
         self,
         params: dict[str, Tensor],
@@ -252,9 +268,8 @@ class RiemannianOrthogonalUpdate:
         geometry: Geometry,
     ) -> dict[str, Tensor]:
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
-            # Project gradient onto tangent space: P = G - (G @ W^T + W @ G^T) @ W / 2
-            # For simplicity, use sign-SGD style update
-            return param - self.config.step_size * grad.sign()
+            ortho_grad = self._orthogonalize(grad)
+            return param - self.config.step_size * ortho_grad
 
         return apply_pseudo_gradients(params, list(pseudo_grads), apply)
 
@@ -305,6 +320,25 @@ class ElasticConsolidationUpdate:
 
     def __init__(self, config: ParameterUpdateConfig | None = None):
         self.config = config or ParameterUpdateConfig.elastic_consolidation()
+        self._old_params: dict[str, Tensor] = {}
+        self._fisher: dict[str, Tensor] = {}
+
+    def consolidate(
+        self, params: dict[str, Tensor], old_params: dict[str, Tensor]
+    ) -> None:
+        """Store old parameters and compute Fisher importance (squared distance from old).
+
+        In EWC, the Fisher information is approximated by (param - old_param)^2,
+        which measures how much each parameter has moved from the previous task.
+        """
+        self._old_params = {k: v.clone().detach() for k, v in old_params.items()}
+        # Fisher = (current - old)^2 + damping
+        self._fisher = {
+            k: (params[k].detach() - old_params[k].detach()) ** 2
+            + self.config.ewc_lambda
+            for k in params
+            if k in old_params
+        }
 
     def step(
         self,
@@ -313,7 +347,14 @@ class ElasticConsolidationUpdate:
         geometry: Geometry,
     ) -> dict[str, Tensor]:
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
-            # Simplified: no actual Fisher info stored
+            # EWC update: param - lr * grad - lr * ewc_lambda * fisher * (param - old_param)
+            if name in self._old_params and name in self._fisher:
+                ewc_term = self._fisher[name] * (param - self._old_params[name])
+                return (
+                    param
+                    - self.config.step_size * grad
+                    - self.config.step_size * ewc_term
+                )
             return param - self.config.step_size * grad
 
         return apply_pseudo_gradients(params, list(pseudo_grads), apply)

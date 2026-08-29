@@ -11,6 +11,7 @@ from typing import Protocol, TypeVar, runtime_checkable
 import torch
 from torch import Tensor, nn
 
+from computronium.core.registry import ComputeProfile
 from computronium.ontology.credit import (
     CreditAssignment,
     CreditAssignmentConfig,

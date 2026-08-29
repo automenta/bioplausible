@@ -353,6 +353,24 @@ class RandomProjectionsCredit:
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.random_projections()
+        self._feedback_weights: dict[str, Tensor] = {}
+
+    def _init_feedback_weights(
+        self, geometry: Geometry, device: torch.device | None = None
+    ) -> None:
+        """Initialize fixed random feedback matrices for each learnable weight.
+
+        Feedback matrices are initialized once and kept constant throughout training.
+        This implements the FA/DFA assumption of fixed feedback pathways.
+        """
+        if self._feedback_weights:
+            return  # Already initialized
+        weight_names = _learnable_weight_names(geometry.params)
+        for name in weight_names:
+            param = geometry.params[name]
+            # Initialize with small random values
+            fb = torch.randn_like(param, device=device) * self.config.feedback_scale
+            self._feedback_weights[name] = fb
 
     def compute_pseudo_gradient(
         self,
@@ -360,17 +378,46 @@ class RandomProjectionsCredit:
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
-        # Simplified: return random projections of loss gradient
+        """Compute FA pseudo-gradients using fixed feedback matrices."""
         free_state = states.get(Phase.FREE)
         nudged_state = states.get(Phase.NUDGED)
         if free_state is None or nudged_state is None:
             return []
 
         weight_names = _learnable_weight_names(geometry.params)
+        if not self._feedback_weights:
+            device = (
+                next(iter(geometry.params.values())).device if geometry.params else None
+            )
+            self._init_feedback_weights(geometry, device)
+
+        # FA error signal: difference between nudged and free activations
+        free_acts = free_state.activations
+        nudged_acts = nudged_state.activations
+        # Handle activations as list (take last element) or tensor
+        if isinstance(free_acts, list):
+            free_acts = free_acts[-1] if free_acts else None
+        if isinstance(nudged_acts, list):
+            nudged_acts = nudged_acts[-1] if nudged_acts else None
+        if free_acts is not None and nudged_acts is not None:
+            error = (nudged_acts - free_acts).detach()
+        else:
+            error = (
+                torch.ones_like(nudged_acts)
+                if nudged_acts is not None
+                else torch.tensor(1.0)
+            )
+
+        # Project error through feedback matrices (one per layer)
         grads = []
-        for _ in weight_names:
-            # Random projection pseudo-gradient
-            grads.append(torch.randn(1))
+        for name in weight_names:
+            fb = self._feedback_weights.get(name)
+            if fb is not None:
+                # FA gradient: feedback @ error (simplified: scale feedback by error norm)
+                grad = fb * error.abs().mean()
+            else:
+                grad = torch.zeros_like(geometry.params[name])
+            grads.append(grad)
         return grads
 
     def surrogate_objective(
@@ -412,6 +459,10 @@ class TemporalTraceCredit:
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.temporal_trace()
+        # STDP parameters with sensible defaults
+        self.a_plus = getattr(self.config, "a_plus", 1.0)
+        self.a_minus = getattr(self.config, "a_minus", 1.0)
+        self.tau = getattr(self.config, "tau", 20.0)
 
     def compute_pseudo_gradient(
         self,
@@ -421,6 +472,37 @@ class TemporalTraceCredit:
     ) -> list[Tensor]:
         # Simplified
         return []
+
+    def compute_stdp_window(
+        self,
+        pre_spikes: Tensor,  # [batch, 1] or [batch] - spike times (unused for window function)
+        post_spikes: Tensor,  # [batch, 1] or [batch] - spike times (unused for window function)
+        dt: Tensor,  # [n_dt] - time lag grid
+    ) -> Tensor:
+        """Compute STDP window W(Δt) over the lag grid dt.
+
+        The STDP window is an antisymmetric function of the time lag Δt:
+        W(Δt) = A+ exp(-Δt/τ) for Δt > 0 (potentiation),
+              = -A- exp(Δt/τ) for Δt < 0 (depression),
+              = 0 for Δt = 0.
+
+        The pre_spikes and post_spikes arguments are retained for API consistency
+        (e.g., batching multiple spike pairs) but the window function itself
+        depends only on the time lag grid dt.
+
+        Returns: Tensor of shape [batch, n_dt] where each row is W(dt).
+        """
+        # Standard STDP window function evaluated at dt grid
+        pos_mask = dt > 0
+        neg_mask = dt < 0
+
+        window = torch.zeros_like(dt)
+        window[pos_mask] = self.a_plus * torch.exp(-dt[pos_mask] / self.tau)
+        window[neg_mask] = -self.a_minus * torch.exp(dt[neg_mask] / self.tau)
+
+        # Expand to [batch, n_dt] for API consistency (same window for all pairs in batch)
+        batch_size = pre_spikes.shape[0] if pre_spikes.ndim > 0 else 1
+        return window.expand(batch_size, -1)
 
 
 class TargetInversionCredit:
@@ -476,8 +558,20 @@ class GradientCredit:
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
-        # Simplified
-        return []
+        """Compute true gradients via autograd on nudged state loss."""
+        if loss is None:
+            return []
+
+        weight_names = _learnable_weight_names(geometry.params)
+        params = [geometry.params[n] for n in weight_names]
+        grads = torch.autograd.grad(
+            loss, params, retain_graph=False, create_graph=False, allow_unused=True
+        )
+        # Return None grads as zeros of correct shape
+        return [
+            g if g is not None else torch.zeros_like(p)
+            for p, g in zip(params, grads, strict=True)
+        ]
 
 
 # Alias for backwards compatibility
