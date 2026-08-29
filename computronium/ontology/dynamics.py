@@ -18,6 +18,190 @@ if TYPE_CHECKING:
 
 
 # ============================================================
+# State type detection helpers (duck typing for SystemState + CompositeState)
+# ============================================================
+
+
+def _is_composite_state(state: object) -> bool:
+    """Check if state is a CompositeState (has activity/plastic/substrate dicts)."""
+    return hasattr(state, "activity") and isinstance(getattr(state, "activity", None), dict)
+
+
+def _get_state_x(state: object) -> Tensor | None:
+    """Get input x from either SystemState or CompositeState."""
+    return getattr(state, "x", None)
+
+
+def _get_state_activations(state: object) -> list[Tensor] | Tensor | None:
+    """Get activations from either SystemState or CompositeState."""
+    return getattr(state, "activations", None)
+
+
+def _get_state_free_state(state: object) -> list[Tensor] | Tensor | None:
+    """Get free_state from either SystemState or CompositeState."""
+    return getattr(state, "free_state", None)
+
+
+def _get_state_nudged_state(state: object) -> list[Tensor] | Tensor | None:
+    """Get nudged_state from either SystemState or CompositeState."""
+    return getattr(state, "nudged_state", None)
+
+
+def _get_state_loss(state: object) -> Tensor | float | None:
+    """Get loss from either SystemState or CompositeState."""
+    return getattr(state, "loss", None)
+
+
+def _get_state_metrics(state: object) -> dict[str, float] | None:
+    """Get metrics from either SystemState or CompositeState."""
+    return getattr(state, "metrics", None)
+
+
+def _set_state_x(state: object, value: Tensor | None) -> None:
+    """Set input x on either SystemState or CompositeState."""
+    if value is None:
+        if hasattr(state, "activity") and isinstance(state.activity, dict):
+            state.activity.pop("x", None)
+        else:
+            state.x = None
+    else:
+        if hasattr(state, "activity") and isinstance(state.activity, dict):
+            state.activity["x"] = value
+        else:
+            state.x = value
+
+
+def _set_state_activations(state: object, value: list[Tensor] | Tensor | None) -> None:
+    """Set activations on either SystemState or CompositeState."""
+    if value is None:
+        if hasattr(state, "activity") and isinstance(state.activity, dict):
+            state.activity.pop("activations", None)
+        else:
+            state.activations = None
+    else:
+        if hasattr(state, "activity") and isinstance(state.activity, dict):
+            state.activity["activations"] = value
+        else:
+            state.activations = value
+
+
+def _set_state_free_state(state: object, value: list[Tensor] | Tensor | None) -> None:
+    """Set free_state on either SystemState or CompositeState."""
+    if value is None:
+        if hasattr(state, "activity") and isinstance(state.activity, dict):
+            state.activity.pop("free_state", None)
+        else:
+            state.free_state = None
+    else:
+        if hasattr(state, "activity") and isinstance(state.activity, dict):
+            state.activity["free_state"] = value
+        else:
+            state.free_state = value
+
+
+def _set_state_nudged_state(state: object, value: list[Tensor] | Tensor | None) -> None:
+    """Set nudged_state on either SystemState or CompositeState."""
+    if value is None:
+        if hasattr(state, "activity") and isinstance(state.activity, dict):
+            state.activity.pop("nudged_state", None)
+        else:
+            state.nudged_state = None
+    else:
+        if hasattr(state, "activity") and isinstance(state.activity, dict):
+            state.activity["nudged_state"] = value
+        else:
+            state.nudged_state = value
+
+
+def _set_state_loss(state: object, value: Tensor | float | None) -> None:
+    """Set loss on either SystemState or CompositeState."""
+    if value is None:
+        if hasattr(state, "activity") and isinstance(state.activity, dict):
+            state.activity.pop("loss", None)
+        else:
+            state.loss = None
+    else:
+        if hasattr(state, "activity") and isinstance(state.activity, dict):
+            state.activity["loss"] = value
+        else:
+            state.loss = value
+
+
+def _set_state_metrics(state: object, value: dict[str, float] | None) -> None:
+    """Set metrics on either SystemState or CompositeState."""
+    if value is None:
+        if hasattr(state, "activity") and isinstance(state.activity, dict):
+            state.activity.pop("metrics", None)
+        else:
+            state.metrics = None
+    else:
+        if hasattr(state, "activity") and isinstance(state.activity, dict):
+            state.activity["metrics"] = value
+        else:
+            state.metrics = value
+
+
+def _get_state_activity(state: object) -> dict | None:
+    """Get activity dict from CompositeState, or None for SystemState."""
+    if hasattr(state, "activity") and isinstance(state.activity, dict):
+        return state.activity
+    return None
+
+
+def _create_output_state(
+    state: object,
+    *,
+    x: Tensor | None = None,
+    output: Tensor | None = None,
+    free_state: list[Tensor] | Tensor | None = None,
+    nudged_state: list[Tensor] | Tensor | None = None,
+    activations: list[Tensor] | Tensor | None = None,
+) -> object:
+    """Create a new state of the same type with updated fields."""
+    if _is_composite_state(state):
+        from computronium.state import CompositeState
+
+        activity = dict(state.activity)
+        if x is not None:
+            activity["x"] = x
+        if output is not None:
+            activity["output"] = output
+        if free_state is not None:
+            activity["free_state"] = free_state
+        if nudged_state is not None:
+            activity["nudged_state"] = nudged_state
+        if activations is not None:
+            activity["activations"] = activations
+        return CompositeState(
+            activity=activity,
+            plastic=state.plastic,
+            substrate=state.substrate,
+        )
+    else:
+        # SystemState - create new instance with updated fields
+        from computronium.ontology.system import SystemState
+
+        return SystemState(
+            x=x if x is not None else getattr(state, "x", None),
+            y=getattr(state, "y", None),
+            activations=activations
+            if activations is not None
+            else getattr(state, "activations", None),
+            free_state=free_state
+            if free_state is not None
+            else getattr(state, "free_state", None),
+            nudged_state=nudged_state
+            if nudged_state is not None
+            else getattr(state, "nudged_state", None),
+            pseudo_gradients=getattr(state, "pseudo_gradients", None),
+            energy=getattr(state, "energy", None),
+            loss=getattr(state, "loss", None),
+            metrics=dict(getattr(state, "metrics", {}) or {}),
+            spike_counts=getattr(state, "spike_counts", None),
+        )
+
+
+# ============================================================
 # StateDynamics Configuration
 # ============================================================
 
@@ -617,9 +801,8 @@ class PredictiveSettlingDynamics:
         target: Tensor | None = None,
     ) -> CompositeState:
         # Simplified predictive settling
-        if state.x is not None:
-            x = state.x
-        else:
+        x = _get_state_x(state)
+        if x is None:
             raise ValueError("State must contain input 'x'")
 
         h = substrate.initial_state(x)
@@ -633,30 +816,25 @@ class PredictiveSettlingDynamics:
                 error, geometry.params.get("weight", torch.eye(h.shape[-1]))
             )
 
-        new_activity = {**state.activity, "x": x, "output": h}
-        new_state = CompositeState(
-            activity=new_activity,
-            plastic=state.plastic,
-            substrate=state.substrate,
+        new_state = _create_output_state(
+            state,
+            x=x,
+            output=h,
+            free_state=[h] if target is None else None,
+            nudged_state=[h] if target is not None else None,
+            activations=[h],
         )
-
-        if target is None:
-            new_state.free_state = [h]
-        else:
-            new_state.nudged_state = [h]
 
         return new_state
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
-        if state.activations is not None:
-            acts = (
-                state.activations
-                if isinstance(state.activations, list)
-                else [state.activations]
-            )
+        acts = _get_state_activations(state)
+        if acts is not None:
+            acts = acts if isinstance(acts, list) else [acts]
             h = acts[-1] if acts else torch.zeros(1)
         else:
-            h = state.activity.get("output", torch.zeros(1))
+            activity = _get_state_activity(state)
+            h = activity.get("output", torch.zeros(1)) if activity else torch.zeros(1)
         return h.pow(2).sum()
 
 
@@ -673,9 +851,8 @@ class SpikeIntegrationDynamics:
         substrate: Substrate,
         target: Tensor | None = None,
     ) -> CompositeState:
-        if state.x is not None:
-            x = state.x
-        else:
+        x = _get_state_x(state)
+        if x is None:
             raise ValueError("State must contain input 'x'")
 
         h = substrate.initial_state(x)
@@ -686,30 +863,25 @@ class SpikeIntegrationDynamics:
             I_syn = geometry.route(h)
             h = h + self.config.step_size * (-h + I_syn)
 
-        new_activity = {**state.activity, "x": x, "output": h}
-        new_state = CompositeState(
-            activity=new_activity,
-            plastic=state.plastic,
-            substrate=state.substrate,
+        new_state = _create_output_state(
+            state,
+            x=x,
+            output=h,
+            free_state=[h] if target is None else None,
+            nudged_state=[h] if target is not None else None,
+            activations=[h],
         )
-
-        if target is None:
-            new_state.free_state = [h]
-        else:
-            new_state.nudged_state = [h]
 
         return new_state
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
-        if state.activations is not None:
-            acts = (
-                state.activations
-                if isinstance(state.activations, list)
-                else [state.activations]
-            )
+        acts = _get_state_activations(state)
+        if acts is not None:
+            acts = acts if isinstance(acts, list) else [acts]
             h = acts[-1] if acts else torch.zeros(1)
         else:
-            h = state.activity.get("output", torch.zeros(1))
+            activity = _get_state_activity(state)
+            h = activity.get("output", torch.zeros(1)) if activity else torch.zeros(1)
         return h.pow(2).sum()
 
 
@@ -758,9 +930,8 @@ class DiffusionDynamics:
         substrate: Substrate,
         target: Tensor | None = None,
     ) -> CompositeState:
-        if state.x is not None:
-            x = state.x
-        else:
+        x = _get_state_x(state)
+        if x is None:
             raise ValueError("State must contain input 'x'")
 
         h = substrate.initial_state(x)
@@ -775,17 +946,14 @@ class DiffusionDynamics:
             with torch.no_grad():
                 h = h - self.config.step_size * energy_grad + noise
 
-        new_activity = {**state.activity, "x": x, "output": h}
-        new_state = CompositeState(
-            activity=new_activity,
-            plastic=state.plastic,
-            substrate=state.substrate,
+        new_state = _create_output_state(
+            state,
+            x=x,
+            output=h,
+            free_state=[h] if target is None else None,
+            nudged_state=[h] if target is not None else None,
+            activations=[h],
         )
-
-        if target is None:
-            new_state.free_state = [h]
-        else:
-            new_state.nudged_state = [h]
 
         return new_state
 
@@ -796,17 +964,15 @@ class DiffusionDynamics:
         return energy
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
-        if state.activations is not None:
-            acts = (
-                state.activations
-                if isinstance(state.activations, list)
-                else [state.activations]
-            )
+        acts = _get_state_activations(state)
+        if acts is not None:
+            acts = acts if isinstance(acts, list) else [acts]
             h = acts[-1] if acts else torch.zeros(1)
         else:
-            h = state.activity.get("output", torch.zeros(1))
+            activity = _get_state_activity(state)
+            h = activity.get("output", torch.zeros(1)) if activity else torch.zeros(1)
         # Use a default substrate for energy computation if not available
-        substrate_obj = state.substrate.get("substrate")
+        substrate_obj = state.substrate.get("substrate") if _is_composite_state(state) else None
         if substrate_obj is None:
             from computronium.ontology.substrate import (
                 DigitalSubstrate,
@@ -843,7 +1009,7 @@ class LazyStateDynamics:
         target: Tensor | None = None,
     ) -> CompositeState:
         """Settle with lazy activation computation."""
-        h = state.activations
+        h = _get_state_activations(state)
         if h is None:
             return state
         if isinstance(h, list):
@@ -865,24 +1031,21 @@ class LazyStateDynamics:
                     break
             h = h_new
 
-        new_activity = {**state.activity, "output": h}
-        new_state = CompositeState(
-            activity=new_activity,
-            plastic=state.plastic,
-            substrate=state.substrate,
+        new_state = _create_output_state(
+            state,
+            output=h,
+            free_state=[h] if target is None else None,
+            nudged_state=[h] if target is not None else None,
+            activations=[h],
         )
-
-        if target is None:
-            new_state.free_state = [h]
-        else:
-            new_state.nudged_state = [h]
-        new_state.activations = [h]
 
         return new_state
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
         """Compute energy using cached activations if available."""
-        acts = state.free_state if state.free_state is not None else state.activations
+        acts = _get_state_free_state(state)
+        if acts is None:
+            acts = _get_state_activations(state)
         if acts is None:
             return torch.tensor(0.0)
         if isinstance(acts, list):

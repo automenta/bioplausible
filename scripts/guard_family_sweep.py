@@ -28,7 +28,7 @@ from computronium.core.campaign.evaluation import (
     build_coordinate_system,
     episode_batch,
 )
-from computronium.core.stability.guard import (
+from computronium.stability.guard import (
     ProbeSpec,
     StabilityGuard,
     measure_guard_overhead,

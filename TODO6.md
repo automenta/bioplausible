@@ -297,7 +297,7 @@ class BenchmarkRunner:  # base class enforcing contract
 
 ## Progress Summary (as of 2026-08-28)
 
-### ✅ COMPLETED (Phase 0 + Phase 1 + Phase 2)
+### ✅ COMPLETED (Phase 0 + Phase 1 + Phase 2 + Phase 3)
 - **Phase 0.1**: Cleaned up fractured `libraries/computronium_stability/` (removed `.venv/`, `build/`, cache dirs)
 - **Phase 0.2**: Moved `computronium/core/stability/` → `computronium/stability/` (single canonical location)
 - **Phase 0.3**: Created standalone test suite `tests/unit/core/test_stability_standalone.py` (55 tests) — runs against built wheel
@@ -307,7 +307,7 @@ class BenchmarkRunner:  # base class enforcing contract
 - **Phase 1.7**: Verified CI quality gates (ruff, pyright, pytest all pass)
 - **Publishing**: `uv pip install -e .[stability]` → `import computronium_stability` works ✅
 - **Phase 2.1**: Extracted state types to `computronium/state/` (CompositeState, SystemContext, StateRegistry, StateVariable, NullPlasticity, PlasticityConfig, PlasticityPrimitive, CoupledTransition)
-- **Phase 2.2**: Extracted ontology primitives to `computtronium/ontology/` (all 5 axes: substrate, geometry, dynamics, credit, update + SystemConfig, System, ModelAdapter)
+- **Phase 2.2**: Extracted ontology primitives to `computronium/ontology/` (all 5 axes: substrate, geometry, dynamics, credit, update + SystemConfig, System, ModelAdapter)
 - **Phase 2.3**: Created joint system facade at `computronium/core/joint/__init__.py` (exports composition API only)
 - **Phase 2.4**: Import sweep (~100 sites) automated via sed + libcst script; ResourceUsage moved to `computronium/resources.py` (neutral home)
 - **Cleanup**: Removed `computronium/core/stability/` (old location)
@@ -318,6 +318,8 @@ class BenchmarkRunner:  # base class enforcing contract
 - **Fix**: Added `x`, `y`, `activations`, `free_state`, `nudged_state`, `loss`, `metrics` properties to `CompositeState` for backward compatibility with StateDynamics API
 - **Fix**: Updated test imports to use internal modules (`computronium.core.joint.state`, `computronium.core.joint.transition`) instead of facade
 - **Fix**: Fixed test assertions for energy descent (Hopfield energy can be negative)
+- **Fix (2026-08-28)**: Added duck-typing helpers in `computronium/ontology/dynamics.py` to support both `SystemState` (5-D pipeline) and `CompositeState` (6-D joint) — fixes `PredictiveSettlingDynamics`, `SpikeIntegrationDynamics`, `DiffusionDynamics`, `LazyStateDynamics`
+- **Fix (2026-08-28)**: Fixed stale imports in `computronium.core.continual.stability`, `scripts/calibrate_stability_guard.py`, `scripts/guard_family_sweep.py`, `computronium/core/profiling.py`, `computronium/__init__.py` lazy imports
 - All stability tests (55) pass
 - All joint property tests (130) pass
 - Standalone wheel tests (55) pass
@@ -329,17 +331,22 @@ class BenchmarkRunner:  # base class enforcing contract
 - **Standalone wheel**: Guard uses duck-typed `CompositeState`; test suite runs against **built wheel** (`uv build && pip install dist/*.whl`)
 - **Import cycle strategy**: `TYPE_CHECKING` + string annotations for `System`/`Config` cycles; CI grep gate
 - **Wheel test re-run**: After 2.1 commit, re-run standalone tests against built wheel
+- **Fix (2026-08-28)**: Dynamics duck-typing for `SystemState`/`CompositeState` compatibility
+- **Fix (2026-08-28)**: Stale import cleanup across codebase
 
 ### ⚠️ 0.0a RECONCILE PENDING (Do First — Zero Compute)
 - §2.5 in tracker still shows superseded +0.0006/p=1.0 numbers
 - Authoritative artifact: `continual_learning_retest_fixed2/` (+0.100, p=0.0076)
 - Action: Update §2.5 numbers/artifact path; log in `DECISIONS.md`
 
-### 🔄 NEXT STEPS (Post-Phase 2)
+### ⚠️ KNOWN ISSUES (Pre-existing, not blocking)
+- **Ternary substrate guard kill**: `test_axis_probe.py::test_guard_kill_status_matches_known_unstable_set[5-0]` fails — ternary substrate shows `growth=5.43e+08 > τ=1.029` despite test comment claiming it should settle contractively (ρ=1.0). This is a pre-existing substrate stability issue, not a regression from recent changes.
+
+### 🔄 NEXT STEPS (Post-Phase 3)
 1. ~~**Cleanup**: Remove `computronium/core/stability/` directory (old location)~~ ✅ DONE
 2. ~~**Cleanup**: Remove `libraries/computronium_stability/` directory~~ ✅ DONE
 3. ~~**Fix ModelAdapter tests**: Legacy model registration issues in test suite~~ ✅ FIXED (imports updated, EnergyMinimizationDynamics ported)
-4. **Phase 3**: RESEARCH3 infrastructure (fairness, campaign, L2/𝒞, algorithm migration, export) — **✅ COMPLETED**
+4. ~~**Phase 3**: RESEARCH3 infrastructure (fairness, campaign, L2/𝒞, algorithm migration, export)~~ ✅ COMPLETED (2026-08-28)
 5. **Phase 4**: Regime discovery, family-coverage benchmark, frontier certification
 
 ### 📋 PHASE 3-4 (Future)

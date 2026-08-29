@@ -97,11 +97,11 @@ __version__ = "1.0.0"
 # Lazy imports for heavy dependencies (zoo, experiment, config, core components)
 # Name -> (submodule_path, attr_or_None). attr None returns the submodule itself.
 _LAZY: dict[str, tuple[str, str | None]] = {
-    # 6-D Joint Architecture
-    "CompositeState": ("computronium.core.joint.state", "CompositeState"),
+    # 6-D Joint Architecture (facade exports only)
+    "CompositeState": ("computronium.state", "CompositeState"),
     "CoupledTransition": ("computronium.core.joint.transition", "CoupledTransition"),
-    "StateRegistry": ("computronium.core.joint.state", "StateRegistry"),
-    "SystemContext": ("computronium.core.joint.context", "SystemContext"),
+    "StateRegistry": ("computronium.state", "StateRegistry"),
+    "SystemContext": ("computronium.state", "SystemContext"),
     # Core 5-D Ontology
     "AnalogSubstrate": ("computronium.core.ontology", "AnalogSubstrate"),
     "BackpropCredit": ("computronium.core.ontology", "BackpropCredit"),

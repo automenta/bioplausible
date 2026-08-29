@@ -406,7 +406,7 @@ def _activity_spectral_radius(
         return None
     try:
         from computronium.core.campaign.evaluation import activity_transition
-        from computronium.core.stability.spectral_radius import (
+        from computronium.stability.spectral_radius import (
             estimate_spectral_radius,
         )
         from computronium.state import CompositeState

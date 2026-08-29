@@ -20,7 +20,7 @@ import numpy as np
 import torch
 
 from computronium.core.joint.transition import PlasticityConfig
-from computronium.core.stability.guard import ProbeSpec
+from computronium.stability.guard import ProbeSpec
 from computronium.stability import (
     StabilityGuard,
     calibrate_threshold,
@@ -30,7 +30,7 @@ from computronium.stability import (
 from computronium.state import CompositeState, SystemContext
 
 if TYPE_CHECKING:
-    from computronium.core.stability.guard import StatisticKind
+    from computronium.stability.guard import StatisticKind
 
 logger = logging.getLogger(__name__)
 
