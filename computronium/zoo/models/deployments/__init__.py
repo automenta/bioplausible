@@ -13,7 +13,17 @@ from computronium.zoo.models.deployments.base import (
     RLDeploymentConfig,
     TemporalDeploymentConfig,
     build_tile_head,
+)
+from computronium.zoo.models.deployments.deployment import (
     create_deployment_model,
+    create_vision_model,
+    create_rl_model,
+    create_timeseries_model,
+    create_graph_model,
+    register_deployment_variants,
+    FeatureExtractor,
+    TileDeploymentModel,
+    DeploymentDomain,
 )
 from computronium.zoo.models.deployments.graph import (
     GraphAttentionLayer,
@@ -22,7 +32,7 @@ from computronium.zoo.models.deployments.graph import (
     GraphTileNetLayer,
     add_self_loops,
     aggregate_messages,
-    create_graph_model,
+    create_graph_model as _create_graph_model,
     create_molecule_model,
     create_social_graph_model,
     scatter_max,
@@ -38,7 +48,7 @@ from computronium.zoo.models.deployments.rl import (
     create_atari_model,
     create_mujoco_model,
     create_recurrent_rl_model,
-    create_rl_model,
+    create_rl_model as _create_rl_model,
 )
 from computronium.zoo.models.deployments.timeseries import (
     TemporalAttentionLayer,
@@ -58,7 +68,7 @@ from computronium.zoo.models.deployments.vision import (
     create_cifar_model,
     create_imagenet_model,
     create_mnist_model,
-    create_vision_model,
+    create_vision_model as _create_vision_model,
 )
 
 __all__ = [
@@ -67,6 +77,8 @@ __all__ = [
     "ConvTileNet",
     "ConvTileNetConfig",
     "DeploymentConfig",
+    "DeploymentDomain",
+    "FeatureExtractor",
     "GraphAttentionLayer",
     "GraphDeploymentConfig",
     "GraphTileNet",
@@ -83,6 +95,7 @@ __all__ = [
     "TimeSeriesConfig",
     "TimeSeriesTileNet",
     "TimeSeriesTileNetLayer",
+    "TileDeploymentModel",
     "VisionAugmentation",
     "add_self_loops",
     "aggregate_messages",
@@ -102,7 +115,9 @@ __all__ = [
     "create_recurrent_rl_model",
     "create_rl_model",
     "create_social_graph_model",
+    "create_timeseries_model",
     "create_vision_model",
+    "register_deployment_variants",
     "scatter_max",
     "scatter_mean",
     "scatter_sum",

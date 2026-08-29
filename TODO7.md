@@ -67,12 +67,23 @@
 - `computronium/core/local_learning/builder.py` — TileAlgorithmConfig, TileAlgorithm (main class with all factory methods)
 - `computronium/core/local_learning/__init__.py` — Updated exports for all new modules
 
-### ✅ Execution Strategy Decomposition (1,079 lines → 4 modules)
-- `computronium/execution/criteria.py` — CRITERIA dict, check_criterion with task-specific overrides
-- `computronium/execution/task_weights.py` — TASK_WEIGHTS, TASK_GROUPS, TIER_ORDER, calculate_future_boost, calculate_complexity_penalty
-- `computronium/execution/candidate_gen.py` — CandidateGenerator, ExecutionStrategyConfig, full candidate generation logic
-- `computronium/execution/lifecycle.py` — ExecutionStrategy, plan_next, plan_batch
-- `computronium/execution/__init__.py` — Updated lazy exports for all new modules
+### ✅ Phase 2: ModelAdapter Decomposition (Empowers Strangler Fig)
+- Created `computronium/ontology/adapter/inference.py` — `SubstrateInferer`, `GeometryInferer`, `DynamicsInferer`, `CreditInferer`, `UpdateInferer` protocols + native and heuristic implementations
+- Created `computronium/ontology/adapter/registry.py` — metadata extraction from `ComponentMetadata` (uses new `ontology_axes` fields)
+- Created `computronium/ontology/adapter/heuristics.py` — family/name-based fallbacks when metadata missing (backward compatibility for legacy models)
+- Created `computronium/ontology/adapter/adapter.py` — main facade coordinating inferrers, builds System, validation support
+- Created `computronium/ontology/adapter/__init__.py` — unified exports
+- Split monolithic ModelAdapter (~350 lines) into 4 focused modules (~400 lines total)
+- Enables testable inference, extensible for new axes, clean separation of concerns
+
+### ✅ Phase 1: Deployment Models Unification
+- Created `computronium/zoo/models/deployments/deployment.py` — Unified factory with `FeatureExtractor` protocol and `DeploymentConfig` subclasses
+- Consolidates vision, RL, time-series, graph deployments into single `create_deployment_model(domain, **config)` factory
+- `FeatureExtractor` protocol with `output_dim` property + registry for CNN/LSTM/MLP/GraphConv extractors
+- Backward-compatible factory functions: `create_vision_model`, `create_rl_model`, `create_timeseries_model`, `create_graph_model`
+- Algorithm variant registration via `register_deployment_variants` for all 4 domains (ep, pc, fa, tp, hebbian, snn, gnn)
+- Deprecated imports via `__getattr__` with deprecation warnings pointing to new unified API
+- ~3000 lines eliminated across 4 domain-specific modules
 
 ### ✅ Phase 0: Register Native Models + Ontology Axes Metadata
 - Added `ontology_substrate`, `ontology_geometry`, `ontology_dynamics`, `ontology_credit`, `ontology_update` fields to `ComponentMetadata`
@@ -152,20 +163,21 @@
 | **Dynamics Primitives** | Extract `_settle_step`, `_compute_hopfield_energy` to `ontology/dynamics/primitives.py` | `dynamics.py` | 30 min | ✅ COMPLETE |
 | **Total** | **~3 hours** for ~200 lines deduplicated across 5 axis modules | | | ✅ COMPLETE |
 
-### Phase 1: Deployment Models Unification (Eliminates ~3000 lines)
+### ✅ Phase 1: Deployment Models Unification (Eliminates ~3000 lines)
 | Item | Description | Impact |
 |------|-------------|--------|
-| **Consolidate Vision/RL/Timeseries/Graph** | Single `computronium/zoo/models/deployments/deployment.py` with `FeatureExtractor` protocol + `DeploymentConfig` subclasses; factory `create_deployment_model(config, extractor)` | Removes 4 duplicate modules (~3000 lines), new deployment types in 50 lines |
+| **Consolidate Vision/RL/Timeseries/Graph** | Single `computronium/zoo/models/deployments/deployment.py` with `FeatureExtractor` protocol + `DeploymentConfig` subclasses; factory `create_deployment_model(domain, **config)` | Removes 4 duplicate modules (~3000 lines), new deployment types in 50 lines |
 | **Extract FeatureExtractors Protocol** | `FeatureExtractor` protocol with `output_dim` property + registry for CNN/LSTM/MLP/GraphConv; used by deployment factory | Enables mixing/matching extractors with TileAlgorithm heads |
-| **Deprecate per-deployment modules** | Mark `vision.py`, `rl.py`, `timeseries.py`, `graph.py` deprecated; imports redirect to unified factory | Clear migration path, eliminates duplicate `DeploymentModel` boilerplate |
+| **Deprecate per-deployment modules** | Mark `vision.py`, `rl.py`, `timeseries.py`, `graph.py` deprecated; imports redirect to unified factory via `__getattr__` | Clear migration path, eliminates duplicate `DeploymentModel` boilerplate |
 
-### Phase 2: ModelAdapter Decomposition (Empowers Strangler Fig)
-| Item | Description | Impact |
-|------|-------------|--------|
-| **Split inference logic** | `ontology/adapter/inference.py` — `SubstrateInferer`, `GeometryInferer`, `DynamicsInferer`, `CreditInferer`, `UpdateInferer` protocols + implementations | Testable inference, extensible for new axes |
-| **Extract registry metadata** | `ontology/adapter/registry.py` — metadata extraction from `ComponentMetadata` (uses new `ontology_axes` fields) | Single source of truth for axis projection |
-| **Heuristics fallback** | `ontology/adapter/heuristics.py` — family/name-based fallbacks when metadata missing | Backward compatibility for legacy models |
-| **Main Adapter** | `ontology/adapter/adapter.py` — coordinates inferrers, builds System | Clean facade, ~100 lines |
+### ✅ Phase 2: ModelAdapter Decomposition (Empowers Strangler Fig)
+- Created `computronium/ontology/adapter/inference.py` — `SubstrateInferer`, `GeometryInferer`, `DynamicsInferer`, `CreditInferer`, `UpdateInferer` protocols + native and heuristic implementations
+- Created `computronium/ontology/adapter/registry.py` — metadata extraction from `ComponentMetadata` (uses new `ontology_axes` fields)
+- Created `computronium/ontology/adapter/heuristics.py` — family/name-based fallbacks when metadata missing (backward compatibility for legacy models)
+- Created `computronium/ontology/adapter/adapter.py` — main facade coordinating inferrers, builds System, validation support
+- Created `computronium/ontology/adapter/__init__.py` — unified exports
+- Split monolithic ModelAdapter (~350 lines) into 4 focused modules (~400 lines total)
+- Enables testable inference, extensible for new axes, clean separation of concerns
 
 ### Phase 3: Native Model Promotion (Replaces Legacy Zoo)
 | Legacy Family | Count | Native Replacement Strategy |
@@ -201,11 +213,11 @@
 Week 1 (Current):  ✅ P0 Decompositions COMPLETE
                    ✅ Phase 0: Register native models + ontology_axes metadata
                    ✅ Phase 0b: Ontology Internal Deduplication (3 hrs, high ROI)
-Week 2:             Phase 1: Deployment Models Unification
-                    Phase 2: ModelAdapter Decomposition  
-Week 3:             Phase 3: Native Model Promotion (eqprop/fa/backprop)
+                   ✅ Phase 1: Deployment Models Unification
+                   ✅ Phase 2: ModelAdapter Decomposition
+Week 2:             Phase 3: Native Model Promotion (eqprop/fa/backprop)
                     Phase 4: SystemConfig/JointSystem Split
-Week 4:             Phase 5: Registry Enhancement + Deprecation
+Week 3:             Phase 5: Registry Enhancement + Deprecation
                     Documentation + Migration Guide
 ```
 
@@ -220,8 +232,8 @@ Week 4:             Phase 5: Registry Enhancement + Deprecation
 - [ ] Standalone wheel test passes (`tests/unit/core/test_stability_standalone.py`)
 - [ ] Migration guide written for external consumers
 - [x] **All 15 native models registered in Registry with `ontology_axes`**
-- [ ] **Deployment modules unified into single factory (<1000 lines)**
-- [ ] **ModelAdapter decomposed into 4 adapter modules**
+- [x] **Deployment modules unified into single factory (<1000 lines)**
+- [x] **ModelAdapter decomposed into 4 adapter modules**
 - [ ] **38 legacy Zoo models replaced by <10 native compositions**
 - [ ] **Registry supports axis-aware queries for AutoScientist**
 - [x] **Ontology internal deduplication complete (6 utility modules)**
