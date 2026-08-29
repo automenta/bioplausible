@@ -698,3 +698,14 @@ class NoisySubstrate(DigitalSubstrate):
     def inject_state_noise(self, s: Tensor) -> Tensor:
         noise = torch.randn_like(s) * self.config.noise_level
         return s + noise
+
+
+class QuantizedSubstrate(DigitalSubstrate):
+    """Quantized substrate (int8 precision) for backward compatibility."""
+
+    def __init__(self, config: SubstrateConfig | None = None):
+        super().__init__(config or SubstrateConfig.digital(precision="int8"))
+
+    def quantize_weights(self, w: Tensor) -> Tensor:
+        scale = w.abs().max() / 127
+        return (w / scale).round().clamp(-128, 127) * scale

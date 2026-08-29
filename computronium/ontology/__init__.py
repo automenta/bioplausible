@@ -56,6 +56,7 @@ from computronium.ontology.substrate import (
     NoisySubstrate,
     OpticalSubstrate,
     QuantumSubstrate,
+    QuantizedSubstrate,
     SparseSubstrate,
     Substrate,
     SubstrateConfig,
@@ -84,18 +85,24 @@ from computronium.ontology.update import (
     RiemannianOrthogonalUpdate,
     SpectralConstrainedUpdate,
 )
+from computronium.ontology.plasticity import (
+    FastWeightPlasticity,
+    NullPlasticity,
+    PlasticityConfig,
+    PlasticityPrimitive,
+    RoutingPlasticity,
+    RuleStatePlasticity,
+    SubstrateCoupledPlasticity,
+    TransitionFn,
+)
 
 # Re-export transition types from state module for convenience
 from computronium.state import (
     CompositeState,
     CoupledTransition,
-    NullPlasticity,
-    PlasticityConfig,
-    PlasticityPrimitive,
     StateRegistry,
     StateVariable,
     SystemContext,
-    TransitionFn,
 )
 
 __all__ = [
@@ -113,6 +120,7 @@ __all__ = [
     "TernarySubstrate",
     "ComplexSubstrate",
     "NoisySubstrate",
+    "QuantizedSubstrate",
     "substrate_from_config",
     # Geometry
     "GeometryConfig",
@@ -149,6 +157,15 @@ __all__ = [
     "SpectralConstrainedUpdate",
     "NaturalGradientUpdate",
     "ElasticConsolidationUpdate",
+    # Plasticity (M-axis)
+    "PlasticityPrimitive",
+    "PlasticityConfig",
+    "TransitionFn",
+    "NullPlasticity",
+    "FastWeightPlasticity",
+    "RoutingPlasticity",
+    "RuleStatePlasticity",
+    "SubstrateCoupledPlasticity",
     # System
     "SystemConfig",
     "System",
@@ -162,10 +179,6 @@ __all__ = [
     "SystemContext",
     "StateRegistry",
     "StateVariable",
-    "NullPlasticity",
-    "PlasticityConfig",
-    "PlasticityPrimitive",
     "CoupledTransition",
-    "TransitionFn",
     "SystemPhase",
 ]
