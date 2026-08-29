@@ -1,3 +1,25 @@
+"""
+Base EqProp Model Class
+
+Abstract base class for Equilibrium Propagation models.
+
+.. deprecated:: 1.0
+   The legacy EqPropModel base class is deprecated. Use native compositions instead:
+   - ``computronium.ontology.system.System`` with 5-D ontology configuration
+   - ``TileAlgorithm`` for tile-based local learning
+   - ``computronium.core.system_trainer.factory.compose_system()`` for 5-D system composition
+"""
+
+import warnings
+
+warnings.warn(
+    "computronium.zoo.models.base is deprecated. "
+    "Use native compositions: computronium.ontology.system.System, "
+    "TileAlgorithm, or compose_system() instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 from abc import abstractmethod
 
 import torch

@@ -124,8 +124,22 @@
 - Fixed super().__init__(config, **kwargs) → super().__init__(config)
 - All 29 settle protocol integration tests now pass
 
+### Zoo Legacy Deprecation (Phase 6) — THIS SESSION
+- **Added deprecation warnings** to 3 remaining legacy modules:
+  - `computronium/zoo/models/wrappers.py` — Generic EqProp wrappers (RecurrentWrapper, StackedRecurrentWrapper, TransformerEqPropWrapper)
+  - `computronium/zoo/models/base.py` — EqPropModel abstract base class
+  - `computronium/zoo/models/transitions.py` — TransitionGraph protocol & TransitionGraphMixin
+- **Updated test files** to use native Geometry protocol instead of deprecated transitions:
+  - `tests/conftest.py` — Replaced TransitionGraphMixin with local autodiscovery helper
+  - `tests/unit/core/test_registry.py` — Replaced TransitionGraph isinstance check with hasattr check
+  - `tests/integration/test_mep_integration.py` — Replaced TransitionGraphMixin with local transition_modules()
+- **Fixed registry loading** for audit and test support:
+  - `computronium/core/audit.py` — Added zoo import to _load_registry()
+  - `tests/property/_support.py` — Added zoo import to _all_registered_model_names()
+- **Fixed script import** — `scripts/inventory_eqprop.py` now imports ModelConfig from config.unified
+
 ### Test Results
-- Core unit tests: 172 passed
+- Core unit tests: 172+ passed (registry, audit, etc.)
 - Property tests: 35 passed (ontology locks: 32 + 3 skipped)
 - Integration (settle protocol): 29 passed
 - Stability standalone: 55 passed
@@ -155,9 +169,10 @@
 ### P2 — Important: Deprecation & Test Failures
 | Item | Description |
 |------|-------------|
-| **Zoo Legacy Deprecation** | Remove remaining deprecated modules: `wrappers.py`, `base.py`, `transitions.py` (~30K lines). Legacy modules already emit DeprecationWarning. |
-| ~~Property test failures~~ | ~~Fix `test_ontology_locks.py` failures (pre-existing, not regressions)~~ ✅ **FIXED** |
+| **Zoo Legacy Removal** | Remove deprecated modules: `wrappers.py`, `base.py`, `transitions.py` + 10 legacy zoo modules (fa.py, eqprop/, backprop.py, hebbian.py, predictive_coding.py, mep.py, o1memory.py, spiking.py, target_prop.py, forward_only.py) |
 | **Pyright strict mode** | 4,315 errors (mostly `reportUnknownMemberType` in tests); suppress or fix incrementally |
+
+### P3 — Improvement Opportunities
 
 ### P3 — Improvement Opportunities
 | Item | Description |
@@ -191,16 +206,17 @@
 | `spiking.py` | 6,219 | **DEPRECATED** ✅ | TileAlgorithm.from_snn() |
 | `target_prop.py` | 5,665 | **DEPRECATED** ✅ | TileAlgorithm.from_tp() |
 | `forward_only.py` | 9,247 | **DEPRECATED** ✅ | TileAlgorithm + LocalGoodness |
-| `wrappers.py` | 11,277 | **DEPRECATE** | Composition pattern |
-| `base.py` | 15,631 | **DEPRECATE** | Protocol-based System |
-| `transitions.py` | 3,323 | **DEPRECATE** | TransitionGraphMixin → Geometry |
+| `wrappers.py` | 355 | **DEPRECATED** ✅ | Composition pattern (native TileAlgorithm) |
+| `base.py` | 420 | **DEPRECATED** ✅ | Protocol-based System (ontology System) |
+| `transitions.py` | 96 | **DEPRECATED** ✅ | Geometry protocol (transition_modules) |
 | `tile_models.py` | 16,029 | **KEEP** | Thin TileAlgorithm wrappers |
 | `tile_fa.py` | 5,425 | **KEEP** | Thin TileAlgorithm wrapper |
 | `tile_lm.py` | 13,550 | **KEEP** | Thin TileAlgorithm wrapper |
 | `deployments/` | ~8,000 | **UNIFIED** ✅ | Single deployment factory |
 
 **Total legacy to deprecate: ~200K lines** → **Target: <20K lines of native compositions**
-**Deprecated with warnings: 10 modules (~160K lines)**
+**Deprecated with warnings: 13 modules (10 legacy zoo + 3 support modules)**
+**Actual lines deprecated this session: ~871 lines (wrappers: 355, base: 420, transitions: 96)**
 
 ---
 
@@ -216,9 +232,12 @@
 - [x] Deployment modules unified into single factory (<1000 lines)
 - [x] ModelAdapter decomposed into 4 adapter modules
 - [x] Tile variants (7/7) complete with explicit ontology axes
-- [x] 10 legacy Zoo modules deprecated with migration warnings
+- [x] 13 legacy Zoo modules deprecated with migration warnings (10 zoo + 3 support)
 - [x] Registry supports axis-aware queries for AutoScientist (`query_axis`)
 - [x] Ontology internal deduplication complete (6 utility modules)
 - [x] TileAlgorithm Factory Registry complete (`@tile_algorithm` decorator + `from_config`)
 - [x] SystemTrainer config split into `protocol.py`, `config.py`, `spec.py`
 - [x] SettleProtocol MRO fix — 29 integration tests pass
+- [x] Zoo support modules deprecated: `wrappers.py`, `base.py`, `transitions.py`
+- [x] Test files migrated from TransitionGraphMixin to Geometry protocol
+- [x] Registry loading fixed for audit and test support

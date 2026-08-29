@@ -33,7 +33,7 @@ def _instantiate_model(model_cls, name: str):
 
     # Try with ModelConfig if available
     try:
-        from computronium.zoo.models.base import ModelConfig
+        from computronium.config.unified import ModelConfig
 
         config = ModelConfig(input_dim=32, hidden_dim=32, output_dim=10)
         return model_cls(config)

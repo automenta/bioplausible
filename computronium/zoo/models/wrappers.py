@@ -5,7 +5,25 @@ Generic wrappers that convert standard PyTorch modules into EqProp-compatible mo
 This allows using PyTorch primitives while supporting equilibrium propagation.
 
 Key insight: object recurrent model that satisfies L < 1 can be trained with EqProp.
+
+.. deprecated:: 1.0
+   The legacy wrapper models are deprecated. Use native compositions instead:
+   - ``TileAlgorithm.from_fa()`` for feedback alignment variants
+   - ``TileAlgorithm.from_hebbian()`` for hebbian variants
+   - ``TileAlgorithm.from_pc()`` for predictive coding variants
+   - ``TileAlgorithm.from_snn()`` for spiking variants
+   - ``TileAlgorithm.from_tp()`` for target propagation variants
+   - ``native_tile_ep``, ``native_tile_fa``, ``native_tile_tp``, ``native_tile_snn``, ``native_tile_hebbian``, ``native_tile_pc``, ``native_tile_gnn`` for tile-based models
 """
+
+import warnings
+
+warnings.warn(
+    "computronium.zoo.models.wrappers is deprecated. "
+    "Use native compositions: TileAlgorithm.from_*() or native_tile_* models instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import torch
 from torch import nn

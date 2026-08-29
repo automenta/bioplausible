@@ -316,10 +316,9 @@ def test_infer_metadata_regular_field():
 
 
 def test_runtime_checkable_transition_graph():
-    """All registered EqProp models pass isinstance(..., TransitionGraph)."""
+    """All registered EqProp models expose transition_modules()."""
     from computronium.config.unified import ModelConfig
     from computronium.zoo.models.eqprop._energy import EquilibriumMLP
-    from computronium.zoo.models.transitions import TransitionGraph
 
     # Test the consolidated EquilibriumMLP engine
     config = ModelConfig(
@@ -343,8 +342,9 @@ def test_runtime_checkable_transition_graph():
         },
     )
     model = EquilibriumMLP(config=config)
-    assert isinstance(model, TransitionGraph), (
-        f"{model.__class__.__name__} instance is not TransitionGraph"
+    # Check for transition_modules method (replaces TransitionGraph protocol)
+    assert hasattr(model, "transition_modules"), (
+        f"{model.__class__.__name__} has no transition_modules()"
     )
     modules = model.transition_modules()
     assert len(modules) > 0

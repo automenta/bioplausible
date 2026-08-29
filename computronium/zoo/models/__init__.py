@@ -6,6 +6,9 @@ All models registered with the unified registry system.
 
 from computronium.core.registry import LocalityLevel, Registry, register_model
 
+# Import native models to trigger registration
+from computronium.models import native as native_models  # noqa: F401
+
 from . import (
     backprop,
     deployments,
@@ -31,6 +34,7 @@ __all__: list[str] = [
     "fa",
     "forward_only",
     "hebbian",
+    "native_models",
     "predictive_coding",
     "register_model",
     "spiking",

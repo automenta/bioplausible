@@ -15,11 +15,10 @@ import torch
 from torch import nn
 
 from computronium.core.registry import ComponentCategory, Registry
-from computronium.zoo.models.transitions import TransitionGraphMixin
 
 
-class TinyMLP(TransitionGraphMixin, nn.Module):
-    """Tiny MLP for smoke testing with TransitionGraph support."""
+class TinyMLP(nn.Module):
+    """Tiny MLP for smoke testing."""
 
     def __init__(self):
         super().__init__()
@@ -34,6 +33,10 @@ class TinyMLP(TransitionGraphMixin, nn.Module):
 
     def forward(self, x):
         return self.net(x)
+
+    def transition_modules(self) -> list[nn.Module]:
+        """Return linear layers as transition modules."""
+        return [m for m in self.layers if isinstance(m, nn.Linear)]
 
 
 def get_dummy_data(batch_size=4):
@@ -97,9 +100,9 @@ class TestZooIntegration:
         models = Registry._components.get(ComponentCategory.MODEL, {})
         assert len(models) > 0
 
-    def test_optimizer_registry_available(self):
-        """Test that optimizer registry is available."""
-        optimizers = Registry._components.get(ComponentCategory.OPTIMIZER, {})
+    def test_param_update_registry_available(self):
+        """Test that param_update registry is available."""
+        optimizers = Registry._components.get(ComponentCategory.PARAM_UPDATE, {})
         assert len(optimizers) > 0
 
     def test_list_models(self):
@@ -109,10 +112,10 @@ class TestZooIntegration:
         models = list_models()
         assert len(models) > 0
 
-    def test_list_optimizers(self):
-        """Test listing optimizers."""
-        result = Registry.list(ComponentCategory.OPTIMIZER)
-        names = result.get("optimizer", [])
+    def test_list_param_updates(self):
+        """Test listing param updates."""
+        result = Registry.list(ComponentCategory.PARAM_UPDATE)
+        names = result.get("param_update", [])
         assert len(names) > 0
 
 

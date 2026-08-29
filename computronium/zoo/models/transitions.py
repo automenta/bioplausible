@@ -6,9 +6,24 @@ Propagators (EqProp, CHL, MEP) consume ``model.transition_modules()`` instead
 of doing their own (hardcoded, divergent) layer discovery.
 
 See ``REFACTOR3.md`` for the full design rationale.
+
+.. deprecated:: 1.0
+   The legacy TransitionGraph protocol is deprecated. Use the Geometry axis instead:
+   - ``computronium.ontology.geometry.Geometry`` protocol with ``transition_modules()``
+   - ``computronium.ontology.geometry.FeedforwardGeometry``, ``RecurrentGeometry``, ``TileGeometry``
+   - ``computronium.ontology.config.GeometryConfig`` for configuration
 """
 
 from __future__ import annotations
+
+import warnings
+
+warnings.warn(
+    "computronium.zoo.models.transitions is deprecated. "
+    "Use computronium.ontology.geometry.Geometry protocol instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 from typing import Protocol, runtime_checkable
 

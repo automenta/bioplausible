@@ -82,6 +82,7 @@ class AuditRow:
 
 def _load_registry() -> None:
     """Import the registration modules so every component is present."""
+    from computronium.zoo import models, optimizers, propagators, sparsity  # noqa: F401
 
 
 def _parity_status(name: str) -> str:

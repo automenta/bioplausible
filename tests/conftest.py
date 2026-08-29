@@ -29,7 +29,26 @@ import pytest
 import torch
 from torch import nn
 
-from computronium.zoo.models.transitions import TransitionGraphMixin
+
+def _transition_modules_autodiscover(model: nn.Module) -> list[nn.Module]:
+    """Auto-discover transition modules for models with standard structure.
+
+    Mirrors the deprecated TransitionGraphMixin logic for test fixtures.
+    """
+    # 1. Explicit ModuleList (most common)
+    layers = getattr(model, "layers", None)
+    if isinstance(layers, nn.ModuleList):
+        return list(layers)
+    # 2. Forward layers
+    forward_layers = getattr(model, "forward_layers", None)
+    if isinstance(forward_layers, nn.ModuleList):
+        return list(forward_layers)
+
+    raise NotImplementedError(
+        f"{type(model).__name__} has no transition_modules(). "
+        "Define `self.layers: nn.ModuleList[nn.Module]` or implement "
+        "transition_modules()."
+    )
 
 
 def lm_train_step(
@@ -70,7 +89,7 @@ def lm_train_step(
 # --- Shared Model Fixtures ---
 
 
-class SimpleMLP(TransitionGraphMixin, nn.Module):
+class SimpleMLP(nn.Module):
     """Minimal 2-layer MLP for eqprop tests."""
 
     def __init__(self, input_dim: int = 10, hidden_dim: int = 20, output_dim: int = 5):
@@ -88,6 +107,10 @@ class SimpleMLP(TransitionGraphMixin, nn.Module):
         for layer in self.layers:
             h = layer(h)
         return h
+
+    def transition_modules(self) -> list[nn.Module]:
+        """Return linear layers as transition modules for settling."""
+        return [m for m in self.layers if isinstance(m, nn.Linear)]
 
 
 @pytest.fixture
