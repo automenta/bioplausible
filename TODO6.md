@@ -307,9 +307,20 @@ class BenchmarkRunner:  # base class enforcing contract
 - **Phase 1.7**: Verified CI quality gates (ruff, pyright, pytest all pass)
 - **Publishing**: `uv pip install -e .[stability]` → `import computronium_stability` works ✅
 - **Phase 2.1**: Extracted state types to `computronium/state/` (CompositeState, SystemContext, StateRegistry, StateVariable, NullPlasticity, PlasticityConfig, PlasticityPrimitive, CoupledTransition)
-- **Phase 2.2**: Extracted ontology primitives to `computronium/ontology/` (all 5 axes: substrate, geometry, dynamics, credit, update + SystemConfig, System, ModelAdapter)
+- **Phase 2.2**: Extracted ontology primitives to `computtronium/ontology/` (all 5 axes: substrate, geometry, dynamics, credit, update + SystemConfig, System, ModelAdapter)
 - **Phase 2.3**: Created joint system facade at `computronium/core/joint/__init__.py` (exports composition API only)
 - **Phase 2.4**: Import sweep (~100 sites) automated via sed + libcst script; ResourceUsage moved to `computronium/resources.py` (neutral home)
+- **Cleanup**: Removed `computronium/core/stability/` (old location)
+- **Cleanup**: Removed `libraries/computronium_stability/`
+- **Fix**: Ported full `EnergyMinimizationDynamics` implementation to `computronium/ontology/dynamics.py` (with gradient checkpointing, momentum, Hopfield energy)
+- **Fix**: Added `LazyStateDynamics` to `computronium/ontology/dynamics.py`
+- **Fix**: Added `TernarySubstrate` export from `computronium.ontology`
+- **Fix**: Added `x`, `y`, `activations`, `free_state`, `nudged_state`, `loss`, `metrics` properties to `CompositeState` for backward compatibility with StateDynamics API
+- **Fix**: Updated test imports to use internal modules (`computronium.core.joint.state`, `computronium.core.joint.transition`) instead of facade
+- **Fix**: Fixed test assertions for energy descent (Hopfield energy can be negative)
+- All stability tests (55) pass
+- All joint property tests (130) pass
+- Standalone wheel tests (55) pass
 
 ### 🔧 FIXED FROM REVIEW (Pre-S1)
 - **Phase 0.0 rewritten**: Split into 0.0a (Reconcile), 0.0b (Pre-flight), 0.0c (Retest with correct paired protocol + co-primary metrics + power calc)
@@ -325,9 +336,9 @@ class BenchmarkRunner:  # base class enforcing contract
 - Action: Update §2.5 numbers/artifact path; log in `DECISIONS.md`
 
 ### 🔄 NEXT STEPS (Post-Phase 2)
-1. **Cleanup**: Remove `computronium/core/stability/` directory (old location)
-2. **Cleanup**: Remove `libraries/computronium_stability/` directory
-3. **Fix ModelAdapter tests**: Legacy model registration issues in test suite
+1. ~~**Cleanup**: Remove `computronium/core/stability/` directory (old location)~~ ✅ DONE
+2. ~~**Cleanup**: Remove `libraries/computronium_stability/` directory~~ ✅ DONE
+3. ~~**Fix ModelAdapter tests**: Legacy model registration issues in test suite~~ ✅ FIXED (imports updated, EnergyMinimizationDynamics ported)
 4. **Phase 3**: RESEARCH3 infrastructure (fairness, campaign, L2/𝒞, algorithm migration, export)
 5. **Phase 4**: Regime discovery, family-coverage benchmark, frontier certification
 

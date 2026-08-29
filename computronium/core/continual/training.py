@@ -246,7 +246,7 @@ def _continual_step(
     model._psi = psi
     loss_val = (
         total_loss.item() if isinstance(total_loss, Tensor) else float(total_loss)
-    )  # noqa: E501
+    )
     energy_val = (
         output.energy.item()
         if isinstance(output.energy, Tensor)

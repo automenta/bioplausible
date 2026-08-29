@@ -281,8 +281,8 @@ _LAZY: dict[str, tuple[str, str | None]] = {
 __all__ = [
     "AnalogSubstrate",
     "BackpropCredit",
-    "ComputroniumLinear",
     "CompositeState",
+    "ComputroniumLinear",
     "CoupledTransition",
     "CreditAssignmentConfig",
     "CreditRule",

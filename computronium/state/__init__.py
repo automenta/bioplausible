@@ -13,12 +13,12 @@ from computronium.state.transitions import (
 
 __all__ = [
     "CompositeState",
-    "SystemContext",
-    "StateRegistry",
-    "StateVariable",
+    "CoupledTransition",
     "NullPlasticity",
     "PlasticityConfig",
     "PlasticityPrimitive",
-    "CoupledTransition",
+    "StateRegistry",
+    "StateVariable",
+    "SystemContext",
     "TransitionFn",
 ]

@@ -7,13 +7,13 @@ import torch
 from computronium.core.joint import (
     CompositeState,
     CoupledTransition,
-    LegacyDynamicsAsCoupledTransition,
     NullPlasticity,
     PlasticityConfig,
     StateRegistry,
     StateVariable,
     SystemContext,
 )
+from computronium.core.joint.transition import LegacyDynamicsAsCoupledTransition
 from computronium.core.system_trainer import compose_system
 from computronium.ontology import (
     CreditAssignmentConfig,

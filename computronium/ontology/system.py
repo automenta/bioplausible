@@ -6,27 +6,30 @@ import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol, TypeVar, runtime_checkable
+from typing import Protocol, TypeVar, runtime_checkable
 
 import torch
 from torch import Tensor, nn
 
-from computronium.ontology.substrate import DigitalSubstrate, Substrate, SubstrateConfig
+from computronium.ontology.credit import (
+    CreditAssignment,
+    CreditAssignmentConfig,
+    GradientCredit,
+    Phase,
+)
+from computronium.ontology.dynamics import (
+    InstantaneousDynamics,
+    StateDynamics,
+    StateDynamicsConfig,
+)
 from computronium.ontology.geometry import FeedforwardGeometry, Geometry, GeometryConfig
-from computronium.ontology.dynamics import InstantaneousDynamics, StateDynamics, StateDynamicsConfig
-from computronium.ontology.credit import CreditAssignment, CreditAssignmentConfig, GradientCredit, Phase
-from computronium.ontology.update import EuclideanUpdate, ParameterUpdate, ParameterUpdateConfig
-
-if TYPE_CHECKING:
-    from computronium.core.registry import ComponentMetadata, ComputeProfile
-    from computronium.ontology.credit import (
-        CreditAssignmentConfig,
-        GradientCredit,
-    )
-    from computronium.state import (
-        PlasticityConfig,
-    )
-
+from computronium.ontology.substrate import DigitalSubstrate, Substrate, SubstrateConfig
+from computronium.ontology.update import (
+    EuclideanUpdate,
+    ParameterUpdate,
+    ParameterUpdateConfig,
+)
+from computronium.state import PlasticityConfig
 
 # ============================================================
 # Helper Functions

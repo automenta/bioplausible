@@ -187,5 +187,3 @@ TransitionFn = "CoupledTransition"
 
 
 # Import for TYPE_CHECKING (avoid circular)
-if TYPE_CHECKING:
-    pass

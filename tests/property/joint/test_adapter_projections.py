@@ -27,13 +27,14 @@ from computronium.core.dynamics.adapters import (
 )
 from computronium.core.joint import (
     CompositeState,
-    JointTrajectoryRecorder,
     NullPlasticity,
     PlasticityConfig,
     StateRegistry,
     StateVariable,
     SystemContext,
 )
+from computronium.core.joint.state import JointTrajectoryRecorder
+from computronium.core.joint.transition import LegacyDynamicsAsCoupledTransition
 from computronium.core.substrates.adapters import (
     DigitalToAnalogAdapter,
     DigitalToQuantumAdapter,
@@ -567,7 +568,6 @@ def test_null_plasticity_as_adapter():
 
 def test_joint_transition_with_null_plasticity():
     """Joint transition with NullPlasticity should match 5-D system."""
-    from computronium.core.joint import LegacyDynamicsAsCoupledTransition
 
     geometry = _create_base_geometry()
     substrate = DigitalSubstrate(SubstrateConfig.digital())

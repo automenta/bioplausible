@@ -498,5 +498,7 @@ class GradientCredit:
     ) -> list[Tensor]:
         # Simplified
         return []
+
+
 # Alias for backwards compatibility
 BackpropCredit = GradientCredit

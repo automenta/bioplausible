@@ -6,10 +6,10 @@ import torch
 
 from computronium.core.joint import (
     CompositeState,
-    JointTrajectoryRecorder,
     StateRegistry,
     StateVariable,
 )
+from computronium.core.joint.state import JointTrajectoryRecorder
 
 
 def test_composite_state_mutability():

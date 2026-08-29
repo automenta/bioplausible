@@ -29,8 +29,8 @@ from computronium.core.joint import (
     SystemContext,
     consolidate,
 )
+from computronium.core.joint.state import JointTrajectoryRecorder
 from computronium.core.substrates.adapters import DigitalToTernaryAdapter
-from computronium.core.substrates.ternary_substrate import TernarySubstrate
 from computronium.core.system_trainer import compose_system
 from computronium.ontology import (
     CreditAssignmentConfig,
@@ -44,6 +44,7 @@ from computronium.ontology import (
     SubstrateConfig,
     SystemConfig,
     SystemState,
+    TernarySubstrate,
     ThermodynamicContrast,
 )
 
@@ -650,7 +651,6 @@ def test_j6_dynamics_adapter_preserves_shape():
 
 def test_j7_trajectory_records_full_joint_state():
     """J7: JointTrajectory records activity, plastic, and substrate."""
-    from computronium.core.joint import JointTrajectoryRecorder
 
     recorder = JointTrajectoryRecorder(
         max_steps=10, record_plastic=True, record_substrate=True
@@ -690,7 +690,6 @@ def test_j7_trajectory_records_full_joint_state():
 
 def test_j7_trajectory_optional_components():
     """J7: Trajectory can optionally omit plastic/substrate recording."""
-    from computronium.core.joint import JointTrajectoryRecorder
 
     # Record only activity
     recorder = JointTrajectoryRecorder(

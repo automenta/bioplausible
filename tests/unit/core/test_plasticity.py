@@ -407,11 +407,7 @@ class TestPlasticityDeviceConsistency:
                 assert p.device.type == device_cuda.type
 
         # NullPlasticity has no internal state
-        elif isinstance(plasticity, NullPlasticity):
-            pass  # Nothing to check
-
-        # RoutingPlasticity has no internal persistent tensors
-        elif isinstance(plasticity, RoutingPlasticity):
+        elif isinstance(plasticity, NullPlasticity) or isinstance(plasticity, RoutingPlasticity):
             pass  # Nothing to check
 
 

@@ -34,6 +34,7 @@ from computronium.ontology.dynamics import (
     DiffusionDynamics,
     EnergyMinimizationDynamics,
     InstantaneousDynamics,
+    LazyStateDynamics,
     PredictiveSettlingDynamics,
     SpikeIntegrationDynamics,
     StateDynamics,
@@ -127,6 +128,7 @@ __all__ = [
     "SpikeIntegrationDynamics",
     "InstantaneousDynamics",
     "DiffusionDynamics",
+    "LazyStateDynamics",
     # CreditAssignment
     "CreditAssignmentConfig",
     "CreditAssignment",
@@ -151,10 +153,8 @@ __all__ = [
     "SystemConfig",
     "System",
     "SystemState",
-    "Phase",
     "FAMILY_TOLERANCES",
     "ModelAdapter",
-    "substrate_from_config",
     "_learnable_weight_names",
     "apply_pseudo_gradients",
     # State types (from computronium.state)

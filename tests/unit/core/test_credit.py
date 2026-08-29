@@ -5,8 +5,6 @@ These tests lock in the credit assignment audit checks to prevent regressions.
 
 from __future__ import annotations
 
-from typing import List
-
 import pytest
 import torch
 import torch.nn.functional as F
@@ -30,7 +28,7 @@ from computronium.ontology import (
 )
 
 
-def get_activations(geometry, substrate, x) -> List[Tensor]:
+def get_activations(geometry, substrate, x) -> list[Tensor]:
     """Get intermediate activations from geometry."""
     if hasattr(geometry, "forward_with_intermediates"):
         return geometry.forward_with_intermediates(x, substrate)
