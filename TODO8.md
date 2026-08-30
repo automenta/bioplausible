@@ -68,7 +68,7 @@ cls = Registry.get(ComponentCategory.MODEL, name)  # Returns empty registry
 
 ## 🟡 High Priority (Capability & Verification — Phase 1-2)
 
-### 9. Property Test Migrations (from TODO7.md Phase B)
+### 9. Property Test Updates to Native API (from TODO7.md Phase B)
 | Test File | Status | Required |
 |-----------|--------|----------|
 | `test_ontology_parity.py` | 30 passed, 1 skipped, 2 xfailed | ✅ Mostly done |
@@ -129,22 +129,22 @@ cls = Registry.get(ComponentCategory.MODEL, name)  # Returns empty registry
 These 8 files are permanently ignored. Audit each:
 | File | Reason Ignored | Action |
 |------|----------------|--------|
-| `test_hardware_aware.py` | Legacy imports | Migrate or delete |
+| `test_hardware_aware.py` | Legacy imports | Fix to native API or delete |
 | `test_benchmarks.py` (joint) | Not implemented | Implement or delete |
 | `test_diffusion_integration.py` | DiffusionDynamics gradient bug | Fix or skip |
-| `test_energy_invariants.py` | Legacy imports / should pass per TODO2 | Fix and re-enable |
-| `test_equitile_sparsity_robustness.py` | Legacy imports | Migrate |
+| `test_energy_invariants.py` | Legacy imports / should pass per TODO2 | Fix to native API and re-enable |
+| `test_equitile_sparsity_robustness.py` | Legacy imports | Fix to native API or delete |
 | `test_dht.py` | Environment issues | Fix infra or skip |
 | `test_grpc_seam.py` | gRPC infra issues | Fix infra or skip |
 | `test_grpc_seam_subprocess.py` | gRPC infra issues | Fix infra or skip |
 
-### 19. Remaining Zoo Modules — Final Deprecation/Archival
-**Kept as thin wrappers (per TODO7):**
+### 19. Remaining Zoo Modules — Delete/Archive
+**Delete (no deprecation warnings — zero users):**
 - `computronium/zoo/models/tile_models.py` — Thin TileAlgorithm wrappers
 - `computronium/zoo/models/tile_fa.py` — Thin TileAlgorithm wrapper  
 - `computronium/zoo/models/tile_lm.py` — Thin TileAlgorithm wrapper
 
-**Action:** Add deprecation warnings pointing to native API; archive to `archive/zoo/` if not needed.
+**Action:** Delete these 3 files. All functionality replaced by native Ontology API (`create_tile_mlp`, `native_tile_*`, `TileAlgorithm` factories). Move to `archive/zoo/` only if git history needed.
 
 ### 20. Campaign/Stability Infrastructure (from TODO6 Phase 3-4 / TODO4 PR-0..PR-9)
 - [ ] **DB schema freeze** + migrations for CampaignStore (alembic or custom)
@@ -238,7 +238,7 @@ Audit and remove:
 - [ ] Re-enable `test_energy_invariants.py` (should pass per TODO2)
 
 ### Phase 2: Property Test Completion (Week 2)
-- [ ] Complete `test_scaling_invariants.py` migration (resolve xfail/skip)
+- [ ] Complete `test_scaling_invariants.py` update to native API (resolve xfail/skip)
 - [ ] Restore settle protocol integration to 29+ passing
 - [ ] Improve `test_validation_all.py` skip documentation
 - [ ] Achieve 28/28 native model smoke tests passing
@@ -251,11 +251,11 @@ Audit and remove:
 - [ ] Verify EquilibriumFunction compatibility
 - [ ] Port quantization kernels
 
-### Phase 4: Geometry Decision & Defer (Week 3)
+### Phase 4: Geometry Decision & Zoo Cleanup (Week 3)
 - [ ] Document explicit decision to defer Conv/Graph/Attention geometry
 - [ ] Close P3 items with "Deferred" status
 - [ ] Update capability map in README
-- [ ] Archive remaining Zoo modules with deprecation warnings
+- [ ] **Delete remaining 3 Zoo wrapper files** (`tile_models.py`, `tile_fa.py`, `tile_lm.py`)
 
 ### Phase 5: Campaign & Research Infrastructure (Week 3-4)
 - [ ] DB schema freeze + migrations for CampaignStore
@@ -295,7 +295,7 @@ Audit and remove:
 | **Energy Invariants** | All 15 tests passing (re-enabled) |
 | **Coverage** | ≥25% |
 | **Pyright Errors** | ≤1000 |
-| **Ignored Test Files** | 0 (all migrated, fixed, or deleted with justification) |
+| **Ignored Test Files** | 0 (all fixed to native API, fixed, or deleted with justification) |
 | **CI Gate** | `ruff format --check` → `ruff check` → `pyright` → `pytest --cov` all pass |
 | **CLI Complete** | `biopl campaign`, `biopl benchmark`, `biopl stability`, `biopl joint-validate` all functional |
 | **Research Phases** | Phase 4 regime discovery run; Phase 5 coordinate locked + run; Phase 6 frontier + manifesto |
