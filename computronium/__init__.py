@@ -94,6 +94,9 @@ compatibility alias map to the model-side registration
 
 __version__ = "1.0.0"
 
+# Trigger native model registration
+from computronium.models.native import registration  # noqa: F401
+
 # Lazy imports for heavy dependencies (zoo, experiment, config, core components)
 # Name -> (submodule_path, attr_or_None). attr None returns the submodule itself.
 _LAZY: dict[str, tuple[str, str | None]] = {

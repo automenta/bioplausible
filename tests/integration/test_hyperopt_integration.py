@@ -22,10 +22,11 @@ class TestHyperoptIntegration(unittest.TestCase):
         vocab_size = 65
         names = Registry.list(ComponentCategory.MODEL).get("model", [])
         # LM-compatible names: filter by Domain.LM in metadata.
+        # Use "general" domain models which are general-purpose and can be used for LM tasks.
         lm_models = []
         for name in names:
             meta = Registry.get_metadata(ComponentCategory.MODEL, name)
-            if any(d.value == "lm" for d in meta.domains):
+            if meta.domain in ("lm", "general"):
                 lm_models.append(name)
 
         tested_count = 0
@@ -60,7 +61,7 @@ class TestHyperoptIntegration(unittest.TestCase):
         vision_models = []
         for name in names:
             meta = Registry.get_metadata(ComponentCategory.MODEL, name)
-            if any(d.value == "vision" for d in meta.domains):
+            if meta.domain in ("vision", "general"):
                 vision_models.append(name)
 
         tested_count = 0

@@ -312,6 +312,25 @@ class Registry:
             ComponentCategory.MODEL,
             "predictive_coding_hybrid",
         ),
+        # Legacy model name aliases to native models (Phase 0)
+        "backprop_mlp": (ComponentCategory.MODEL, "native_backprop_mlp"),
+        "eqprop_mlp": (ComponentCategory.MODEL, "native_eqprop_mlp"),
+        "fa_mlp": (ComponentCategory.MODEL, "native_fa_mlp"),
+        "pepita_mlp": (ComponentCategory.MODEL, "native_pepita_mlp"),
+        "tile_ep": (ComponentCategory.MODEL, "native_tile_ep"),
+        "tile_fa": (ComponentCategory.MODEL, "native_tile_fa"),
+        "tile_tp": (ComponentCategory.MODEL, "native_tile_tp"),
+        "tile_snn": (ComponentCategory.MODEL, "native_tile_snn"),
+        "tile_hebbian": (ComponentCategory.MODEL, "native_tile_hebbian"),
+        "tile_pc": (ComponentCategory.MODEL, "native_tile_pc"),
+        "tile_gnn": (ComponentCategory.MODEL, "native_tile_gnn"),
+        "diffusion_eqprop": (ComponentCategory.MODEL, "native_diffusion_eqprop"),
+        "momentum_eqprop": (ComponentCategory.MODEL, "native_momentum_eqprop"),
+        "sparse_eqprop": (ComponentCategory.MODEL, "native_sparse_eqprop"),
+        "ternary_eqprop": (ComponentCategory.MODEL, "native_ternary_eqprop"),
+        "holomorphic_ep": (ComponentCategory.MODEL, "native_holomorphic_ep"),
+        "directed_ep": (ComponentCategory.MODEL, "native_directed_ep"),
+        "finite_nudge_ep": (ComponentCategory.MODEL, "native_finite_nudge_ep"),
     }
 
     @staticmethod

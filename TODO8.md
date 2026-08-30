@@ -9,15 +9,18 @@
 
 ### P0 — Unblock Test Suite (Week 1) — **DO FIRST, NOTHING ELSE**
 
-| # | Task | Root Cause | Files to Touch |
-|---|------|------------|----------------|
-| 1 | **Registry auto-population** | 28 native models only register on explicit `import registration` | `computronium/models/native/__init__.py` — add `from . import registration` |
-| 2 | **KnowledgeBase constructor** | Tests pass `str`/`Path`; impl requires `KnowledgeBaseConfig` | `computronium/knowledge/kb.py` — accept `str | Path | KnowledgeBaseConfig` |
-| 3 | **Module boundary tests** | `SystemTrainer` eagerly imported in `__init__.py` | `computronium/__init__.py` — lazy load `SystemTrainer` |
-| 4 | **Re-run full suite** | Verify failures drop from registry/constructor cascade | `./run_all_tests.sh` |
-| 5 | **Triage remaining failures** | Separate real capability gaps from downstream effects | Update this doc with actual counts |
+| # | Task | Root Cause | Files to Touch | Status |
+|---|------|------------|----------------|--------|
+| 1 | **Registry auto-population** | 28 native models only register on explicit `import registration` | `computronium/__init__.py` — add `from computronium.models.native import registration` | ✅ Done (m0034) |
+| 2 | **KnowledgeBase constructor** | Tests pass `str`/`Path`; impl requires `KnowledgeBaseConfig` | `computronium/knowledge/kb.py` — accept `str | Path | KnowledgeBaseConfig` | ⏳ Pending |
+| 3 | **Module boundary tests** | `SystemTrainer` eagerly imported in `__init__.py` | `computronium/__init__.py` — lazy load `SystemTrainer` | ✅ Already lazy (via `_LAZY`) |
+| 4 | **Legacy model aliases** | Tests use old names (`backprop_mlp`, `eqprop_mlp`, etc.) | `computronium/core/registry.py` — add `_ALIASES` entries | ✅ Done (m0052) |
+| 5 | **PARAM_UPDATE registrations** | `adam`, `sgd`, etc. not registered for lightning | `computronium/zoo/optimizers/standard.py` — register standard optimizers | ⏳ Pending |
+| 6 | **Re-run full suite** | Verify failures drop from registry/constructor cascade | `./run_all_tests.sh` | ⏳ Pending |
+| 7 | **Triage remaining failures** | Separate real capability gaps from downstream effects | Update this doc with actual counts | ⏳ Pending |
 
 **Expected:** >1300 passing, <20 meaningful failures after P0.
+**Actual so far:** 2/9 hyperopt tests pass, 2/4 lightning tests pass after fixes 1, 4. Remaining: KnowledgeBase, PARAM_UPDATE, optuna bridge.
 
 ---
 
@@ -261,3 +264,16 @@ uv run pyright computronium/ontology
 - **EqProp competitive**: 81.32% MNIST anchored via 20-epoch run (grad_clip + checkpointing).
 - **ComputroniumLinear (CP-C)**: Drop-in `nn.Linear` wrapper complete, 26 tests.
 - **torch.jit → torch.export**: Migration complete in `deployment.py`.
+
+### P0 Progress Log (2025-08-30)
+- ✅ Registry auto-population: Added native registration import to `computronium/__init__.py:4`
+- ✅ Legacy model aliases: Added 20 entries to `Registry._ALIASES` mapping old names → `native_*` variants
+- ✅ Module boundary: `SystemTrainer` already lazy-loaded via `_LAZY` dict
+- ⏳ KnowledgeBase constructor: Needs `str | Path | KnowledgeBaseConfig` acceptance
+- ⏳ PARAM_UPDATE registrations: Standard optimizers (adam, sgd, adamw, rmsprop) missing from registry
+- ⏳ Optuna bridge: Likely same Registry empty issue; verify after PARAM_UPDATE fix
+
+### New Improvement Opportunities (Discovered)
+- **Registry alias pattern**: The `_ALIASES` mechanism works well for backward compatibility without deprecation paths — consider documenting as standard pattern
+- **PARAM_UPDATE category**: Currently empty; need to register standard optimizers from `computronium/zoo/optimizers/standard.py` 
+- **KnowledgeBase API**: Should accept both config object and path string for ergonomics
