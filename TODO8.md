@@ -1,6 +1,6 @@
 # TODO8.md — Comprehensive Test & Capability Parity Plan
 
-> **Scope:** Achieve a functioning, well-tested codebase leveraging the new Ontology (not Legacy "Zoo") API/architecture. Based on complete test run results from `run_all_tests.sh` (67 failed, 1387 passed, 97 skipped, 33 xfailed, 4 xpassed).
+> **Scope:** Achieve a functioning, well-tested codebase leveraging the new Ontology (not Legacy "Zoo") API/architecture. Based on complete test run results from `run_all_tests.sh` (67 failed, 1387 passed, 97 skipped, 33 xfailed, 4 xpassed) + comprehensive review of TODO6.md, TODO7.md, TODO.md sprint backlog.
 
 ---
 
@@ -13,10 +13,12 @@
 - **Lightning integration**: Uses `ComponentCategory.MODEL` which exists but registry is unpopulated
 - **Test coverage**: ~16.8% (meets ≥15% floor), but many integration tests failing due to missing registrations
 - **Geometry gaps**: No `ConvGeometry`, `GraphGeometry`, `AttentionGeometry` — Conv/Graph/Attention EqProp gone
+- **Joint architecture (6-D)**: Implemented through Sprint J6 — stability, plasticity, campaigns, benchmarks, CLI all functional
+- **Legacy Zoo**: ~200K lines removed (13 modules). 3 kept as thin wrappers (`tile_models.py`, `tile_fa.py`, `tile_lm.py`)
 
 ---
 
-## 🔴 Critical Failures (Blocking)
+## 🔴 Critical Failures (Blocking — Phase 0)
 
 ### 1. Registry Auto-Population Failure
 **Impact:** 28 native models registered only on explicit import of `registration.py`. Tests fail because registry is empty.
@@ -60,16 +62,16 @@ cls = Registry.get(ComponentCategory.MODEL, name)  # Returns empty registry
 
 ---
 
-## 🟡 High Priority (Capability & Verification)
+## 🟡 High Priority (Capability & Verification — Phase 1-2)
 
 ### 9. Property Test Migrations (from TODO7.md Phase B)
 | Test File | Status | Required |
 |-----------|--------|----------|
 | `test_ontology_parity.py` | 30 passed, 1 skipped, 2 xfailed | ✅ Mostly done |
 | `test_biology_axioms.py` | 7/9 passing | ✅ Mostly done |
-| `test_scaling_invariants.py` | 5 passed, 3 skipped, 3 xfailed | Migrate remaining |
+| `test_scaling_invariants.py` | 5 passed, 3 skipped, 3 xfailed | Migrate remaining xfail/skip |
 | `test_settle_protocol.py` | 6 passed | ✅ Done |
-| `test_validation_all.py` | 2 passed, 14 skipped | Document skips better |
+| `test_validation_all.py` | 2 passed, 14 skipped | Document skips better; fix underlying issues |
 
 ### 10. Native Model Smoke Tests
 **Current:** `test_native_smoke.py` — 20 passed, 4 skipped, 4 xfailed
@@ -79,11 +81,17 @@ cls = Registry.get(ComponentCategory.MODEL, name)  # Returns empty registry
 **Current:** 21 passing (was 18, restored from 29)
 **Target:** Full 29+ passing with TileAlgorithm convergence fixes.
 
+### 12. Joint Architecture Test Coverage (from TODO.md Sprint J6)
+- [ ] Property tests: 351 passing (already ✅ per TODO.md)
+- [ ] Integration tests: `tests/integration/joint/test_benchmarks.py` — currently IGNORED in `run_all_tests.sh`
+- [ ] Joint validation CLI: `biopl joint-validate` — verify all 6-D coordinate combos
+- [ ] Stability metrics: `tests/property/joint/test_stability_metrics.py` — 33 tests passing ✅
+
 ---
 
-## 🟠 Medium Priority (Architecture & Performance)
+## 🟠 Medium Priority (Architecture & Performance — Phase 2-3)
 
-### 12. Legacy Kernel Porting to Substrate Operator API (P2b)
+### 13. Legacy Kernel Porting to Substrate Operator API (P2b from TODO7)
 | Kernel Type | Status | Target |
 |-------------|--------|--------|
 | Triton kernels (eqprop, FA, etc.) | **PENDING** | Port to `Substrate.get_forward_operator()` |
@@ -91,7 +99,7 @@ cls = Registry.get(ComponentCategory.MODEL, name)  # Returns empty registry
 | Custom backward (EquilibriumFunction) | **PENDING** | Verify compatibility with native System |
 | Sparse/Ternary quantization | **PENDING** | Port to `Substrate.quantize_weights()` |
 
-### 13. Geometry Build-Out Decision (P3 — Explicit Decision Required)
+### 14. Geometry Build-Out Decision (P3 — Explicit Decision Required)
 | Geometry | Need For | Effort | Decision |
 |----------|----------|--------|----------|
 | `ConvGeometry` | Vision (ConvEqProp, ConvTileNet) | Medium | **Defer** unless science needs |
@@ -101,11 +109,11 @@ cls = Registry.get(ComponentCategory.MODEL, name)  # Returns empty registry
 
 **Recommendation:** Defer all. Phase 5/6 science runs on Feedforward/Recurrent/Tile at MLP scale.
 
-### 14. Pyright Strict Mode
+### 15. Pyright Strict Mode
 **Current:** ~4315 errors
 **Target:** ≤1000 (deprioritized behind functional work)
 
-### 15. Ignored Test Files in `run_all_tests.sh`
+### 16. Ignored Test Files in `run_all_tests.sh` — Audit & Resolve
 These 8 files are permanently ignored. Audit each:
 | File | Reason Ignored | Action |
 |------|----------------|--------|
@@ -118,35 +126,66 @@ These 8 files are permanently ignored. Audit each:
 | `test_grpc_seam.py` | gRPC infra issues | Fix infra or skip |
 | `test_grpc_seam_subprocess.py` | gRPC infra issues | Fix infra or skip |
 
+### 17. Remaining Zoo Modules — Final Deprecation/Archival
+**Kept as thin wrappers (per TODO7):**
+- `computronium/zoo/models/tile_models.py` — Thin TileAlgorithm wrappers
+- `computronium/zoo/models/tile_fa.py` — Thin TileAlgorithm wrapper  
+- `computronium/zoo/models/tile_lm.py` — Thin TileAlgorithm wrapper
+
+**Action:** Add deprecation warnings pointing to native API; archive to `archive/zoo/` if not needed.
+
+### 18. Campaign/Stability Infrastructure (from TODO6 Phase 3-4)
+- [ ] **DB schema freeze** + migrations for CampaignStore (alembic or custom)
+- [ ] **ProposalObjective** enum: extend with `STABILITY`, `ENERGY`, `LATENCY`, `PLASTICITY_CAPACITY`
+- [ ] **Replication gate:** auto-verify ≥5 seeds + ≥2 task families before promoting discovery
+- [ ] **Counterfactual attribution:** integrate `analysis/counterfactual.py` into evaluation
+- [ ] **Deliverable:** `CampaignStack.run_campaign(coordinate, objective, max_wall_hours)`
+- [ ] **Effective-FLOPs → 𝒞 Vector**: Already implemented in `ResourceUsage` — verify wiring complete
+- [ ] **Algorithm Migration benchmark**: Promoted to `computronium/benchmarks/algorithm_migration.py` — add CI smoke test
+
 ---
 
-## 🟢 Lower Priority (Polish & Completeness)
+## 🟢 Lower Priority (Polish & Completeness — Phase 4+)
 
-### 16. Coverage Improvements
+### 19. Coverage Improvements
 - Target: ≥25% (currently ~16.8%)
-- Focus: Ontology primitives, SystemTrainer, JointSystemTrainer, Registry
+- Focus: Ontology primitives, SystemTrainer, JointSystemTrainer, Registry, Plasticity, Campaign, Stability, Export, Inference
 
-### 17. Slow Test Optimization
+### 20. Slow Test Optimization
 Identify tests >10s and optimize without sacrificing coverage:
 - Hypothesis property tests with large example counts
 - Integration tests with full training loops
-- Consider `@pytest.mark.slow` separation
+- Consider `@pytest.mark.slow` separation (already used in benchmark tests)
 
-### 18. Redundant/Outdated Tests
+### 21. Redundant/Outdated Tests
 Audit and remove:
 - Legacy zoo model tests (already mostly removed)
 - Duplicate parity tests
 - Tests for removed capabilities (Conv EqProp, Graph EqProp, Transformer EqProp)
 
-### 19. Untested Functionality
-Add coverage for:
-- JointSystemTrainer (6-D joint training loop)
-- Plasticity primitives (Routing, FastWeight, RuleState, SubstrateCoupled)
-- AutoScientist campaign execution
-- P2P distributed training
-- Model export (ONNX, TorchScript, INT8, Ternary)
-- Inference server (FastAPI, TensorRT)
-- Stability monitoring (spectral radius, Lyapunov, basin stability)
+### 22. Untested Functionality — Add Coverage
+| Area | Missing Coverage |
+|------|-----------------|
+| JointSystemTrainer | 6-D joint training loop |
+| Plasticity primitives | Routing, FastWeight, RuleState, SubstrateCoupled |
+| AutoScientist | Campaign execution, proposal generation, KB integration |
+| P2P distributed training | gRPC worker, Kademlia DHT, fault tolerance |
+| Model export | ONNX, TorchScript (PT2), INT8, Ternary |
+| Inference server | FastAPI, TensorRT, dynamic batching |
+| Stability monitoring | Spectral radius, Lyapunov, basin stability |
+| Frontier analysis | Pareto computation, knee detection |
+
+### 23. CLI Completeness (from TODO.md Sprint J4/J6)
+- [ ] `biopl campaign run --space joint_smoke --objective adaptation_efficiency` — verify end-to-end
+- [ ] `biopl benchmark run --suite z3_fixed_weights` — verify Z3 runs
+- [ ] `biopl stability report` — verify frontier reports
+- [ ] `biopl joint-validate` — verify arbitrary coordinate validation
+
+### 24. Research Program Items (from README & TODO6)
+- [ ] **Phase 4 Regime Discovery**: Bandit Router (generalize RoutingPlasticity to route learning rules)
+- [ ] **Phase 5 Family-Coverage Benchmark**: Lock ≥30 coordinates by rule-family coverage
+- [ ] **Phase 6 Frontier Certification**: M-Axis sweep at flagship coordinate with AutoScientist
+- [ ] **Goldilocks Map**: ρ(J_F) × 𝒞 scatter with guard boundary overlay
 
 ---
 
@@ -164,13 +203,14 @@ Add coverage for:
 - [ ] Fix continual learning test
 - [ ] Fix ModelAdapter tests
 - [ ] Fix refactor tests
-- [ ] Audit and migrate/remove 8 ignored test files
+- [ ] Audit and migrate/remove 8 ignored test files in `run_all_tests.sh`
 
 ### Phase 2: Property Test Completion (Week 2)
-- [ ] Complete `test_scaling_invariants.py` migration
+- [ ] Complete `test_scaling_invariants.py` migration (resolve xfail/skip)
 - [ ] Restore settle protocol integration to 29+ passing
 - [ ] Improve `test_validation_all.py` skip documentation
 - [ ] Achieve 28/28 native model smoke tests passing
+- [ ] Enable `tests/integration/joint/test_benchmarks.py` in test suite
 
 ### Phase 3: Kernel Porting (Week 2-3)
 - [ ] Port Triton kernels to Substrate operator API
@@ -182,16 +222,24 @@ Add coverage for:
 - [ ] Document explicit decision to defer Conv/Graph/Attention geometry
 - [ ] Close P3 items with "Deferred" status
 - [ ] Update capability map in README
+- [ ] Archive remaining Zoo modules with deprecation warnings
 
-### Phase 5: Coverage & Polish (Week 3-4)
-- [ ] Add missing test coverage for JointSystemTrainer, Plasticity, AutoScientist, P2P, Export, Inference, Stability
+### Phase 5: Campaign & Research Infrastructure (Week 3-4)
+- [ ] DB schema freeze + migrations for CampaignStore
+- [ ] Extend ProposalObjective enum
+- [ ] Implement replication gate
+- [ ] Integrate counterfactual attribution
+- [ ] Complete CampaignStack.run_campaign()
+
+### Phase 6: Coverage & Polish (Week 4)
+- [ ] Add missing test coverage for all untested functionality (item 22)
 - [ ] Optimize slow tests
 - [ ] Remove redundant tests
 - [ ] Push coverage to ≥25%
 
-### Phase 6: Pyright & CI (Week 4)
+### Phase 7: Pyright & CI (Week 4-5)
 - [ ] Reduce pyright errors to ≤1000
-- [ ] Ensure `ruff format --check`, `ruff check`, `pyright`, `pytest --cov` all pass in CI
+- [ ] Ensure `ruff format --check` → `ruff check` → `pyright` → `pytest --cov` all pass in CI
 - [ ] Update `run_all_tests.sh` to remove unnecessary ignores
 
 ---
@@ -203,12 +251,14 @@ Add coverage for:
 | **Test Pass Rate** | ≥95% (excluding known xfail/skip with documented reasons) |
 | **Critical Failures** | 0 (Registry, KnowledgeBase, Lightning, Hyperopt, Smoke tasks) |
 | **Native Model Coverage** | 28/28 smoke tests passing |
-| **Property Locks** | All 32 ontology locks passing |
+| **Property Locks** | All 32 ontology locks passing + 33 joint stability tests |
 | **Settle Protocol** | ≥29 integration tests passing |
+| **Joint Benchmarks** | All 5 suites runnable via `biopl benchmark` |
 | **Coverage** | ≥25% |
 | **Pyright Errors** | ≤1000 |
 | **Ignored Test Files** | 0 (all migrated, fixed, or deleted with justification) |
 | **CI Gate** | `ruff format --check` → `ruff check` → `pyright` → `pytest --cov` all pass |
+| **CLI Complete** | `biopl campaign`, `biopl benchmark`, `biopl stability`, `biopl joint-validate` all functional |
 
 ---
 
@@ -220,15 +270,20 @@ Add coverage for:
 4. **`comp joint-validate --coordinate ...`** validates arbitrary 6-D coordinates
 5. All 13 factory functions (`create_*_mlp`) work with `SystemTrainer`
 6. Registry queries (`Registry.query_axis(...)`) return native models
+7. Campaign persistence: resume after interruption (SQLite + YAML checkpoints)
+8. Pareto frontier computed over loss, resources, stability metrics
 
 ---
 
 ## 📝 Notes & Context
 
-- **TODO7.md** modularization DoD is ✅ COMPLETE — this plan focuses on verification & capability parity
-- **Legacy Zoo**: ~200K lines removed (13 modules). 3 modules kept (`tile_models.py`, `tile_fa.py`, `tile_lm.py`) as thin wrappers
+- **TODO6.md**: Modularization Phases 0-3 ✅ COMPLETE (stability library, state types, ontology extraction, joint facade, RESEARCH3 infrastructure)
+- **TODO7.md**: Post-cleanup roadmap — Capability-parity migration ~75% done; Verification/Parity DoD is the truth
+- **TODO.md**: Joint Architecture Sprints J0-J6 ✅ COMPLETE through J6 hardening
+- **Legacy Zoo**: ~200K lines removed (13 modules). 3 modules kept as thin wrappers.
 - **Native Models**: 28 registered with explicit 5-D ontology axes. Accessible via `Registry.get()` once registration module loads
 - **Zero-Extension Invariant**: `M=NullPlasticity` slice formally verified (J1 test)
+- **Joint Architecture**: 6-D system `S ⊗ G ⊗ D ⊗ M ⊗ C ⊗ U` fully implemented through Sprint J6
 - **Science vs Product**: Geometry build-out is a **fork** — defer unless Phase 5/6 science demands it
 
 ---
@@ -249,6 +304,18 @@ uv run pytest tests/property/test_native_smoke.py -v
 # Integration verification
 uv run pytest tests/integration/test_validation_all.py -v
 uv run pytest tests/integration/test_settle_protocol_models.py -v
+uv run pytest tests/integration/joint/test_benchmarks.py -v
+
+# Joint architecture
+uv run pytest tests/property/joint/test_lifecycle_locks.py -q
+uv run pytest tests/property/joint/test_stability_metrics.py -q
+
+# CLI verification
+comp joint-validate --coordinate digital/recurrent/energy_min/null/thermo/euclidean
+comp joint-validate --coordinate digital/recurrent/energy_min/routing/thermo/euclidean
+comp benchmark run --suite adaptation_efficiency
+comp benchmark run --suite z3_fixed_weights
+comp stability report --run-id <run_id>
 
 # Type checking
 uv run pyright .
