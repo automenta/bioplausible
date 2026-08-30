@@ -50,7 +50,9 @@ def test_tile_algorithm_adopts_settle_protocol():
     assert isinstance(model, SettleProtocol)
 
 
-@pytest.mark.xfail(reason="TileAlgorithm EP convergence needs tuning - threshold not triggering")
+@pytest.mark.xfail(
+    reason="TileAlgorithm EP convergence needs tuning - threshold not triggering"
+)
 def test_loose_threshold_terminates_before_max_steps_and_converges():
     """A convergence_threshold=1e-2 model terminates in < max_steps, converged."""
     model = _make(threshold=1e-2, start=2, max_steps=20)
@@ -61,7 +63,9 @@ def test_loose_threshold_terminates_before_max_steps_and_converges():
     assert out.shape == (4, model.config.output_dim)
 
 
-@pytest.mark.xfail(reason="TileAlgorithm EP convergence needs tuning - threshold not triggering")
+@pytest.mark.xfail(
+    reason="TileAlgorithm EP convergence needs tuning - threshold not triggering"
+)
 def test_forward_exposes_steps_and_convergence_probe_metrics():
     """forward() records steps_taken/converged for the probe driver."""
     model = _make(threshold=1e-2, start=2, max_steps=20)
@@ -82,7 +86,9 @@ def test_forward_trajectory_path_still_works():
     assert len(trajectory) <= model.max_steps + 1
 
 
-@pytest.mark.xfail(reason="TileAlgorithm EP convergence needs tuning - threshold not triggering")
+@pytest.mark.xfail(
+    reason="TileAlgorithm EP convergence needs tuning - threshold not triggering"
+)
 @given(
     threshold=st.floats(min_value=1e-2, max_value=1e-1, allow_nan=False),
     max_steps=st.integers(min_value=5, max_value=30),

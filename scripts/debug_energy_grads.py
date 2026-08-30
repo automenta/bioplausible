@@ -57,7 +57,7 @@ def debug_energy_grads(steps: int = 10, lr: float = 0.01, beta: float = 2.0):
     # Compute energy
     energy = model.dynamics.compute_energy(
         type("State", (), {"free_state": acts, "activations": acts, "x": x})(),
-        model.geometry
+        model.geometry,
     )
     print(f"  Energy: {energy.item():.6f}")
 

@@ -81,16 +81,22 @@ def track_20_transfer_learning(verifier) -> TrackResult:
 
     # Copy input layer - handle spectral norm parametrization
     if hasattr(model.geometry._layers[0], "parametrizations"):
-        model_B.geometry._layers[0].parametrizations.weight.original.data = model.geometry._layers[
+        model_B.geometry._layers[
+            0
+        ].parametrizations.weight.original.data = model.geometry._layers[
             0
         ].parametrizations.weight.original.data.clone()
     else:
-        model_B.geometry._layers[0].weight.data = model.geometry._layers[0].weight.data.clone()
+        model_B.geometry._layers[0].weight.data = model.geometry._layers[
+            0
+        ].weight.data.clone()
     model_B.geometry._layers[0].bias.data = model.geometry._layers[0].bias.data.clone()
 
     # Copy recurrent layer (W_rec)
     if model.geometry._recurrent_weight is not None:
-        model_B.geometry._recurrent_weight.data = model.geometry._recurrent_weight.data.clone()
+        model_B.geometry._recurrent_weight.data = (
+            model.geometry._recurrent_weight.data.clone()
+        )
     # Readout (layers.1) is random (scratch)
 
     # Baseline: Train from scratch on B (same amount of data)

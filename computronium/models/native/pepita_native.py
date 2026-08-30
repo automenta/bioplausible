@@ -17,6 +17,7 @@ from computronium.ontology import (
     LocalGoodnessCredit,
     ParameterUpdateConfig,
     StateDynamicsConfig,
+    SubstrateConfig,
     System,
 )
 
@@ -27,6 +28,7 @@ def create_native_pepita_mlp(
     output_dim: int,
     num_layers: int = 2,
     lr: float = 0.01,
+    device: str = "cpu",
     **kwargs,
 ) -> System:
     """Create a PEPITA system using native 5-D composition.
@@ -40,6 +42,7 @@ def create_native_pepita_mlp(
         output_dim: Output dimension
         num_layers: Number of hidden layers
         lr: Learning rate
+        device: Target device
         **kwargs: Additional arguments (ignored, for compatibility)
 
     Returns:
@@ -47,7 +50,7 @@ def create_native_pepita_mlp(
         + LocalGoodnessCredit + EuclideanUpdate
     """
     # Build hidden dims list
-    hidden_dims = tuple([hidden_dim] * max(num_layers - 1, 1))
+    hidden_dims = tuple([hidden_dim] * num_layers)
 
     geometry_cfg = GeometryConfig(
         input_dim=input_dim,
@@ -59,7 +62,7 @@ def create_native_pepita_mlp(
         recurrent_weight=None,
     )
 
-    substrate = DigitalSubstrate()
+    substrate = DigitalSubstrate(SubstrateConfig.digital(device=device))
     geometry = FeedforwardGeometry(geometry_cfg)
     dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     credit = LocalGoodnessCredit(

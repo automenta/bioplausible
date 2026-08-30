@@ -12,7 +12,9 @@ from computronium.core.utils.device import get_device
 from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 from computronium.models.native.sparse_eqprop_native import create_native_sparse_eqprop
-from computronium.models.native.ternary_eqprop_native import create_native_ternary_eqprop
+from computronium.models.native.ternary_eqprop_native import (
+    create_native_ternary_eqprop,
+)
 
 from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
 from ._base import build_track_result, track_header
@@ -153,15 +155,17 @@ def track_17_analog_photonics(verifier) -> TrackResult:
         EuclideanUpdate,
         ParameterUpdateConfig,
     )
-    
-    substrate = DigitalSubstrate(SubstrateConfig(
-        device="cpu",
-        precision="float32",
-        noise_level=noise_level,
-        weight_bounds=None,
-        sparsity=0.0,
-    ))
-    
+
+    substrate = DigitalSubstrate(
+        SubstrateConfig(
+            device="cpu",
+            precision="float32",
+            noise_level=noise_level,
+            weight_bounds=None,
+            sparsity=0.0,
+        )
+    )
+
     geometry_cfg = GeometryConfig.recurrent(
         input_dim=input_dim,
         output_dim=output_dim,
@@ -184,10 +188,12 @@ def track_17_analog_photonics(verifier) -> TrackResult:
             step_size=0.01,
         )
     )
-    
+
     model = compose_system(substrate, geometry, dynamics, credit, update)
 
-    train_model(model, X, y, epochs=verifier.epochs, lr=0.01, name=f"Noise={noise_level}")
+    train_model(
+        model, X, y, epochs=verifier.epochs, lr=0.01, name=f"Noise={noise_level}"
+    )
     acc = evaluate_accuracy(model, X, y)
 
     logger.info("  Final Accuracy: %.1f%%", acc * 100)
@@ -233,8 +239,13 @@ def track_18_thermodynamic_dna(verifier) -> TrackResult:
     X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
 
     model = create_native_eqprop_mlp(
-        input_dim, hidden_dim, output_dim, use_spectral_norm=True,
-        beta=0.5, settle_steps=30, lr=0.01
+        input_dim,
+        hidden_dim,
+        output_dim,
+        use_spectral_norm=True,
+        beta=0.5,
+        settle_steps=30,
+        lr=0.01,
     )
     optimizer = create_optimizer(
         model, OptimizerConfig(name="sgd", lr=0.01, weight_decay=0.0)

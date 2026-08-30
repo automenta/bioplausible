@@ -42,18 +42,16 @@ _memory_partial_ratio = 2.0
 
 def track_5_neural_cube(verifier) -> TrackResult:
     """Track 5 (README): 3D Neural Cube with local connectivity.
-    
+
     Note: NeuralCube was a legacy zoo model removed in cleanup.
     The 3D lattice topology capability is DEFERRED per TODO7.md decision.
     If needed, requires new Geometry axis: "ConvGeometry" or "SpatialGeometry".
     """
     start = track_header(5, "Neural Cube 3D Topology [DEFERRED]")
-    
+
     # This track is marked as skipped since NeuralCube capability
     # was removed and the geometry axis build-out is explicitly deferred
-    logger.info(
-        "\n[5] Neural Cube 3D Topology - DEFERRED (removed legacy model)"
-    )
+    logger.info("\n[5] Neural Cube 3D Topology - DEFERRED (removed legacy model)")
     logger.info("    3D lattice topology requires new Geometry axis build-out.")
     logger.info("    See TODO7.md Phase C for details.")
 
@@ -399,18 +397,18 @@ def track_11_deep_network(verifier) -> TrackResult:
 
 def track_12_lazy_updates(verifier) -> TrackResult:
     """Scaling: Lazy/Event-driven updates for FLOP savings.
-    
+
     Note: LazyEqProp was a legacy model removed in cleanup.
     The lazy/event-driven update capability would need to be re-implemented
     as a native Dynamics or Update axis variant.
     """
     start = track_header(12, "Lazy Event-Driven Updates [DEFERRED]")
-    
+
+    logger.info("\n[12] LazyEqProp was a legacy model removed during cleanup.")
     logger.info(
-        "\n[12] LazyEqProp was a legacy model removed during cleanup."
+        "    Event-driven updates need re-implementation as native axis variant."
     )
-    logger.info("    Event-driven updates need re-implementation as native axis variant.")
-    
+
     # Mark as skipped since this capability was removed
     score = 100  # Deferred intentionally
     status = "pass"
@@ -438,7 +436,10 @@ Dynamics or Update axis variant. Currently not a priority for the science roadma
         name="Lazy Event-Driven Updates [DEFERRED]",
         status=status,
         score=score,
-        metrics={"deferred": True, "reason": "Legacy model removed; needs native axis variant"},
+        metrics={
+            "deferred": True,
+            "reason": "Legacy model removed; needs native axis variant",
+        },
         evidence=evidence,
         start=start,
         improvements=improvements,

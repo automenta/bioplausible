@@ -26,7 +26,9 @@ from computronium import (
 from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
 from computronium.domains.factory import create_task
 from computronium.models.native.backprop_native import create_native_backprop_mlp
-from computronium.models.native.diffusion_eqprop_native import create_native_diffusion_eqprop
+from computronium.models.native.diffusion_eqprop_native import (
+    create_native_diffusion_eqprop,
+)
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 from computronium.models.native.fa_native import (
     create_native_fa_mlp,
@@ -41,7 +43,9 @@ from computronium.models.native.fa_native import (
     create_native_fa_layerwise_equilibrium,
     create_native_fa_deep_dfa,
 )
-from computronium.models.native.momentum_eqprop_native import create_native_momentum_eqprop
+from computronium.models.native.momentum_eqprop_native import (
+    create_native_momentum_eqprop,
+)
 from computronium.models.native.pepita_native import create_native_pepita_mlp
 from computronium.models.native.research_native import (
     create_native_directed_ep,
@@ -49,7 +53,9 @@ from computronium.models.native.research_native import (
     create_native_holomorphic_ep,
 )
 from computronium.models.native.sparse_eqprop_native import create_native_sparse_eqprop
-from computronium.models.native.ternary_eqprop_native import create_native_ternary_eqprop
+from computronium.models.native.ternary_eqprop_native import (
+    create_native_ternary_eqprop,
+)
 from computronium.models.native.tile_native import (
     create_native_tile_ep,
     create_native_tile_fa,
@@ -417,7 +423,15 @@ class TestSubstrateVariants:
 
     @pytest.mark.parametrize(
         "substrate_type",
-        ["digital", "analog", "neuromorphic", "optical", "quantum", "sparse", "ternary"],
+        [
+            "digital",
+            "analog",
+            "neuromorphic",
+            "optical",
+            "quantum",
+            "sparse",
+            "ternary",
+        ],
     )
     def test_substrate_composition(self, substrate_type):
         """Each substrate should compose and run forward pass."""
@@ -572,9 +586,7 @@ class TestHebbianParity:
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
         hidden_dim = 128
 
-        system = create_native_tile_hebbian(
-            input_dim, hidden_dim, output_dim, lr=0.001
-        )
+        system = create_native_tile_hebbian(input_dim, hidden_dim, output_dim, lr=0.001)
 
         acc = train_system(system, train_loader, val_loader, epochs, device)
         assert acc >= 0.0, f"Tile Hebbian accuracy: {acc:.1f}%"
@@ -594,9 +606,7 @@ class TestSNNParity:
         device = "cuda" if torch.cuda.is_available() else "cpu"
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
 
-        system = create_snn_mlp(
-            input_dim, (128,), output_dim, lr=0.001, device=device
-        )
+        system = create_snn_mlp(input_dim, (128,), output_dim, lr=0.001, device=device)
 
         acc = train_system(system, train_loader, val_loader, epochs, device)
 
@@ -604,16 +614,16 @@ class TestSNNParity:
         assert acc >= 0.0, f"SNN accuracy: {acc:.1f}%"
 
     @pytest.mark.parametrize("epochs", [2])
-    @pytest.mark.xfail(reason="SpikeIntegrationDynamics has tensor size mismatch with TileGeometry")
+    @pytest.mark.xfail(
+        reason="SpikeIntegrationDynamics has tensor size mismatch with TileGeometry"
+    )
     def test_native_tile_snn_composes_and_trains(self, epochs):
         """native_tile_snn should compose and train."""
         device = "cuda" if torch.cuda.is_available() else "cpu"
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
         hidden_dim = 128
 
-        system = create_native_tile_snn(
-            input_dim, hidden_dim, output_dim, lr=0.001
-        )
+        system = create_native_tile_snn(input_dim, hidden_dim, output_dim, lr=0.001)
 
         acc = train_system(system, train_loader, val_loader, epochs, device)
         assert acc >= 0.0, f"Tile SNN accuracy: {acc:.1f}%"
@@ -686,7 +696,9 @@ class TestTileParity:
 
         # Variants with known device/dynamics issues - skip for now
         # These are tracked as native model implementation issues
-        pytest.skip("native_tile_ep, native_tile_pc, native_tile_gnn, native_tile_snn have device/dynamics issues")
+        pytest.skip(
+            "native_tile_ep, native_tile_pc, native_tile_gnn, native_tile_snn have device/dynamics issues"
+        )
 
 
 class TestResearchModelsParity:

@@ -43,7 +43,9 @@ def debug_target_prop(steps: int = 10, lr: float = 0.001, target_lr: float = 0.1
             with torch.no_grad():
                 acts = model.geometry.forward_with_intermediates(x, model.substrate)
                 for i, act in enumerate(acts):
-                    print(f"  Layer {i}: shape={tuple(act.shape)}, norm={act.norm().item():.4f}")
+                    print(
+                        f"  Layer {i}: shape={tuple(act.shape)}, norm={act.norm().item():.4f}"
+                    )
 
     print("\n=== Summary ===")
     print("Activations should propagate through all tile layers")

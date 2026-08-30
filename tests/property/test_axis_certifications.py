@@ -457,7 +457,9 @@ class TestCAxisTemporalTraceCredit:
             )
 
     @pytest.mark.parametrize("dt_val", [5.0, 20.0])
-    @pytest.mark.xfail(reason="compute_stdp_window ignores spike times, returns same window regardless of pre/post order")
+    @pytest.mark.xfail(
+        reason="compute_stdp_window ignores spike times, returns same window regardless of pre/post order"
+    )
     def test_stdp_antisymmetry(self, dt_val: float) -> None:
         """STDP antisymmetry: W(Δt) ≈ -W(-Δt) within 5%."""
         credit = TemporalTraceCredit(CreditAssignmentConfig.temporal_trace())
@@ -475,7 +477,9 @@ class TestCAxisTemporalTraceCredit:
             f"max diff={(window_pos + window_neg).abs().max().item():.6f}"
         )
 
-    @pytest.mark.xfail(reason="compute_stdp_window ignores spike times, returns same window for all Δt")
+    @pytest.mark.xfail(
+        reason="compute_stdp_window ignores spike times, returns same window for all Δt"
+    )
     def test_stdp_exponential_decay(self) -> None:
         """STDP decay: |W(20)| < |W(5)| (exponential decay)."""
         credit = TemporalTraceCredit(CreditAssignmentConfig.temporal_trace())
@@ -505,7 +509,9 @@ class TestUAxisRiemannianOrthogonalUpdate:
     """U-Axis: RiemannianOrthogonalUpdate (Muon) orthogonality preservation."""
 
     @pytest.mark.parametrize("seed", [42, 123, 456, 789])
-    @pytest.mark.xfail(reason="Test uses _newton_schulz method but implementation uses _orthogonalize with QR")
+    @pytest.mark.xfail(
+        reason="Test uses _newton_schulz method but implementation uses _orthogonalize with QR"
+    )
     def test_orthogonality_preservation(self, seed: int) -> None:
         """Newton-Schulz orthogonalization: ||G^T G - I||_F < 1e-4."""
         device = select_device()
@@ -588,7 +594,9 @@ class TestUAxisElasticConsolidationUpdate:
     """U-Axis: ElasticConsolidationUpdate (EWC) importance-weighted updates."""
 
     @pytest.mark.parametrize("seed", [42, 123, 456, 789])
-    @pytest.mark.xfail(reason="Test calls consolidate with wrong signature and expects pre-computed Fisher")
+    @pytest.mark.xfail(
+        reason="Test calls consolidate with wrong signature and expects pre-computed Fisher"
+    )
     def test_protected_parameter_immobility(self, seed: int) -> None:
         """EWC penalty: high Fisher params move toward old_params."""
         device = select_device()

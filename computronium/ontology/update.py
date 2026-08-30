@@ -360,7 +360,9 @@ class ElasticConsolidationUpdate:
             # EWC update: param - lr * grad - lr * ewc_lambda * fisher * (param - old_param)
             if name in self._old_params and name in self._fisher:
                 ewc_term = (
-                    self.config.ewc_lambda * self._fisher[name] * (param - self._old_params[name])
+                    self.config.ewc_lambda
+                    * self._fisher[name]
+                    * (param - self._old_params[name])
                 )
                 return (
                     param

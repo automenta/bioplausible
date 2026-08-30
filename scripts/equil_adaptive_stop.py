@@ -77,7 +77,9 @@ def _timed_epoch(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="§7 controlled experiment: adaptive early-stopping threshold for eqprop")
+    parser = argparse.ArgumentParser(
+        description="§7 controlled experiment: adaptive early-stopping threshold for eqprop"
+    )
     parser.add_argument("--max-steps", type=int, default=30)
     parser.add_argument("--epochs", type=int, default=2)
     parser.add_argument("--batch", type=int, default=128)

@@ -76,7 +76,9 @@ def _timed_epoch(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="§7 controlled experiment: equilibrium warm-start vs cold-start settling (native)")
+    parser = argparse.ArgumentParser(
+        description="§7 controlled experiment: equilibrium warm-start vs cold-start settling (native)"
+    )
     parser.add_argument("--max-steps", type=int, default=20)
     parser.add_argument("--epochs", type=int, default=2)
     parser.add_argument("--batch", type=int, default=128)
@@ -90,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
         (x.to(device), y.to(device)) for x, y in _mnist_batches(args.batch, args.probes)
     ]
 
-# Note: Native models use the same pipeline for both runs
+    # Note: Native models use the same pipeline for both runs
     # The "warm start" concept is handled internally by the pipeline
     # This experiment is kept for compatibility but the native models
     # don't have a warm_start config option

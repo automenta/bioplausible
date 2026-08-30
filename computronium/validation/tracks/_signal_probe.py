@@ -52,7 +52,9 @@ def measure_layer_signals(model, h_perturbed, x_input=None):
             # Create dummy input if not provided
             batch_size = h_perturbed.shape[0]
             x_transformed = torch.zeros(
-                batch_size, model.geometry.config.hidden_dims[-1], device=h_perturbed.device
+                batch_size,
+                model.geometry.config.hidden_dims[-1],
+                device=h_perturbed.device,
             )
 
         h = h_perturbed.clone()
@@ -125,7 +127,8 @@ def inject_perturbation_at_layer(
     device = next(model.parameters()).device
 
     perturbation = (
-        torch.randn(batch_size, model.geometry.config.hidden_dims[-1], device=device) * perturbation_strength
+        torch.randn(batch_size, model.geometry.config.hidden_dims[-1], device=device)
+        * perturbation_strength
     )
     return perturbation
 

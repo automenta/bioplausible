@@ -115,9 +115,7 @@ def _create_native_backprop_cuda(
 
     dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
 
-    credit = BackpropCredit(
-        CreditAssignmentConfig.gradient()
-    )
+    credit = BackpropCredit(CreditAssignmentConfig.gradient())
 
     update = EuclideanUpdate(
         ParameterUpdateConfig(
@@ -263,10 +261,7 @@ class TestDeepNetworkCreditAssignment:
             if (
                 "weight" in name.lower()
                 and "bias" not in name.lower()
-                and (
-                    "layer_0" in name
-                    or "W_in" in name
-                )
+                and ("layer_0" in name or "W_in" in name)
             ):
                 first_layer_weight = param
                 break
@@ -361,7 +356,9 @@ class TestEqPropBackpropAccuracyParity:
 
         bp_model.eval()  # type: ignore[attr-defined]
         with torch.no_grad():
-            bp_acc = (bp_model.forward(x_test).argmax(dim=1) == y_test).float().mean().item()
+            bp_acc = (
+                (bp_model.forward(x_test).argmax(dim=1) == y_test).float().mean().item()
+            )
 
         # EqProp
         eq_model.train()  # type: ignore[attr-defined]
@@ -370,7 +367,9 @@ class TestEqPropBackpropAccuracyParity:
 
         eq_model.eval()  # type: ignore[attr-defined]
         with torch.no_grad():
-            eq_acc = (eq_model.forward(x_test).argmax(dim=1) == y_test).float().mean().item()
+            eq_acc = (
+                (eq_model.forward(x_test).argmax(dim=1) == y_test).float().mean().item()
+            )
 
         gap = abs(bp_acc - eq_acc)
         # Allow up to 15% gap (lenient for property test)

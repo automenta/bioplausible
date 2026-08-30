@@ -293,7 +293,10 @@ SN enables stability.
 def _compute_lipschitz(model) -> float:
     """Compute Lipschitz constant from model geometry weights."""
     geometry = model.geometry
-    if hasattr(geometry, "_recurrent_weight") and geometry._recurrent_weight is not None:
+    if (
+        hasattr(geometry, "_recurrent_weight")
+        and geometry._recurrent_weight is not None
+    ):
         # For recurrent geometry, use the recurrent weight spectral norm
         with torch.no_grad():
             return torch.linalg.svdvals(geometry._recurrent_weight)[0].item()

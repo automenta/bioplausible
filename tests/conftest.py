@@ -180,7 +180,14 @@ def eqprop_model():
     """Minimal native_eqprop_mlp for settling/contrastive tests."""
     from computronium.models.native.eqprop_native import native_eqprop_mlp
 
-    return native_eqprop_mlp(input_dim=64, hidden_dim=32, output_dim=10, num_layers=1, beta=0.5, settle_steps=5)
+    return native_eqprop_mlp(
+        input_dim=64,
+        hidden_dim=32,
+        output_dim=10,
+        num_layers=1,
+        beta=0.5,
+        settle_steps=5,
+    )
 
 
 # --- Sprint 4.3.4 Synthetic Fixtures (zero I/O, zero download) ---

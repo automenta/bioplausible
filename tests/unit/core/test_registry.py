@@ -319,7 +319,9 @@ def test_runtime_checkable_transition_graph():
     """All registered EqProp models expose transition_modules() via geometry."""
     from computronium.models.native.eqprop_native import native_eqprop_mlp
 
-    system = native_eqprop_mlp(input_dim=4, hidden_dim=8, output_dim=4, num_layers=1, beta=0.5, settle_steps=2)
+    system = native_eqprop_mlp(
+        input_dim=4, hidden_dim=8, output_dim=4, num_layers=1, beta=0.5, settle_steps=2
+    )
     # Check for transition_modules method on geometry (replaces TransitionGraph protocol)
     assert hasattr(system.geometry, "transition_modules"), (
         f"{system.geometry.__class__.__name__} has no transition_modules()"

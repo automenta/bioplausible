@@ -127,9 +127,7 @@ class TestEPGradientEquivalence:
             f"All: {cos_sims}"
         )
 
-    @pytest.mark.xfail(
-        reason="GATE-0: pre-existing EqProp gradient drift"
-    )
+    @pytest.mark.xfail(reason="GATE-0: pre-existing EqProp gradient drift")
     def test_deq_gradients_match_bptt_wired_up(self, synthetic_mlp_task):
         """Wire up the disabled test_deq.py::test_gradients_match_bptt."""
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
@@ -188,6 +186,7 @@ class TestLyapunovEnergyDescent:
         # Use settle_universal to get trajectory
         with torch.no_grad():
             from computronium.core.local_learning.settling import SettleConfig
+
             config = SettleConfig(
                 max_steps=20,
                 convergence_threshold=1e-4,
@@ -232,6 +231,7 @@ class TestFixedPointReliability:
         # Test settle_universal converges
         with torch.no_grad():
             from computronium.core.local_learning.settling import SettleConfig
+
             config = SettleConfig(
                 max_steps=50,
                 convergence_threshold=1e-4,
@@ -286,9 +286,15 @@ class TestWeightTransportFreeness:
 
         for name, param in model.named_parameters():
             if "weight" in name.lower() and "bias" not in name.lower():
-                if "backward" in name.lower() or "feedback" in name.lower() or "B" in name:
+                if (
+                    "backward" in name.lower()
+                    or "feedback" in name.lower()
+                    or "B" in name
+                ):
                     backward_weights.append((name, param.data.clone()))
-                elif "forward" in name.lower() or "W" in name or "layer" in name.lower():
+                elif (
+                    "forward" in name.lower() or "W" in name or "layer" in name.lower()
+                ):
                     forward_weights.append((name, param.data.clone()))
 
         if not backward_weights:
@@ -387,7 +393,11 @@ class TestAdaptiveFAAlignment:
         for name, param in model.named_parameters():
             if "backward" in name.lower() or "feedback" in name.lower() or "B" in name:
                 B_weights.append(param)
-            elif "forward" in name.lower() and "weight" in name.lower() and "bias" not in name.lower():
+            elif (
+                "forward" in name.lower()
+                and "weight" in name.lower()
+                and "bias" not in name.lower()
+            ):
                 W_weights.append(param)
 
         if not B_weights or not W_weights:

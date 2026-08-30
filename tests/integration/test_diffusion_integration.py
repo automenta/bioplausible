@@ -3,7 +3,9 @@ import unittest
 import torch
 
 from computronium.core.registry import ComponentCategory, Registry
-from computronium.models.native.diffusion_eqprop_native import create_native_diffusion_eqprop
+from computronium.models.native.diffusion_eqprop_native import (
+    create_native_diffusion_eqprop,
+)
 
 
 class TestDiffusionIntegration(unittest.TestCase):
@@ -52,7 +54,10 @@ class TestDiffusionIntegration(unittest.TestCase):
 
     def test_registry_lookup(self):
         """Test that native_diffusion_eqprop is registered."""
-        from computronium.models.native.diffusion_eqprop_native import native_diffusion_eqprop
+        from computronium.models.native.diffusion_eqprop_native import (
+            native_diffusion_eqprop,
+        )
+
         self.assertIsNotNone(native_diffusion_eqprop)
         model = native_diffusion_eqprop(input_dim=10, hidden_dim=32, output_dim=10)
         self.assertIsNotNone(model)

@@ -36,7 +36,10 @@ logger = get_logger()
 def _compute_lipschitz(model) -> float:
     """Compute Lipschitz constant from model geometry weights."""
     geometry = model.geometry
-    if hasattr(geometry, "_recurrent_weight") and geometry._recurrent_weight is not None:
+    if (
+        hasattr(geometry, "_recurrent_weight")
+        and geometry._recurrent_weight is not None
+    ):
         # For recurrent geometry, use the recurrent weight spectral norm
         with torch.no_grad():
             return torch.linalg.svdvals(geometry._recurrent_weight)[0].item()
@@ -52,10 +55,12 @@ def _compute_lipschitz(model) -> float:
     return 1.0
 
 
-def _train_model(model, X: torch.Tensor, y: torch.Tensor, epochs: int, lr: float, name: str) -> list[float]:
+def _train_model(
+    model, X: torch.Tensor, y: torch.Tensor, epochs: int, lr: float, name: str
+) -> list[float]:
     """Train a native model using its train_step method."""
     from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
-    
+
     optimizer = create_optimizer(model, OptimizerConfig(name="adam", lr=lr))
     losses = []
 
@@ -82,12 +87,14 @@ def _train_model(model, X: torch.Tensor, y: torch.Tensor, epochs: int, lr: float
     return losses
 
 
-def _train_model_sn(model, X: torch.Tensor, y: torch.Tensor, epochs: int, name: str) -> list[float]:
+def _train_model_sn(
+    model, X: torch.Tensor, y: torch.Tensor, epochs: int, name: str
+) -> list[float]:
     """Train a native model using its train_step method (SN version uses model's internal lr)."""
     from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
-    
+
     # Use the model's internal learning rate (set during creation)
-    lr = getattr(model.update.config, 'step_size', 0.01)
+    lr = getattr(model.update.config, "step_size", 0.01)
     optimizer = create_optimizer(model, OptimizerConfig(name="adam", lr=lr))
     losses = []
 
@@ -131,7 +138,7 @@ def _create_synthetic_dataset(
 ):
     """Create synthetic dataset for validation."""
     from computronium.utils import seed_everything
-    
+
     seed_everything(seed)
     centers = torch.randn(n_classes, input_dim) * 2
     samples_per_class = n_samples // n_classes
@@ -265,7 +272,9 @@ def track_2_backprop_parity(verifier) -> TrackResult:
     # Backprop
     logger.info("\n[2a] Backprop MLP...")
     bp_model = create_native_backprop_mlp(input_dim, hidden_dim, output_dim)
-    _train_model(bp_model, X_train, y_train, epochs=verifier.epochs, lr=0.01, name="Backprop")
+    _train_model(
+        bp_model, X_train, y_train, epochs=verifier.epochs, lr=0.01, name="Backprop"
+    )
     bp_acc = _evaluate_accuracy(bp_model, X_test, y_test)
 
     # EqProp
@@ -279,7 +288,9 @@ def track_2_backprop_parity(verifier) -> TrackResult:
         settle_steps=30,
         lr=0.01,
     )
-    _train_model(eq_model, X_train, y_train, epochs=verifier.epochs, lr=0.01, name="EqProp")
+    _train_model(
+        eq_model, X_train, y_train, epochs=verifier.epochs, lr=0.01, name="EqProp"
+    )
     eq_acc = _evaluate_accuracy(eq_model, X_test, y_test)
 
     gap = (bp_acc - eq_acc) * 100

@@ -506,8 +506,12 @@ class TemporalTraceCredit:
         neg_mask = dt < 0
 
         window = torch.zeros_like(dt)
-        window[pos_mask] = self.config.a_plus * torch.exp(-dt[pos_mask] / self.config.tau)
-        window[neg_mask] = -self.config.a_minus * torch.exp(dt[neg_mask] / self.config.tau)
+        window[pos_mask] = self.config.a_plus * torch.exp(
+            -dt[pos_mask] / self.config.tau
+        )
+        window[neg_mask] = -self.config.a_minus * torch.exp(
+            dt[neg_mask] / self.config.tau
+        )
 
         # Expand to [batch, n_dt] for API consistency (same window for all pairs in batch)
         batch_size = pre_spikes.shape[0] if pre_spikes.ndim > 0 else 1

@@ -43,16 +43,16 @@ def _get_mock_data(input_dim=784, output_dim=10, batch_size=32):
 
 def track_50_nebc_eqprop_variants(verifier: object) -> TrackResult:
     """Verify newly migrated NEBC EqProp variants (Tile models).
-    
+
     Note: Tile models have known dimension mismatch issues with native
     TileGeometry + InstantaneousDynamics. This track is deferred until
     the TileGeometry dimension handling is fixed.
     """
     logger.info("    Running NEBC EqProp Variants check... [DEFERRED]")
-    
+
     # Tile native models have dimension mismatch issues
     # This is a known limitation - see TODO7.md P2b
-    
+
     return TrackResult(
         track_id=50,
         name="NEBC EqProp Variants [DEFERRED]",

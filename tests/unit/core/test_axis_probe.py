@@ -144,7 +144,7 @@ def test_fenced_pairs_raise(geometry: str, dynamics: str) -> None:
 # optical forward takes the quadrature term sin(φ/2) (was cos, which maps
 # w=0 to full-strength coupling → overflow to inf). Both settle contractively
 # (ρ = 1.0) on composed systems; a future divergent substrate belongs here.
-# 
+#
 # Known unstable coordinates (guard kills at calibrated threshold):
 # - ternary/feedforward/energy_minimization/null/thermodynamic_contrast/euclidean
 _GUARD_KILLED_COORDINATES: Final[frozenset[str]] = frozenset({

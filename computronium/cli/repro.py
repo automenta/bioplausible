@@ -43,14 +43,16 @@ REPRO_MODELS = [
 ]
 
 
-def _instantiate(
-    model_name: str, input_dim: int, output_dim: int, device: str
-):
+def _instantiate(model_name: str, input_dim: int, output_dim: int, device: str):
     """Instantiate a native model; mirrors the benchmark harness instantiation paths."""
     if model_name == "native_backprop_mlp":
-        from computronium.models.native.backprop_native import create_native_backprop_mlp
+        from computronium.models.native.backprop_native import (
+            create_native_backprop_mlp,
+        )
 
-        return create_native_backprop_mlp(input_dim, 64, output_dim, num_layers=2, lr=1e-3)
+        return create_native_backprop_mlp(
+            input_dim, 64, output_dim, num_layers=2, lr=1e-3
+        )
 
     if model_name == "native_eqprop_mlp":
         from computronium.models.native.eqprop_native import create_native_eqprop_mlp
@@ -73,7 +75,9 @@ def _instantiate(
     if model_name == "native_pepita_mlp":
         from computronium.models.native.pepita_native import create_native_pepita_mlp
 
-        return create_native_pepita_mlp(input_dim, 64, output_dim, num_layers=2, lr=1e-3)
+        return create_native_pepita_mlp(
+            input_dim, 64, output_dim, num_layers=2, lr=1e-3
+        )
 
     if model_name == "native_tile_ep":
         from computronium.models.native.tile_native import create_native_tile_ep

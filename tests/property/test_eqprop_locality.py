@@ -673,7 +673,9 @@ def test_eqprop_feedback_alignment_still_local(
     seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
 @settings(max_examples=30, deadline=None)
-@pytest.mark.xfail(reason="Hopfield energy can be negative - test assumption is incorrect")
+@pytest.mark.xfail(
+    reason="Hopfield energy can be negative - test assumption is incorrect"
+)
 def test_energy_minimization_dynamics_free_energy_decreases(
     input_dim, hidden_dim, num_layers, output_dim, batch_size, beta, seed
 ):
