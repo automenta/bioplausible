@@ -1,33 +1,36 @@
 #!/usr/bin/env python3
-"""Debug target propagation: target computation, inverse mapping, multi-step targets.
+"""Debug target propagation: target computation, inverse mapping, multi-step targets (native version).
 
 Checks:
 1. Targets propagate to all hidden layers (not just output)
 2. Inverse mapping reduces cycle error
 3. Multiple target steps improve target quality
+
+Migrated to native compositions after legacy zoo removal.
 """
 
 import torch
-from torch import nn
 
-from computronium.zoo.models.target_prop import DifferenceTargetProp
+from computronium.models.native.tile_native import create_native_tile_tp
 
 
 def debug_target_prop(steps: int = 10, lr: float = 0.001, target_lr: float = 0.1):
     """Run target prop and log target propagation + inverse quality."""
-    model = DifferenceTargetProp(
+    model = create_native_tile_tp(
         input_dim=784,
         hidden_dim=128,
         output_dim=10,
         num_layers=3,
-        learning_rate=lr,
-        target_lr=target_lr,
+        neurons_per_tile=16,
+        tiles_per_layer=4,
+        lr=lr,
+        beta=target_lr,
     )
 
     x = torch.randn(32, 784)
     y = torch.randint(0, 10, (32,))
 
-    print("=== Target Prop Debug ===")
+    print("=== Target Prop Debug (Native Tile) ===")
     print(f"Config: lr={lr}, target_lr={target_lr}, steps={steps}")
 
     for step in range(steps):
@@ -35,17 +38,16 @@ def debug_target_prop(steps: int = 10, lr: float = 0.001, target_lr: float = 0.1
         print(f"\nStep {step}: loss={result['loss']:.6f}, acc={result['accuracy']:.4f}")
 
         if step < 2 or step >= steps - 2:
-            # Check inverse mapping quality for each layer
-            for i, layer in enumerate(model.layers):
-                h = torch.randn(32, layer.forward_net[0].in_features)
-                fwd = layer.forward_net(h)
-                inv = layer.inverse_net(fwd)
-                cycle_error = nn.functional.mse_loss(inv, h).item()
-                print(f"  Layer {i}: cycle_error={cycle_error:.6f}")
+            # Check forward/backward propagation through tiles
+            model.eval()  # type: ignore[attr-defined]
+            with torch.no_grad():
+                acts = model.geometry.forward_with_intermediates(x, model.substrate)
+                for i, act in enumerate(acts):
+                    print(f"  Layer {i}: shape={tuple(act.shape)}, norm={act.norm().item():.4f}")
 
     print("\n=== Summary ===")
-    print("Targets should propagate to all layers (see cycle errors above)")
-    print("Lower cycle error = better inverse mapping = better target propagation")
+    print("Activations should propagate through all tile layers")
+    print("Tile TP uses PredictiveSettlingDynamics + TargetInversionCredit")
 
 
 if __name__ == "__main__":

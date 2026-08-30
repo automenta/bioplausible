@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 import torch
+import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -10,25 +11,24 @@ from torch.utils.data import DataLoader, TensorDataset
 parent_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(parent_dir))
 
-from computronium.config.unified import ModelConfig
-from computronium.core.local_learning.rules.fa import AdaptiveFA
-from computronium.zoo.models.eqprop import (
-    ConvEqProp,
-    FullEqPropLM,
-    HomeostaticEqProp,
-    ModernConvEqProp,
-    RecurrentEqPropLM,
-    SimpleConvEqProp,
-    TransformerEqProp,
+from computronium.models.native.backprop_native import create_native_backprop_mlp
+from computronium.models.native.eqprop_native import create_native_eqprop_mlp
+from computronium.models.native.fa_native import create_native_fa_mlp
+from computronium.models.native.pepita_native import create_native_pepita_mlp
+from computronium.models.native.tile_native import (
+    create_native_tile_ep,
+    create_native_tile_fa,
+    create_native_tile_hebbian,
+    create_native_tile_tp,
 )
-from computronium.zoo.models.eqprop._energy import EquilibriumMLP
-from computronium.zoo.models.fa import FeedbackAlignmentEqProp
 
 
 class TestValidationAll(unittest.TestCase):
     """
     Generalized validation suite for all models.
     Verifies that minimal instances of every model can actually learn a simple task.
+
+    Migrated to native compositions after legacy zoo removal.
     """
 
     def setUp(self):
@@ -53,255 +53,146 @@ class TestValidationAll(unittest.TestCase):
         )
 
         # 2. Convolutional Data (CIFAR-like shape: B, 3, 16, 16)
-        # We need targets compatible with the model's output dim (usually 10 for these models)
+        # Note: Native models don't yet support ConvGeometry - DEFERRED per TODO7.md
+        # ConvEqProp, ModernConvEqProp, SimpleConvEqProp tests skipped
         self.x_conv = torch.randn(self.sample_size, 3, 16, 16).to(self.device)
         self.y_conv = torch.randint(0, 10, (self.sample_size,)).to(
             self.device
         )  # Models default to 10 classes
-        self.loader_conv = DataLoader(
-            TensorDataset(self.x_conv, self.y_conv),
-            batch_size=self.batch_size,
-            shuffle=True,
-        )
 
-        # 3. Sequence Data for LMs (B, T) -> (B, T)
-        self.x_seq = torch.randint(
-            0, self.vocab_size, (self.sample_size, self.seq_len)
-        ).to(self.device)
-        self.y_seq = torch.randint(
-            0, self.vocab_size, (self.sample_size, self.seq_len)
-        ).to(self.device)
-        self.loader_seq = DataLoader(
-            TensorDataset(self.x_seq, self.y_seq),
-            batch_size=self.batch_size,
-            shuffle=True,
-        )
-
-        # 4. Transformer Classification Data (B, T) -> (B,)
-        # TransformerEqProp takes sequence input but pools to classification output
-        self.y_trans_cls = torch.randint(0, self.output_dim, (self.sample_size,)).to(
-            self.device
-        )
-        self.loader_trans_cls = DataLoader(
-            TensorDataset(self.x_seq, self.y_trans_cls),
-            batch_size=self.batch_size,
-            shuffle=True,
-        )
-
-    def _train_minimal(self, model, loader, is_sequence=False):
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-        criterion = nn.CrossEntropyLoss()
-
-        initial_loss = float("inf")
-        final_loss = 0.0
-
+    def _train_and_assert_learns(
+        self, model: nn.Module, x: torch.Tensor, y: torch.Tensor, name: str
+    ) -> None:
+        """Train for a few epochs and assert loss decreases."""
+        opt = torch.optim.Adam(model.parameters(), lr=1e-3)
         model.train()
-
-        # Capture initial loss on the first batch
-        bx, by = next(iter(loader))
-        with torch.no_grad():
-            output = self._forward_safe(model, bx)
-            loss = self._compute_loss(criterion, output, by, is_sequence)
-            initial_loss = loss.item()
-
-        # Train loop
+        losses = []
         for epoch in range(self.epochs):
-            total_loss = 0
-            count = 0
-            for bx, by in loader:
-                optimizer.zero_grad()
-
-                if hasattr(model, "train_step") and not isinstance(model, (LoopedMLP)):
-                    # Custom training step models (AdaptiveFA)
-                    # Note: LoopedMLP technically might have it via mixins but we want standard path usually
-                    metrics = model.train_step(bx, by)
-                    if metrics is not None:
-                        loss_val = metrics.get("loss")
-                        total_loss += (
-                            loss_val.item() if hasattr(loss_val, "item") else loss_val
-                        )
-                        count += 1
-                        continue
-
-                output = self._forward_safe(model, bx)
-                loss = self._compute_loss(criterion, output, by, is_sequence)
-
-                loss.backward()
-                optimizer.step()
-                total_loss += loss.item()
-                count += 1
-
-            final_loss = total_loss / count
-
-        return initial_loss, final_loss
-
-    def _forward_safe(self, model, x):
-        """Handle model-specific forward arguments."""
-        if isinstance(model, HomeostaticEqProp):
-            return model(x, apply_homeostasis=False)
-        return model(x)
-
-    def _compute_loss(self, criterion, output, target, is_sequence):
-        if is_sequence:
-            return criterion(output.view(-1, output.size(-1)), target.view(-1))
-        return criterion(output, target)
-
-    def test_looped_mlp_learns(self):
-        config = ModelConfig(
-            name="eqprop_mlp",
-            input_dim=self.input_dim,
-            output_dim=self.output_dim,
-            hidden_dims=[32],
-            learning_rate=0.01,
-            beta=0.5,
-            max_steps=5,
-            convergence_threshold=1e-4,
-            convergence_start=5,
-            use_spectral_norm=True,
-            spectral_norm_power_iterations=5,
-            activation="tanh",
-            lipschitz_mode="power_iteration",
-            output_scaling_mode="uniform",
-            extra={
-                "gradient_method": "contrastive",
-                "backend": "pytorch",
-            },
+            opt.zero_grad()
+            out = model(x)
+            loss = F.cross_entropy(out, y)
+            loss.backward()
+            opt.step()
+            losses.append(loss.item())
+        self.assertLess(
+            losses[-1],
+            losses[0],
+            msg=f"{name}: loss did not decrease ({losses[0]:.4f} -> {losses[-1]:.4f})",
         )
-        model = EquilibriumMLP(config=config).to(self.device)
-        i_loss, f_loss = self._train_minimal(model, self.loader)
-        print(f"LoopedMLP: {i_loss:.4f} -> {f_loss:.4f}")
-        self.assertLess(f_loss, i_loss)
 
-    def test_looped_mlp_equilibrium_learns(self):
-        # Equilibrium Mode requires sufficient steps to reach fixed point
-        # for the gradient approximation to be valid.
-        config = ModelConfig(
-            name="eqprop_mlp",
-            input_dim=self.input_dim,
-            output_dim=self.output_dim,
-            hidden_dims=[32],
-            learning_rate=0.01,
-            beta=0.5,
-            max_steps=12,
-            convergence_threshold=1e-4,
-            convergence_start=5,
-            use_spectral_norm=True,
-            spectral_norm_power_iterations=5,
-            activation="tanh",
-            lipschitz_mode="power_iteration",
-            output_scaling_mode="uniform",
-            extra={
-                "gradient_method": "equilibrium",
-                "backend": "pytorch",
-            },
+    def _train_system_and_assert_learns(
+        self, system, x: torch.Tensor, y: torch.Tensor, name: str
+    ) -> None:
+        """Train a native System for a few epochs and assert loss decreases."""
+        system.train()  # type: ignore[attr-defined]
+        losses = []
+        for epoch in range(self.epochs):
+            metrics = system.train_step(x, y)
+            losses.append(metrics.get("loss", 0.0))
+        self.assertLess(
+            losses[-1],
+            losses[0],
+            msg=f"{name}: loss did not decrease ({losses[0]:.4f} -> {losses[-1]:.4f})",
         )
-        model = EquilibriumMLP(config=config).to(self.device)
-        i_loss, f_loss = self._train_minimal(model, self.loader)
-        print(f"LoopedMLP (Eq): {i_loss:.4f} -> {f_loss:.4f}")
-        self.assertLess(f_loss, i_loss)
 
-    def test_conv_eqprop_learns(self):
-        # Uses explicit input channels/output dim
-        model = ConvEqProp(
-            input_channels=3, hidden_channels=8, output_dim=10, max_steps=5
-        ).to(self.device)
-        i_loss, f_loss = self._train_minimal(model, self.loader_conv)
-        print(f"ConvEqProp: {i_loss:.4f} -> {f_loss:.4f}")
-        # Relaxed check for noisy convergence
-        self.assertTrue(torch.isfinite(torch.tensor(f_loss)))
-        self.assertLess(f_loss, i_loss * 1.5)
+    # --- Native MLP Models ---
 
-    def test_modern_conv_learns(self):
-        # Hardcoded 10 outputs
-        model = ModernConvEqProp(hidden_channels=8, eq_steps=5).to(self.device)
-        i_loss, f_loss = self._train_minimal(model, self.loader_conv)
-        print(f"ModernConv: {i_loss:.4f} -> {f_loss:.4f}")
-        self.assertLess(f_loss, i_loss)
+    def test_native_backprop_mlp(self):
+        """Native Backprop MLP learns."""
+        model = create_native_backprop_mlp(self.input_dim, 16, self.output_dim, num_layers=2, lr=1e-3)
+        self._train_system_and_assert_learns(model, self.x, self.y, "native_backprop_mlp")
 
-    def test_simple_conv_learns(self):
-        # Hardcoded 10 outputs
-        model = SimpleConvEqProp(hidden_channels=8).to(self.device)
-        i_loss, f_loss = self._train_minimal(model, self.loader_conv)
-        print(f"SimpleConv: {i_loss:.4f} -> {f_loss:.4f}")
-        self.assertLess(f_loss, i_loss)
-
-    def test_transformer_eqprop_learns(self):
-        # Maps sequence input (loader_trans_cls) to classification output (output_dim)
-        model = TransformerEqProp(
-            vocab_size=self.vocab_size,
+    def test_native_eqprop_mlp(self):
+        """Native EqProp MLP learns."""
+        model = create_native_eqprop_mlp(
+            input_dim=self.input_dim,
             hidden_dim=16,
             output_dim=self.output_dim,
-            num_layers=1,
-            max_seq_len=10,
-        ).to(self.device)
-        i_loss, f_loss = self._train_minimal(model, self.loader_trans_cls)
-        print(f"TransformerEqProp: {i_loss:.4f} -> {f_loss:.4f}")
-        self.assertLess(f_loss, i_loss)
-
-    def test_lm_models_learn(self):
-        for cls in [FullEqPropLM, RecurrentEqPropLM]:
-            model = cls(
-                vocab_size=self.vocab_size, hidden_dim=16, num_layers=1, max_seq_len=10
-            ).to(self.device)
-            i_loss, f_loss = self._train_minimal(
-                model, self.loader_seq, is_sequence=True
-            )
-            print(f"{cls.__name__}: {i_loss:.4f} -> {f_loss:.4f}")
-            self.assertLess(f_loss, i_loss)
-
-    def test_adaptive_fa_learns(self):
-        model = FeedbackAlignmentEqProp(self.input_dim, 32, self.output_dim).to(
-            self.device
+            num_layers=2,
+            beta=0.5,
+            settle_steps=10,
+            lr=1e-3,
         )
-        optimizer = AdaptiveFA(model.parameters(), model=model)
+        self._train_system_and_assert_learns(model, self.x, self.y, "native_eqprop_mlp")
 
-        i_loss = None
-        f_loss = None
+    def test_native_fa_mlp(self):
+        """Native FA MLP learns."""
+        model = create_native_fa_mlp(self.input_dim, 16, self.output_dim, num_layers=2, lr=1e-3)
+        self._train_system_and_assert_learns(model, self.x, self.y, "native_fa_mlp")
 
-        for i, (bx, by) in enumerate(self.loader):
-            bx, by = bx.to(self.device), by.to(self.device)
-            optimizer.zero_grad()
+    def test_native_pepita_mlp(self):
+        """Native PEPITA MLP learns."""
+        model = create_native_pepita_mlp(self.input_dim, 16, self.output_dim, num_layers=2, lr=1e-3)
+        self._train_system_and_assert_learns(model, self.x, self.y, "native_pepita_mlp")
 
-            # Since AdaptiveFA intercepts step() to do its own update
-            # based on FA layer internals, we follow its learning rule.
-            optimizer.step(x=bx, target=by)
-            loss = torch.nn.functional.cross_entropy(model(bx), by).item()
+    # --- Native Tile Models ---
 
-            if i_loss is None:
-                i_loss = loss
-            f_loss = loss
-
-        print(f"AdaptiveFA: {i_loss:.4f} -> {f_loss:.4f}")
-        self.assertTrue(torch.isfinite(torch.tensor(f_loss)))
-
-    def test_feedback_alignment_learns(self):
-        model = FeedbackAlignmentEqProp(self.input_dim, 32, self.output_dim).to(
-            self.device
+    def test_native_tile_ep(self):
+        """Native Tile EP learns."""
+        model = create_native_tile_ep(
+            self.input_dim, 16, self.output_dim,
+            num_layers=2, neurons_per_tile=8, tiles_per_layer=2, lr=1e-3
         )
+        self._train_system_and_assert_learns(model, self.x, self.y, "native_tile_ep")
 
-        # We use a basic SGD for FA learning
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-        criterion = torch.nn.CrossEntropyLoss()
+    def test_native_tile_fa(self):
+        """Native Tile FA learns."""
+        model = create_native_tile_fa(
+            self.input_dim, 16, self.output_dim,
+            num_layers=2, neurons_per_tile=8, tiles_per_layer=2, lr=1e-3
+        )
+        self._train_system_and_assert_learns(model, self.x, self.y, "native_tile_fa")
 
-        i_loss = None
-        f_loss = None
-        for _ in range(3):  # Multiple epochs
-            for bx, by in self.loader:
-                bx, by = bx.to(self.device), by.to(self.device)
-                optimizer.zero_grad()
+    def test_native_tile_tp(self):
+        """Native Tile TP learns."""
+        model = create_native_tile_tp(
+            self.input_dim, 16, self.output_dim,
+            num_layers=2, neurons_per_tile=8, tiles_per_layer=2, lr=1e-3, beta=0.1
+        )
+        self._train_system_and_assert_learns(model, self.x, self.y, "native_tile_tp")
 
-                # FeedbackAlignmentEqProp defines a custom forward logic
-                outputs = model(bx)
-                loss = criterion(outputs, by)
-                loss.backward()
-                optimizer.step()
+    def test_native_tile_hebbian(self):
+        """Native Tile Hebbian learns."""
+        model = create_native_tile_hebbian(
+            self.input_dim, 16, self.output_dim,
+            num_layers=2, neurons_per_tile=8, tiles_per_layer=2, lr=1e-3
+        )
+        self._train_system_and_assert_learns(model, self.x, self.y, "native_tile_hebbian")
 
-                if i_loss is None:
-                    i_loss = loss.item()
-                f_loss = loss.item()
+    # --- Skipped: Conv/Graph/Attention Models ---
+    # These require ConvGeometry, GraphGeometry, AttentionGeometry which are DEFERRED per TODO7.md
 
-        print(f"FA: {i_loss:.4f} -> {f_loss:.4f}")
-        self.assertLess(f_loss, i_loss)
+    @unittest.skip("ConvGeometry not implemented - DEFERRED per TODO7.md")
+    def test_conv_eqprop(self):
+        pass
+
+    @unittest.skip("ConvGeometry not implemented - DEFERRED per TODO7.md")
+    def test_modern_conv_eqprop(self):
+        pass
+
+    @unittest.skip("ConvGeometry not implemented - DEFERRED per TODO7.md")
+    def test_simple_conv_eqprop(self):
+        pass
+
+    @unittest.skip("AttentionGeometry not implemented - DEFERRED per TODO7.md")
+    def test_transformer_eqprop(self):
+        pass
+
+    @unittest.skip("GraphGeometry not implemented - DEFERRED per TODO7.md")
+    def test_full_eqprop_lm(self):
+        pass
+
+    @unittest.skip("GraphGeometry not implemented - DEFERRED per TODO7.md")
+    def test_recurrent_eqprop_lm(self):
+        pass
+
+    @unittest.skip("Homeostatic credit not implemented - DEFERRED per TODO7.md")
+    def test_homeostatic_eqprop(self):
+        pass
+
+    @unittest.skip("FeedbackAlignmentEqProp legacy model deleted - use native_fa_mlp")
+    def test_feedback_alignment_eqprop(self):
+        pass
 
 
 if __name__ == "__main__":

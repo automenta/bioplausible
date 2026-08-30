@@ -36,6 +36,9 @@ class CreditAssignmentConfig:
         local_objective: Layer-local loss type (for local goodness)
         orthogonal_init: Initialize feedback matrices with orthogonal weights
         feedback_scale: Scaling factor for feedback matrices
+        a_plus: STDP potentiation amplitude (for temporal_trace)
+        a_minus: STDP depression amplitude (for temporal_trace)
+        tau: STDP time constant (for temporal_trace)
     """
 
     credit_type: str
@@ -44,6 +47,9 @@ class CreditAssignmentConfig:
     local_objective: str
     orthogonal_init: bool
     feedback_scale: float
+    a_plus: float = 1.0
+    a_minus: float = 1.0
+    tau: float = 20.0
 
     @classmethod
     def thermodynamic_contrast(
@@ -111,6 +117,9 @@ class CreditAssignmentConfig:
         local_objective: str = "mse",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
+        a_plus: float = 1.0,
+        a_minus: float = 1.0,
+        tau: float = 20.0,
     ) -> CreditAssignmentConfig:
         return cls(
             credit_type="temporal_trace",
@@ -119,6 +128,9 @@ class CreditAssignmentConfig:
             local_objective=local_objective,
             orthogonal_init=orthogonal_init,
             feedback_scale=feedback_scale,
+            a_plus=a_plus,
+            a_minus=a_minus,
+            tau=tau,
         )
 
     @classmethod
@@ -409,12 +421,13 @@ class RandomProjectionsCredit:
             )
 
         # Project error through feedback matrices (one per layer)
+        # Apply feedback_scale to gradient magnitude during training (not just init)
         grads = []
         for name in weight_names:
             fb = self._feedback_weights.get(name)
             if fb is not None:
-                # FA gradient: feedback @ error (simplified: scale feedback by error norm)
-                grad = fb * error.abs().mean()
+                # FA gradient: feedback @ error, scaled by feedback_scale
+                grad = fb * error.abs().mean() * self.config.feedback_scale
             else:
                 grad = torch.zeros_like(geometry.params[name])
             grads.append(grad)
@@ -459,10 +472,6 @@ class TemporalTraceCredit:
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.temporal_trace()
-        # STDP parameters with sensible defaults
-        self.a_plus = getattr(self.config, "a_plus", 1.0)
-        self.a_minus = getattr(self.config, "a_minus", 1.0)
-        self.tau = getattr(self.config, "tau", 20.0)
 
     def compute_pseudo_gradient(
         self,
@@ -497,8 +506,8 @@ class TemporalTraceCredit:
         neg_mask = dt < 0
 
         window = torch.zeros_like(dt)
-        window[pos_mask] = self.a_plus * torch.exp(-dt[pos_mask] / self.tau)
-        window[neg_mask] = -self.a_minus * torch.exp(dt[neg_mask] / self.tau)
+        window[pos_mask] = self.config.a_plus * torch.exp(-dt[pos_mask] / self.config.tau)
+        window[neg_mask] = -self.config.a_minus * torch.exp(dt[neg_mask] / self.config.tau)
 
         # Expand to [batch, n_dt] for API consistency (same window for all pairs in batch)
         batch_size = pre_spikes.shape[0] if pre_spikes.ndim > 0 else 1

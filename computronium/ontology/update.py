@@ -316,7 +316,17 @@ class NaturalGradientUpdate:
 
 
 class ElasticConsolidationUpdate:
-    """EWC-style importance-weighted update."""
+    """EWC-style importance-weighted update.
+
+    In standard EWC (Kirkpatrick et al., 2017):
+    - Fisher information F = (param - old_param)^2 (squared distance from old task)
+    - Regularization: lambda * F * (param - old_param)
+    - lambda (ewc_lambda) is the importance weight controlling regularization strength
+
+    This implementation separates:
+    - fisher_damping: small constant added to Fisher for numerical stability
+    - ewc_lambda: importance weight for the EWC regularization term
+    """
 
     def __init__(self, config: ParameterUpdateConfig | None = None):
         self.config = config or ParameterUpdateConfig.elastic_consolidation()
@@ -332,10 +342,10 @@ class ElasticConsolidationUpdate:
         which measures how much each parameter has moved from the previous task.
         """
         self._old_params = {k: v.clone().detach() for k, v in old_params.items()}
-        # Fisher = (current - old)^2 + damping
+        # Fisher = (current - old)^2 + fisher_damping (for numerical stability)
         self._fisher = {
             k: (params[k].detach() - old_params[k].detach()) ** 2
-            + self.config.ewc_lambda
+            + self.config.fisher_damping
             for k in params
             if k in old_params
         }
@@ -349,7 +359,9 @@ class ElasticConsolidationUpdate:
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
             # EWC update: param - lr * grad - lr * ewc_lambda * fisher * (param - old_param)
             if name in self._old_params and name in self._fisher:
-                ewc_term = self._fisher[name] * (param - self._old_params[name])
+                ewc_term = (
+                    self.config.ewc_lambda * self._fisher[name] * (param - self._old_params[name])
+                )
                 return (
                     param
                     - self.config.step_size * grad

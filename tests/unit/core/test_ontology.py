@@ -617,9 +617,12 @@ class TestModelAdapter:
 
     def test_validate_with_legacy_model(self):
         """Test ModelAdapter.validate compares legacy and system metrics."""
-        from computronium.zoo.models.forward_only import ForwardForwardNet
-
-        model = ForwardForwardNet(input_dim=10, hidden_dim=20, output_dim=3)
+        # Use a simple PyTorch model instead of deleted legacy model
+        model = torch.nn.Sequential(
+            torch.nn.Linear(10, 20),
+            torch.nn.ReLU(),
+            torch.nn.Linear(20, 3),
+        )
         adapter = ModelAdapter(model)
 
         # Run validation
@@ -650,9 +653,12 @@ class TestModelAdapter:
 
     def test_validate_with_custom_data(self):
         """Test ModelAdapter.validate with user-provided test data."""
-        from computronium.zoo.models.forward_only import ForwardForwardNet
-
-        model = ForwardForwardNet(input_dim=10, hidden_dim=20, output_dim=3)
+        # Use a simple PyTorch model instead of deleted legacy model
+        model = torch.nn.Sequential(
+            torch.nn.Linear(10, 20),
+            torch.nn.ReLU(),
+            torch.nn.Linear(20, 3),
+        )
         adapter = ModelAdapter(model)
 
         x = torch.randn(8, 10)

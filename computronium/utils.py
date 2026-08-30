@@ -346,15 +346,14 @@ def create_model_preset(preset_name: str, **overrides) -> nn.Module:
     Example:
         >>> model = create_model_preset("mnist_small", hidden_dim=512)
     """
-    from computronium.zoo.models.eqprop.conv_eqprop import ConvEqProp
-    from computronium.zoo.models.eqprop.looped_mlp import LoopedMLP
+    from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 
     presets = {
-        "mnist_small": lambda: LoopedMLP(784, 128, 10, use_spectral_norm=True),
-        "mnist_medium": lambda: LoopedMLP(784, 256, 10, use_spectral_norm=True),
-        "mnist_large": lambda: LoopedMLP(784, 512, 10, use_spectral_norm=True),
-        "cifar_conv": lambda: ConvEqProp(3, 64, 10),
-        "cifar_mlp": lambda: LoopedMLP(3072, 512, 10, use_spectral_norm=True),
+        "mnist_small": lambda: create_native_eqprop_mlp(784, 128, 10, num_layers=2, beta=0.5, settle_steps=20, lr=1e-3),
+        "mnist_medium": lambda: create_native_eqprop_mlp(784, 256, 10, num_layers=2, beta=0.5, settle_steps=20, lr=1e-3),
+        "mnist_large": lambda: create_native_eqprop_mlp(784, 512, 10, num_layers=2, beta=0.5, settle_steps=20, lr=1e-3),
+        # cifar_conv requires ConvGeometry which is DEFERRED per TODO7.md
+        "cifar_mlp": lambda: create_native_eqprop_mlp(3072, 512, 10, num_layers=2, beta=0.5, settle_steps=20, lr=1e-3),
     }
 
     if preset_name not in presets:

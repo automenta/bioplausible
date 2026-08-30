@@ -1,37 +1,44 @@
 #!/usr/bin/env python3
-"""Debug three-factor Hebbian: modulator signal, weight update direction.
+"""Debug three-factor Hebbian: modulator signal, weight update direction (native version).
 
 Checks:
 1. Modulator is graded (continuous, not binary)
 2. Weight updates correlate with error direction
 3. Loss decreases over steps
+
+Migrated to native compositions after legacy zoo removal.
 """
 
 import torch
 
-from computronium.zoo.models.hebbian import ThreeFactorHebbian
+from computronium.models.native.tile_native import create_native_tile_hebbian
 
 
 def debug_hebbian(steps: int = 10, lr: float = 0.005):
     """Run three-factor Hebbian and log modulator + weight changes."""
-    model = ThreeFactorHebbian(
-        input_dim=784, hidden_dim=128, output_dim=10, num_layers=3
+    model = create_native_tile_hebbian(
+        input_dim=784,
+        hidden_dim=128,
+        output_dim=10,
+        num_layers=3,
+        neurons_per_tile=16,
+        tiles_per_layer=4,
+        lr=lr,
     )
-    model.lr = lr
 
     x = torch.randn(32, 784)
     y = torch.randint(0, 10, (32,))
 
-    print("=== Three-Factor Hebbian Debug ===")
+    print("=== Three-Factor Hebbian Debug (Native Tile) ===")
     print(f"Config: lr={lr}, steps={steps}")
 
     for step in range(steps):
-        w_before = [p.data.clone() for p in model.parameters()]
+        w_before = {n: p.clone() for n, p in model.geometry.params.items()}
         result = model.train_step(x, y)
 
-        # Check modulator
+        # Check modulator (error signal)
         with torch.no_grad():
-            out = model.forward(x)
+            out = model(x)  # type: ignore[operator]
             pred_probs = torch.softmax(out, dim=1)
             y_onehot = torch.zeros_like(out)
             y_onehot.scatter_(1, y.unsqueeze(1), 1.0)
@@ -43,11 +50,9 @@ def debug_hebbian(steps: int = 10, lr: float = 0.005):
         )
 
         if step < 2 or step >= steps - 2:
-            for name, p, w_b in zip(
-                model.named_parameters(), model.parameters(), w_before
-            ):
-                if "out_layer" in name:
-                    delta = (p.data - w_b).norm().item()
+            for name, p in model.geometry.params.items():
+                if "output_proj" in name or "tile_weight" in name:
+                    delta = (p - w_before[name]).norm().item()
                     if delta > 0:
                         print(f"  {name}: delta_norm={delta:.6f}")
 

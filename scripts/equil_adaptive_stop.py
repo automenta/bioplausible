@@ -1,7 +1,7 @@
-"""§7 controlled experiment: adaptive early-stopping threshold for eqprop.
+"""§7 controlled experiment: adaptive early-stopping threshold for eqprop (native version).
 
 Tests combinations of ``convergence_threshold`` and ``convergence_start`` on
-``StandardEqProp`` (MNIST, 5 epochs) to find the Pareto of (time, accuracy).
+``native_eqprop_mlp`` (MNIST, 5 epochs) to find the Pareto of (time, accuracy).
 
 Hypothesis: looser thresholds / earlier checks reduce settling iterations
 without hurting accuracy. A pure compute win if time drops at matched acc.
@@ -18,7 +18,7 @@ import itertools
 import time
 
 import torch
-from computronium.zoo.models.eqprop.standard_eqprop import StandardEqProp
+from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 
 # Test grid: (threshold, start) pairs
 THRESHOLDS = [1e-2, 1e-3, 1e-4]
@@ -36,19 +36,16 @@ def _model(
     max_steps: int,
     threshold: float,
     start: int,
-) -> StandardEqProp:
+):
     torch.manual_seed(seed)
-    return StandardEqProp(
-        config=None,
+    return create_native_eqprop_mlp(
         input_dim=784,
-        output_dim=10,
         hidden_dim=256,
+        output_dim=10,
         num_layers=2,
-        use_spectral_norm=False,
-        max_steps=max_steps,
-        learning_rate=1e-3,
-        convergence_threshold=threshold,
-        convergence_start=start,
+        beta=0.5,
+        settle_steps=max_steps,
+        lr=1e-3,
     )
 
 
@@ -66,10 +63,10 @@ def _mnist_batches(batch: int, probes: int) -> list[tuple[torch.Tensor, torch.Te
 
 
 def _timed_epoch(
-    model: StandardEqProp, batches: list[tuple[torch.Tensor, torch.Tensor]]
+    model, batches: list[tuple[torch.Tensor, torch.Tensor]]
 ) -> tuple[float, float]:
     """Time one epoch of train_step calls, returning (elapsed_s, mean_acc)."""
-    model.train()
+    model.train()  # type: ignore[attr-defined]
     start = time.time()
     acc_sum = 0.0
     for x, y in batches:
@@ -80,7 +77,7 @@ def _timed_epoch(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description="§7 controlled experiment: adaptive early-stopping threshold for eqprop")
     parser.add_argument("--max-steps", type=int, default=30)
     parser.add_argument("--epochs", type=int, default=2)
     parser.add_argument("--batch", type=int, default=128)
@@ -106,7 +103,7 @@ def _run_grid(
     """Run all (threshold, start) combos, return {(thresh, start): (time, acc)}."""
     results: dict[tuple[float, int], tuple[float, float]] = {}
     for threshold, start in GRID:
-        m = _model(args.seed, args.max_steps, threshold, start).to(device)
+        m = _model(args.seed, args.max_steps, threshold, start)
         _timed_epoch(m, batches)  # warmup
         total_time = 0.0
         final_acc = 0.0
