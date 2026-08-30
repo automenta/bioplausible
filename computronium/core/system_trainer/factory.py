@@ -101,7 +101,7 @@ def compose_system[
         )
     """
 
-    @dataclasses.dataclass(frozen=True, slots=True)
+    @dataclasses.dataclass(frozen=False, slots=True)
     class _ComposedSystem[
         TS: Substrate,
         TG: Geometry,
@@ -114,6 +114,7 @@ def compose_system[
         dynamics: TD
         credit: TC
         update: TU
+        _training: bool = True
 
         def to_spec(self) -> dict:
             """Serialize the System to a specification dictionary.
@@ -259,6 +260,16 @@ def compose_system[
             from computronium.core.pipeline import run_forward
 
             return run_forward(self.substrate, self.geometry, self.dynamics, x)
+
+        def train(self, mode: bool = True) -> _ComposedSystem:
+            """Set training mode. Compatibility with PyTorch nn.Module interface."""
+            self._training = mode
+            return self
+
+        def eval(self) -> _ComposedSystem:
+            """Set evaluation mode. Compatibility with PyTorch nn.Module interface."""
+            self._training = False
+            return self
 
     return _ComposedSystem[TS, TG, TD, TC, TU](
         substrate=substrate,
