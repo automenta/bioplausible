@@ -3,7 +3,7 @@
 These tests ensure that 5-D ontology native factories produce functionally
 equivalent systems to their preset factory counterparts.
 
-Run: uv run pytest tests/property/test_ontology_parity.py -v
+Run: uv run pytest tests/property/test_ontology_parity.py -v  # tier: -m slow
 """
 
 import pytest
@@ -89,6 +89,9 @@ from computronium.ontology import (
     ThermodynamicContrast,
 )
 from computronium.core.system_trainer import compose_system
+
+# Every test here trains full models (2-3 epochs each); runs in the slow tier only.
+pytestmark = pytest.mark.slow
 
 
 def make_dataloaders(device: str = "cpu", batch_size: int = 64):

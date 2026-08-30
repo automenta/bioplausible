@@ -253,11 +253,11 @@ def test_native_research_eqprop_smoke(factory):
         ),
         pytest.param(
             create_native_tile_fa,
-            marks=pytest.mark.skip(reason="InstantaneousDynamics produces no error signal"),
+            marks=pytest.mark.xfail(reason="FA with InstantaneousDynamics produces no error signal"),
         ),
         pytest.param(
             create_native_tile_tp,
-            marks=pytest.mark.skip(reason="TileGeometry issues with predictive settling"),
+            marks=pytest.mark.xfail(reason="TileGeometry + PredictiveSettlingDynamics not working"),
         ),
         pytest.param(
             create_native_tile_snn,
@@ -265,11 +265,11 @@ def test_native_research_eqprop_smoke(factory):
         ),
         pytest.param(
             create_native_tile_hebbian,
-            marks=pytest.mark.skip(reason="LocalGoodnessCredit returns empty gradients"),
+            marks=pytest.mark.xfail(reason="TileGeometry + InstantaneousDynamics + LocalGoodnessCredit returns empty gradients"),
         ),
         pytest.param(
             create_native_tile_pc,
-            marks=pytest.mark.skip(reason="TileGeometry + PredictiveSettlingDynamics not working"),
+            marks=pytest.mark.xfail(reason="TileGeometry + PredictiveSettlingDynamics not working"),
         ),
         pytest.param(
             create_native_tile_gnn,

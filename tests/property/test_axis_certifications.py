@@ -430,7 +430,6 @@ class TestCAxisTemporalTraceCredit:
             (0.0, 0.0, 0),  # Simultaneous => zero (antisymmetry)
         ],
     )
-    @pytest.mark.xfail(reason="Test checks window[0] which is dt=-50, not the spike Δt")
     def test_stdp_causal_asymmetry(
         self, pre_time: float, post_time: float, expected_sign: int
     ) -> None:
@@ -445,7 +444,10 @@ class TestCAxisTemporalTraceCredit:
         dt = torch.linspace(-50, 50, 101)
         window = credit.compute_stdp_window(pre_spikes, post_spikes, dt)
 
-        window_val = window[0, 0].item()  # Single pair
+        # Find the index corresponding to the actual Δt = post_time - pre_time
+        delta_t = post_time - pre_time
+        dt_idx = (dt - delta_t).abs().argmin().item()
+        window_val = window[0, dt_idx].item()  # Single pair
 
         if expected_sign == 0:
             assert abs(window_val) < 1e-6, (
@@ -453,7 +455,7 @@ class TestCAxisTemporalTraceCredit:
             )
         else:
             assert (window_val > 0) == (expected_sign > 0), (
-                f"Expected sign {expected_sign}, got {window_val}"
+                f"Expected sign {expected_sign}, got {window_val} at Δt={delta_t}"
             )
 
     @pytest.mark.parametrize("dt_val", [5.0, 20.0])

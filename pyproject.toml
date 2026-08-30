@@ -131,10 +131,11 @@ dev = [
     "libcst>=1.9.0",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
+    "pytest-timeout>=2.4.0",
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests/unit", "tests/property"]
 markers = [
     "slow: marks tests as slow (e.g. MNIST full epoch)",
     "gpu: runs on CUDA device; skipped when GPU unavailable",
@@ -143,8 +144,12 @@ markers = [
     "benchmark: performance/parity benchmark producing JSONL",
     "flaky: quarantined non-deterministic test (Sprint 5.6)",
     "llm: requires a real LLM provider; skipped in CI",
+    "filterwarnings: builtin, registered for --strict-markers compat",
 ]
-addopts = "--cov=computronium --cov-report=term-missing --cov-fail-under=15 -p no:warnings"
+addopts = "--strict-markers --durations=25 -m 'not slow and not benchmark and not llm' -p no:warnings"
+faulthandler_timeout = 120
+timeout = 60
+timeout_method = "signal"
 
 [tool.coverage.run]
 source = ["computronium"]

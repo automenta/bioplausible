@@ -1,7 +1,7 @@
 import sys
-import unittest
 from pathlib import Path
 
+import pytest
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -23,7 +23,7 @@ from computronium.models.native.tile_native import (
 )
 
 
-class TestValidationAll(unittest.TestCase):
+class TestValidationAll:
     """
     Generalized validation suite for all models.
     Verifies that minimal instances of every model can actually learn a simple task.
@@ -31,7 +31,7 @@ class TestValidationAll(unittest.TestCase):
     Migrated to native compositions after legacy zoo removal.
     """
 
-    def setUp(self):
+    def setup_method(self):
         # Seed torch at setup so the per-test random tensors are independent
         # of upstream test RNG usage (which can flip pass/fail rates of the
         # inherently-flaky `f_loss < i_loss` checks in this suite).
@@ -74,10 +74,8 @@ class TestValidationAll(unittest.TestCase):
             loss.backward()
             opt.step()
             losses.append(loss.item())
-        self.assertLess(
-            losses[-1],
-            losses[0],
-            msg=f"{name}: loss did not decrease ({losses[0]:.4f} -> {losses[-1]:.4f})",
+        assert losses[-1] < losses[0], (
+            f"{name}: loss did not decrease ({losses[0]:.4f} -> {losses[-1]:.4f})"
         )
 
     def _train_system_and_assert_learns(
@@ -89,10 +87,8 @@ class TestValidationAll(unittest.TestCase):
         for epoch in range(self.epochs):
             metrics = system.train_step(x, y)
             losses.append(metrics.get("loss", 0.0))
-        self.assertLess(
-            losses[-1],
-            losses[0],
-            msg=f"{name}: loss did not decrease ({losses[0]:.4f} -> {losses[-1]:.4f})",
+        assert losses[-1] < losses[0], (
+            f"{name}: loss did not decrease ({losses[0]:.4f} -> {losses[-1]:.4f})"
         )
 
     # --- Native MLP Models ---
@@ -119,21 +115,17 @@ class TestValidationAll(unittest.TestCase):
         )
         self._train_system_and_assert_learns(model, self.x, self.y, "native_eqprop_mlp")
 
-    @unittest.skip(
-        "FA with InstantaneousDynamics produces no error signal (free=nudged) - known issue"
-    )
+    @pytest.mark.xfail(reason="FA with InstantaneousDynamics produces no error signal (free=nudged) - known issue")
     def test_native_fa_mlp(self):
-        """Native FA MLP learns - SKIPPED: InstantaneousDynamics doesn't produce free/nudged difference."""
+        """Native FA MLP learns - XFAIL: InstantaneousDynamics doesn't produce free/nudged difference."""
         model = create_native_fa_mlp(
             self.input_dim, 16, self.output_dim, num_layers=2, lr=1e-3
         )
         self._train_system_and_assert_learns(model, self.x, self.y, "native_fa_mlp")
 
-    @unittest.skip(
-        "PEPITA LocalGoodnessCredit returns empty pseudo-gradients - known issue"
-    )
+    @pytest.mark.xfail(reason="PEPITA LocalGoodnessCredit returns empty pseudo-gradients - known issue")
     def test_native_pepita_mlp(self):
-        """Native PEPITA MLP learns - SKIPPED: LocalGoodnessCredit.compute_pseudo_gradient not implemented."""
+        """Native PEPITA MLP learns - XFAIL: LocalGoodnessCredit.compute_pseudo_gradient not implemented."""
         model = create_native_pepita_mlp(
             self.input_dim, 16, self.output_dim, num_layers=2, lr=1e-3
         )
@@ -141,11 +133,9 @@ class TestValidationAll(unittest.TestCase):
 
     # --- Native Tile Models ---
 
-    @unittest.skip(
-        "TileGeometry incompatible with EnergyMinimizationDynamics - known issue"
-    )
+    @pytest.mark.xfail(reason="TileGeometry incompatible with EnergyMinimizationDynamics - known issue")
     def test_native_tile_ep(self):
-        """Native Tile EP learns - SKIPPED: TileGeometry lacks _layers for EnergyMinimizationDynamics."""
+        """Native Tile EP learns - XFAIL: TileGeometry lacks _layers for EnergyMinimizationDynamics."""
         model = create_native_tile_ep(
             self.input_dim,
             16,
@@ -157,11 +147,9 @@ class TestValidationAll(unittest.TestCase):
         )
         self._train_system_and_assert_learns(model, self.x, self.y, "native_tile_ep")
 
-    @unittest.skip(
-        "FA with InstantaneousDynamics produces no error signal - known issue"
-    )
+    @pytest.mark.xfail(reason="FA with InstantaneousDynamics produces no error signal - known issue")
     def test_native_tile_fa(self):
-        """Native Tile FA learns - SKIPPED: InstantaneousDynamics doesn't produce free/nudged difference."""
+        """Native Tile FA learns - XFAIL: InstantaneousDynamics doesn't produce free/nudged difference."""
         model = create_native_tile_fa(
             self.input_dim,
             16,
@@ -173,11 +161,9 @@ class TestValidationAll(unittest.TestCase):
         )
         self._train_system_and_assert_learns(model, self.x, self.y, "native_tile_fa")
 
-    @unittest.skip(
-        "TileGeometry + PredictiveSettlingDynamics not working - known issue"
-    )
+    @pytest.mark.xfail(reason="TileGeometry + PredictiveSettlingDynamics not working - known issue")
     def test_native_tile_tp(self):
-        """Native Tile TP learns - SKIPPED: TileGeometry issues with predictive settling."""
+        """Native Tile TP learns - XFAIL: TileGeometry issues with predictive settling."""
         model = create_native_tile_tp(
             self.input_dim,
             16,
@@ -190,11 +176,9 @@ class TestValidationAll(unittest.TestCase):
         )
         self._train_system_and_assert_learns(model, self.x, self.y, "native_tile_tp")
 
-    @unittest.skip(
-        "TileGeometry + InstantaneousDynamics + LocalGoodnessCredit not working - known issue"
-    )
+    @pytest.mark.xfail(reason="TileGeometry + InstantaneousDynamics + LocalGoodnessCredit not working - known issue")
     def test_native_tile_hebbian(self):
-        """Native Tile Hebbian learns - SKIPPED: LocalGoodnessCredit returns empty gradients."""
+        """Native Tile Hebbian learns - XFAIL: LocalGoodnessCredit returns empty gradients."""
         model = create_native_tile_hebbian(
             self.input_dim,
             16,
@@ -211,35 +195,35 @@ class TestValidationAll(unittest.TestCase):
     # --- Skipped: Conv/Graph/Attention Models ---
     # These require ConvGeometry, GraphGeometry, AttentionGeometry which are DEFERRED per TODO7.md
 
-    @unittest.skip("ConvGeometry not implemented - DEFERRED per TODO7.md")
+    @pytest.mark.skip(reason="ConvGeometry not implemented - DEFERRED per TODO7.md")
     def test_conv_eqprop(self):
         pass
 
-    @unittest.skip("ConvGeometry not implemented - DEFERRED per TODO7.md")
+    @pytest.mark.skip(reason="ConvGeometry not implemented - DEFERRED per TODO7.md")
     def test_modern_conv_eqprop(self):
         pass
 
-    @unittest.skip("ConvGeometry not implemented - DEFERRED per TODO7.md")
+    @pytest.mark.skip(reason="ConvGeometry not implemented - DEFERRED per TODO7.md")
     def test_simple_conv_eqprop(self):
         pass
 
-    @unittest.skip("AttentionGeometry not implemented - DEFERRED per TODO7.md")
+    @pytest.mark.skip(reason="AttentionGeometry not implemented - DEFERRED per TODO7.md")
     def test_transformer_eqprop(self):
         pass
 
-    @unittest.skip("GraphGeometry not implemented - DEFERRED per TODO7.md")
+    @pytest.mark.skip(reason="GraphGeometry not implemented - DEFERRED per TODO7.md")
     def test_full_eqprop_lm(self):
         pass
 
-    @unittest.skip("GraphGeometry not implemented - DEFERRED per TODO7.md")
+    @pytest.mark.skip(reason="GraphGeometry not implemented - DEFERRED per TODO7.md")
     def test_recurrent_eqprop_lm(self):
         pass
 
-    @unittest.skip("Homeostatic credit not implemented - DEFERRED per TODO7.md")
+    @pytest.mark.skip(reason="Homeostatic credit not implemented - DEFERRED per TODO7.md")
     def test_homeostatic_eqprop(self):
         pass
 
-    @unittest.skip("FeedbackAlignmentEqProp legacy model deleted - use native_fa_mlp")
+    @pytest.mark.skip(reason="FeedbackAlignmentEqProp legacy model deleted - use native_fa_mlp")
     def test_feedback_alignment_eqprop(self):
         pass
 

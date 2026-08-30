@@ -289,10 +289,6 @@ def test_eqprop_joint_system():
     assert "accuracy" in result
 
 
-# FA compute_pseudo_gradient has shape mismatch with single hidden layer - xfail
-@pytest.mark.xfail(
-    reason="FA compute_pseudo_gradient shape mismatch with single hidden layer"
-)
 def test_fa_produces_gradients():
     """FA system should run a training step and produce gradients."""
     from computronium.core.system_trainer import compose_system

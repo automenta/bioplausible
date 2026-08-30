@@ -597,6 +597,9 @@ class TestSplitMNIST:
 class TestContinualLearningIntegration:
     """End-to-end integration tests (smoke tests, 1 epoch)."""
 
+    # Each test trains a full CL arm on SplitMNIST (minutes on CPU).
+    pytestmark = pytest.mark.slow
+
     def test_fast_weights_single_task_learning(self, device):
         """Test fast weights can learn a single task above chance."""
         config = CLConfig(
