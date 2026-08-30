@@ -11,7 +11,7 @@ from computronium.config.unified import ModelConfig
 from computronium.core.logging import get_logger
 from computronium.core.losses import compute_accuracy
 from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
-from computronium.zoo.models.eqprop._energy import EquilibriumMLP
+from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 
 from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
 from ._base import build_track_result, track_header
@@ -53,27 +53,15 @@ def track_20_transfer_learning(verifier) -> TrackResult:
 
     # 1. Pre-train on Task A
     logger.info("\n[20a] Pre-training on Task A (Classes 0-4)...")
-    config = ModelConfig(
-        name="eqprop_mlp",
+    model = create_native_eqprop_mlp(
         input_dim=input_dim,
+        hidden_dim=hidden_dim,
         output_dim=5,
-        hidden_dims=[hidden_dim],
-        learning_rate=0.01,
-        beta=0.5,
-        max_steps=30,
-        convergence_threshold=1e-4,
-        convergence_start=5,
         use_spectral_norm=True,
-        spectral_norm_power_iterations=5,
-        activation="tanh",
-        lipschitz_mode="power_iteration",
-        output_scaling_mode="uniform",
-        extra={
-            "gradient_method": "contrastive",
-            "backend": "pytorch",
-        },
+        beta=0.5,
+        settle_steps=30,
+        lr=0.01,
     )
-    model = EquilibriumMLP(config=config)
     train_model(model, X_A, y_A, epochs=verifier.epochs, lr=0.01, name="Pretrain")
     acc_A = evaluate_accuracy(model, X_A, y_A)
     logger.info("  Task A Accuracy: %.1f%%", acc_A * 100)
@@ -81,24 +69,40 @@ def track_20_transfer_learning(verifier) -> TrackResult:
     logger.info("\n[20b] Transferring to Task B (Classes 5-9)...")
 
     # Create new model for B, copy weights from A (except readout)
-    model_B = EquilibriumMLP(config=config)
+    model_B = create_native_eqprop_mlp(
+        input_dim=input_dim,
+        hidden_dim=hidden_dim,
+        output_dim=5,
+        use_spectral_norm=True,
+        beta=0.5,
+        settle_steps=30,
+        lr=0.01,
+    )
 
-    # Copy input layer (layers.0) - handle spectral norm parametrization
-    if hasattr(model.layers[0], "parametrizations"):
-        model_B.layers[0].parametrizations.weight.original.data = model.layers[
+    # Copy input layer - handle spectral norm parametrization
+    if hasattr(model.geometry._layers[0], "parametrizations"):
+        model_B.geometry._layers[0].parametrizations.weight.original.data = model.geometry._layers[
             0
         ].parametrizations.weight.original.data.clone()
     else:
-        model_B.layers[0].weight.data = model.layers[0].weight.data.clone()
-    model_B.layers[0].bias.data = model.layers[0].bias.data.clone()
+        model_B.geometry._layers[0].weight.data = model.geometry._layers[0].weight.data.clone()
+    model_B.geometry._layers[0].bias.data = model.geometry._layers[0].bias.data.clone()
 
-    # Copy recurrent layer (W_rec is a ModuleList with Linear at index 0)
-    model_B.W_rec[0].weight.data = model.W_rec[0].weight.data.clone()
-    model_B.W_rec[0].bias.data = model.W_rec[0].bias.data.clone()
+    # Copy recurrent layer (W_rec)
+    if model.geometry._recurrent_weight is not None:
+        model_B.geometry._recurrent_weight.data = model.geometry._recurrent_weight.data.clone()
     # Readout (layers.1) is random (scratch)
 
     # Baseline: Train from scratch on B (same amount of data)
-    model_scratch = EquilibriumMLP(config=config)
+    model_scratch = create_native_eqprop_mlp(
+        input_dim=input_dim,
+        hidden_dim=hidden_dim,
+        output_dim=5,
+        use_spectral_norm=True,
+        beta=0.5,
+        settle_steps=30,
+        lr=0.01,
+    )
 
     # Train both for FEW epochs to see speedup
     transfer_epochs = max(1, verifier.epochs // 2)
@@ -160,27 +164,15 @@ def track_21_continual_learning(verifier) -> TrackResult:
     X_B, y_B = X[y >= 5], y[y >= 5]
 
     # Single mask readout (classes 0-9)
-    config = ModelConfig(
-        name="eqprop_mlp",
+    model = create_native_eqprop_mlp(
         input_dim=input_dim,
+        hidden_dim=hidden_dim,
         output_dim=10,
-        hidden_dims=[hidden_dim],
-        learning_rate=0.01,
-        beta=0.5,
-        max_steps=30,
-        convergence_threshold=1e-4,
-        convergence_start=5,
         use_spectral_norm=True,
-        spectral_norm_power_iterations=5,
-        activation="tanh",
-        lipschitz_mode="power_iteration",
-        output_scaling_mode="uniform",
-        extra={
-            "gradient_method": "contrastive",
-            "backend": "pytorch",
-        },
+        beta=0.5,
+        settle_steps=30,
+        lr=0.01,
     )
-    model = EquilibriumMLP(config=config)
 
     # 1. Train Task A
     logger.info("\n[21a] Learning Task A...")

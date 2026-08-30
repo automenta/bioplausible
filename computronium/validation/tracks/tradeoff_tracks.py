@@ -36,11 +36,10 @@ from torch import optim
 
 from computronium.core.logging import get_logger
 from computronium.core.utils.device import get_device
+from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
+from computronium.models.native.backprop_native import create_native_backprop_mlp
+from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 from computronium.utils import count_parameters
-from computronium.zoo.models.eqprop import (
-    BackpropMLP,
-    LoopedMLP,
-)
 
 from ._base import build_track_result, track_header
 
@@ -239,7 +238,7 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
         logger.info(
             "[57a] Training EqProp (%d hidden, %d steps)...", hidden_dim, max_steps
         )
-        eqprop_model = LoopedMLP(
+        eqprop_model = create_native_eqprop_mlp(
             input_dim=784,
             hidden_dim=hidden_dim,
             output_dim=10,
@@ -262,7 +261,7 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
 
         # Backprop (same capacity)
         logger.info("\n[57b] Training Backprop (%d hidden)...", hidden_dim)
-        backprop_model = BackpropMLP(
+        backprop_model = create_native_backprop_mlp(
             input_dim=784, hidden_dim=hidden_dim, output_dim=10
         ).to(device)
 

@@ -67,11 +67,13 @@ def create_optimizer(
     Raises:
         ValueError: If ``config.name`` is not a supported optimizer family.
     """
-    params = (
-        model_or_params.parameters()
-        if isinstance(model_or_params, nn.Module)
-        else model_or_params
-    )
+    # Handle native System objects that have parameters() method
+    if hasattr(model_or_params, 'parameters') and callable(model_or_params.parameters):
+        params = model_or_params.parameters()
+    elif isinstance(model_or_params, nn.Module):
+        params = model_or_params.parameters()
+    else:
+        params = model_or_params
     match config.name:
         case "adam":
             return torch.optim.Adam(

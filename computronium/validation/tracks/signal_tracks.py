@@ -3,12 +3,13 @@ Signal Propagation Validation Tracks (Track 42)
 
 Validates signal propagation in deep equilibrium networks.
 Tests the hypothesis that EqProp maintains better signal flow
-than traditional backprop through deep layers.
+than traditional approaches through deep layers.
 """
 
 import torch
 
 from computronium.core.logging import get_logger
+from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 from computronium.validation.notebook import ValidationTrack
 from computronium.validation.tracks._signal_probe import (
     run_signal_propagation_experiment,

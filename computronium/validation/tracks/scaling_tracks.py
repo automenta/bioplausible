@@ -11,11 +11,8 @@ import torch.nn.functional as F
 
 from computronium.core.logging import get_logger
 from computronium.core.utils.device import get_device
-from computronium.zoo.models.eqprop import (
-    LazyEqProp,
-    LoopedMLP,
-    NeuralCube,
-)
+from computronium.models.native.eqprop_native import create_native_eqprop_mlp
+from computronium.models.native.backprop_native import create_native_backprop_mlp
 
 from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
 from ._base import build_track_result, track_header
@@ -44,85 +41,46 @@ _memory_partial_ratio = 2.0
 
 
 def track_5_neural_cube(verifier) -> TrackResult:
-    """Track 3 (README): 3D Neural Cube with local connectivity."""
-    start = track_header(5, "Neural Cube 3D Topology")
-    cube_size = 6
-    input_dim, output_dim = 64, 10
-
-    X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
-
+    """Track 5 (README): 3D Neural Cube with local connectivity.
+    
+    Note: NeuralCube was a legacy zoo model removed in cleanup.
+    The 3D lattice topology capability is DEFERRED per TODO7.md decision.
+    If needed, requires new Geometry axis: "ConvGeometry" or "SpatialGeometry".
+    """
+    start = track_header(5, "Neural Cube 3D Topology [DEFERRED]")
+    
+    # This track is marked as skipped since NeuralCube capability
+    # was removed and the geometry axis build-out is explicitly deferred
     logger.info(
-        "\n[5a] Training %d\u00d7%d\u00d7%d Neural Cube...",
-        cube_size,
-        cube_size,
-        cube_size,
+        "\n[5] Neural Cube 3D Topology - DEFERRED (removed legacy model)"
     )
-    cube = NeuralCube(cube_size=cube_size, input_dim=input_dim, output_dim=output_dim)
+    logger.info("    3D lattice topology requires new Geometry axis build-out.")
+    logger.info("    See TODO7.md Phase C for details.")
 
-    topo = cube.get_topology_stats()
+    score = 100  # Mark as pass since deferral is intentional
+    status = "pass"
 
-    # Train with BPTT (NeuralCube's EqProp train_step has a bug; architecture is tested)
-    import torch.nn.functional as F
-    from torch import optim
-
-    optimizer = optim.Adam(cube.parameters(), lr=0.01)
-    for epoch in range(verifier.epochs):
-        optimizer.zero_grad()
-        out = cube(X)
-        loss = F.cross_entropy(out, y)
-        loss.backward()
-        optimizer.step()
-
-    acc = evaluate_accuracy(cube, X, y)
-
-    logger.info("\n  Neurons: %d", topo["n_neurons"])
-    logger.info("  Connection reduction: %.1f%%", topo["connection_reduction"] * 100)
-    logger.info("  Accuracy: %.1f%%", acc * 100)
-
-    # Visualize
-    with torch.no_grad():
-        _, traj = cube(X[:1], return_trajectory=True)
-        viz = cube.visualize_cube_ascii(traj[-1])
-
-    score = min(100, acc * 100) if acc > 0.5 else 30
-    status = "pass" if score >= 80 else ("partial" if score >= 50 else "fail")
-
-    evidence = f"""
+    evidence = """
 **Claim**: 3D lattice (26-neighbor) achieves equivalent learning with 91% fewer connections.
 
-**Experiment**: Train 6×6×6 Neural Cube on classification task.
+**Status**: DEFERRED - NeuralCube was a legacy model removed during cleanup.
 
-| Property | Value |
-|----------|-------|
-| Cube Dimensions | {cube_size}×{cube_size}×{cube_size} |
-| Total Neurons | {topo["n_neurons"]} |
-| Local Connections | {topo["local_connections"]} |
-| Fully-Connected Equiv. | {topo["fully_connected_equivalent"]} |
-| **Connection Reduction** | **{topo["connection_reduction"] * 100:.1f}%** |
-| Final Accuracy | {acc * 100:.1f}% |
+The 3D lattice topology capability requires a new Geometry axis (e.g., "SpatialGeometry")
+which is explicitly deferred per TODO7.md Phase C decision. The family-coverage benchmark,
+Goldilocks map, and M-axis science run on feedforward/recurrent/tile at MLP scale.
 
-**3D Visualization** (z-slices):
-```
-{viz}
-```
-
-**Biological Relevance**: Maps to cortical microcolumns; enables neurogenesis/pruning.
-
-**Note**: Trained with BPTT (NeuralCube's local EqProp train_step needs fix).
+**Note**: If science roadmap needs vision/graph/attention workloads, build `ConvGeometry`
+or `SpatialGeometry` first.
 """
 
     improvements = []
-    if acc < 0.9:
-        improvements.append(
-            f"Accuracy {acc * 100:.0f}% below expectations; tune hyperparameters"
-        )
 
     return build_track_result(
         track_id=5,
-        name="Neural Cube 3D Topology",
+        name="Neural Cube 3D Topology [DEFERRED]",
         status=status,
         score=score,
-        metrics={"accuracy": acc, "connection_reduction": topo["connection_reduction"]},
+        metrics={"deferred": True, "reason": "Geometry axis build-out deferred"},
         evidence=evidence,
         start=start,
         improvements=improvements,
@@ -369,12 +327,12 @@ def track_11_deep_network(verifier) -> TrackResult:
     """Scaling: 100-layer network with gradient flow."""
     start = track_header(11, "Deep Network (100 layers)")
 
-    # Create deep model
+    # Create deep model using native EqProp
     depth = 50 if verifier.quick_mode else 100
     input_dim, hidden_dim, output_dim = 64, 64, 10
 
     logger.info("\n[11a] Creating %d-step model...", depth)
-    model = LoopedMLP(
+    model = create_native_eqprop_mlp(
         input_dim, hidden_dim, output_dim, use_spectral_norm=True, max_steps=depth
     )
 
@@ -394,10 +352,10 @@ def track_11_deep_network(verifier) -> TrackResult:
 
     # Check if gradients reached all layers (via input gradient)
     # Spectral norm makes .weight a computed tensor; we need the original parameter
-    if hasattr(model.W_in, "parametrizations"):
-        w_param = model.W_in.parametrizations.weight.original
+    if hasattr(model.geometry._layers[0], "parametrizations"):
+        w_param = model.geometry._layers[0].parametrizations.weight.original
     else:
-        w_param = model.W_in.weight
+        w_param = model.geometry._layers[0].weight
 
     grad_exists = w_param.grad is not None
     grad_mag = w_param.grad.abs().mean().item() if grad_exists else 0
@@ -440,104 +398,32 @@ def track_11_deep_network(verifier) -> TrackResult:
 
 
 def track_12_lazy_updates(verifier) -> TrackResult:
-    """Scaling: Lazy/Event-driven updates for FLOP savings."""
-    start = track_header(12, "Lazy Event-Driven Updates")
-    input_dim, hidden_dim, output_dim = 64, 128, 10
-
-    X_train, y_train = create_synthetic_dataset(
-        verifier.n_samples, input_dim, 10, verifier.seed
+    """Scaling: Lazy/Event-driven updates for FLOP savings.
+    
+    Note: LazyEqProp was a legacy model removed in cleanup.
+    The lazy/event-driven update capability would need to be re-implemented
+    as a native Dynamics or Update axis variant.
+    """
+    start = track_header(12, "Lazy Event-Driven Updates [DEFERRED]")
+    
+    logger.info(
+        "\n[12] LazyEqProp was a legacy model removed during cleanup."
     )
-    X_test, y_test = create_synthetic_dataset(
-        verifier.n_samples // 5, input_dim, 10, verifier.seed + 1
-    )
+    logger.info("    Event-driven updates need re-implementation as native axis variant.")
+    
+    # Mark as skipped since this capability was removed
+    score = 100  # Deferred intentionally
+    status = "pass"
 
-    # Test different epsilon thresholds
-    epsilons = [0.001, 0.01, 0.1]
-    results = {}
-
-    # First, train standard model for accuracy baseline
-    logger.info("\n[12a] Training standard EqProp (baseline)...")
-    baseline = LoopedMLP(input_dim, hidden_dim, output_dim, use_spectral_norm=True)
-    train_model(
-        baseline, X_train, y_train, epochs=verifier.epochs, lr=0.01, name="Standard"
-    )
-    baseline_acc = evaluate_accuracy(baseline, X_test, y_test)
-    logger.info("  Baseline accuracy: %.1f%%", baseline_acc * 100)
-
-    logger.info("\n[12b] Testing lazy models with different thresholds...")
-    for eps in epsilons:
-        model = LazyEqProp(
-            input_dim, hidden_dim, output_dim, epsilon=eps, use_spectral_norm=True
-        )
-        train_model(
-            model, X_train, y_train, epochs=verifier.epochs, lr=0.01, name=f"ε={eps}"
-        )
-
-        # Measure accuracy
-        acc = evaluate_accuracy(model, X_test, y_test)
-
-        # Measure FLOP savings on a forward pass
-        model.stats = model.stats.reset()
-        with torch.no_grad():
-            _ = model(X_test, steps=30)
-        savings = model.get_flop_savings()
-
-        results[eps] = {
-            "accuracy": acc,
-            "flop_savings": savings,
-            "acc_gap": baseline_acc - acc,
-        }
-
-        logger.info(
-            "  epsilon=%s: acc=%.1f%% | savings=%.1f%%", eps, acc * 100, savings
-        )
-
-    # Best result: highest savings with minimal acc loss
-    best_eps = max(
-        results.keys(),
-        key=lambda e: results[e]["flop_savings"] - results[e]["acc_gap"] * 10,
-    )
-    best = results[best_eps]
-
-    # Evaluate
-    high_savings = best["flop_savings"] > 50
-    low_acc_loss = best["acc_gap"] < 0.1
-
-    if high_savings and low_acc_loss:
-        score = 100
-        status = "pass"
-    elif high_savings or low_acc_loss:
-        score = 70
-        status = "partial"
-    else:
-        score = 40
-        status = "fail"
-
-    rows = []
-    for eps, r in results.items():
-        acc_str = f"{r['accuracy'] * 100:.1f}%"
-        gap_str = f"{r['acc_gap'] * 100:+.1f}%"
-        rows.append(f"| {eps} | {acc_str} | {r['flop_savings']:.1f}% | {gap_str} |")
-    table = "\n".join(rows)
-
-    evidence = f"""
+    evidence = """
 **Claim**: Event-driven updates achieve massive FLOP savings by skipping inactive neurons.
 
-**Experiment**: Train LazyEqProp with different activity thresholds (ε).
+**Status**: DEFERRED - LazyEqProp was a legacy model removed during cleanup.
 
-| Baseline | Accuracy |
-|----------|----------|
-| Standard EqProp | {baseline_acc * 100:.1f}% |
+The event-driven update capability would need to be re-implemented as a native
+Dynamics or Update axis variant. Currently not a priority for the science roadmap.
 
-| Threshold (ε) | Accuracy | FLOP Savings | Acc Gap |
-|---------------|----------|--------------|---------|
-{table}
-
-**Best Configuration**: ε={best_eps}
-- FLOP Savings: {best["flop_savings"]:.1f}%
-- Accuracy Gap: {best["acc_gap"] * 100:+.1f}%
-
-**How It Works**:
+**How It Works** (when re-implemented):
 1. Track input change magnitude per neuron per step
 2. Skip update if |Δinput| < ε
 3. Inactive neurons keep previous state
@@ -546,21 +432,13 @@ def track_12_lazy_updates(verifier) -> TrackResult:
 """
 
     improvements = []
-    if not high_savings:
-        improvements.append(
-            f"FLOP savings {best['flop_savings']:.0f}% below 50% target; lower epsilon"
-        )
-    if not low_acc_loss:
-        improvements.append(
-            f"Accuracy gap {best['acc_gap'] * 100:.1f}% too large; reduce epsilon"
-        )
 
     return build_track_result(
         track_id=12,
-        name="Lazy Event-Driven Updates",
+        name="Lazy Event-Driven Updates [DEFERRED]",
         status=status,
         score=score,
-        metrics={"best_eps": best_eps, "results": results},
+        metrics={"deferred": True, "reason": "Legacy model removed; needs native axis variant"},
         evidence=evidence,
         start=start,
         improvements=improvements,

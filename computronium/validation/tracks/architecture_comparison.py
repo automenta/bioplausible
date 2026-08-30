@@ -20,9 +20,7 @@ import torch
 from torch import nn
 
 from computronium.core.logging import get_logger
-from computronium.zoo.models.eqprop import (
-    LoopedMLP,
-)
+from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 
 from ._base import build_track_result, track_header
 
@@ -183,7 +181,7 @@ def track_56_depth_architecture_comparison(verifier) -> TrackResult:
     for use_sn in [True, False]:
         label = "with_sn" if use_sn else "without_sn"
 
-        model = LoopedMLP(
+        model = create_native_eqprop_mlp(
             input_dim=dim,
             hidden_dim=dim,
             output_dim=10,
@@ -200,7 +198,7 @@ def track_56_depth_architecture_comparison(verifier) -> TrackResult:
 
         # Gradient magnitude at input indicates credit assignment works
         grad_norm = x_test.grad.norm().item() if x_test.grad is not None else 0
-        L = model.compute_lipschitz()
+        L = _compute_lipschitz(model)
 
         looped_results[label] = {
             "grad_norm": grad_norm,
@@ -290,3 +288,13 @@ SN enables stability.
         start=start,
         improvements=[],
     )
+
+
+def _compute_lipschitz(model) -> float:
+    """Compute Lipschitz constant from model geometry weights."""
+    geometry = model.geometry
+    if hasattr(geometry, "_recurrent_weight") and geometry._recurrent_weight is not None:
+        # For recurrent geometry, use the recurrent weight spectral norm
+        with torch.no_grad():
+            return torch.linalg.svdvals(geometry._recurrent_weight)[0].item()
+    return 1.0

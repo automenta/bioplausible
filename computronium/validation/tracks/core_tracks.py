@@ -6,14 +6,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
+from torch import nn
 
 from computronium.core.logging import get_logger
-from computronium.zoo.models.eqprop import (
-    BackpropMLP,
-    LoopedMLP,
-)
+from computronium.core.losses import compute_accuracy
+from computronium.models.native.backprop_native import create_native_backprop_mlp
+from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 
-from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
 from ._base import build_track_result, track_header
 
 if TYPE_CHECKING:
@@ -34,26 +33,155 @@ __all__ = [
 logger = get_logger()
 
 
+def _compute_lipschitz(model) -> float:
+    """Compute Lipschitz constant from model geometry weights."""
+    geometry = model.geometry
+    if hasattr(geometry, "_recurrent_weight") and geometry._recurrent_weight is not None:
+        # For recurrent geometry, use the recurrent weight spectral norm
+        with torch.no_grad():
+            return torch.linalg.svdvals(geometry._recurrent_weight)[0].item()
+    # For feedforward, compute product of layer spectral norms
+    layers = getattr(geometry, "_layers", None)
+    if layers is not None:
+        lipschitz = 1.0
+        for layer in layers:
+            if isinstance(layer, nn.Linear):
+                with torch.no_grad():
+                    lipschitz *= torch.linalg.svdvals(layer.weight)[0].item()
+        return lipschitz
+    return 1.0
+
+
+def _train_model(model, X: torch.Tensor, y: torch.Tensor, epochs: int, lr: float, name: str) -> list[float]:
+    """Train a native model using its train_step method."""
+    from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
+    
+    optimizer = create_optimizer(model, OptimizerConfig(name="adam", lr=lr))
+    losses = []
+
+    for epoch in range(epochs):
+        model.train()  # type: ignore[attr-defined]
+        metrics = model.train_step(X, y)
+        loss = float(metrics.get("loss", 0.0))
+        losses.append(loss)
+
+        logits = metrics.get("logits")
+        if logits is None:
+            logits = model.forward(X)
+        acc = compute_accuracy(logits, y, scale=100)
+        logger.debug(
+            "  %s: Epoch %d/%d loss=%.3f acc=%.1f%%",
+            name,
+            epoch + 1,
+            epochs,
+            loss,
+            acc,
+        )
+
+    logger.info("Training complete for %s", name)
+    return losses
+
+
+def _train_model_sn(model, X: torch.Tensor, y: torch.Tensor, epochs: int, name: str) -> list[float]:
+    """Train a native model using its train_step method (SN version uses model's internal lr)."""
+    from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
+    
+    # Use the model's internal learning rate (set during creation)
+    lr = getattr(model.update.config, 'step_size', 0.01)
+    optimizer = create_optimizer(model, OptimizerConfig(name="adam", lr=lr))
+    losses = []
+
+    for epoch in range(epochs):
+        model.train()  # type: ignore[attr-defined]
+        metrics = model.train_step(X, y)
+        loss = float(metrics.get("loss", 0.0))
+        losses.append(loss)
+
+        logits = metrics.get("logits")
+        if logits is None:
+            logits = model.forward(X)
+        acc = compute_accuracy(logits, y, scale=100)
+        logger.debug(
+            "  %s: Epoch %d/%d loss=%.3f acc=%.1f%%",
+            name,
+            epoch + 1,
+            epochs,
+            loss,
+            acc,
+        )
+
+    logger.info("Training complete for %s", name)
+    return losses
+
+
+def _evaluate_accuracy(model, X: torch.Tensor, y: torch.Tensor) -> float:
+    """Evaluate accuracy of a native model."""
+    model.eval()  # type: ignore[attr-defined]
+    try:
+        with torch.no_grad():
+            out = model.forward(X)
+            acc = compute_accuracy(out, y)
+    finally:
+        model.train()  # type: ignore[attr-defined]
+    return acc
+
+
+def _create_synthetic_dataset(
+    n_samples: int, input_dim: int, n_classes: int, seed: int = 42
+):
+    """Create synthetic dataset for validation."""
+    from computronium.utils import seed_everything
+    
+    seed_everything(seed)
+    centers = torch.randn(n_classes, input_dim) * 2
+    samples_per_class = n_samples // n_classes
+    X, y = [], []
+
+    for c in range(n_classes):
+        class_samples = centers[c] + torch.randn(samples_per_class, input_dim) * 0.5
+        X.append(class_samples)
+        y.append(torch.full((samples_per_class,), c, dtype=torch.long))
+
+    X, y = torch.cat(X), torch.cat(y)
+    perm = torch.randperm(len(y))
+    return X[perm], y[perm]
+
+
 def track_1_spectral_norm(verifier) -> TrackResult:
     """Core: Spectral Normalization maintains L < 1."""
     start = track_header(1, "Spectral Normalization Stability")
     input_dim, hidden_dim, output_dim = 64, 128, 10
-    X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
+    X, y = _create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
 
     # Without SN - use higher LR to show instability
     logger.info("\n[1a] Without spectral norm (aggressive training)...")
-    model_no_sn = LoopedMLP(input_dim, hidden_dim, output_dim, use_spectral_norm=False)
-    L_before_no = model_no_sn.compute_lipschitz()
-    # Higher LR causes L to grow more
-    train_model(model_no_sn, X, y, epochs=verifier.epochs, lr=0.05, name="No SN")
-    L_after_no = model_no_sn.compute_lipschitz()
+    model_no_sn = create_native_eqprop_mlp(
+        input_dim=input_dim,
+        hidden_dim=hidden_dim,
+        output_dim=output_dim,
+        use_spectral_norm=False,
+        beta=0.5,
+        settle_steps=30,
+        lr=0.05,
+    )
+    L_before_no = _compute_lipschitz(model_no_sn)
+    _train_model(model_no_sn, X, y, epochs=verifier.epochs, lr=0.05, name="No SN")
+    L_after_no = _compute_lipschitz(model_no_sn)
 
     # With SN
     logger.info("[1b] With spectral norm...")
-    model_sn = LoopedMLP(input_dim, hidden_dim, output_dim, use_spectral_norm=True)
-    L_before_sn = model_sn.compute_lipschitz()
-    train_model(model_sn, X, y, epochs=verifier.epochs, lr=0.05, name="With SN")
-    L_after_sn = model_sn.compute_lipschitz()
+    model_sn = create_native_eqprop_mlp(
+        input_dim=input_dim,
+        hidden_dim=hidden_dim,
+        output_dim=output_dim,
+        use_spectral_norm=True,
+        beta=0.5,
+        settle_steps=30,
+        lr=0.05,
+    )
+    L_before_sn = _compute_lipschitz(model_sn)
+    _train_model(model_sn, X, y, epochs=verifier.epochs, lr=0.05, name="With SN")
+    L_after_sn = _compute_lipschitz(model_sn)
 
     # Evaluate: Key insight is that SN constrains L while non-SN allows growth
     sn_constrained = L_after_sn <= 1.05  # With SN, L should stay near 1
@@ -113,11 +241,11 @@ def track_1_spectral_norm(verifier) -> TrackResult:
     )
 
 
-# Attach metadata
-track_1_spectral_norm.description = (
+# Attach metadata using function attributes (compatible with validation framework)
+track_1_spectral_norm.__dict__["description"] = (
     "Verifies spectral norm constraints keep Lipschitz constant <= 1"
 )
-track_1_spectral_norm.category = "Core Stability"
+track_1_spectral_norm.__dict__["category"] = "Core Stability"
 
 
 def track_2_backprop_parity(verifier) -> TrackResult:
@@ -127,7 +255,7 @@ def track_2_backprop_parity(verifier) -> TrackResult:
 
     # Create a single dataset and split it for fair comparison
     # Using the same data for both methods ensures fair algorithm comparison
-    X_all, y_all = create_synthetic_dataset(
+    X_all, y_all = _create_synthetic_dataset(
         verifier.n_samples, input_dim, 10, verifier.seed
     )
     split = int(0.8 * len(X_all))
@@ -136,15 +264,23 @@ def track_2_backprop_parity(verifier) -> TrackResult:
 
     # Backprop
     logger.info("\n[2a] Backprop MLP...")
-    bp_model = BackpropMLP(input_dim, hidden_dim, output_dim)
-    train_model(bp_model, X_train, y_train, epochs=verifier.epochs, name="Backprop")
-    bp_acc = evaluate_accuracy(bp_model, X_test, y_test)
+    bp_model = create_native_backprop_mlp(input_dim, hidden_dim, output_dim)
+    _train_model(bp_model, X_train, y_train, epochs=verifier.epochs, lr=0.01, name="Backprop")
+    bp_acc = _evaluate_accuracy(bp_model, X_test, y_test)
 
     # EqProp
-    logger.info("[2b] EqProp (LoopedMLP)...")
-    eq_model = LoopedMLP(input_dim, hidden_dim, output_dim, use_spectral_norm=True)
-    train_model(eq_model, X_train, y_train, epochs=verifier.epochs, name="EqProp")
-    eq_acc = evaluate_accuracy(eq_model, X_test, y_test)
+    logger.info("[2b] EqProp (native_eqprop_mlp)...")
+    eq_model = create_native_eqprop_mlp(
+        input_dim=input_dim,
+        hidden_dim=hidden_dim,
+        output_dim=output_dim,
+        use_spectral_norm=True,
+        beta=0.5,
+        settle_steps=30,
+        lr=0.01,
+    )
+    _train_model(eq_model, X_train, y_train, epochs=verifier.epochs, lr=0.01, name="EqProp")
+    eq_acc = _evaluate_accuracy(eq_model, X_test, y_test)
 
     gap = (bp_acc - eq_acc) * 100
 
@@ -171,7 +307,7 @@ on synthetic classification.
 | Method | Test Accuracy | Gap |
 |--------|---------------|-----|
 | Backprop MLP | {bp_acc * 100:.1f}% | — |
-| EqProp (LoopedMLP) | {eq_acc * 100:.1f}% | {gap:+.1f}% |
+| EqProp (native_eqprop_mlp) | {eq_acc * 100:.1f}% | {gap:+.1f}% |
 
 **Verdict**: {"[OK]  PARITY" if abs(gap) < 5 else "[WARN]  Gap"} (gap = {abs(gap):.1f}%)
 
@@ -199,10 +335,10 @@ on synthetic classification.
 
 
 # Attach metadata
-track_2_backprop_parity.description = (
+track_2_backprop_parity.__dict__["description"] = (
     "Tests if EqProp matches Backprop accuracy on synthetic data"
 )
-track_2_backprop_parity.category = "Performance"
+track_2_backprop_parity.__dict__["category"] = "Performance"
 
 
 def track_3_adversarial_healing(verifier) -> TrackResult:
@@ -210,25 +346,33 @@ def track_3_adversarial_healing(verifier) -> TrackResult:
     start = track_header(3, "Adversarial Self-Healing")
     input_dim, hidden_dim, output_dim = 64, 128, 10
 
-    X, y = create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
-    model = LoopedMLP(input_dim, hidden_dim, output_dim, use_spectral_norm=True)
+    X, y = _create_synthetic_dataset(verifier.n_samples, input_dim, 10, verifier.seed)
+    model = create_native_eqprop_mlp(
+        input_dim=input_dim,
+        hidden_dim=hidden_dim,
+        output_dim=output_dim,
+        use_spectral_norm=True,
+        beta=0.5,
+        settle_steps=50,
+        lr=0.01,
+    )
 
     logger.info("\n[3a] Pre-training model...")
-    train_model(model, X, y, epochs=verifier.epochs, name="Pre-train")
+    _train_model(model, X, y, epochs=verifier.epochs, lr=0.01, name="Pre-train")
 
     logger.info("[3b] Testing noise damping...")
     noise_levels = [0.5, 1.0, 2.0]
     results = {}
 
-    model.eval()
+    model.eval()  # type: ignore[attr-defined]
     with torch.no_grad():
         # Get the initial activations (input projection)
         x_test = X[:32]
-        activations = model._initial_activations(x_test)
+        activations = model.geometry.forward_with_intermediates(x_test, model.substrate)
 
     for noise in noise_levels:
         # Inject noise into hidden state and measure damping through relaxation
-        model.eval()
+        model.eval()  # type: ignore[attr-defined]
         with torch.no_grad():
             # Start from clean activations
             h_clean = activations[-1].clone()
@@ -248,16 +392,19 @@ def track_3_adversarial_healing(verifier) -> TrackResult:
                 settle_activations_list,
             )
 
+            # Note: native models use EnergyMinimizationDynamics which has
+            # convergence_threshold and convergence_start on its config
+            dyn_cfg = model.dynamics.config
             settled, _, _ = settle_activations_list(
                 activations_0=activations_noisy,
-                forward_dynamics=model.forward_dynamics,
-                steps=model.max_steps,
+                forward_dynamics=model.dynamics,
+                steps=dyn_cfg.max_steps,
                 beta=0.0,
                 target=None,
                 return_trajectory=False,
                 return_dynamics=False,
-                convergence_threshold=model.convergence_threshold,
-                convergence_start=model.convergence_start,
+                convergence_threshold=dyn_cfg.convergence_threshold,
+                convergence_start=dyn_cfg.convergence_start,
             )
 
             h_final = settled[-1]
@@ -316,7 +463,7 @@ def track_3_adversarial_healing(verifier) -> TrackResult:
 
 
 # Attach metadata
-track_3_adversarial_healing.description = (
+track_3_adversarial_healing.__dict__["description"] = (
     "Measures noise damping (self-healing) properties of EqProp"
 )
-track_3_adversarial_healing.category = "Robustness"
+track_3_adversarial_healing.__dict__["category"] = "Robustness"

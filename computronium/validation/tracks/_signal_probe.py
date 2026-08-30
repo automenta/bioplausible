@@ -19,7 +19,7 @@ from tqdm import tqdm
 from computronium.core.logging import get_logger
 from computronium.core.utils.device import get_device
 from computronium.data.vision import get_vision_dataset
-from computronium.zoo.models.eqprop import LoopedMLP, MemoryEfficientLoopedMLP
+from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 
 logger = get_logger()
 
@@ -36,8 +36,8 @@ def measure_layer_signals(model, h_perturbed, x_input=None):
     Returns:
         Dictionary with signal measurements at each layer
     """
-    if hasattr(model, "max_steps"):
-        steps = model.max_steps
+    if hasattr(model.dynamics.config, "max_steps"):
+        steps = model.dynamics.config.max_steps
     else:
         steps = 30  # default
 
@@ -47,18 +47,18 @@ def measure_layer_signals(model, h_perturbed, x_input=None):
     # and observing how perturbations propagate through the settling iterations
     with torch.no_grad():
         if x_input is not None:
-            x_transformed = model._transform_input(x_input)
+            x_transformed = model.geometry._layers[0](x_input)
         else:
             # Create dummy input if not provided
             batch_size = h_perturbed.shape[0]
             x_transformed = torch.zeros(
-                batch_size, model.hidden_dim, device=h_perturbed.device
+                batch_size, model.geometry.config.hidden_dims[-1], device=h_perturbed.device
             )
 
         h = h_perturbed.clone()
 
         for step in range(steps):
-            h = model.forward_step(h, x_transformed)
+            h = model.dynamics.route(h, x_transformed, model.geometry)
             # Measure signal strength (mean magnitude)
             signal_strength = h.abs().mean().item()
             signals.append(signal_strength)
@@ -88,23 +88,17 @@ def create_deep_model(
     Returns:
         Configured model
     """
-    if backend == "kernel":
-        model = MemoryEfficientLoopedMLP(
-            input_dim=input_dim,
-            hidden_dim=hidden_dim,
-            output_dim=output_dim,
-            max_steps=depth,
-            use_spectral_norm=True,
-        )
-    else:
-        model = LoopedMLP(
-            input_dim=input_dim,
-            hidden_dim=hidden_dim,
-            output_dim=output_dim,
-            max_steps=depth,
-            use_spectral_norm=True,
-            backend=backend,
-        )
+    model = create_native_eqprop_mlp(
+        input_dim=input_dim,
+        hidden_dim=hidden_dim,
+        output_dim=output_dim,
+        num_layers=1,
+        max_steps=depth,
+        use_spectral_norm=True,
+        beta=0.5,
+        settle_steps=depth,
+        lr=0.01,
+    )
 
     # Store effective depth for later reference
     model.effective_depth = depth
@@ -131,7 +125,7 @@ def inject_perturbation_at_layer(
     device = next(model.parameters()).device
 
     perturbation = (
-        torch.randn(batch_size, model.hidden_dim, device=device) * perturbation_strength
+        torch.randn(batch_size, model.geometry.config.hidden_dims[-1], device=device) * perturbation_strength
     )
     return perturbation
 
@@ -193,7 +187,7 @@ def run_signal_propagation_experiment(
         sample_x = sample_x.to(device)
 
         # Initialize hidden state
-        h_base = model._initialize_hidden_state(sample_x)
+        h_base = model.geometry._layers[0](sample_x)
 
         # Inject perturbation at the "last" layer (effectively at equilibrium)
         h_perturbed = h_base + perturbation_strength * torch.randn_like(h_base)

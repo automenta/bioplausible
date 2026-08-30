@@ -261,6 +261,19 @@ def compose_system[
 
             return run_forward(self.substrate, self.geometry, self.dynamics, x)
 
+        def __call__(self, x: Tensor) -> Tensor:
+            """Enable calling the system like a function: model(x)."""
+            return self.forward(x)
+
+        def parameters(self):
+            """Return an iterator over all learnable parameters (from geometry)."""
+            return self.geometry.params.values()
+
+        @property
+        def training(self) -> bool:
+            """PyTorch compatibility: training mode flag."""
+            return self._training
+
         def train(self, mode: bool = True) -> _ComposedSystem:
             """Set training mode. Compatibility with PyTorch nn.Module interface."""
             self._training = mode
