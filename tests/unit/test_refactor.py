@@ -1,6 +1,7 @@
 import unittest
 
 from computronium.core.registry import ComponentCategory, Registry
+from computronium.models.native import registration  # noqa: F401  (populates Registry)
 
 
 class TestRefactor(unittest.TestCase):

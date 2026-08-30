@@ -94,9 +94,6 @@ compatibility alias map to the model-side registration
 
 __version__ = "1.0.0"
 
-# Trigger native model registration
-from computronium.models.native import registration  # noqa: F401
-
 # Lazy imports for heavy dependencies (zoo, experiment, config, core components)
 # Name -> (submodule_path, attr_or_None). attr None returns the submodule itself.
 _LAZY: dict[str, tuple[str, str | None]] = {
@@ -104,6 +101,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "CompositeState": ("computronium.state", "CompositeState"),
     "CoupledTransition": ("computronium.core.joint.transition", "CoupledTransition"),
     "StateRegistry": ("computronium.state", "StateRegistry"),
+    "Registry": ("computronium.core.registry", "Registry"),
     "SystemContext": ("computronium.state", "SystemContext"),
     # Core 5-D Ontology (new decomposed modules)
     "AnalogSubstrate": ("computronium.ontology.substrate", "AnalogSubstrate"),
@@ -352,6 +350,7 @@ __all__ = [
     "QuantumSubstrate",
     "RandomProjectionsCredit",
     "RecurrentGeometry",
+    "Registry",
     "RiemannianOrthogonalUpdate",
     "RoutingPlasticity",
     "RuleStatePlasticity",
@@ -412,7 +411,15 @@ __all__ = [
 
 # ruff: file-ignore[raise-vanilla-args, RUF022]
 def __getattr__(name: str) -> object:
-    """Lazily import a top-level symbol on first access."""
+    """Lazily import a top-level symbol on first access.
+
+    Attribute access also triggers deferred Registry population so light
+    submodule imports (e.g. ``computronium.core.registry``) stay torch-free
+    while top-level consumers see a fully populated Registry.
+    """
+    from computronium.core.registry import _ensure_native_registered
+
+    _ensure_native_registered()
     if name not in _LAZY:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     module_name, attr = _LAZY[name]

@@ -393,6 +393,8 @@ def construct_model(
     Returns:
         The constructed ``nn.Module``.
     """
+    if isinstance(input_dim, tuple | list):
+        input_dim = int(math.prod(input_dim))
     consumption = resolve_consumption(model_cls)
     if consumption.accepts_config:
         cfg = build_model_config(

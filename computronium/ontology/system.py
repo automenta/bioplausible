@@ -931,6 +931,8 @@ class ModelAdapter:
                     legacy_metrics = legacy_result  # type: ignore[assignment]
             except Exception as e:
                 legacy_metrics = {"error": str(e)}
+        else:
+            legacy_metrics = self._standard_metrics(x, y)
 
         # Run System train_step
         system = self.to_system()
@@ -958,6 +960,20 @@ class ModelAdapter:
                 "family": self._metadata.family if self._metadata else "unknown",
             },
         }
+
+    def _standard_metrics(self, x: Tensor, y: Tensor) -> dict[str, object]:
+        """Loss/accuracy for models without a ``train_step`` method."""
+        from computronium.core.losses import compute_loss
+
+        was_training = self.model.training
+        self.model.eval()
+        with torch.no_grad():
+            logits = self.model(x)
+            loss = compute_loss(nn.CrossEntropyLoss(), logits, y)
+        if was_training:
+            self.model.train()
+        acc = (logits.argmax(-1) == y).float().mean().item()
+        return {"loss": float(loss.item()), "accuracy": acc}
 
     @staticmethod
     def _compare_metrics(
@@ -1028,12 +1044,22 @@ class _AdaptedSystem:
         self.credit = credit
         self.update = update
         self._model = model
+        self._optimizer: torch.optim.Optimizer | None = None
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
         # Delegate to model's training step if available
         if hasattr(self._model, "train_step"):
             return self._model.train_step(x, y)
-        return {"loss": 0.0}
+        from computronium.core.trainer import bptt_step
+
+        if self._optimizer is None:
+            self._optimizer = torch.optim.SGD(
+                self._model.parameters(), lr=self.update.config.step_size
+            )
+        out = bptt_step(self._model, self._optimizer, x, y)
+        logits: Tensor = out["logits"]  # type: ignore[assignment]
+        acc = (logits.argmax(-1) == y).float().mean().item()
+        return {"loss": float(out["loss"]), "accuracy": acc}
 
     def forward(self, x: Tensor) -> Tensor:
         return self._model(x)

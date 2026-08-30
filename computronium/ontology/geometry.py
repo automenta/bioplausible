@@ -264,7 +264,7 @@ class FeedforwardGeometry(nn.Module):
 
             substrate = DigitalSubstrate()
         op = substrate.get_forward_operator()
-        h = x
+        h = x.flatten(1) if x.dim() > 2 else x
         for layer in self._layers:
             if isinstance(layer, nn.Linear):
                 h = op(h, layer.weight)
@@ -290,7 +290,7 @@ class FeedforwardGeometry(nn.Module):
 
             substrate = DigitalSubstrate()
         op = substrate.get_forward_operator()
-        h = x
+        h = x.flatten(1) if x.dim() > 2 else x
         acts = [h]  # Include input
         for layer in self._layers:
             if isinstance(layer, nn.Linear):

@@ -4,12 +4,15 @@ Training utilities for the TaskProtocol interface.
 Moved from ``hyperopt/tasks.py`` during Phase 3.1 task hierarchy merge.
 """
 
-from typing import Protocol, runtime_checkable
+import contextlib
+import time
+from typing import Protocol, cast, runtime_checkable
 
 import torch
 from torch import nn
 
 from computronium.core.logging import get_logger
+from computronium.core.losses import compute_loss
 from computronium.domains.base import DomainType
 
 __all__ = [
@@ -69,13 +72,20 @@ def _resolve_task_loss(task: TaskProtocol) -> nn.Module:
     return nn.CrossEntropyLoss()
 
 
-class _TaskTrainer:
-    """Lightweight task-protocol trainer.
+def _accuracy(logits: torch.Tensor, y: torch.Tensor) -> float:
+    """Classification accuracy; 0.0 for non-index targets (regression)."""
+    if y.dtype not in (torch.long, torch.int, torch.int32, torch.int64):
+        return 0.0
+    preds = logits[:, -1, :] if logits.dim() == 3 else logits
+    return (preds.argmax(-1) == y).float().mean().item()
 
-    Thin wrapper around ``CoreTrainer`` that delegates training to
-    ``CoreTrainer.from_task()``.  The wrapper exists to preserve the
-    ``train_*``-prefixed metric shape and inline validation behaviour
-    expected by ``hyperopt`` callers.
+
+class _TaskTrainer:
+    """Lightweight task-protocol trainer for plain ``nn.Module`` models.
+
+    Runs the canonical forward/loss/backward/step loop over task batches with
+    inline validation, preserving the ``train_*``-prefixed metric shape
+    expected by hyperopt callers.
     """
 
     def __init__(
@@ -83,7 +93,7 @@ class _TaskTrainer:
         model: nn.Module,
         task: TaskProtocol,
         device: str = "cpu",
-        optimizer=None,
+        optimizer: torch.optim.Optimizer | None = None,
         epochs: int = 1,
         batches_per_epoch: int = 1,
         grad_clip: float | None = None,
@@ -93,58 +103,65 @@ class _TaskTrainer:
         output_dir: str = "",
         **kwargs,
     ):
-        from computronium.core.trainer import CoreTrainer
-
-        self._trainer = CoreTrainer.from_task(
-            model=model,
-            task=task,
-            device=device,
-            optimizer=optimizer,
-            epochs=epochs,
-            batches_per_epoch=batches_per_epoch,
-            grad_clip=grad_clip,
-            use_compile=use_compile,
-            track_energy=track_energy,
-            ablation_tags=ablation_tags or {},
-            output_dir=output_dir,
-            batch_size=kwargs.pop("batch_size", 32),
-        )
-        self.model = model
+        self.model: nn.Module = cast("nn.Module", model)
         self.task = task
+        self.device = device
         self.epochs = epochs
+        self.batches_per_epoch = int(kwargs.pop("steps", batches_per_epoch))
+        self.episodes_per_epoch = self.batches_per_epoch
+        self.batch_size = int(kwargs.pop("batch_size", 32))
+        self.eval_batches = kwargs.pop("eval_batches", None)
+        self.grad_clip = grad_clip
+        self.track_energy = track_energy
+        self.ablation_tags = ablation_tags or {}
+        self.output_dir = output_dir
+        self._loss = _resolve_task_loss(task)
+        if use_compile:
+            self.model = cast("nn.Module", torch.compile(self.model))
+        lr = float(kwargs.pop("lr", 1e-3))
+        self.optimizer = optimizer or torch.optim.Adam(self.model.parameters(), lr=lr)
 
-    @property
-    def optimizer(self):
-        return self._trainer.optimizer
+    def _run_batches(self, split: str, no_grad: bool = False) -> dict[str, float]:
+        total_loss = 0.0
+        total_acc = 0.0
+        batches = self.eval_batches if (no_grad and self.eval_batches) else 1
+        ctx = torch.no_grad() if no_grad else contextlib.nullcontext()
+        with ctx:
+            for _ in range(int(batches)):
+                x, y = self.task.get_batch(split=split, batch_size=self.batch_size)
+                x, y = x.to(self.device), y.to(self.device)
+                logits = self.model(x)
+                loss = compute_loss(self._loss, logits, y)
+                if not no_grad:
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    if self.grad_clip:
+                        nn.utils.clip_grad_norm_(
+                            self.model.parameters(), self.grad_clip
+                        )
+                    self.optimizer.step()
+                total_loss += loss.item()
+                total_acc += _accuracy(logits, y)
+        n = int(batches)
+        return {"loss": total_loss / n, "accuracy": total_acc / n}
 
     def train_epoch(self) -> dict[str, float]:
         """Run one epoch of training and return aggregated metrics."""
-        import time
-
         epoch_t0 = time.time()
-        raw = self._trainer.train_epoch()
-
-        metrics: dict[str, float] = {}
-        for k, v in raw.items():
-            if k in ("loss", "accuracy"):
-                metrics[f"train_{k}"] = v
-            elif k == "samples_seen":
-                continue
-            else:
-                metrics[k] = v
-        metrics["loss"] = metrics.get("train_loss", 0.0)
-        metrics["accuracy"] = metrics.get("train_accuracy", 0.0)
+        self.model.train()
+        train_metrics = self._run_batches("train")
+        metrics: dict[str, float] = {f"train_{k}": v for k, v in train_metrics.items()}
+        metrics |= train_metrics
 
         metrics["val_loss"] = float("nan")
         metrics["val_accuracy"] = float("nan")
         try:
-            val_raw = self._trainer.validate(1)
-            metrics["val_loss"] = val_raw.get("val_loss", float("nan"))
-            metrics["val_accuracy"] = val_raw.get("val_accuracy", float("nan"))
-            if "val_perplexity" in val_raw:
-                metrics["val_perplexity"] = val_raw["val_perplexity"]
-        except (NotImplementedError, RuntimeError) as e:
+            val_metrics = self._run_batches("val", no_grad=True)
+            metrics["val_loss"] = val_metrics["loss"]
+            metrics["val_accuracy"] = val_metrics["accuracy"]
+        except (NotImplementedError, RuntimeError, KeyError, ValueError) as e:
             logger.warning("Validation skipped for %s: %s", self.task.name, e)
 
         metrics["time"] = time.time() - epoch_t0
+        metrics["samples_seen"] = float(self.batches_per_epoch * self.batch_size)
         return metrics

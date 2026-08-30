@@ -6,6 +6,7 @@ Provides FAISS-based semantic search and embedding generation.
 
 import json
 import pathlib
+import sqlite3
 from dataclasses import dataclass
 
 import numpy as np
@@ -116,7 +117,7 @@ class VectorStore:
             logger.warning(
                 "Vector search not available. Falling back to keyword search."
             )
-            return []
+            return self._keyword_search(query, k, min_similarity)
 
         # Generate query embedding
         query_embedding = self._embed_text(query)
@@ -140,6 +141,35 @@ class VectorStore:
                         break
 
         return results
+
+    def _keyword_search(
+        self, query: str, k: int, min_similarity: float
+    ) -> list[tuple[str, float]]:
+        """Term-overlap fallback over the knowledge table when FAISS/embeddings
+        are unavailable. Score is the fraction of query terms present in the
+        entry's searchable text."""
+        terms = query.lower().split()
+        if not terms:
+            return []
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                rows = conn.execute(
+                    "SELECT rowid, id, topic, model_family, finding, details, tags"
+                    " FROM knowledge"
+                ).fetchall()
+        except sqlite3.OperationalError as e:
+            logger.warning("Keyword search failed: %s", e)
+            return []
+        results: list[tuple[int, str, float]] = []
+        for rowid, entry_id, *text_fields in rows:
+            text = " ".join(str(field) for field in text_fields if field).lower()
+            score = sum(term in text for term in terms) / len(terms)
+            if score >= min_similarity:
+                results.append((rowid, entry_id, score))
+        return [
+            (entry_id, score)
+            for _, entry_id, score in sorted(results, key=lambda r: (-r[2], -r[0]))
+        ][:k][:k]
 
     def get_stats(self) -> dict[str, object]:
         """Get vector store statistics."""

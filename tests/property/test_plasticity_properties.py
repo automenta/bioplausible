@@ -495,8 +495,6 @@ def test_fast_weight_plasticity_decay_bound(
                 if post_b.dim() == 0:
                     post_b = post_b.unsqueeze(0)
                 outer = torch.outer(pre_b, post_b).flatten()
-                if outer.shape[0] > fast_weight_dim:
-                    outer = outer[:fast_weight_dim]
                 outer_sum += lr * scale * outer.norm().item()
 
         current_psi = plasticity.step(current_psi, z, context)

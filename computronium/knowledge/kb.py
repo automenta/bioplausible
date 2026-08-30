@@ -11,7 +11,7 @@ import pathlib
 import sqlite3
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from computronium.core._paths import db_path
 from computronium.core.exceptions import KnowledgeBaseError
@@ -57,8 +57,19 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
     - Meta-analysis: scaling laws, fingerprints, failure manifolds, phylogeny
     """
 
-    def __init__(self, config: KnowledgeBaseConfig | None = None):
-        self.config = config or KnowledgeBaseConfig()
+    def __init__(
+        self,
+        config: str | pathlib.Path | KnowledgeBaseConfig | None = None,
+        **overrides: object,
+    ) -> None:
+        match config:
+            case KnowledgeBaseConfig():
+                base = config
+            case str() | pathlib.Path():
+                base = KnowledgeBaseConfig(db_path=str(config))
+            case _:
+                base = KnowledgeBaseConfig()
+        self.config = replace(base, **overrides) if overrides else base
 
         # Initialize components
         self.query_engine = QueryEngine(
@@ -367,6 +378,20 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
     ) -> list[dict[str, object]]:
         """List experiments with optional filters."""
         return self.query_engine.list_experiments(model_family, task, limit)
+
+    def natural_language_query(self, question: str, k: int = 3) -> str:
+        """Answer a natural-language question from stored knowledge.
+
+        Retrieves the most relevant entries and composes a deterministic
+        answer text from their findings. Lenient threshold: partial term
+        matches are accepted so loosely-phrased questions still retrieve.
+        """
+        results = self.search(question, k=k, min_similarity=0.0)
+        if not results:
+            return "No relevant knowledge found."
+        return "\n".join(
+            f"{entry.finding} ({entry.model_family})" for entry, _ in results
+        )
 
     # Delegate to vector store
     def search(

@@ -332,15 +332,20 @@ class ElasticConsolidationUpdate:
         self.config = config or ParameterUpdateConfig.elastic_consolidation()
         self._old_params: dict[str, Tensor] = {}
         self._fisher: dict[str, Tensor] = {}
+        self._baseline: dict[str, Tensor] = {}
 
     def consolidate(
-        self, params: dict[str, Tensor], old_params: dict[str, Tensor]
+        self, params: dict[str, Tensor], old_params: dict[str, Tensor] | None = None
     ) -> None:
         """Store old parameters and compute Fisher importance (squared distance from old).
 
-        In EWC, the Fisher information is approximated by (param - old_param)^2,
-        which measures how much each parameter has moved from the previous task.
+        With ``old_params`` given, importance is ``(params - old_params)^2``.
+        Single-argument form anchors the current snapshot for future tasks and
+        derives importance from drift since the previous consolidation
+        baseline (uniform damping on the first call).
         """
+        if old_params is None:
+            old_params = self._baseline or params
         self._old_params = {k: v.clone().detach() for k, v in old_params.items()}
         # Fisher = (current - old)^2 + fisher_damping (for numerical stability)
         self._fisher = {
@@ -349,6 +354,7 @@ class ElasticConsolidationUpdate:
             for k in params
             if k in old_params
         }
+        self._baseline = {k: v.clone().detach() for k, v in params.items()}
 
     def step(
         self,

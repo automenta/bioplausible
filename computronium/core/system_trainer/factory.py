@@ -115,6 +115,8 @@ def compose_system[
         credit: TC
         update: TU
         _training: bool = True
+        # Attached training state (e.g. hyperopt mirrors trainer.optimizer here)
+        optimizer: object | None = None
 
         def to_spec(self) -> dict:
             """Serialize the System to a specification dictionary.
@@ -268,6 +270,12 @@ def compose_system[
         def parameters(self):
             """Return an iterator over all learnable parameters (from geometry)."""
             return self.geometry.params.values()
+
+        def to(self, device: torch.device | str) -> _ComposedSystem:
+            """Move learnable parameters to ``device`` (nn.Module compatibility)."""
+            for name, param in self.geometry.params.items():
+                self.geometry.params[name] = param.to(device)
+            return self
 
         @property
         def training(self) -> bool:

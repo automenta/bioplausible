@@ -284,6 +284,24 @@ class _DomainIs:
         return meta.domain == self.domain
 
 
+_registration_state = {"native": False, "blocked": False}
+
+
+def _ensure_native_registered() -> None:
+    """Lazily populate the Registry with native models + optimizers.
+
+    Deferred from import time so light imports of this module stay
+    torch-free (module-boundary invariant). Idempotent; permanently
+    disabled once :meth:`Registry.clear` takes ownership of contents.
+    """
+    state = _registration_state
+    if state["blocked"] or state["native"]:
+        return
+    state["native"] = True
+    from computronium.models.native import registration  # noqa: F401
+    from computronium.ontology import optimizers  # noqa: F401
+
+
 class Registry:
     """Central registry for all components.
 
@@ -414,6 +432,7 @@ class Registry:
         If ``name`` is a known alias (see :attr:`_ALIASES`), the lookup
         transparently follows it to the canonical component.
         """
+        _ensure_native_registered()
         cat = cls._resolve_category(category)
         if cat not in cls._components:
             raise ValueError(f"Unknown category: {cat}")
@@ -475,6 +494,7 @@ class Registry:
         Resolves alias names transparently by delegating to
         :meth:`resolve_alias`.
         """
+        _ensure_native_registered()
         cat = cls._resolve_category(category)
         if cat not in cls._components:
             raise ValueError(f"Unknown category: {cat}")
@@ -487,18 +507,30 @@ class Registry:
         return cast("ComponentMetadata", cls._components[cat][name]["metadata"])
 
     @classmethod
+    def _names_with_aliases(cls, cat: ComponentCategory) -> list[str]:
+        """Registered names for ``cat`` plus any aliases resolving into it."""
+        registered = cls._components.get(cat, {})
+        names = list(registered.keys())
+        names.extend(
+            alias
+            for alias, (target_cat, target_name) in cls._ALIASES.items()
+            if target_cat == cat and target_name in registered and alias not in names
+        )
+        return names
+
+    @classmethod
     def list(
         cls, category: ComponentCategory | str | None = None
     ) -> dict[str, list[str]]:
-        """List all registered components, optionally filtered by category."""
+        """List all registered components (including aliases), optionally
+        filtered by category."""
+        _ensure_native_registered()
         if category is not None:
             cat: ComponentCategory = cls._resolve_category(category)
-            if cat not in cls._components:
-                return {cat.value: []}
-            return {cat.value: list(cls._components[cat].keys())}
+            return {cat.value: cls._names_with_aliases(cat)}
         return {
-            cat.value: list(comps.keys())
-            for cat, comps in cls._components.items()
+            cat.value: cls._names_with_aliases(cat)
+            for cat in cls._components
             if isinstance(cat, ComponentCategory)
         }
 
@@ -522,6 +554,7 @@ class Registry:
         entries matching ALL criteria. Designed for AutoScientist
         composition.
         """
+        _ensure_native_registered()
         flt = _QueryFilter(
             locality=locality,
             compute=compute,
@@ -964,8 +997,13 @@ class Registry:
 
     @classmethod
     def clear(cls) -> None:
-        """Clear the registry (mainly for testing)."""
+        """Clear the registry (mainly for testing).
+
+        Disables lazy native registration so subsequent reads reflect the
+        explicitly-managed (empty) state instead of repopulating it.
+        """
         cls._components.clear()
+        _registration_state["blocked"] = True
 
     @classmethod
     def export_yaml(cls, path: str) -> None:

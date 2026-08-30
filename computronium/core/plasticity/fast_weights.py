@@ -81,17 +81,26 @@ class FastWeightPlasticity:
         return self._config.fast_weight_dim
 
     def _get_proj_matrix(self, outer_dim: int, device: torch.device) -> Tensor:
-        """Get or create random projection matrix for given outer product dimension.
+        """Get or create the random-subspace projection for a given outer
+        product dimension.
 
-        Uses a fixed seed per dimension for reproducibility across episodes.
+        Rows are orthonormal (zero-padded when ``outer_dim`` is smaller than
+        the fast-weight dimension), so the projection is non-expansive:
+        ``||P v|| <= ||v||``. This preserves the Hebbian decay bound
+        deterministically, unlike a scaled Gaussian projection which only
+        preserves norms in expectation.
         """
         if outer_dim not in self._proj_matrices:
-            # Deterministic random projection for given outer_dim
+            # Deterministic random subspace for given outer_dim
             generator = torch.Generator(device=device)
             generator.manual_seed(outer_dim * 12345 + 42)
-            proj = torch.randn(
-                self.fast_weight_dim, outer_dim, generator=generator, device=device
-            ) / (outer_dim**0.5)
+            raw = torch.randn(
+                outer_dim, self.fast_weight_dim, generator=generator, device=device
+            )
+            q, _ = torch.linalg.qr(raw)
+            proj = torch.zeros(self.fast_weight_dim, outer_dim, device=device)
+            rank = min(outer_dim, self.fast_weight_dim)
+            proj[:rank, :] = q[:, :rank].T
             self._proj_matrices[outer_dim] = proj
         return self._proj_matrices[outer_dim]
 

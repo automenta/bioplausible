@@ -421,7 +421,7 @@ def test_strategy_end_to_end_promotion(temp_db):
     state = ExperimentState(temp_db)
     storage = HyperoptStorage(temp_db)
 
-    model = "backprop_mlp"
+    model = "native_backprop_mlp"
 
     # Set up some SMOKE and SHALLOW tier successes
     # Backprop Baseline handles mnist, others might be restricted by curriculum
