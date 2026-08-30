@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from computronium.core.registry import register_propagator
+from computronium.core.registry import register_credit_assignment
 
 from .base import LearningRuleOptimizer
 
@@ -22,7 +22,7 @@ __all__ = [
 ]
 
 
-@register_propagator("feedback_alignment", family="fa")
+@register_credit_assignment("feedback_alignment", family="fa")
 class FeedbackAlignment(LearningRuleOptimizer):
     """
     Feedback Alignment: Fixed random feedback weights.
@@ -81,7 +81,7 @@ class FeedbackAlignment(LearningRuleOptimizer):
                 self._apply_update(param.grad, param, buffer)
 
 
-@register_propagator("direct_fa", family="fa")
+@register_credit_assignment("direct_fa", family="fa")
 class DirectFA(LearningRuleOptimizer):
     """
     Direct Feedback Alignment: Skip connections from output to all layers.
@@ -149,7 +149,7 @@ class DirectFA(LearningRuleOptimizer):
                 self._apply_update(param.grad, param, buffer)
 
 
-@register_propagator("adaptive_fa", family="fa")
+@register_credit_assignment("adaptive_fa", family="fa")
 class AdaptiveFA(LearningRuleOptimizer):
     """
     Adaptive Feedback Alignment: Feedback weights slowly adapt.
@@ -208,7 +208,7 @@ class AdaptiveFA(LearningRuleOptimizer):
                 fb.add_(alignment_grad, alpha=self.feedback_lr)
 
 
-@register_propagator("stochastic_fa", family="fa")
+@register_credit_assignment("stochastic_fa", family="fa")
 class StochasticFA(LearningRuleOptimizer):
     """
     Stochastic Feedback Alignment: Noise in feedback weights.
@@ -259,7 +259,7 @@ class StochasticFA(LearningRuleOptimizer):
                 fb.add_(torch.randn_like(fb) * self.noise_std)
 
 
-@register_propagator("contrastive_fa", family="fa")
+@register_credit_assignment("contrastive_fa", family="fa")
 class ContrastiveFA(LearningRuleOptimizer):
     """
     Contrastive Feedback Alignment: Contrastive learning + FA.
@@ -334,7 +334,7 @@ class ContrastiveFA(LearningRuleOptimizer):
         return loss
 
 
-@register_propagator("sign_symmetric_fa", family="fa")
+@register_credit_assignment("sign_symmetric_fa", family="fa")
 class SignSymmetricFA(LearningRuleOptimizer):
     """
     Sign-Symmetric Feedback Alignment: Feedback weights preserve forward weight signs.

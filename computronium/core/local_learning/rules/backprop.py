@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from computronium.core.registry import LocalityLevel, register_propagator
+from computronium.core.registry import LocalityLevel, register_credit_assignment
 
 from .base import LearningRuleOptimizer
 
@@ -17,7 +17,7 @@ __all__ = [
 ]
 
 
-@register_propagator(
+@register_credit_assignment(
     "backprop",
     family="backprop",
     locality_level=LocalityLevel.GLOBAL,

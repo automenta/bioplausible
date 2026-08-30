@@ -7,7 +7,7 @@ with a ``step(x, target)`` method that drives forward/backward/propagation.
 Moved from ``zoo/propagators/`` as the canonical home for learning rules.
 """
 
-# Import all rules to trigger @register_propagator registration
+# Import all rules to trigger @register_credit_assignment registration
 from . import backprop, base, eqprop, fa, hebbian, spiking
 from .composite_adapter import CompositeOptimizerAdapter
 

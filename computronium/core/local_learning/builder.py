@@ -86,8 +86,8 @@ class TileAlgorithmConfig(LocalLearningConfigProtocol):
 
     # Bio-plausible loop knobs
     beta: float = 0.1
-    step_size: float = 0.1
-    lambda_error: float = 1.0
+    step_size: float = 0.2
+    lambda_error: float = 0.5
     clamp_min: float = -10.0
     clamp_max: float = 10.0
     clamp: bool = True
@@ -543,19 +543,18 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         state_old: list[Tensor],
         step: int,
     ) -> bool:
-        """Custom convergence check for tile activities."""
+        """Custom convergence check for tile activities (absolute delta)."""
         if step <= self.convergence_start:
             return False
 
-        convergence_norm = 2
-        max_rel_delta = 0.0
+        # Use absolute delta (inf-norm) like EnergyMinimizationDynamics
+        # Relative delta is constant for exponential decay dynamics
+        max_abs_delta = 0.0
         for s_new, s_old in zip(state_new, state_old):
-            abs_delta = torch.dist(s_new, s_old, p=convergence_norm).item()
-            norm = s_old.norm(p=convergence_norm).item() + 1e-8
-            rel_delta = abs_delta / norm
-            max_rel_delta = max(max_rel_delta, rel_delta)
+            abs_delta = torch.dist(s_new, s_old, p=float("inf")).item()
+            max_abs_delta = max(max_abs_delta, abs_delta)
 
-        return max_rel_delta < self.convergence_threshold
+        return max_abs_delta < self.convergence_threshold
 
     def _on_step_end(
         self,

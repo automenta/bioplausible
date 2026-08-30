@@ -16,7 +16,7 @@ equivalent local rule through the Zoo propagator interface.
 import torch
 from torch import nn
 
-from computronium.core.registry import LocalityLevel, register_propagator
+from computronium.core.registry import LocalityLevel, register_credit_assignment
 
 from .base import LearningRuleOptimizer
 
@@ -25,7 +25,7 @@ __all__ = [
 ]
 
 
-@register_propagator(
+@register_credit_assignment(
     "stdp",
     family="spiking",
     locality_level=LocalityLevel.LOCAL,

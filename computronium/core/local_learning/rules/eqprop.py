@@ -10,7 +10,7 @@ from torch import nn
 
 from computronium.core.local_learning.settling import energy_gradient_descent
 from computronium.core.optimization.strategies import UpdateStrategy
-from computronium.core.registry import register_propagator
+from computronium.core.registry import register_credit_assignment
 from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 from .base import LearningRuleOptimizer
@@ -24,7 +24,7 @@ __all__ = [
 ]
 
 
-@register_propagator("eq_prop", requires=["transition_graph"], family="eqprop")
+@register_credit_assignment("eq_prop", requires=["transition_graph"], family="eqprop")
 class EqProp(LearningRuleOptimizer):
     """
     Standard Equilibrium Propagation.
@@ -273,7 +273,7 @@ class EqProp(LearningRuleOptimizer):
                 weight.grad = -(contrast.T @ inp) / batch_size
 
 
-@register_propagator(
+@register_credit_assignment(
     "adam_eq_prop",
     requires=["transition_graph"],
     family="eqprop",
@@ -345,7 +345,7 @@ class AdamEqProp(EqProp):
         self._adam.step()
 
 
-@register_propagator(
+@register_credit_assignment(
     "holomorphic_eq_prop",
     requires=["transition_graph"],
     family="eqprop",
@@ -388,7 +388,7 @@ class HolomorphicEqProp(LearningRuleOptimizer):
                 self._apply_update(param.grad, param, buffer)
 
 
-@register_propagator(
+@register_credit_assignment(
     "finite_nudge_eq_prop",
     requires=["transition_graph"],
     family="eqprop",
@@ -430,7 +430,7 @@ class FiniteNudgeEqProp(LearningRuleOptimizer):
                 self._apply_update(param.grad, param, buffer)
 
 
-@register_propagator("lazy_eq_prop", requires=["transition_graph"], family="eqprop")
+@register_credit_assignment("lazy_eq_prop", requires=["transition_graph"], family="eqprop")
 class LazyEqProp(LearningRuleOptimizer):
     """
     Lazy EqProp: Event-driven updates.
