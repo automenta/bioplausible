@@ -1,6 +1,6 @@
 # TODO8.md — Comprehensive Test & Capability Parity Plan
 
-> **Scope:** Achieve a functioning, well-tested codebase leveraging the new Ontology (not Legacy "Zoo") API/architecture. Based on complete test run results from `run_all_tests.sh` (67 failed, 1387 passed, 97 skipped, 33 xfailed, 4 xpassed) + comprehensive review of TODO6.md, TODO7.md, TODO.md sprint backlog.
+> **Scope:** Achieve a functioning, well-tested codebase leveraging the new Ontology (not Legacy "Zoo") API/architecture. Based on complete test run results from `run_all_tests.sh` (67 failed, 1387 passed, 97 skipped, 33 xfailed, 4 xpassed) + comprehensive review of TODO2-7.md, TODO.md sprint backlog.
 
 ---
 
@@ -13,8 +13,12 @@
 - **Lightning integration**: Uses `ComponentCategory.MODEL` which exists but registry is unpopulated
 - **Test coverage**: ~16.8% (meets ≥15% floor), but many integration tests failing due to missing registrations
 - **Geometry gaps**: No `ConvGeometry`, `GraphGeometry`, `AttentionGeometry` — Conv/Graph/Attention EqProp gone
-- **Joint architecture (6-D)**: Implemented through Sprint J6 — stability, plasticity, campaigns, benchmarks, CLI all functional
+- **Joint architecture (6-D)**: Implemented through Sprint J6 / TODO5 Phase 3.6 — stability, plasticity, campaigns, benchmarks, CLI all functional
 - **Legacy Zoo**: ~200K lines removed (13 modules). 3 kept as thin wrappers (`tile_models.py`, `tile_fa.py`, `tile_lm.py`)
+- **System-wide correctness audits**: ALL COMPLETE (Phase 3.6.1–3.6.8 from TODO5)
+- **EqProp competitive**: 81.32% MNIST (best epoch) anchored via 20-epoch run with grad_clip + checkpointing
+- **ComputroniumLinear (CP-C)**: Drop-in `nn.Linear` wrapper COMPLETE with 26 tests
+- **torch.jit → torch.export**: Migration COMPLETE in `deployment.py`
 
 ---
 
@@ -81,17 +85,25 @@ cls = Registry.get(ComponentCategory.MODEL, name)  # Returns empty registry
 **Current:** 21 passing (was 18, restored from 29)
 **Target:** Full 29+ passing with TileAlgorithm convergence fixes.
 
-### 12. Joint Architecture Test Coverage (from TODO.md Sprint J6)
+### 12. Joint Architecture Test Coverage (from TODO.md Sprint J6 / TODO5)
 - [ ] Property tests: 351 passing (already ✅ per TODO.md)
 - [ ] Integration tests: `tests/integration/joint/test_benchmarks.py` — currently IGNORED in `run_all_tests.sh`
 - [ ] Joint validation CLI: `biopl joint-validate` — verify all 6-D coordinate combos
 - [ ] Stability metrics: `tests/property/joint/test_stability_metrics.py` — 33 tests passing ✅
 
+### 13. Energy Invariant Tests (from TODO2.md)
+**Status:** IGNORED in `run_all_tests.sh` — `test_energy_invariants.py`
+**Action:** Audit — tests should pass per TODO2 (#9 "All 15 tests now pass"). Fix or re-enable.
+
+### 14. Module Boundary Tests (from TODO2.md)
+**Status:** 2/3 tests failing in `test_module_boundary.py` — pre-existing architectural issue (`SystemTrainer` eagerly imported in `__init__.py`)
+**Action:** Implement lazy loading in `__init__.py` if strict module boundaries required, or accept as known limitation.
+
 ---
 
 ## 🟠 Medium Priority (Architecture & Performance — Phase 2-3)
 
-### 13. Legacy Kernel Porting to Substrate Operator API (P2b from TODO7)
+### 15. Legacy Kernel Porting to Substrate Operator API (P2b from TODO7)
 | Kernel Type | Status | Target |
 |-------------|--------|--------|
 | Triton kernels (eqprop, FA, etc.) | **PENDING** | Port to `Substrate.get_forward_operator()` |
@@ -99,7 +111,7 @@ cls = Registry.get(ComponentCategory.MODEL, name)  # Returns empty registry
 | Custom backward (EquilibriumFunction) | **PENDING** | Verify compatibility with native System |
 | Sparse/Ternary quantization | **PENDING** | Port to `Substrate.quantize_weights()` |
 
-### 14. Geometry Build-Out Decision (P3 — Explicit Decision Required)
+### 16. Geometry Build-Out Decision (P3 — Explicit Decision Required)
 | Geometry | Need For | Effort | Decision |
 |----------|----------|--------|----------|
 | `ConvGeometry` | Vision (ConvEqProp, ConvTileNet) | Medium | **Defer** unless science needs |
@@ -109,24 +121,24 @@ cls = Registry.get(ComponentCategory.MODEL, name)  # Returns empty registry
 
 **Recommendation:** Defer all. Phase 5/6 science runs on Feedforward/Recurrent/Tile at MLP scale.
 
-### 15. Pyright Strict Mode
-**Current:** ~4315 errors
+### 17. Pyright Strict Mode
+**Current:** ~4315 errors (or 3837 per TODO4)
 **Target:** ≤1000 (deprioritized behind functional work)
 
-### 16. Ignored Test Files in `run_all_tests.sh` — Audit & Resolve
+### 18. Ignored Test Files in `run_all_tests.sh` — Audit & Resolve
 These 8 files are permanently ignored. Audit each:
 | File | Reason Ignored | Action |
 |------|----------------|--------|
 | `test_hardware_aware.py` | Legacy imports | Migrate or delete |
 | `test_benchmarks.py` (joint) | Not implemented | Implement or delete |
 | `test_diffusion_integration.py` | DiffusionDynamics gradient bug | Fix or skip |
-| `test_energy_invariants.py` | Legacy imports | Migrate |
+| `test_energy_invariants.py` | Legacy imports / should pass per TODO2 | Fix and re-enable |
 | `test_equitile_sparsity_robustness.py` | Legacy imports | Migrate |
 | `test_dht.py` | Environment issues | Fix infra or skip |
 | `test_grpc_seam.py` | gRPC infra issues | Fix infra or skip |
 | `test_grpc_seam_subprocess.py` | gRPC infra issues | Fix infra or skip |
 
-### 17. Remaining Zoo Modules — Final Deprecation/Archival
+### 19. Remaining Zoo Modules — Final Deprecation/Archival
 **Kept as thin wrappers (per TODO7):**
 - `computronium/zoo/models/tile_models.py` — Thin TileAlgorithm wrappers
 - `computronium/zoo/models/tile_fa.py` — Thin TileAlgorithm wrapper  
@@ -134,7 +146,7 @@ These 8 files are permanently ignored. Audit each:
 
 **Action:** Add deprecation warnings pointing to native API; archive to `archive/zoo/` if not needed.
 
-### 18. Campaign/Stability Infrastructure (from TODO6 Phase 3-4)
+### 20. Campaign/Stability Infrastructure (from TODO6 Phase 3-4 / TODO4 PR-0..PR-9)
 - [ ] **DB schema freeze** + migrations for CampaignStore (alembic or custom)
 - [ ] **ProposalObjective** enum: extend with `STABILITY`, `ENERGY`, `LATENCY`, `PLASTICITY_CAPACITY`
 - [ ] **Replication gate:** auto-verify ≥5 seeds + ≥2 task families before promoting discovery
@@ -143,27 +155,45 @@ These 8 files are permanently ignored. Audit each:
 - [ ] **Effective-FLOPs → 𝒞 Vector**: Already implemented in `ResourceUsage` — verify wiring complete
 - [ ] **Algorithm Migration benchmark**: Promoted to `computronium/benchmarks/algorithm_migration.py` — add CI smoke test
 
+### 21. Phase 4 Regime Discovery (from TODO5 — UNBLOCKED)
+- [ ] **Prior-Art Gate** (hard gate): Literature check on mixed credit, hypernetworks, MoE routing — log in `DECISIONS.md`
+- [ ] **Bandit Router**: Generalize `RoutingPlasticity` to route learning rules per layer; reward = energy descent rate + windowed growth + validation improvement
+- [ ] **Memristive IR-Drop** (simulation tier): Sweep IR-drop on `MemristiveSubstrate`; find where `BackpropCredit` parity breaks; test `SpectralConstrainedUpdate` + `EnergyMinimization` for stability
+- [ ] **Photonic Epistemology Swap** (simulation tier): `OpticalSubstrate` (ρ=1.000 post-fix) × {`ThermodynamicContrast`, `LocalGoodnessCredit`, `RandomProjectionsCredit`}
+- [ ] **Campaign Hygiene**: Enforce `simulated / estimated / measured` labeling; `ProposalObjective` non-accuracy ranking; kill criterion for discovery-only wins
+
+### 22. Phase 5 Family-Coverage Benchmark (from TODO5 — UNBLOCKED)
+- [ ] **Coordinate Lock**: Lock by rule-family coverage (every credit×update + substrate variants); ≥30 coords; freeze in `DECISIONS.md`
+- [ ] **Resource-Vector Runner**: Full `ResourceUsage` per coord/seed; equal GPU-hours (PR-6); ≥5 seeds paired
+- [ ] **Dynamical Phylogeny**: Cluster by settling time, windowed growth, gate entropy, ρ via `analysis/genealogy.py`
+- [ ] **Full Run**: Capability matrix, Pareto overlays, per-rule stability audits, failure modes from manifesto
+
+### 23. Phase 6 Frontier Certification (from TODO5 — UNBLOCKED)
+- [ ] **M-Axis Frontier**: Pin S/G/D/C/U at flagship; sweep M ∈ {Null, Routing, FastWeight, RuleState}; `AutoScientistCampaign` with guard live, checkpoint/resume
+- [ ] **Goldilocks Map**: ρ(J_F) × 𝒞 scatter; guard boundary (τ=1.029) overlay; annotate M primitive per Pareto knee; "controlled departure from contraction" zones
+- [ ] **Manifesto Dataset**: Package failure manifesto as standalone dataset from every guard kill + E-7 null across Phases 2–6
+
 ---
 
 ## 🟢 Lower Priority (Polish & Completeness — Phase 4+)
 
-### 19. Coverage Improvements
+### 24. Coverage Improvements
 - Target: ≥25% (currently ~16.8%)
 - Focus: Ontology primitives, SystemTrainer, JointSystemTrainer, Registry, Plasticity, Campaign, Stability, Export, Inference
 
-### 20. Slow Test Optimization
+### 25. Slow Test Optimization
 Identify tests >10s and optimize without sacrificing coverage:
 - Hypothesis property tests with large example counts
 - Integration tests with full training loops
 - Consider `@pytest.mark.slow` separation (already used in benchmark tests)
 
-### 21. Redundant/Outdated Tests
+### 26. Redundant/Outdated Tests
 Audit and remove:
 - Legacy zoo model tests (already mostly removed)
 - Duplicate parity tests
 - Tests for removed capabilities (Conv EqProp, Graph EqProp, Transformer EqProp)
 
-### 22. Untested Functionality — Add Coverage
+### 27. Untested Functionality — Add Coverage
 | Area | Missing Coverage |
 |------|-----------------|
 | JointSystemTrainer | 6-D joint training loop |
@@ -175,17 +205,18 @@ Audit and remove:
 | Stability monitoring | Spectral radius, Lyapunov, basin stability |
 | Frontier analysis | Pareto computation, knee detection |
 
-### 23. CLI Completeness (from TODO.md Sprint J4/J6)
+### 28. CLI Completeness (from TODO.md Sprint J4/J6 / TODO2)
 - [ ] `biopl campaign run --space joint_smoke --objective adaptation_efficiency` — verify end-to-end
 - [ ] `biopl benchmark run --suite z3_fixed_weights` — verify Z3 runs
 - [ ] `biopl stability report` — verify frontier reports
 - [ ] `biopl joint-validate` — verify arbitrary coordinate validation
 
-### 24. Research Program Items (from README & TODO6)
-- [ ] **Phase 4 Regime Discovery**: Bandit Router (generalize RoutingPlasticity to route learning rules)
-- [ ] **Phase 5 Family-Coverage Benchmark**: Lock ≥30 coordinates by rule-family coverage
-- [ ] **Phase 6 Frontier Certification**: M-Axis sweep at flagship coordinate with AutoScientist
-- [ ] **Goldilocks Map**: ρ(J_F) × 𝒞 scatter with guard boundary overlay
+### 29. Rocq Formalization (from TODO3/TODO4 — CP-B pull-based)
+- [ ] `energy_decreases_diagonal` — **DONE** (0-admit, `make` in `rocq/` clean)
+- [ ] General-case `energy_decreases` — Cauchy-Schwarz descent inequality (admitted w/ paper proof; CP-B pull-based)
+- [ ] `settle_converges` — classical coercivity/completeness (CP-B pull-based)
+- [ ] EqProp module split-out → `rocq/EqProp.v` (CP-B pull-based)
+- [ ] Optional CI: `rocq-prover` apt job (verify against real runner)
 
 ---
 
@@ -204,6 +235,7 @@ Audit and remove:
 - [ ] Fix ModelAdapter tests
 - [ ] Fix refactor tests
 - [ ] Audit and migrate/remove 8 ignored test files in `run_all_tests.sh`
+- [ ] Re-enable `test_energy_invariants.py` (should pass per TODO2)
 
 ### Phase 2: Property Test Completion (Week 2)
 - [ ] Complete `test_scaling_invariants.py` migration (resolve xfail/skip)
@@ -211,6 +243,7 @@ Audit and remove:
 - [ ] Improve `test_validation_all.py` skip documentation
 - [ ] Achieve 28/28 native model smoke tests passing
 - [ ] Enable `tests/integration/joint/test_benchmarks.py` in test suite
+- [ ] Fix module boundary tests (lazy loading in `__init__.py`)
 
 ### Phase 3: Kernel Porting (Week 2-3)
 - [ ] Port Triton kernels to Substrate operator API
@@ -231,13 +264,18 @@ Audit and remove:
 - [ ] Integrate counterfactual attribution
 - [ ] Complete CampaignStack.run_campaign()
 
-### Phase 6: Coverage & Polish (Week 4)
-- [ ] Add missing test coverage for all untested functionality (item 22)
+### Phase 6: Phase 4/5/6 Research Execution (Week 4+)
+- [ ] Phase 4: Regime Discovery (Bandit Router, Memristive IR-Drop, Photonic Swap)
+- [ ] Phase 5: Family-Coverage Benchmark (Coordinate Lock, Resource-Vector Runner, Phylogeny)
+- [ ] Phase 6: Frontier Certification (M-Axis Frontier, Goldilocks Map, Manifesto Dataset)
+
+### Phase 7: Coverage & Polish (Week 4-5)
+- [ ] Add missing test coverage for all untested functionality (item 27)
 - [ ] Optimize slow tests
 - [ ] Remove redundant tests
 - [ ] Push coverage to ≥25%
 
-### Phase 7: Pyright & CI (Week 4-5)
+### Phase 8: Pyright & CI (Week 5)
 - [ ] Reduce pyright errors to ≤1000
 - [ ] Ensure `ruff format --check` → `ruff check` → `pyright` → `pytest --cov` all pass in CI
 - [ ] Update `run_all_tests.sh` to remove unnecessary ignores
@@ -254,11 +292,13 @@ Audit and remove:
 | **Property Locks** | All 32 ontology locks passing + 33 joint stability tests |
 | **Settle Protocol** | ≥29 integration tests passing |
 | **Joint Benchmarks** | All 5 suites runnable via `biopl benchmark` |
+| **Energy Invariants** | All 15 tests passing (re-enabled) |
 | **Coverage** | ≥25% |
 | **Pyright Errors** | ≤1000 |
 | **Ignored Test Files** | 0 (all migrated, fixed, or deleted with justification) |
 | **CI Gate** | `ruff format --check` → `ruff check` → `pyright` → `pytest --cov` all pass |
 | **CLI Complete** | `biopl campaign`, `biopl benchmark`, `biopl stability`, `biopl joint-validate` all functional |
+| **Research Phases** | Phase 4 regime discovery run; Phase 5 coordinate locked + run; Phase 6 frontier + manifesto |
 
 ---
 
@@ -272,6 +312,9 @@ Audit and remove:
 6. Registry queries (`Registry.query_axis(...)`) return native models
 7. Campaign persistence: resume after interruption (SQLite + YAML checkpoints)
 8. Pareto frontier computed over loss, resources, stability metrics
+9. EqProp competitive anchor: 81.32% MNIST (best) cited in benchmark
+10. ComputroniumLinear drop-in wrapper: 26 tests passing, bit-for-bit backprop fallback
+11. `torch.export` (PT2) round-trip works for FeedforwardGeometry + RecurrentGeometry
 
 ---
 
@@ -279,11 +322,15 @@ Audit and remove:
 
 - **TODO6.md**: Modularization Phases 0-3 ✅ COMPLETE (stability library, state types, ontology extraction, joint facade, RESEARCH3 infrastructure)
 - **TODO7.md**: Post-cleanup roadmap — Capability-parity migration ~75% done; Verification/Parity DoD is the truth
+- **TODO5.md**: Verified Dynamics Pivot — Phases 1-3.6 ✅ COMPLETE; Phases 4-6 UNBLOCKED; Z3 close-out (order-scoped capability, speed null)
+- **TODO4.md**: Sprint Close-Out — Phase 3.6 audits ✅ COMPLETE; Phase 9 pipeline ✅; PR-0..PR-9 ✅ (except PR-3b, PR-8); Z3 v2 citable but ORDER-SCOPED
+- **TODO3.md**: Scientific Rigor — Hypothesis property tests ✅; Rocq diagonal case ✅; EqProp 80% ✅; Phase 6 dropped
+- **TODO2.md**: Usability/Demo/Rigor — Quickstart, presets, CLI, visualization, AutoScientist, profiling ✅
 - **TODO.md**: Joint Architecture Sprints J0-J6 ✅ COMPLETE through J6 hardening
 - **Legacy Zoo**: ~200K lines removed (13 modules). 3 modules kept as thin wrappers.
 - **Native Models**: 28 registered with explicit 5-D ontology axes. Accessible via `Registry.get()` once registration module loads
 - **Zero-Extension Invariant**: `M=NullPlasticity` slice formally verified (J1 test)
-- **Joint Architecture**: 6-D system `S ⊗ G ⊗ D ⊗ M ⊗ C ⊗ U` fully implemented through Sprint J6
+- **Joint Architecture**: 6-D system `S ⊗ G ⊗ D ⊗ M ⊗ C ⊗ U` fully implemented through Sprint J6 / Phase 3.6
 - **Science vs Product**: Geometry build-out is a **fork** — defer unless Phase 5/6 science demands it
 
 ---
@@ -310,6 +357,9 @@ uv run pytest tests/integration/joint/test_benchmarks.py -v
 uv run pytest tests/property/joint/test_lifecycle_locks.py -q
 uv run pytest tests/property/joint/test_stability_metrics.py -q
 
+# Energy invariants (should pass per TODO2)
+uv run pytest tests/integration/test_energy_invariants.py -v
+
 # CLI verification
 comp joint-validate --coordinate digital/recurrent/energy_min/null/thermo/euclidean
 comp joint-validate --coordinate digital/recurrent/energy_min/routing/thermo/euclidean
@@ -322,4 +372,10 @@ uv run pyright .
 
 # Coverage
 uv run pytest --cov=computronium --cov-report=term-missing
+
+# Rocq formalization
+make -C rocq/
+
+# ComputroniumLinear tests
+uv run pytest tests/unit/nn/test_computronium_linear.py -v
 ```
