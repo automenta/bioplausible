@@ -83,7 +83,7 @@ def _scalar(value: Tensor | float) -> float:
     return value.item() if isinstance(value, Tensor) else float(value)
 
 
-def run_train_step(  # noqa: PLR0913, PLR0917  # 5-axis pipeline contract + x/y
+def run_train_step(  # noqa: PLR0913, PLR0917  # 5/6-axis pipeline contract + x/y
     substrate: Substrate,
     geometry: Geometry,
     dynamics: StateDynamics,
@@ -91,28 +91,52 @@ def run_train_step(  # noqa: PLR0913, PLR0917  # 5-axis pipeline contract + x/y
     update: ParameterUpdate,
     x: Tensor,
     y: Tensor,
+    *,
+    plasticity: object | None = None,
+    psi: dict[str, Tensor] | None = None,
+    context: object | None = None,
 ) -> dict[str, float]:
-    """Execute one training step through the 5-layer pipeline.
+    """Execute one training step through the 5/6-layer pipeline.
 
     Settles exactly the phases declared by ``credit.phases``; runs under
     ``no_grad`` unless ``credit.requires_autograd`` is declared (pseudo-
     gradients are consumed as plain values — keeping settle graphs from
     accumulating is the default for every non-autograd family).
 
+    If ``plasticity`` and ``psi`` are provided, the M-axis is engaged:
+    ψ steps once per episode via ``plasticity.step(psi, z, context)`` and
+    can modulate activity via ``plasticity.modulate(activations, psi)`` if
+    the primitive implements it. J2/J3 invariants: θ untouched intra-episode;
+    ψ mutates only via ``plasticity.step``.
+
     Returns:
         Metrics with parity-guaranteed keys ``loss``/``energy``/``accuracy``
-        plus any float extras the output state or dynamics expose.
+        plus ``free_loss``/``free_energy``/``free_accuracy`` (imp-20).
     """
     grad_ctx = nullcontext() if credit.requires_autograd else torch.no_grad()
     with grad_ctx:
         states: dict[Phase, SystemState] = {}
         initial_activations = forward_pass(substrate, geometry, x)
 
+        # M-axis: step plasticity once per episode on the initial activity state
+        if plasticity is not None and psi is not None and context is not None:
+            from computronium.state import CompositeState
+
+            z = CompositeState(activity={"x": x}, plastic=psi, substrate={})
+            psi = plasticity.step(psi, z, context)
+
         for phase in credit.phases:
             state = SystemState(x=x, y=y)
             state.activations = initial_activations
             target = y if phase is Phase.NUDGED else None
             settled = dynamics.settle(state, geometry, substrate, target=target)
+
+            # M-axis: modulate settled activity if plasticity provides modulate hook
+            if plasticity is not None and psi is not None:
+                modulate = getattr(plasticity, "modulate", None)
+                if modulate is not None:
+                    settled.activations = modulate(settled.activations, psi)
+
             if phase is Phase.NUDGED:
                 settled.loss = task_loss(settled, y)
             settled.energy = dynamics.compute_energy(settled, geometry)
@@ -135,15 +159,31 @@ def run_train_step(  # noqa: PLR0913, PLR0917  # 5-axis pipeline contract + x/y
         pseudo_grads = credit.compute_pseudo_gradient(states, loss, geometry)
         geometry.update_params(update.step(geometry.params, pseudo_grads, geometry))
 
+        # Post-update, target-free forward+settle for honest learning metrics.
+        # This is the "free" readout: what the model actually predicts without
+        # supervision leakage. Legacy "accuracy" = nudged-settle fit (may be leaked).
+        with torch.no_grad():
+            free_state = SystemState(x=x, y=y)
+            free_state.activations = forward_pass(substrate, geometry, x)
+            free_settled = dynamics.settle(free_state, geometry, substrate, target=None)
+            free_loss = task_loss(free_settled, y)
+            free_energy = dynamics.compute_energy(free_settled, geometry)
+            free_accuracy = free_settled.metrics.get("accuracy", 0.0)
+
         metrics = {
             "loss": _scalar(loss),
             "energy": _scalar(output.energy),
-            "accuracy": output.metrics.get("accuracy", 0.0),
+            "accuracy": output.metrics.get(
+                "accuracy", 0.0
+            ),  # nudged-settle fit (legacy)
+            "free_loss": _scalar(free_loss),
+            "free_energy": _scalar(free_energy),
+            "free_accuracy": free_accuracy,
         }
         metrics.update({
             k: v
             for k, v in output.metrics.items()
-            if isinstance(v, (int, float)) and k != "accuracy"
+            if isinstance(v, (int, float)) and k not in ("accuracy", "free_accuracy")
         })
         return metrics
 

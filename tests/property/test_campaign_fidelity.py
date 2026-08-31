@@ -86,21 +86,29 @@ class TestCreditFidelity:
         assert "pseudo-gradient" in credit_check.detail
 
     def test_implemented_credits_signal_under_energy(self) -> None:
-        for credit in ("thermodynamic_contrast", "random_projections"):
+        for credit in (
+            "thermodynamic_contrast",
+            "random_projections",
+            "local_goodness",
+            "temporal_trace",
+            "target_inversion",
+            "homeostatic",
+        ):
             verdict = check_coordinate_fidelity(
                 f"digital/feedforward/energy_minimization/null/{credit}/euclidean"
             )
-            assert _check(verdict, "credit").status == "pass"
+            assert _check(verdict, "credit").status == "pass", (
+                f"{credit} credit failed: {_check(verdict, 'credit').detail}"
+            )
 
-    def test_local_goodness_is_an_unimplemented_stub(self) -> None:
-        """R3.3 root cause: compute_pseudo_gradient returns [] — the credit
-        path is not implemented, not mis-wired."""
+    def test_local_goodness_now_implemented(self) -> None:
+        """LocalGoodnessCredit is no longer a stub — compute_pseudo_gradient produces signal."""
         verdict = check_coordinate_fidelity(
             "digital/feedforward/energy_minimization/null/local_goodness/euclidean"
         )
         credit_check = _check(verdict, "credit")
-        assert credit_check.status == "fail"
-        assert "0 tensors" in credit_check.detail
+        assert credit_check.status == "pass"
+        assert "pseudo-gradient" in credit_check.detail
 
 
 class TestUpdateFidelity:
@@ -130,19 +138,18 @@ class TestPlasticityFidelity:
         assert "ψ const" in m.detail
 
     @pytest.mark.parametrize("plasticity", ["routing", "fast_weights"])
-    def test_nonnull_plasticity_is_inert_in_episode_pipeline(
+    def test_nonnull_plasticity_engages_in_episode_pipeline(
         self, plasticity: str
     ) -> None:
-        """M-axis lock: plasticity.step is never invoked by run_train_step,
-        so ψ cannot modulate activity or credit in campaign episodes.
-        Flipping this verdict = plasticity wired into the pipeline."""
+        """M-axis lock: plasticity.step is now invoked by run_train_step
+        (imp-22), so ψ steps and can modulate activity. Verdict flips to pass."""
         verdict = check_coordinate_fidelity(
             f"digital/feedforward/energy_minimization/{plasticity}"
             f"/thermodynamic_contrast/euclidean"
         )
         m = _check(verdict, "plasticity")
-        assert m.status == "fail"
-        assert "never invoked" in m.detail
+        assert m.status == "pass"
+        assert "stepped" in m.detail or "engages" in m.detail or "ψ stepped" in m.detail
 
 
 class TestCapabilityManifest:
@@ -153,19 +160,26 @@ class TestCapabilityManifest:
             assert axes == {"dynamics", "credit", "update", "plasticity"}
 
     def test_passing_set_is_the_validated_subspace(self, manifest) -> None:
-        """The capability manifest of the current grid: only the
-        energy_minimization x null x {thermodynamic_contrast,
-        random_projections} subspace passes all fidelity probes."""
+        """The capability manifest of the current grid: energy_minimization x
+        {null, fast_weights, routing} x {thermodynamic_contrast, random_projections,
+        local_goodness(feedforward)} x {feedforward, recurrent} x {euclidean, spectral_constrained}
+        passes. Recurrent/local_goodness fails (EM settle doesn't preserve autograd graph)."""
         passing = {c for c, v in manifest.items() if v.passed}
         expected = {
             c
             for c in GRID
             if "/energy_minimization/" in c
-            and "/null/" in c
-            and ("/thermodynamic_contrast/" in c or "/random_projections/" in c)
+            and ("/null/" in c or "/fast_weights/" in c or "/routing/" in c)
+            and (
+                "/thermodynamic_contrast/" in c
+                or "/random_projections/" in c
+                or ("/local_goodness/" in c and "/feedforward/" in c)
+            )
         }
-        assert passing == expected
-        assert len(passing) == 8
+        assert passing == expected, (
+            f"Passing: {sorted(passing)}, Expected: {sorted(expected)}"
+        )
+        assert len(passing) == 30
 
     def test_defect_filtered_attribution_excludes_and_lists(self, manifest) -> None:
         records = [
@@ -181,12 +195,12 @@ class TestCapabilityManifest:
             result.passing_coordinates
         )
         assert all(c in manifest for c in result.excluded_coordinates)
-        # With only one value per dynamics/plasticity axis in the passing
-        # subspace, no D/M minimal pairs can exist in the filtered output.
+        # With 3 plasticity values in passing subspace, plasticity deltas ARE attributable.
+        # Dynamics still has only energy_minimization.
         attributed_axes = {a.axis for a in result.attributions}
         assert "dynamics" not in attributed_axes
-        assert "plasticity" not in attributed_axes
-        assert attributed_axes <= {"geometry", "credit", "update"}
+        assert "plasticity" in attributed_axes
+        assert attributed_axes <= {"geometry", "credit", "update", "plasticity"}
 
 
 def test_manifest_report_renders() -> None:
@@ -212,3 +226,69 @@ def test_manifest_report_renders() -> None:
     }
     text = json.dumps(payload)
     assert "passed" in text
+
+
+class TestMetricHonesty:
+    """imp-20: free_accuracy must not carry supervision leakage.
+
+    An inert-credit coordinate (Δθ = 0) must show free_accuracy ≈ chance
+    while its nudged accuracy may be high due to settle-to-target leakage.
+    """
+
+    def test_free_accuracy_is_not_supervision_leaked(self) -> None:
+        """RandomProjectionsCredit with feedback_scale=0 produces zero Δθ.
+        Under energy_minimization, nudged settle reaches target (high acc),
+        but free settle accuracy should be at chance.
+        """
+        from computronium.core.system_trainer.joint import compose_joint_system
+        from computronium.ontology import (
+            CreditAssignmentConfig,
+            DigitalSubstrate,
+            EnergyMinimizationDynamics,
+            EuclideanUpdate,
+            FeedforwardGeometry,
+            GeometryConfig,
+            NullPlasticity,
+            ParameterUpdateConfig,
+            RandomProjectionsCredit,
+            StateDynamicsConfig,
+            SubstrateConfig,
+        )
+
+        substrate = DigitalSubstrate(SubstrateConfig.digital())
+        geometry = FeedforwardGeometry(
+            GeometryConfig.feedforward(input_dim=8, output_dim=8, hidden_dims=(16,))
+        )
+        dynamics = EnergyMinimizationDynamics(
+            StateDynamicsConfig.energy_minimization(max_steps=3, step_size=0.1)
+        )
+        credit = RandomProjectionsCredit(
+            CreditAssignmentConfig.random_projections(feedback_scale=0.0)
+        )
+        update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))
+
+        system = compose_joint_system(
+            substrate=substrate,
+            geometry=geometry,
+            dynamics=dynamics,
+            plasticity=NullPlasticity(),
+            credit=credit,
+            update=update,
+        )
+
+        import torch
+
+        x = torch.randn(16, 8)
+        y = torch.randint(0, 8, (16,))
+        metrics = system.train_step(x, y)
+
+        # Inert credit: Δθ = 0 → free_accuracy ≈ 1/8 = 0.125
+        free_acc = metrics["free_accuracy"]
+        chance = 1.0 / 8
+
+        # free_accuracy at chance (within 3x tolerance for small sample)
+        assert abs(free_acc - chance) < 3 * chance, (
+            f"free_accuracy {free_acc:.3f} leaked; should be ≈ chance {chance:.3f}"
+        )
+        # nudged accuracy can be high (leakage) - that's the bug being fixed
+        # but we don't assert on it; the point is the CONTRAST

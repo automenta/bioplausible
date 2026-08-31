@@ -861,25 +861,27 @@ class DiffusionDynamics:
         if x is None:
             raise ValueError("State must contain input 'x'")
 
-        h = substrate.initial_state(x)
-        # op = substrate.get_forward_operator()  # Unused in this simplified implementation
+        h = substrate.initial_state(x).detach().requires_grad_(True)
 
         for _step in range(self.config.max_steps):
             # Langevin dynamics: dh = -∇E dt + sqrt(2*D) dW
-            energy_grad = torch.autograd.grad(
-                self.compute_energy_from_state(h, geometry, substrate), h
-            )[0]
+            # Internal autograd must run even if pipeline is in no_grad context
+            with torch.enable_grad():
+                energy = self.compute_energy_from_state(h, geometry, substrate)
+                energy_grad = torch.autograd.grad(energy, h)[0]
             noise = torch.randn_like(h) * math.sqrt(2 * self.config.step_size)
             with torch.no_grad():
                 h = h - self.config.step_size * energy_grad + noise
+            # Re-enable grad for next iteration
+            h = h.detach().requires_grad_(True)
 
         new_state = _create_output_state(
             state,
             x=x,
-            output=h,
-            free_state=[h] if target is None else None,
-            nudged_state=[h] if target is not None else None,
-            activations=[h],
+            output=h.detach(),
+            free_state=[h.detach()] if target is None else None,
+            nudged_state=[h.detach()] if target is not None else None,
+            activations=[h.detach()],
         )
 
         return new_state

@@ -39,6 +39,7 @@ class CreditAssignmentConfig:
         a_plus: STDP potentiation amplitude (for temporal_trace)
         a_minus: STDP depression amplitude (for temporal_trace)
         tau: STDP time constant (for temporal_trace)
+        homeostatic_target: Target activation norm for homeostatic scaling
     """
 
     credit_type: str
@@ -50,6 +51,7 @@ class CreditAssignmentConfig:
     a_plus: float = 1.0
     a_minus: float = 1.0
     tau: float = 20.0
+    homeostatic_target: float = 1.0
 
     @classmethod
     def thermodynamic_contrast(
@@ -272,6 +274,33 @@ class CreditAssignment(Protocol):
         )
 
 
+def _acts_list(activations: list[Tensor] | Tensor | None) -> list[Tensor]:
+    """Normalize activations to a list of layer tensors."""
+    if activations is None:
+        return []
+    if isinstance(activations, list):
+        return activations
+    return [activations]
+
+
+def _propagate_targets(
+    acts: list[Tensor],
+    y: Tensor,
+    weight_names: list[str],
+    geometry: Geometry,
+) -> list[Tensor | None]:
+    """Transpose-feedback target propagation: t_L = one-hot(y), t_l = t_{l+1} @ W_{l+1}."""
+    out_dim = acts[-1].shape[-1]
+    targets: list[Tensor | None] = [None] * len(acts)
+    targets[-1] = torch.nn.functional.one_hot(y, num_classes=out_dim).float()
+    for l in range(len(weight_names) - 1, -1, -1):
+        nxt = targets[l + 1]
+        if nxt is None:
+            break
+        targets[l] = nxt @ geometry.params[weight_names[l]]
+    return targets
+
+
 # ============================================================
 # Default/Reference CreditAssignment Implementations
 # ============================================================
@@ -446,7 +475,11 @@ class RandomProjectionsCredit:
 
 
 class LocalGoodnessCredit:
-    """Layer-local contrastive objective (Forward-Forward, PEPITA)."""
+    """Layer-local contrastive objective (Forward-Forward, PEPITA).
+
+    Goodness G_l = mean(acts_l^2) per layer. The pseudo-gradient descends
+    (G_free - G_nudged) so nudged goodness increases, free goodness decreases.
+    """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
     requires_autograd: ClassVar[bool] = True
@@ -460,12 +493,77 @@ class LocalGoodnessCredit:
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
-        # Simplified
-        return []
+        free_state = states.get(Phase.FREE)
+        nudged_state = states.get(Phase.NUDGED)
+        if free_state is None or nudged_state is None:
+            return []
+
+        free_acts = _acts_list(free_state.activations)
+        nudged_acts = _acts_list(nudged_state.activations)
+        if not free_acts or not nudged_acts:
+            return []
+
+        weight_names = _learnable_weight_names(geometry.params)
+        if len(weight_names) != len(free_acts) - 1:
+            # Mismatch: return zeros for all weights
+            return [torch.zeros_like(geometry.params[n]) for n in weight_names]
+
+        grads = []
+        for i, name in enumerate(weight_names):
+            # Layer i maps acts[i] -> acts[i+1]
+            post_free = free_acts[i + 1]
+            post_nudged = nudged_acts[i + 1]
+
+            # Goodness = mean squared activation
+            g_free = post_free.pow(2).mean()
+            g_nudged = post_nudged.pow(2).mean()
+
+            # Local objective: descend (G_free - G_nudged) -> raise nudged, lower free
+            local_obj = g_free - g_nudged
+
+            # Autograd through the settled activations (requires_autograd=True)
+            if not post_nudged.requires_grad:
+                # Graph not available - return zeros
+                grads.append(torch.zeros_like(geometry.params[name]))
+                continue
+
+            grad = torch.autograd.grad(
+                local_obj,
+                geometry.params[name],
+                retain_graph=True,
+                create_graph=False,
+                allow_unused=True,
+            )[0]
+            grads.append(
+                grad if grad is not None else torch.zeros_like(geometry.params[name])
+            )
+
+        return grads
+
+    def surrogate_objective(
+        self,
+        free_state: SystemState,
+        nudged_state: SystemState,
+        geometry: Geometry,
+    ) -> Tensor:
+        """Sum of layer-local goodness differences."""
+        free_acts = _acts_list(free_state.activations)
+        nudged_acts = _acts_list(nudged_state.activations)
+        if not free_acts or not nudged_acts:
+            return torch.tensor(0.0)
+        total = torch.tensor(0.0)
+        for i in range(1, min(len(free_acts), len(nudged_acts))):
+            total = total + free_acts[i].pow(2).mean() - nudged_acts[i].pow(2).mean()
+        return total
 
 
 class TemporalTraceCredit:
-    """Spike-timing correlations (STDP)."""
+    """Spike-timing correlations (STDP).
+
+    Rate-coded surrogate: causal (pre->post) potentiation with a_plus,
+    anti-causal depression with a_minus. Pseudo-gradient descends:
+    -(a_plus * post^T@pre - a_minus * pre^T@post) / batch.
+    """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE,)
     requires_autograd: ClassVar[bool] = False
@@ -479,8 +577,38 @@ class TemporalTraceCredit:
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
-        # Simplified
-        return []
+        free_state = states.get(Phase.FREE)
+        if free_state is None or free_state.activations is None:
+            return []
+
+        acts = _acts_list(free_state.activations)
+        if len(acts) < 2:
+            return []
+
+        weight_names = _learnable_weight_names(geometry.params)
+        if len(weight_names) != len(acts) - 1:
+            return [torch.zeros_like(geometry.params[n]) for n in weight_names]
+
+        batch = acts[0].shape[0]
+        grads = []
+        for i in range(len(weight_names)):
+            pre = acts[i]  # [batch, in_dim]
+            post = acts[i + 1]  # [batch, out_dim]
+
+            # Causal correlation: post^T @ pre -> [out_dim, in_dim] (matches weight shape)
+            causal = post.T @ pre / batch
+            # Anti-causal: pre^T @ post -> [in_dim, out_dim], transpose for weight shape
+            anticausal = pre.T @ post / batch
+            anticausal_w = anticausal.T
+
+            # STDP: potentiate causal, depress anti-causal
+            # Pseudo-gradient descended: -(a_plus * causal - a_minus * anticausal_w)
+            stdp_grad = -(
+                self.config.a_plus * causal - self.config.a_minus * anticausal_w
+            )
+            grads.append(stdp_grad)
+
+        return grads
 
     def compute_stdp_window(
         self,
@@ -519,7 +647,12 @@ class TemporalTraceCredit:
 
 
 class TargetInversionCredit:
-    """Propagating local targets (Target Prop)."""
+    """Propagating local targets (Target Prop) with transpose feedback.
+
+    Output target = one-hot(y). Local targets propagated backward through
+    transpose of weight matrices: t_l = t_{l+1} @ W_{l+1}.
+    Per-layer pseudo-gradient = (acts_l - t_l)^T @ acts_{l-1} / batch.
+    """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
     requires_autograd: ClassVar[bool] = True
@@ -533,12 +666,69 @@ class TargetInversionCredit:
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
-        # Simplified
-        return []
+        nudged_state = states.get(Phase.NUDGED)
+        if nudged_state is None or nudged_state.activations is None:
+            return []
+
+        acts = _acts_list(nudged_state.activations)
+        if len(acts) < 2:
+            return []
+
+        weight_names = _learnable_weight_names(geometry.params)
+        if len(weight_names) != len(acts) - 1:
+            return [torch.zeros_like(geometry.params[n]) for n in weight_names]
+
+        # Target at output layer: one-hot of class indices
+        y = nudged_state.y
+        if y is None:
+            return [torch.zeros_like(geometry.params[n]) for n in weight_names]
+
+        targets = _propagate_targets(acts, y, weight_names, geometry)
+
+        # Layer-local deltas and pseudo-gradients
+        grads = []
+        for i, name in enumerate(weight_names):
+            tgt = targets[i + 1] if i + 1 < len(targets) else None
+            if tgt is None or i + 1 >= len(acts):
+                grads.append(torch.zeros_like(geometry.params[name]))
+                continue
+            delta = acts[i + 1] - tgt  # [batch, out]
+            pre = acts[i]  # [batch, in]
+            # pseudo_grad = delta^T @ pre / batch -> [out, in]
+            grad = delta.T @ pre / pre.shape[0]
+            grads.append(grad)
+
+        return grads
+
+    def surrogate_objective(
+        self,
+        free_state: SystemState,
+        nudged_state: SystemState,
+        geometry: Geometry,
+    ) -> Tensor:
+        """Sum of layer-local target matching errors."""
+        nudged_acts = _acts_list(nudged_state.activations)
+        if not nudged_acts or nudged_state.y is None:
+            return torch.tensor(0.0)
+        y = nudged_state.y
+        weight_names = _learnable_weight_names(geometry.params)
+        targets = _propagate_targets(nudged_acts, y, weight_names, geometry)
+        total = torch.tensor(0.0, device=nudged_acts[-1].device)
+        for i in range(1, len(nudged_acts)):
+            tgt = targets[i]
+            if tgt is None:
+                continue
+            delta = nudged_acts[i] - tgt
+            total = total + (delta**2).mean()
+        return total
 
 
 class HomeostaticCredit:
-    """Homeostatic credit assignment."""
+    """Homeostatic credit assignment (autonomous Lipschitz scaling).
+
+    Per-layer scaling to keep activation norms near homeostatic_target.
+    Pseudo-gradient: (mean|post| - target) * W / |W|_F (directional).
+    """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
     requires_autograd: ClassVar[bool] = False
@@ -552,8 +742,37 @@ class HomeostaticCredit:
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
-        # Simplified
-        return []
+        free_state = states.get(Phase.FREE)
+        if free_state is None or free_state.activations is None:
+            return []
+
+        acts = _acts_list(free_state.activations)
+        if len(acts) < 2:
+            return []
+
+        weight_names = _learnable_weight_names(geometry.params)
+        if len(weight_names) != len(acts) - 1:
+            return [torch.zeros_like(geometry.params[n]) for n in weight_names]
+
+        target = self.config.homeostatic_target
+        grads = []
+        for i, name in enumerate(weight_names):
+            post = acts[i + 1]  # [batch, out_dim]
+            W = geometry.params[name]  # [out_dim, in_dim]
+
+            # Mean post-activation norm (L2 across features, then mean across batch)
+            post_norm = post.norm(dim=1).mean()  # scalar
+            # Error from target
+            err = post_norm - target
+            # Direction: scale W by error, normalized by Frobenius norm
+            W_norm = W.norm()
+            if W_norm > 0:
+                grad = err * W / W_norm
+            else:
+                grad = torch.zeros_like(W)
+            grads.append(grad)
+
+        return grads
 
 
 class GradientCredit:

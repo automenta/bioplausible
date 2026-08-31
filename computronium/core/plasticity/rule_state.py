@@ -203,6 +203,22 @@ class RuleStatePlasticity:
             if x.dim() > 2:
                 x = x.flatten(1)
 
+            # Project input to the controller's declared slot width (operator_dim):
+            # the controller is a fixed-width network; wider inputs are truncated,
+            # narrower ones zero-padded (fixed projection, FA-style).
+            expected = self._config.operator_dim
+            if x.shape[1] != expected:
+                if x.shape[1] > expected:
+                    x = x[:, :expected]
+                else:
+                    pad = torch.zeros(
+                        x.shape[0],
+                        expected - x.shape[1],
+                        device=x.device,
+                        dtype=x.dtype,
+                    )
+                    x = torch.cat([x, pad], dim=-1)
+
             # Controller input: concatenate controller_state with input
             controller_input = torch.cat([controller_state, x], dim=-1)
 

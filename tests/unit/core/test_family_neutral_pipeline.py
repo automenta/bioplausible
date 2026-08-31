@@ -1,9 +1,10 @@
 """Family-neutral pipeline harness (TODO4 Phase 9).
 
-Capabilities are declared, not assumed: settle counts must equal declared
-phases per credit family, autograd is enabled only under
-``requires_autograd``, metrics keys have cross-family parity, and memory
-stays flat across steps for non-autograd families (7.2.1 hard gate).
+Capabilities are declared, not assumed: settle counts equal declared phases
+plus one free readout (imp-20: post-update target-free forward for honest
+metrics), autograd is enabled only under ``requires_autograd``, metrics keys
+have cross-family parity, and memory stays flat across steps for non-autograd
+families (7.2.1 hard gate).
 """
 
 from __future__ import annotations
@@ -56,7 +57,7 @@ def test_credit_phase_declarations(credit: str) -> None:
 
 
 @pytest.mark.parametrize("credit", sorted(EXPECTED_PHASES))
-def test_settle_count_equals_declared_phases(credit: str) -> None:
+def test_settle_count_equals_declared_phases_plus_free_readout(credit: str) -> None:
     system = _build(credit)
     bound = system.dynamics.settle
     calls = {"n": 0}
@@ -68,8 +69,13 @@ def test_settle_count_equals_declared_phases(credit: str) -> None:
     system.dynamics.settle = spy
     x, y = _batch()
     metrics = system.train_step(x, y)
-    assert calls["n"] == len(EXPECTED_PHASES[credit])
-    assert set(metrics) >= METRIC_PARITY_KEYS
+    # +1 for the post-update free readout (imp-20)
+    assert calls["n"] == len(EXPECTED_PHASES[credit]) + 1
+    assert set(metrics) >= METRIC_PARITY_KEYS | {
+        "free_loss",
+        "free_energy",
+        "free_accuracy",
+    }
 
 
 def test_one_phase_family_pays_single_settle_cost() -> None:

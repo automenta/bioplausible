@@ -123,7 +123,9 @@ class FastWeightPlasticity:
             Dict with fast_weights initialized to zero.
         """
         device = context.device if context is not None else None
-        return {"fast_weights": torch.zeros(batch_size, self.fast_weight_dim, device=device)}
+        return {
+            "fast_weights": torch.zeros(batch_size, self.fast_weight_dim, device=device)
+        }
 
     def step(
         self,
@@ -180,6 +182,37 @@ class FastWeightPlasticity:
                 )
 
         return {"fast_weights": new_fast_weights}
+
+    def modulate(
+        self, activations: list[Tensor] | Tensor, psi: dict[str, Tensor]
+    ) -> list[Tensor] | Tensor:
+        """Apply fast weights as additive per-sample modulation.
+
+        Adds the fast weight vector (truncated/padded) to each layer's activations.
+        """
+        fast_weights = psi.get("fast_weights")
+        if fast_weights is None:
+            return activations
+
+        acts = activations if isinstance(activations, list) else [activations]
+        modulated = []
+        for a in acts:
+            # fast_weights: [batch, fw_dim] -> add to feature dim
+            fw = fast_weights
+            if fw.shape[1] != a.shape[1]:
+                # Truncate or pad to match feature dim
+                if fw.shape[1] > a.shape[1]:
+                    fw = fw[:, : a.shape[1]]
+                else:
+                    pad = torch.zeros(
+                        fw.shape[0],
+                        a.shape[1] - fw.shape[1],
+                        device=fw.device,
+                        dtype=fw.dtype,
+                    )
+                    fw = torch.cat([fw, pad], dim=-1)
+            modulated.append(a + fw)
+        return modulated if isinstance(activations, list) else modulated[0]
 
 
 def create_fast_weight_plasticity(config: PlasticityConfig) -> FastWeightPlasticity:

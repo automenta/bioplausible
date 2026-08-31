@@ -354,11 +354,16 @@ def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always 
     growth = guard.probe(activity_transition(joint), z, joint.context)
     decision = guard.decide(growth)
 
+    # task_accuracy = post-update target-free forward accuracy (honest learning metric)
+    # legacy nudged-settle accuracy stored in metadata for comparison
+    task_accuracy = metrics.get("free_accuracy", metrics.get("accuracy", 0.0))
+    nudged_fit_accuracy = metrics.get("accuracy", 0.0)
+
     record = FrontierRecord(
         coordinate=coordinate,
         task_name=task_name,
-        task_loss=metrics["loss"],
-        task_accuracy=metrics["accuracy"],
+        task_loss=metrics.get("free_loss", metrics["loss"]),
+        task_accuracy=task_accuracy,
         adaptation_time=1,
         rho_jacobian=growth,
         lyapunov_local=0.0,
@@ -368,17 +373,21 @@ def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always 
         plasticity_primitive=coordinate.split("/")[3],
         registry_signature=compute_registry_signature(joint.context.registry),
         composite_state_shape=compute_composite_state_shape(joint.context),
-        metadata={"guard_kill": float(decision.kill)},
+        metadata={
+            "guard_kill": float(decision.kill),
+            "nudged_fit_accuracy": nudged_fit_accuracy,
+        },
         seed=seed,
         campaign_id=campaign_id,
         episode_index=episode,
     )
     logger.info(
-        "episode %d [%s]: loss=%.4f acc=%.4f growth=%.3f kill=%s",
+        "episode %d [%s]: loss=%.4f free_acc=%.4f nudged_acc=%.4f growth=%.3f kill=%s",
         episode,
         coordinate,
-        metrics["loss"],
-        metrics["accuracy"],
+        metrics.get("free_loss", metrics["loss"]),
+        task_accuracy,
+        nudged_fit_accuracy,
         growth,
         decision.kill,
     )

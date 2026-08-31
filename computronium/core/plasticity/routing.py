@@ -174,6 +174,32 @@ class RoutingPlasticity:
             # Threshold-based (sigmoid > 0.5)
             return (torch.sigmoid(logits) > 0.5).float()
 
+    def modulate(
+        self, activations: list[Tensor] | Tensor, psi: dict[str, Tensor]
+    ) -> list[Tensor] | Tensor:
+        """Apply routing gates to activations.
+
+        Per-sample scalar gate strength applied to hidden/output layers.
+        """
+        gate_logits = psi.get("gate_logits")
+        if gate_logits is None:
+            return activations
+
+        # Per-sample gate strength: mean sigmoid across gates
+        gate_strength = torch.sigmoid(gate_logits).mean(
+            dim=-1, keepdim=True
+        )  # [batch, 1]
+
+        acts = activations if isinstance(activations, list) else [activations]
+        modulated = []
+        for a in acts:
+            # Apply gate strength to batch dimension
+            if a.shape[0] == gate_strength.shape[0]:
+                modulated.append(a * gate_strength)
+            else:
+                modulated.append(a)
+        return modulated if isinstance(activations, list) else modulated[0]
+
 
 def create_routing_plasticity(config: PlasticityConfig) -> RoutingPlasticity:
     """Factory to create RoutingPlasticity from PlasticityConfig.

@@ -187,8 +187,8 @@ def compose_joint_system[
 
         def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
             """Execute one training step through the family-neutral pipeline."""
-            # Preserve lazy ψ initialization side effects before the loop.
-            self.plasticity.initial_psi(self.context, batch_size=x.shape[0])
+            # Initialize ψ for this episode
+            psi = self.plasticity.initial_psi(self.context, batch_size=x.shape[0])
             from computronium.core.pipeline import run_train_step
 
             return run_train_step(
@@ -199,6 +199,9 @@ def compose_joint_system[
                 self.update,
                 x,
                 y,
+                plasticity=self.plasticity,
+                psi=psi,
+                context=self.context,
             )
 
         @property
