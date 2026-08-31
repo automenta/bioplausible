@@ -83,7 +83,7 @@ def _scalar(value: Tensor | float) -> float:
     return value.item() if isinstance(value, Tensor) else float(value)
 
 
-def run_train_step(  # noqa: PLR0913, PLR0917  # 5/6-axis pipeline contract + x/y
+def run_train_step(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # 5/6-axis pipeline contract + x/y
     substrate: Substrate,
     geometry: Geometry,
     dynamics: StateDynamics,
@@ -118,11 +118,11 @@ def run_train_step(  # noqa: PLR0913, PLR0917  # 5/6-axis pipeline contract + x/
         states: dict[Phase, SystemState] = {}
         initial_activations = forward_pass(substrate, geometry, x)
 
-        # M-axis: step plasticity once per episode on the initial activity state
+        # M-axis: step plasticity once per episode on the input/target state
         if plasticity is not None and psi is not None and context is not None:
             from computronium.state import CompositeState
 
-            z = CompositeState(activity={"x": x}, plastic=psi, substrate={})
+            z = CompositeState(activity={"x": x, "y": y}, plastic=psi, substrate={})
             psi = plasticity.step(psi, z, context)
 
         for phase in credit.phases:
@@ -183,7 +183,7 @@ def run_train_step(  # noqa: PLR0913, PLR0917  # 5/6-axis pipeline contract + x/
         metrics.update({
             k: v
             for k, v in output.metrics.items()
-            if isinstance(v, (int, float)) and k not in ("accuracy", "free_accuracy")
+            if isinstance(v, (int, float)) and k not in {"accuracy", "free_accuracy"}
         })
         return metrics
 

@@ -115,15 +115,18 @@ class TestValidationAll:
         )
         self._train_system_and_assert_learns(model, self.x, self.y, "native_eqprop_mlp")
 
-    @pytest.mark.xfail(reason="FA with InstantaneousDynamics produces no error signal (free=nudged) - known issue")
     def test_native_fa_mlp(self):
-        """Native FA MLP learns - XFAIL: InstantaneousDynamics doesn't produce free/nudged difference."""
+        """Native FA MLP learns - un-xfailed by the R3.2 repair: FA routes
+        the autograd top error through fixed feedback matrices, so
+        InstantaneousDynamics pairs are live (previously Δθ was exactly 0)."""
         model = create_native_fa_mlp(
             self.input_dim, 16, self.output_dim, num_layers=2, lr=1e-3
         )
         self._train_system_and_assert_learns(model, self.x, self.y, "native_fa_mlp")
 
-    @pytest.mark.xfail(reason="PEPITA LocalGoodnessCredit returns empty pseudo-gradients - known issue")
+    @pytest.mark.xfail(
+        reason="PEPITA LocalGoodnessCredit returns empty pseudo-gradients - known issue"
+    )
     def test_native_pepita_mlp(self):
         """Native PEPITA MLP learns - XFAIL: LocalGoodnessCredit.compute_pseudo_gradient not implemented."""
         model = create_native_pepita_mlp(
@@ -133,7 +136,9 @@ class TestValidationAll:
 
     # --- Native Tile Models ---
 
-    @pytest.mark.xfail(reason="TileGeometry incompatible with EnergyMinimizationDynamics - known issue")
+    @pytest.mark.xfail(
+        reason="TileGeometry incompatible with EnergyMinimizationDynamics - known issue"
+    )
     def test_native_tile_ep(self):
         """Native Tile EP learns - XFAIL: TileGeometry lacks _layers for EnergyMinimizationDynamics."""
         model = create_native_tile_ep(
@@ -147,7 +152,9 @@ class TestValidationAll:
         )
         self._train_system_and_assert_learns(model, self.x, self.y, "native_tile_ep")
 
-    @pytest.mark.xfail(reason="FA with InstantaneousDynamics produces no error signal - known issue")
+    @pytest.mark.xfail(
+        reason="FA with InstantaneousDynamics produces no error signal - known issue"
+    )
     def test_native_tile_fa(self):
         """Native Tile FA learns - XFAIL: InstantaneousDynamics doesn't produce free/nudged difference."""
         model = create_native_tile_fa(
@@ -161,7 +168,9 @@ class TestValidationAll:
         )
         self._train_system_and_assert_learns(model, self.x, self.y, "native_tile_fa")
 
-    @pytest.mark.xfail(reason="TileGeometry + PredictiveSettlingDynamics not working - known issue")
+    @pytest.mark.xfail(
+        reason="TileGeometry + PredictiveSettlingDynamics not working - known issue"
+    )
     def test_native_tile_tp(self):
         """Native Tile TP learns - XFAIL: TileGeometry issues with predictive settling."""
         model = create_native_tile_tp(
@@ -176,7 +185,9 @@ class TestValidationAll:
         )
         self._train_system_and_assert_learns(model, self.x, self.y, "native_tile_tp")
 
-    @pytest.mark.xfail(reason="TileGeometry + InstantaneousDynamics + LocalGoodnessCredit not working - known issue")
+    @pytest.mark.xfail(
+        reason="TileGeometry + InstantaneousDynamics + LocalGoodnessCredit not working - known issue"
+    )
     def test_native_tile_hebbian(self):
         """Native Tile Hebbian learns - XFAIL: LocalGoodnessCredit returns empty gradients."""
         model = create_native_tile_hebbian(
@@ -207,7 +218,9 @@ class TestValidationAll:
     def test_simple_conv_eqprop(self):
         pass
 
-    @pytest.mark.skip(reason="AttentionGeometry not implemented - DEFERRED per TODO7.md")
+    @pytest.mark.skip(
+        reason="AttentionGeometry not implemented - DEFERRED per TODO7.md"
+    )
     def test_transformer_eqprop(self):
         pass
 
@@ -219,7 +232,9 @@ class TestValidationAll:
     def test_recurrent_eqprop_lm(self):
         pass
 
-    @pytest.mark.skip(reason="Homeostatic credit not implemented - DEFERRED per TODO7.md")
+    @pytest.mark.skip(
+        reason="Homeostatic credit not implemented - DEFERRED per TODO7.md"
+    )
     def test_homeostatic_eqprop(self):
         pass
 

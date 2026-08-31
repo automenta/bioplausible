@@ -630,6 +630,10 @@ _SMOKE_SPACE: dict[str, list[str]] = {
     "geometries": ["feedforward", "recurrent"],
     "dynamics": ["energy_minimization", "instantaneous"],
     "plasticity": ["null", "routing", "fast_weights"],
-    "credits": ["thermodynamic_contrast", "random_projections"],
+    # thermodynamic_contrast is excluded: contrastive settling credit ×
+    # instantaneous is R3.9-fenced, so cross-product proposals would emit
+    # unsupported outcomes. local_goodness composes on both dynamics (its
+    # instantaneous pairings are quarantined by the fidelity gate, not here).
+    "credits": ["random_projections", "local_goodness"],
     "updates": ["euclidean"],
 }

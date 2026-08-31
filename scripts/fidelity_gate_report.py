@@ -41,16 +41,21 @@ def _load_records(path: Path) -> list[dict]:
     return json.loads(episodes.read_text())
 
 
-def _leakage_probe(coordinate: str) -> dict[str, float]:
+def _leakage_probe(coordinate: str) -> dict[str, float] | None:
     """Reported accuracy vs Δθ movement vs free-settle (target-free) accuracy."""
     from computronium.core.campaign.evaluation import (
+        IncompatibleCoordinateError,
         build_coordinate_system,
         episode_batch,
     )
     from computronium.core.pipeline import forward_pass
     from computronium.ontology import SystemState
 
-    joint = build_coordinate_system(coordinate)
+    try:
+        joint = build_coordinate_system(coordinate)
+    except IncompatibleCoordinateError:
+        # R3.9-fenced pairing: uncomposable, so no leakage numbers exist.
+        return None
     x, y = episode_batch(0)
     before = {
         name: tensor.detach().clone() for name, tensor in joint.geometry.params.items()
@@ -97,6 +102,27 @@ def _rollup(manifest: dict) -> list[dict]:
     ]
 
 
+def _write_manifest(manifest: dict, path: Path) -> None:
+    """Serialize the fidelity manifest for downstream tooling."""
+    payload = {
+        c: {
+            "passed": v.passed,
+            "failures": list(v.failures),
+            "checks": [
+                {
+                    "axis": k.axis,
+                    "value": k.value,
+                    "status": k.status,
+                    "detail": k.detail,
+                }
+                for k in v.checks
+            ],
+        }
+        for c, v in manifest.items()
+    }
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> None:
     args = _parse_args()
     from computronium.core.campaign.fidelity import (
@@ -113,37 +139,31 @@ def main() -> None:
     passing = {c for c, v in manifest.items() if v.passed}
     excluded = sorted(set(coordinates) - passing)
 
-    leakage = {c: _leakage_probe(c) for c in coordinates}
+    leakage = {
+        c: stats for c in coordinates if (stats := _leakage_probe(c)) is not None
+    }
+    n_fenced = len(coordinates) - len(leakage)
 
     records_obj = _records_from_dicts(records)
     filtered = defect_filtered_attribution(records_obj, manifest, metric=args.metric)
     stratified = _stratified_attribution(records_obj, manifest, args.metric)
 
-    manifest_payload = {
-        c: {
-            "passed": v.passed,
-            "failures": list(v.failures),
-            "checks": [
-                {
-                    "axis": k.axis,
-                    "value": k.value,
-                    "status": k.status,
-                    "detail": k.detail,
-                }
-                for k in v.checks
-            ],
-        }
-        for c, v in manifest.items()
-    }
     manifest_path = campaign / "records" / "fidelity_manifest.json"
-    manifest_path.write_text(json.dumps(manifest_payload, indent=2) + "\n")
+    _write_manifest(manifest, manifest_path)
     print(f"manifest -> {manifest_path}")
 
     report = _render_report(
-        campaign, manifest, leakage, filtered, stratified, excluded, passing
+        campaign,
+        manifest,
+        leakage,
+        filtered,
+        stratified,
+        excluded,
+        passing,
+        n_fenced,
     )
     report_path = campaign / "records" / "fidelity_report.md"
-    report_path.write_text(report)
+    report_path.write_text(report, encoding="utf-8")
     print(f"report -> {report_path}")
 
 
@@ -180,6 +200,7 @@ def _render_report(  # ruff: ignore[too-many-arguments, too-many-positional-argu
     stratified: dict,
     excluded: list[str],
     passing: set[str],
+    n_fenced: int,
 ) -> str:
     by_class: dict[tuple[str, str], list[dict[str, float]]] = defaultdict(list)
     for coordinate, stats in leakage.items():
@@ -191,7 +212,8 @@ def _render_report(  # ruff: ignore[too-many-arguments, too-many-positional-argu
         f"# R5b-0 fidelity gate report — `{campaign.name}`",
         "",
         f"- Coordinates probed: {len(manifest)} · passing: {len(passing)} · "
-        f"quarantined: {len(excluded)}",
+        f"quarantined: {len(excluded)} (of which {n_fenced} R3.9-fenced: "
+        "uncomposable at composition, no leakage numbers)",
         f"- Records: {filtered.n_records_total} total · "
         f"{filtered.n_records_passing} survive the fidelity filter",
         "",

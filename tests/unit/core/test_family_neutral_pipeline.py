@@ -103,12 +103,14 @@ def test_backprop_runs_autograd_path() -> None:
     assert all(l >= 0.0 for l in losses)
 
 
-def test_non_autograd_default_is_no_grad() -> None:
+def test_autograd_credits_declared() -> None:
     assert BackpropCredit.requires_autograd is True
     assert GradientCredit.requires_autograd is True
+    # FA routes its top error through autograd (repair: the phase-contrast
+    # signal was structurally zero under a target-blind single pass).
+    assert _build("random_projections").credit.requires_autograd is True
     for credit in (
         "thermodynamic_contrast",
-        "random_projections",
         "temporal_trace",
         "homeostatic",
     ):

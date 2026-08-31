@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor, nn
 
-from computronium.core.utils.device import get_device
 from computronium.core.joint.transition import NullPlasticity, PlasticityConfig
 from computronium.core.plasticity import (
     NullPlasticity as _NullPlasticity,
@@ -19,8 +18,10 @@ from computronium.core.plasticity import (
     create_rule_state_plasticity,
     create_substrate_coupled_plasticity,
 )
+from computronium.core.utils.device import get_device
 from computronium.ontology import (
     CreditAssignmentConfig,
+    DiffusionDynamics,
     DigitalSubstrate,
     ElasticConsolidationUpdate,
     EnergyMinimizationDynamics,
@@ -527,7 +528,8 @@ def compose_joint_system_from_configs(
     else:
         geometry_instance = FeedforwardGeometry(geometry)
 
-    # Instantiate dynamics from config
+    # Instantiate dynamics from config — unknown values raise; a silent
+    # fallback here once ran "diffusion" coordinates as Instantaneous.
     dynamics_type = dynamics.dynamics_type.lower()
     if dynamics_type == "energy_minimization":
         dynamics_instance = EnergyMinimizationDynamics(dynamics)
@@ -535,13 +537,18 @@ def compose_joint_system_from_configs(
         dynamics_instance = PredictiveSettlingDynamics(dynamics)
     elif dynamics_type == "spike_integration":
         dynamics_instance = SpikeIntegrationDynamics(dynamics)
-    else:
+    elif dynamics_type == "diffusion":
+        dynamics_instance = DiffusionDynamics(dynamics)
+    elif dynamics_type == "instantaneous":
         dynamics_instance = InstantaneousDynamics(dynamics)
+    else:
+        raise ValueError(f"Unknown dynamics_type: {dynamics_type!r}")
 
     # Instantiate credit from config
     credit_instance = _credit_from_config(credit)
 
-    # Instantiate update from config
+    # Instantiate update from config — unknown values raise (no silent
+    # Euclidean fallback: a typo'd update_type must not masquerade as SGD).
     update_type = update.update_type.lower()
     if update_type in ("riemannian_orthogonal", "muon"):
         update_instance = RiemannianOrthogonalUpdate(update)
@@ -551,10 +558,13 @@ def compose_joint_system_from_configs(
         update_instance = NaturalGradientUpdate(update)
     elif update_type in ("elastic_consolidation", "ewc"):
         update_instance = ElasticConsolidationUpdate(update)
-    else:
+    elif update_type == "euclidean":
         update_instance = EuclideanUpdate(update)
+    else:
+        raise ValueError(f"Unknown update_type: {update_type!r}")
 
-    # Instantiate plasticity from config
+    # Instantiate plasticity from config — unknown values raise (no silent
+    # Null fallback: null plasticity must be declared, not defaulted).
     plasticity_type = plasticity.plasticity_type.lower()
     if plasticity_type == "routing":
         plasticity_instance = create_routing_plasticity(plasticity)
@@ -564,8 +574,10 @@ def compose_joint_system_from_configs(
         plasticity_instance = create_substrate_coupled_plasticity(plasticity)
     elif plasticity_type == "rule_state":
         plasticity_instance = create_rule_state_plasticity(plasticity)
-    else:
+    elif plasticity_type == "null":
         plasticity_instance = NullPlasticity()
+    else:
+        raise ValueError(f"Unknown plasticity_type: {plasticity_type!r}")
 
     return compose_joint_system(
         substrate_instance,
@@ -760,6 +772,6 @@ def create_fast_weight_eqprop_system(
 __all__ = [
     "compose_joint_system",
     "compose_joint_system_from_configs",
-    "create_routing_eqprop_system",
     "create_fast_weight_eqprop_system",
+    "create_routing_eqprop_system",
 ]

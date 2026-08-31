@@ -64,6 +64,23 @@ class UnsupportedCoordinateError(ValueError):
         self.axis = axis
 
 
+class IncompatibleCoordinateError(UnsupportedCoordinateError):
+    """Coordinate pairs axis values that are conceptually incompatible (R3.9).
+
+    Distinct from an implementation gap: no repair inside the paired axis
+    values can make the coordinate meaningful, so it is rejected at
+    composition rather than quarantined at attribution.
+    """
+
+    def __init__(self, pairing: str, reason: str) -> None:
+        super().__init__("pairing", pairing)
+        self.pairing = pairing
+        self.reason = reason
+
+    def __str__(self) -> str:
+        return f"{self.pairing}: {self.reason}"
+
+
 class GuardKillError(RuntimeError):
     """Guard statistic exceeded the calibrated threshold mid-episode.
 
@@ -234,12 +251,29 @@ _LAYERED_ONLY_DYNAMICS = frozenset({
     "spike_integration",
 })
 
+# R3.9 validity matrix, D x C: ThermodynamicContrast's pseudo-gradient is the
+# (nudged - free) settling contrast, defined only over dynamics with
+# genuinely distinct settling phases. A single target-blind pass has no
+# contrastive structure, so the pairing is conceptually dead (pinned by the
+# R5b-0 gate: free = nudged implies structural zero). Fixable nudge gaps
+# (predictive_settling) are NOT fenced — the dynamics probe quarantines
+# them with a repair-shaped verdict instead.
+_CONTRASTIVE_CREDITS = frozenset({"thermodynamic_contrast"})
+_TARGET_BLIND_INSTANTANEOUS = "instantaneous"
+
 
 def _check_pairwise(parts: list[str]) -> None:
     if parts[1] == "tile_mesh" and parts[2] in _LAYERED_ONLY_DYNAMICS:
         raise UnsupportedCoordinateError(
             "dynamics",
             f"{parts[2]} (requires layered geometry; incompatible with tile_mesh)",
+        )
+    if parts[2] == _TARGET_BLIND_INSTANTANEOUS and parts[4] in _CONTRASTIVE_CREDITS:
+        raise IncompatibleCoordinateError(
+            f"dynamics={parts[2]} x credit={parts[4]}",
+            "contrastive settling credit requires target-responsive "
+            "settlement; a single target-blind pass leaves free equal to "
+            "nudged and the pseudo-gradient structurally zero",
         )
 
 

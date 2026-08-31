@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
@@ -14,6 +13,8 @@ from torch import Tensor
 from computronium.ontology.utils import _learnable_weight_names
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from computronium.ontology.geometry import Geometry
     from computronium.ontology.system import SystemState
 
@@ -293,12 +294,46 @@ def _propagate_targets(
     out_dim = acts[-1].shape[-1]
     targets: list[Tensor | None] = [None] * len(acts)
     targets[-1] = torch.nn.functional.one_hot(y, num_classes=out_dim).float()
-    for l in range(len(weight_names) - 1, -1, -1):
+    for l in range(min(len(weight_names), len(acts) - 1) - 1, -1, -1):
         nxt = targets[l + 1]
         if nxt is None:
             break
-        targets[l] = nxt @ geometry.params[weight_names[l]]
+        w = geometry.params[weight_names[l]]
+        if nxt.shape[-1] != w.shape[0]:
+            # Ragged weight (e.g. tile meshes): the transition contract
+            # does not hold — stop propagating rather than crash.
+            break
+        targets[l] = nxt @ w
     return targets
+
+
+def _weight_acts(
+    weight_names: list[str], acts: list[Tensor], geometry: Geometry
+) -> list[tuple[Tensor, Tensor] | None]:
+    """(pre, post) activation pair each learnable weight consumes.
+
+    Positional over act transitions: weight i maps acts[i] -> acts[i+1].
+    Surplus weights (recurrent self-connections) consume the last hidden
+    layer as both pre and post — the correlate the settle kernel itself
+    feeds them. Weights whose shape does not match their act-pair widths
+    (tile/ragged meshes) map to None — credits emit zeros for them.
+    """
+    n_trans = len(acts) - 1
+    pairs: list[tuple[Tensor, Tensor] | None] = []
+    for i, name in enumerate(weight_names):
+        w = geometry.params[name]
+        if i < n_trans:
+            pre, post = acts[i], acts[i + 1]
+        elif n_trans >= 1:
+            pre = post = acts[n_trans - 1]
+        else:
+            pairs.append(None)
+            continue
+        if w.shape[0] == post.shape[-1] and w.shape[1] == pre.shape[-1]:
+            pairs.append((pre, post))
+        else:
+            pairs.append(None)
+    return pairs
 
 
 # ============================================================
@@ -387,10 +422,19 @@ ThermodynamicContrastCredit = ThermodynamicContrast
 
 
 class RandomProjectionsCredit:
-    """Random feedback alignment credit (FA, DFA)."""
+    """Fixed random feedback pathways (FA/DFA) with an autograd readout.
+
+    Top error δ_L = ∂L/∂a_L via autograd on the task loss (no weight
+    transport at the readout), propagated down through FIXED random
+    matrices: δ_i = δ_{i+1} @ B_i with B_i ~ feedback_scale · N(0,1),
+    fixed at first use. Per-layer pseudo-gradient ΔW_i = δ_{i+1}ᵀ a_i / batch;
+    recurrent self-connections project the last hidden layer's error
+    through their own fixed feedback. When the settle graph is unavailable
+    the signal is zeros — never fabricated noise.
+    """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
-    requires_autograd: ClassVar[bool] = False
+    requires_autograd: ClassVar[bool] = True
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.random_projections()
@@ -406,8 +450,7 @@ class RandomProjectionsCredit:
         """
         if self._feedback_weights:
             return  # Already initialized
-        weight_names = _learnable_weight_names(geometry.params)
-        for name in weight_names:
+        for name in _learnable_weight_names(geometry.params):
             param = geometry.params[name]
             # Initialize with small random values
             fb = torch.randn_like(param, device=device) * self.config.feedback_scale
@@ -419,47 +462,54 @@ class RandomProjectionsCredit:
         loss: Tensor | None,
         geometry: Geometry,
     ) -> list[Tensor]:
-        """Compute FA pseudo-gradients using fixed feedback matrices."""
-        free_state = states.get(Phase.FREE)
+        """Compute FA pseudo-gradients through fixed feedback matrices."""
         nudged_state = states.get(Phase.NUDGED)
-        if free_state is None or nudged_state is None:
+        if loss is None or nudged_state is None or nudged_state.activations is None:
             return []
 
+        acts = _acts_list(nudged_state.activations)
         weight_names = _learnable_weight_names(geometry.params)
-        if not self._feedback_weights:
-            device = (
-                next(iter(geometry.params.values())).device if geometry.params else None
-            )
-            self._init_feedback_weights(geometry, device)
+        if len(acts) < 2 or not weight_names:
+            return []
 
-        # FA error signal: difference between nudged and free activations
-        free_acts = free_state.activations
-        nudged_acts = nudged_state.activations
-        # Handle activations as list (take last element) or tensor
-        if isinstance(free_acts, list):
-            free_acts = free_acts[-1] if free_acts else None
-        if isinstance(nudged_acts, list):
-            nudged_acts = nudged_acts[-1] if nudged_acts else None
-        if free_acts is not None and nudged_acts is not None:
-            error = (nudged_acts - free_acts).detach()
-        else:
-            error = (
-                torch.ones_like(nudged_acts)
-                if nudged_acts is not None
-                else torch.tensor(1.0)
-            )
+        self._init_feedback_weights(geometry, acts[-1].device)
+        logits = acts[-1]
+        if not logits.requires_grad:
+            # Settle graph not preserved (e.g. detached settle paths): no
+            # error signal exists — zeros, never fabricated signal.
+            return [torch.zeros_like(geometry.params[n]) for n in weight_names]
 
-        # Project error through feedback matrices (one per layer)
-        # Apply feedback_scale to gradient magnitude during training (not just init)
-        grads = []
-        for name in weight_names:
-            fb = self._feedback_weights.get(name)
-            if fb is not None:
-                # FA gradient: feedback @ error, scaled by feedback_scale
-                grad = fb * error.abs().mean() * self.config.feedback_scale
-            else:
-                grad = torch.zeros_like(geometry.params[name])
-            grads.append(grad)
+        delta_out = torch.autograd.grad(loss, logits)[0].detach()
+        n_trans = len(acts) - 1
+        batch = acts[0].shape[0]
+
+        # Layered contract: feedback B_k must map the act-space of layer
+        # k+1 down to layer k. Tile/ragged weights (e.g. per-tile matrices
+        # not aligned with the act widths) break the chain — zeros, never
+        # fabricated signal.
+        for k in range(n_trans):
+            b = self._feedback_weights[weight_names[k]]
+            if b.shape[0] != acts[k + 1].shape[-1] or b.shape[1] != acts[k].shape[-1]:
+                return [torch.zeros_like(geometry.params[n]) for n in weight_names]
+
+        # Feedback-propagated error at each act layer:
+        # err_at[L] = ∂L/∂a_L; err_at[k] = err_at[k+1] @ B_k.
+        # During the sweep, err is err_at[i + 1] on entering iteration i.
+        grads: list[Tensor] = []
+        err = delta_out
+        hidden_err = delta_out
+        for i in range(n_trans - 1, -1, -1):
+            grads.append(err.T @ acts[i] / batch)
+            err = err @ self._feedback_weights[weight_names[i]]
+            if i == n_trans - 1:
+                # Error at the last hidden layer: upstream of the recurrent
+                # self-connection.
+                hidden_err = err
+        grads.reverse()
+        for _name in weight_names[n_trans:]:
+            # Recurrent self-connection at the last hidden layer: its
+            # upstream error is the propagated error at that layer.
+            grads.append(hidden_err.T @ acts[n_trans - 1] / batch)
         return grads
 
     def surrogate_objective(
@@ -504,41 +554,29 @@ class LocalGoodnessCredit:
             return []
 
         weight_names = _learnable_weight_names(geometry.params)
-        if len(weight_names) != len(free_acts) - 1:
-            # Mismatch: return zeros for all weights
+        if not weight_names:
+            return []
+
+        # Layer-local goodness objective summed over act transitions
+        # (surplus weights — recurrent self-connections — receive their
+        # gradient through the shared hidden-layer goodness).
+        n_trans = min(len(free_acts), len(nudged_acts)) - 1
+        if n_trans < 1 or not nudged_acts[-1].requires_grad:
+            # Settle graph not preserved: no autograd signal — zeros.
             return [torch.zeros_like(geometry.params[n]) for n in weight_names]
 
-        grads = []
-        for i, name in enumerate(weight_names):
-            # Layer i maps acts[i] -> acts[i+1]
-            post_free = free_acts[i + 1]
-            post_nudged = nudged_acts[i + 1]
+        total = torch.zeros((), device=nudged_acts[-1].device)
+        for i in range(1, n_trans + 1):
+            total += free_acts[i].pow(2).mean() - nudged_acts[i].pow(2).mean()
 
-            # Goodness = mean squared activation
-            g_free = post_free.pow(2).mean()
-            g_nudged = post_nudged.pow(2).mean()
-
-            # Local objective: descend (G_free - G_nudged) -> raise nudged, lower free
-            local_obj = g_free - g_nudged
-
-            # Autograd through the settled activations (requires_autograd=True)
-            if not post_nudged.requires_grad:
-                # Graph not available - return zeros
-                grads.append(torch.zeros_like(geometry.params[name]))
-                continue
-
-            grad = torch.autograd.grad(
-                local_obj,
-                geometry.params[name],
-                retain_graph=True,
-                create_graph=False,
-                allow_unused=True,
-            )[0]
-            grads.append(
-                grad if grad is not None else torch.zeros_like(geometry.params[name])
-            )
-
-        return grads
+        params = [geometry.params[n] for n in weight_names]
+        grads = torch.autograd.grad(
+            total, params, retain_graph=False, create_graph=False, allow_unused=True
+        )
+        return [
+            g if g is not None else torch.zeros_like(p)
+            for p, g in zip(params, grads, strict=True)
+        ]
 
     def surrogate_objective(
         self,
@@ -586,14 +624,18 @@ class TemporalTraceCredit:
             return []
 
         weight_names = _learnable_weight_names(geometry.params)
-        if len(weight_names) != len(acts) - 1:
-            return [torch.zeros_like(geometry.params[n]) for n in weight_names]
+        if not weight_names:
+            return []
 
         batch = acts[0].shape[0]
         grads = []
-        for i in range(len(weight_names)):
-            pre = acts[i]  # [batch, in_dim]
-            post = acts[i + 1]  # [batch, out_dim]
+        for pair, name in zip(
+            _weight_acts(weight_names, acts, geometry), weight_names, strict=True
+        ):
+            if pair is None:
+                grads.append(torch.zeros_like(geometry.params[name]))
+                continue
+            pre, post = pair
 
             # Causal correlation: post^T @ pre -> [out_dim, in_dim] (matches weight shape)
             causal = post.T @ pre / batch
@@ -675,25 +717,34 @@ class TargetInversionCredit:
             return []
 
         weight_names = _learnable_weight_names(geometry.params)
-        if len(weight_names) != len(acts) - 1:
-            return [torch.zeros_like(geometry.params[n]) for n in weight_names]
+        if not weight_names:
+            return []
 
         # Target at output layer: one-hot of class indices
         y = nudged_state.y
         if y is None:
             return [torch.zeros_like(geometry.params[n]) for n in weight_names]
 
-        targets = _propagate_targets(acts, y, weight_names, geometry)
+        n_trans = len(acts) - 1
+        targets = _propagate_targets(acts, y, weight_names[:n_trans], geometry)
+        pairs = _weight_acts(weight_names, acts, geometry)
 
         # Layer-local deltas and pseudo-gradients
         grads = []
         for i, name in enumerate(weight_names):
-            tgt = targets[i + 1] if i + 1 < len(targets) else None
-            if tgt is None or i + 1 >= len(acts):
+            pair = pairs[i]
+            if pair is None or i >= n_trans:
+                # Surplus/ragged weights (recurrent self-connections, tile
+                # meshes) receive no propagated target — zeros, not
+                # fabricated signal.
                 grads.append(torch.zeros_like(geometry.params[name]))
                 continue
-            delta = acts[i + 1] - tgt  # [batch, out]
-            pre = acts[i]  # [batch, in]
+            pre, post = pair
+            tgt = targets[i + 1]
+            if tgt is None:
+                grads.append(torch.zeros_like(geometry.params[name]))
+                continue
+            delta = post - tgt  # [batch, out]
             # pseudo_grad = delta^T @ pre / batch -> [out, in]
             grad = delta.T @ pre / pre.shape[0]
             grads.append(grad)
@@ -751,25 +802,30 @@ class HomeostaticCredit:
             return []
 
         weight_names = _learnable_weight_names(geometry.params)
-        if len(weight_names) != len(acts) - 1:
-            return [torch.zeros_like(geometry.params[n]) for n in weight_names]
+        if not weight_names:
+            return []
 
         target = self.config.homeostatic_target
         grads = []
-        for i, name in enumerate(weight_names):
-            post = acts[i + 1]  # [batch, out_dim]
-            W = geometry.params[name]  # [out_dim, in_dim]
+        for pair, name in zip(
+            _weight_acts(weight_names, acts, geometry), weight_names, strict=True
+        ):
+            if pair is None:
+                grads.append(torch.zeros_like(geometry.params[name]))
+                continue
+            _, post = pair
+            weight = geometry.params[name]  # [out_dim, in_dim]
 
             # Mean post-activation norm (L2 across features, then mean across batch)
             post_norm = post.norm(dim=1).mean()  # scalar
             # Error from target
             err = post_norm - target
             # Direction: scale W by error, normalized by Frobenius norm
-            W_norm = W.norm()
-            if W_norm > 0:
-                grad = err * W / W_norm
+            weight_norm = weight.norm()
+            if weight_norm > 0:
+                grad = err * weight / weight_norm
             else:
-                grad = torch.zeros_like(W)
+                grad = torch.zeros_like(weight)
             grads.append(grad)
 
         return grads

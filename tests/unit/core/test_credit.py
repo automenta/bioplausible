@@ -15,8 +15,11 @@ from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     EnergyMinimizationDynamics,
+    EuclideanUpdate,
     FeedforwardGeometry,
     GeometryConfig,
+    InstantaneousDynamics,
+    ParameterUpdateConfig,
     Phase,
     RandomProjectionsCredit,
     RecurrentGeometry,
@@ -324,41 +327,69 @@ class TestThermodynamicVsBackpropMLP:
 class TestFATheoretical:
     """Test FA pseudo-gradients match theoretical expectation."""
 
-    def test_stub_returns_list(self, device):
-        """RandomProjectionsCredit stub returns list of gradients."""
+    def test_feedback_propagated_error_signal(self, device):
+        """FA routes the autograd top error through fixed feedback matrices:
+        one pseudo-gradient per weight, shapes match, weights move, and the
+        feedback matrices are fixed across calls."""
         geometry = FeedforwardGeometry(
             GeometryConfig.feedforward(
-                input_dim=784,
-                output_dim=10,
-                hidden_dims=(256,),
+                input_dim=8,
+                output_dim=8,
+                hidden_dims=(16,),
                 init_scale=0.1,
             )
         )
         geometry.to(device)
 
         substrate = DigitalSubstrate(SubstrateConfig.digital(device=device))
+        dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
 
         credit = RandomProjectionsCredit(
             CreditAssignmentConfig.random_projections(
                 beta=0.5,
-                feedback_scale=0.01,
+                feedback_scale=0.1,
             )
         )
 
-        free_state = SystemState(
-            x=torch.randn(4, 784, device=device),
-            y=torch.randint(0, 10, (4,), device=device),
-        )
-        nudged_state = SystemState(
-            x=torch.randn(4, 784, device=device),
-            y=torch.randint(0, 10, (4,), device=device),
-        )
-        states = {Phase.FREE: free_state, Phase.NUDGED: nudged_state}
+        x = torch.randn(4, 8, device=device)
+        y = torch.randint(0, 8, (4,), device=device)
+        with torch.enable_grad():
+            state = SystemState(x=x, y=y)
+            state.activations = substrate.inject_state_noise(
+                geometry.forward(x, substrate)
+            )
+            settled = dynamics.settle(state, geometry, substrate, target=y)
+            loss = torch.nn.functional.cross_entropy(settled.activations[-1], y)
+            states = {Phase.NUDGED: settled}
+            grads = credit.compute_pseudo_gradient(states, loss, geometry)
 
-        grads = credit.compute_pseudo_gradient(states, torch.tensor(1.0), geometry)
+        weight_names = _learnable_weight_names(geometry.params)
         assert isinstance(grads, list)
-        # Stub returns one gradient per weight matrix
-        assert len(grads) > 0
+        assert len(grads) == len(weight_names)
+        for grad, name in zip(grads, weight_names, strict=True):
+            assert grad.shape == geometry.params[name].shape
+            assert torch.isfinite(grad).all()
+        # The signal actually drives learning: parameters move under the update.
+        update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.05))
+        before = {n: p.detach().clone() for n, p in geometry.params.items()}
+        geometry.update_params(update.step(geometry.params, grads, geometry))
+        moved = sum(
+            float((geometry.params[n].detach() - before[n]).norm()) for n in before
+        )
+        assert moved > 0.0
+        # Feedback matrices fixed at first use: a fresh settle + second call
+        # reuses them (the first call consumes its settle graph by design).
+        fb_before = {k: v.clone() for k, v in credit._feedback_weights.items()}
+        with torch.enable_grad():
+            state2 = SystemState(x=x, y=y)
+            state2.activations = substrate.inject_state_noise(
+                geometry.forward(x, substrate)
+            )
+            settled2 = dynamics.settle(state2, geometry, substrate, target=y)
+            loss2 = torch.nn.functional.cross_entropy(settled2.activations[-1], y)
+            credit.compute_pseudo_gradient({Phase.NUDGED: settled2}, loss2, geometry)
+        for name, fb in fb_before.items():
+            assert torch.equal(credit._feedback_weights[name], fb)
 
 
 # ============================================================
@@ -369,19 +400,21 @@ class TestFATheoretical:
 class TestDFATheoretical:
     """Test DFA pseudo-gradients match theoretical expectation."""
 
-    def test_stub_returns_list(self, device):
-        """RandomProjectionsCredit stub returns list of gradients."""
+    def test_dfa_feedback_shape_contract(self, device):
+        """DFA config routes through the same fixed-feedback implementation;
+        the pseudo-gradient list matches the geometry's weight structure."""
         geometry = FeedforwardGeometry(
             GeometryConfig.feedforward(
-                input_dim=784,
-                output_dim=10,
-                hidden_dims=(256, 128),
+                input_dim=8,
+                output_dim=8,
+                hidden_dims=(16, 16),
                 init_scale=0.1,
             )
         )
         geometry.to(device)
 
         substrate = DigitalSubstrate(SubstrateConfig.digital(device=device))
+        dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
 
         config = CreditAssignmentConfig(
             credit_type="direct_feedback_alignment",
@@ -389,23 +422,27 @@ class TestDFATheoretical:
             feedback_matrix=None,
             local_objective="mse",
             orthogonal_init=False,
-            feedback_scale=0.01,
+            feedback_scale=0.1,
         )
         credit = RandomProjectionsCredit(config)
 
-        free_state = SystemState(
-            x=torch.randn(4, 784, device=device),
-            y=torch.randint(0, 10, (4,), device=device),
-        )
-        nudged_state = SystemState(
-            x=torch.randn(4, 784, device=device),
-            y=torch.randint(0, 10, (4,), device=device),
-        )
-        states = {Phase.FREE: free_state, Phase.NUDGED: nudged_state}
+        x = torch.randn(4, 8, device=device)
+        y = torch.randint(0, 8, (4,), device=device)
+        with torch.enable_grad():
+            state = SystemState(x=x, y=y)
+            state.activations = substrate.inject_state_noise(
+                geometry.forward(x, substrate)
+            )
+            settled = dynamics.settle(state, geometry, substrate, target=y)
+            loss = torch.nn.functional.cross_entropy(settled.activations[-1], y)
+            grads = credit.compute_pseudo_gradient(
+                {Phase.NUDGED: settled}, loss, geometry
+            )
 
-        grads = credit.compute_pseudo_gradient(states, torch.tensor(1.0), geometry)
-        assert isinstance(grads, list)
-        assert len(grads) > 0
+        weight_names = _learnable_weight_names(geometry.params)
+        assert len(grads) == len(weight_names)
+        for grad, name in zip(grads, weight_names, strict=True):
+            assert grad.shape == geometry.params[name].shape
 
 
 # ============================================================

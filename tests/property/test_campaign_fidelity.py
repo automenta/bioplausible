@@ -11,6 +11,10 @@ import pytest
 
 from computronium.cli.campaign import _get_search_space
 from computronium.core.campaign import space_grid
+from computronium.core.campaign.evaluation import (
+    IncompatibleCoordinateError,
+    build_coordinate_system,
+)
 from computronium.core.campaign.fidelity import (
     CoordinateFidelity,
     check_coordinate_fidelity,
@@ -62,28 +66,93 @@ class TestDynamicsFidelity:
 
     def test_instantaneous_is_single_pass_and_target_blind(self) -> None:
         verdict = check_coordinate_fidelity(
-            "digital/recurrent/instantaneous/null/thermodynamic_contrast/euclidean"
+            "digital/recurrent/instantaneous/null/random_projections/euclidean"
         )
         d = [c for c in verdict.checks if c.axis == "dynamics"]
         assert d[0].status == "pass"
         assert "single pass" in d[0].detail
-        assert "free ≡ nudged" in d[1].detail
+        assert "free = nudged" in d[1].detail
+
+    def test_predictive_settling_settles_but_nudge_unwired(self) -> None:
+        """Real verdicts for a blocked dynamics: the iterative settle runs
+        deterministically but (a) does not descend its own tracked
+        prediction-error energy and (b) ignores the target (the nudged
+        phase equals free), so PC-style clamped inference is missing."""
+        verdict = check_coordinate_fidelity(
+            "digital/feedforward/predictive_settling/null/local_goodness/euclidean"
+        )
+        d = [c for c in verdict.checks if c.axis == "dynamics"]
+        assert d[0].status == "fail"
+        assert "prediction-error energy" in d[0].detail
+        assert d[1].status == "pass"  # deterministic repeat
+        assert d[2].status == "fail"
+        assert "nudge pathway unwired" in d[2].detail
+        assert not verdict.passed
+
+    def test_spike_integration_membrane_bounded_and_spikes_tracked(self) -> None:
+        verdict = check_coordinate_fidelity(
+            "digital/feedforward/spike_integration/null/temporal_trace/euclidean"
+        )
+        d = [c for c in verdict.checks if c.axis == "dynamics"]
+        assert all(c.status == "pass" for c in d)
+        assert "membrane bounded" in d[1].detail
+        assert "spike counts" in d[2].detail
+        assert "target-blind by spec" in d[4].detail
+
+    def test_diffusion_langevin_descent_but_target_blind(self) -> None:
+        """Langevin descent runs (post-R3.1) with noise, but the energy
+        functional has no target term: seed-locked free vs nudged settles
+        are identical, so supervision cannot enter the dynamics."""
+        verdict = check_coordinate_fidelity(
+            "digital/feedforward/diffusion/null/temporal_trace/euclidean"
+        )
+        d = [c for c in verdict.checks if c.axis == "dynamics"]
+        assert d[0].status == "pass"  # finite
+        assert d[1].status == "pass"  # energy descends
+        assert d[2].status == "pass"  # Langevin noise present
+        assert d[3].status == "fail"
+        assert "no target term" in d[3].detail
+
+
+class TestR39ValidityMatrix:
+    def test_instantaneous_thermodynamic_contrast_rejected_at_composition(self) -> None:
+        """R3.9 fence: a contrastive settling credit paired with a single
+        target-blind pass is conceptually dead — rejected at composition,
+        not quarantined at attribution."""
+        with pytest.raises(IncompatibleCoordinateError) as excinfo:
+            build_coordinate_system(
+                "digital/feedforward/instantaneous/null/thermodynamic_contrast/euclidean"
+            )
+        assert "contrastive" in str(excinfo.value)
+
+    def test_incompatible_coordinate_fenced_in_gate(self) -> None:
+        """The gate records the fence as a coordinate-level fail verdict."""
+        verdict = check_coordinate_fidelity(
+            "digital/recurrent/instantaneous/routing/thermodynamic_contrast/euclidean"
+        )
+        assert not verdict.passed
+        assert len(verdict.checks) == 1
+        assert verdict.checks[0].axis == "coordinate"
+        assert "invalid pairing" in verdict.checks[0].detail
 
 
 class TestCreditFidelity:
-    @pytest.mark.parametrize(
-        "credit",
-        ["thermodynamic_contrast", "random_projections", "local_goodness"],
-    )
-    def test_contrastive_credits_dead_under_instantaneous(self, credit: str) -> None:
-        """R3.2-class defect, pinned as a gate verdict: a dynamics that
-        ignores the target leaves contrastive credits structurally zero."""
+    @pytest.mark.parametrize("credit", ["random_projections", "local_goodness"])
+    def test_phase_contrast_credit_under_instantaneous(self, credit: str) -> None:
+        """Phase-contrast credits need distinct settled phases. Random-
+        projections no longer extracts its signal from phase contrast (the
+        FA repair routes the top error through autograd + fixed feedback),
+        so it is live under a target-blind single pass; local goodness
+        still needs nudged ≠ free and remains structurally zero."""
         verdict = check_coordinate_fidelity(
             f"digital/feedforward/instantaneous/null/{credit}/euclidean"
         )
         credit_check = _check(verdict, "credit")
-        assert credit_check.status == "fail"
-        assert "pseudo-gradient" in credit_check.detail
+        assert credit_check.status == (
+            "pass" if credit == "random_projections" else "fail"
+        )
+        if credit == "local_goodness":
+            assert "pseudo-gradient" in credit_check.detail
 
     def test_implemented_credits_signal_under_energy(self) -> None:
         for credit in (
@@ -101,8 +170,29 @@ class TestCreditFidelity:
                 f"{credit} credit failed: {_check(verdict, 'credit').detail}"
             )
 
+    def test_implemented_credits_signal_under_energy_recurrent(self) -> None:
+        """Recurrent geometry: the EM settle graph reaches θ through the
+        kernel, and surplus weights (recurrent self-connections) receive
+        their gradient via positional act-transition mapping."""
+        for credit in (
+            "thermodynamic_contrast",
+            "random_projections",
+            "local_goodness",
+            "temporal_trace",
+            "target_inversion",
+            "homeostatic",
+        ):
+            verdict = check_coordinate_fidelity(
+                f"digital/recurrent/energy_minimization/null/{credit}/euclidean"
+            )
+            assert _check(verdict, "credit").status == "pass", (
+                f"{credit} credit failed (recurrent): "
+                f"{_check(verdict, 'credit').detail}"
+            )
+
     def test_local_goodness_now_implemented(self) -> None:
-        """LocalGoodnessCredit is no longer a stub — compute_pseudo_gradient produces signal."""
+        """LocalGoodnessCredit is no longer a stub: compute_pseudo_gradient
+        produces signal."""
         verdict = check_coordinate_fidelity(
             "digital/feedforward/energy_minimization/null/local_goodness/euclidean"
         )
@@ -121,7 +211,7 @@ class TestUpdateFidelity:
 
     def test_update_blocked_without_signal(self) -> None:
         verdict = check_coordinate_fidelity(
-            "digital/feedforward/instantaneous/null/thermodynamic_contrast/euclidean"
+            "digital/feedforward/instantaneous/null/local_goodness/euclidean"
         )
         update_check = _check(verdict, "update")
         assert update_check.status == "blocked"
@@ -138,18 +228,29 @@ class TestPlasticityFidelity:
         assert "ψ const" in m.detail
 
     @pytest.mark.parametrize("plasticity", ["routing", "fast_weights"])
-    def test_nonnull_plasticity_engages_in_episode_pipeline(
-        self, plasticity: str
-    ) -> None:
-        """M-axis lock: plasticity.step is now invoked by run_train_step
-        (imp-22), so ψ steps and can modulate activity. Verdict flips to pass."""
+    def test_nonnull_plasticity_steps_and_modulates(self, plasticity: str) -> None:
+        """M-axis lock (upgraded, TODO8 Execution Order 9.v): plasticity.step
+        is invoked by the episode pipeline AND ψ actually changes across the
+        step; primitives with a modulate hook must produce ψ-sensitive
+        activity (zeroed-ψ ≠ stepped-ψ)."""
         verdict = check_coordinate_fidelity(
             f"digital/feedforward/energy_minimization/{plasticity}"
             f"/thermodynamic_contrast/euclidean"
         )
         m = _check(verdict, "plasticity")
         assert m.status == "pass"
-        assert "stepped" in m.detail or "engages" in m.detail or "ψ stepped" in m.detail
+        assert "ψ stepped" in m.detail and "changed" in m.detail
+        assert "ψ-sensitive" in m.detail
+
+    def test_fast_weights_psi_receives_target_activity(self) -> None:
+        """Regression pin: the pipeline's M-axis step must expose x AND y in
+        z.activity — the FastWeight Hebbian update was silent-dead while only
+        x was threaded (caught by the ψ non-const assertion)."""
+        verdict = check_coordinate_fidelity(
+            "digital/recurrent/energy_minimization/fast_weights/random_projections"
+            "/euclidean"
+        )
+        assert _check(verdict, "plasticity").status == "pass"
 
 
 class TestCapabilityManifest:
@@ -157,29 +258,29 @@ class TestCapabilityManifest:
         assert set(manifest) == set(GRID)
         for verdict in manifest.values():
             axes = {c.axis for c in verdict.checks}
-            assert axes == {"dynamics", "credit", "update", "plasticity"}
+            assert axes in (
+                {"dynamics", "credit", "update", "plasticity"},
+                {"coordinate"},  # fenced invalid pairing (R3.9)
+            )
 
     def test_passing_set_is_the_validated_subspace(self, manifest) -> None:
-        """The capability manifest of the current grid: energy_minimization x
-        {null, fast_weights, routing} x {thermodynamic_contrast, random_projections,
-        local_goodness(feedforward)} x {feedforward, recurrent} x {euclidean, spectral_constrained}
-        passes. Recurrent/local_goodness fails (EM settle doesn't preserve autograd graph)."""
+        """The capability manifest of the current grid: all energy_minimization
+        coordinates (contrastive/autograd/trace credits now work on both
+        geometries incl. surplus recurrent weights) plus instantaneous x
+        random_projections (FA routes the autograd top error through fixed
+        feedback). Instantaneous x thermodynamic_contrast is fenced invalid;
+        instantaneous x local_goodness is structurally zero."""
         passing = {c for c, v in manifest.items() if v.passed}
         expected = {
             c
             for c in GRID
             if "/energy_minimization/" in c
-            and ("/null/" in c or "/fast_weights/" in c or "/routing/" in c)
-            and (
-                "/thermodynamic_contrast/" in c
-                or "/random_projections/" in c
-                or ("/local_goodness/" in c and "/feedforward/" in c)
-            )
+            or ("/instantaneous/" in c and "/random_projections/" in c)
         }
         assert passing == expected, (
             f"Passing: {sorted(passing)}, Expected: {sorted(expected)}"
         )
-        assert len(passing) == 30
+        assert len(passing) == 48
 
     def test_defect_filtered_attribution_excludes_and_lists(self, manifest) -> None:
         records = [
@@ -195,12 +296,18 @@ class TestCapabilityManifest:
             result.passing_coordinates
         )
         assert all(c in manifest for c in result.excluded_coordinates)
-        # With 3 plasticity values in passing subspace, plasticity deltas ARE attributable.
-        # Dynamics still has only energy_minimization.
+        # The passing subspace varies every axis (incl. dynamics), so all
+        # five are attributable after the filter.
         attributed_axes = {a.axis for a in result.attributions}
-        assert "dynamics" not in attributed_axes
+        assert attributed_axes <= {
+            "dynamics",
+            "geometry",
+            "credit",
+            "update",
+            "plasticity",
+        }
+        assert "dynamics" in attributed_axes
         assert "plasticity" in attributed_axes
-        assert attributed_axes <= {"geometry", "credit", "update", "plasticity"}
 
 
 def test_manifest_report_renders() -> None:

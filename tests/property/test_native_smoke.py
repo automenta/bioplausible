@@ -327,5 +327,20 @@ def test_native_tile_learning_capability(factory):
     )
 
 
+def test_native_fa_learning_capability():
+    """Learning-capability lock for the flagship FA factory.
+
+    The R3.2 repair (autograd top error through fixed feedback matrices)
+    made RandomProjectionsCredit live under InstantaneousDynamics — before
+    the repair Δθ was exactly 0.0 and every FA "training" run was inert."""
+    model = create_native_fa_mlp(INPUT_DIM, HIDDEN_DIM, OUTPUT_DIM, lr=0.01)
+    x, y = _make_batch()
+    before = [p.detach().clone() for p in model.parameters()]
+    model.train_step(x, y)
+    assert any(
+        not torch.equal(p.detach(), b) for p, b in zip(model.parameters(), before)
+    )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

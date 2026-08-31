@@ -20,6 +20,7 @@ from computronium.core.campaign.evaluation import (
     _EXCLUDED_AXES,
     DEFAULT_GUARD_TAU,
     GuardKillError,
+    IncompatibleCoordinateError,
     UnsupportedCoordinateError,
     build_coordinate_system,
     evaluate_episode,
@@ -76,6 +77,11 @@ _INCOMPATIBLE_PAIRS: Final[frozenset[tuple[str, str]]] = frozenset({
     ("tile_mesh", "spike_integration"),
 })
 
+# R3.9 D×C fence: a contrastive settling credit over a single target-blind
+# pass has no contrastive structure (free ≡ nudged ⇒ structural zero).
+_CONTRASTIVE_CREDITS: Final[frozenset[str]] = frozenset({"thermodynamic_contrast"})
+_TARGET_BLIND_DYNAMICS: Final[frozenset[str]] = frozenset({"instantaneous"})
+
 
 def _coordinate(slot: int, value: str) -> str:
     segments = [str(part) for part in BASELINE.split("/")]
@@ -84,8 +90,10 @@ def _coordinate(slot: int, value: str) -> str:
 
 
 def _is_fenced(coordinate: str) -> bool:
-    geometry, dynamics = coordinate.split("/")[1:3]
-    return (geometry, dynamics) in _INCOMPATIBLE_PAIRS
+    geometry, dynamics, _plasticity, credit = coordinate.split("/")[1:5]
+    if (geometry, dynamics) in _INCOMPATIBLE_PAIRS:
+        return True
+    return dynamics == "instantaneous" and credit in _CONTRASTIVE_CREDITS
 
 
 @pytest.mark.parametrize("slot", sorted(AXIS_VALUES))
@@ -134,6 +142,18 @@ def test_fenced_pairs_raise(geometry: str, dynamics: str) -> None:
     segments[1], segments[2] = geometry, dynamics
     coordinate = "/".join(segments)
     with pytest.raises(UnsupportedCoordinateError, match="layered"):
+        build_coordinate_system(coordinate, input_dim=INPUT_DIM, output_dim=OUTPUT_DIM)
+
+
+@pytest.mark.parametrize("dynamics", sorted(_TARGET_BLIND_DYNAMICS))
+@pytest.mark.parametrize("credit", sorted(_CONTRASTIVE_CREDITS))
+def test_contrastive_instantaneous_fenced(dynamics: str, credit: str) -> None:
+    """R3.9: the contrastive-credit × target-blind-pass pairing is rejected
+    at composition (IncompatibleCoordinateError), not merely quarantined."""
+    segments = [str(part) for part in BASELINE.split("/")]
+    segments[2], segments[4] = dynamics, credit
+    coordinate = "/".join(segments)
+    with pytest.raises(IncompatibleCoordinateError, match="contrastive"):
         build_coordinate_system(coordinate, input_dim=INPUT_DIM, output_dim=OUTPUT_DIM)
 
 

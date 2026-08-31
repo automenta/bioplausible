@@ -149,7 +149,11 @@ def _get_search_space(space_name: str) -> dict:
             "geometries": ["feedforward", "recurrent"],
             "dynamics": ["energy_minimization", "instantaneous"],
             "plasticity": ["null", "routing", "fast_weights"],
-            "credits": ["thermodynamic_contrast", "random_projections"],
+            # thermodynamic_contrast excluded: contrastive settling credit x
+            # instantaneous is R3.9-fenced; local_goodness composes on both
+            # dynamics (its instantaneous pairings are quarantined by the
+            # fidelity gate at attribution, not here).
+            "credits": ["random_projections", "local_goodness"],
             "updates": ["euclidean"],
         },
         # 72-coordinate grid for commissioned replication campaigns (R5.1c):

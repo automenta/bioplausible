@@ -20,15 +20,23 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from dataclasses import dataclass
+from itertools import pairwise
 from typing import TYPE_CHECKING, Literal
 
 import torch
 from torch import Tensor
 
-from computronium.core.campaign.evaluation import build_coordinate_system, episode_batch
+from computronium.core.campaign.evaluation import (
+    IncompatibleCoordinateError,
+    build_coordinate_system,
+    episode_batch,
+)
 from computronium.core.pipeline import Phase, forward_pass, task_loss
 from computronium.ontology import (
+    DiffusionDynamics,
     EnergyMinimizationDynamics,
+    PredictiveSettlingDynamics,
+    SpikeIntegrationDynamics,
     StateDynamicsConfig,
     SystemState,
 )
@@ -47,6 +55,8 @@ _PROBE_ENERGY_KWARGS = {"max_steps": 3, "step_size": 0.1}
 
 _GRAD_NORM_TOL = 1e-12
 _MONOTONE_SLACK = 1e-3
+_SPIKE_MEMBRANE_BOUND = 1e3
+_DIFFUSION_PROBE_SEED = 1234
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,101 +133,284 @@ def _settled_phases(
     return states, grads
 
 
+def _acts_history(history: list[float] | None) -> bool:
+    return bool(history) and all(torch.isfinite(torch.tensor(history)))
+
+
+def _settled_output(dynamics, joint, x, y, target):
+    """Forward + settle one phase; return (settled state, layer list).
+
+    Reads the RETURNED state — settle implementations that rebuild the
+    state (via _create_output_state) do not mutate the input in place.
+    """
+    state = SystemState(x=x, y=y)
+    state.activations = forward_pass(joint.substrate, joint.geometry, x)
+    settled = dynamics.settle(state, joint.geometry, joint.substrate, target=target)  # type: ignore[arg-type]
+    return settled, _acts_list(settled.activations)
+
+
+def _probe_energy_minimization(joint, x, y) -> tuple[AxisCheck, ...]:
+    value = "energy_minimization"
+    dynamics = EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(
+            track_free_energy_per_iter=True, **_PROBE_ENERGY_KWARGS
+        )
+    )
+    _state, free_out = _settled_output(dynamics, joint, x, y, None)
+    history = dynamics.get_free_energy_history() or []
+    if not _acts_history(history):
+        return (
+            AxisCheck("dynamics", value, "fail", "energy history missing/non-finite"),
+        )
+    _state, nudged_out = _settled_output(dynamics, joint, x, y, y)
+    responds = (
+        bool(nudged_out)
+        and bool(free_out)
+        and not torch.allclose(free_out[-1], nudged_out[-1], atol=1e-6)
+    )
+    monotone = all(b <= a + _MONOTONE_SLACK for a, b in pairwise(history))
+    return (
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass" if history[-1] < history[0] else "fail",
+            f"energy {history[0]:.4f} -> {history[-1]:.4f} over {len(history)} steps",
+        ),
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass" if monotone else "fail",
+            "per-step energy non-increasing within slack",
+        ),
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass" if responds else "fail",
+            "nudged phase differs from free phase (target-responsive settle)",
+        ),
+    )
+
+
+def _probe_instantaneous(joint, x, y) -> tuple[AxisCheck, ...]:
+    value = "instantaneous"
+    acts1 = joint.geometry.forward_with_intermediates(x, joint.substrate)
+    _state, settled1 = _settled_output(joint.dynamics, joint, x, y, None)
+    _settled_output(joint.dynamics, joint, x, y, y)
+    _state, settled2 = _settled_output(joint.dynamics, joint, x, y, None)
+    single_pass = bool(settled1) and torch.allclose(
+        settled1[-1], acts1[-1].detach(), atol=1e-6
+    )
+    idempotent = bool(settled2) and torch.allclose(
+        settled1[-1], settled2[-1], atol=1e-6
+    )
+    return (
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass" if single_pass and idempotent else "fail",
+            "single pass, idempotent, no inadvertent settle"
+            if single_pass and idempotent
+            else "settle is not a faithful single pass",
+        ),
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass",
+            "target-blind by spec: free = nudged, so contrastive credits "
+            "receive zero phase contrast (surfaced by the credit probe)",
+        ),
+    )
+
+
+def _probe_predictive_settling(joint, x, y) -> tuple[AxisCheck, ...]:
+    value = "predictive_settling"
+    dynamics = PredictiveSettlingDynamics(
+        StateDynamicsConfig.predictive_settling(
+            max_steps=3, track_free_energy_per_iter=True
+        )
+    )
+    _state, free_out = _settled_output(dynamics, joint, x, y, None)
+    history = dynamics.get_free_energy_history() or []
+    _state, nudged_out = _settled_output(dynamics, joint, x, y, y)
+    _state, repeat_out = _settled_output(dynamics, joint, x, y, None)
+    if not _acts_history(history):
+        return (
+            AxisCheck("dynamics", value, "fail", "energy history missing/non-finite"),
+        )
+    deterministic = (
+        bool(free_out)
+        and bool(repeat_out)
+        and torch.allclose(free_out[-1], repeat_out[-1], atol=1e-6)
+    )
+    responds = (
+        bool(free_out)
+        and bool(nudged_out)
+        and not torch.allclose(free_out[-1], nudged_out[-1], atol=1e-6)
+    )
+    return (
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass" if history[-1] < history[0] else "fail",
+            f"prediction-error energy {history[0]:.4f} -> {history[-1]:.4f} "
+            f"over {len(history)} steps",
+        ),
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass" if deterministic else "fail",
+            "repeat settle is deterministic",
+        ),
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass" if responds else "fail",
+            "nudged phase differs from free phase"
+            if responds
+            else "nudge pathway unwired: settle math ignores the target "
+            "(target only selects the state slot); predictive coding "
+            "clamps the output layer in the nudged phase — wire the "
+            "clamp to widen the manifest",
+        ),
+    )
+
+
+def _probe_spike_integration(joint, x, y) -> tuple[AxisCheck, ...]:
+    value = "spike_integration"
+    dynamics = SpikeIntegrationDynamics(
+        StateDynamicsConfig.spike_integration(max_steps=3)
+    )
+    settled, out = _settled_output(dynamics, joint, x, y, None)
+    _state, repeat_out = _settled_output(dynamics, joint, x, y, None)
+    spikes = getattr(settled, "spike_counts", None) or []
+    finite = bool(out) and bool(torch.isfinite(out[-1]).all())
+    bounded = finite and float(out[-1].abs().max()) <= _SPIKE_MEMBRANE_BOUND
+    tracked = len(spikes) > 0 and bool(torch.isfinite(torch.stack(spikes)).all())
+    deterministic = bool(repeat_out) and torch.allclose(
+        out[-1], repeat_out[-1], atol=1e-6
+    )
+    return (
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass" if finite else "fail",
+            "membrane state finite after LIF integration"
+            if finite
+            else "membrane state non-finite after LIF integration",
+        ),
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass" if bounded else "fail",
+            "membrane bounded (LIF threshold-reset active)"
+            if bounded
+            else "membrane unbounded — LIF reset not enforced",
+        ),
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass" if tracked else "fail",
+            f"{len(spikes)} per-step spike counts recorded"
+            if tracked
+            else "spike counts missing from the settled state",
+        ),
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass" if deterministic else "fail",
+            "repeat settle is deterministic",
+        ),
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass",
+            "target-blind by spec: LIF integration carries no nudge term; "
+            "supervision enters via the credit rule "
+            "(surfaced by the credit probe)",
+        ),
+    )
+
+
+def _probe_diffusion(joint, x, y) -> tuple[AxisCheck, ...]:
+    value = "diffusion"
+    dynamics = DiffusionDynamics(StateDynamicsConfig.diffusion(max_steps=3))
+    h0 = joint.substrate.initial_state(x)
+    e_init = float(h0.pow(2).sum())
+    _state, out = _settled_output(dynamics, joint, x, y, None)
+    _state, repeat_out = _settled_output(dynamics, joint, x, y, None)
+    e_final = float(out[-1].pow(2).sum()) if out else float("inf")
+    finite = bool(out) and bool(torch.isfinite(out[-1]).all())
+    # Nudge responsiveness, seed-locked: re-running free vs nudged with
+    # identical Langevin noise isolates the target's causal effect on
+    # the settle output (target-blind implies identical).
+    torch.manual_seed(_DIFFUSION_PROBE_SEED)
+    _state, free_seeded = _settled_output(dynamics, joint, x, y, None)
+    torch.manual_seed(_DIFFUSION_PROBE_SEED)
+    _state, nudged_seeded = _settled_output(dynamics, joint, x, y, y)
+    stochastic = bool(repeat_out) and not torch.allclose(
+        out[-1], repeat_out[-1], atol=1e-9
+    )
+    responsive = (
+        bool(free_seeded)
+        and bool(nudged_seeded)
+        and not torch.allclose(free_seeded[-1], nudged_seeded[-1], atol=1e-9)
+    )
+    return (
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass" if finite else "fail",
+            "Langevin settle produced finite state"
+            if finite
+            else "Langevin settle produced non-finite state",
+        ),
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass" if e_final < e_init else "fail",
+            f"Langevin energy {e_init:.4f} -> {e_final:.4f} (descent on "
+            "the settle energy functional)",
+        ),
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass" if stochastic else "fail",
+            "Langevin noise present (repeat settle differs)"
+            if stochastic
+            else "repeat settle identical — Langevin noise missing",
+        ),
+        AxisCheck(
+            "dynamics",
+            value,
+            "pass" if responsive else "fail",
+            "nudged settle differs from free settle (target-responsive)"
+            if responsive
+            else "nudge pathway unwired: with identical Langevin noise "
+            "the nudged settle equals the free settle — the energy "
+            "functional (norm of h squared) has no target term; "
+            "nudged-Langevin (EP-style) not implemented",
+        ),
+    )
+
+
+_DYNAMICS_PROBES = {
+    "energy_minimization": _probe_energy_minimization,
+    "instantaneous": _probe_instantaneous,
+    "predictive_settling": _probe_predictive_settling,
+    "spike_integration": _probe_spike_integration,
+    "diffusion": _probe_diffusion,
+}
+
+
 def _check_dynamics(joint, parts: list[str]) -> tuple[AxisCheck, ...]:
     value = parts[2]
-    x, y = episode_batch(0)
-    if value == "energy_minimization":
-        dynamics = EnergyMinimizationDynamics(
-            StateDynamicsConfig.energy_minimization(
-                track_free_energy_per_iter=True, **_PROBE_ENERGY_KWARGS
-            )
-        )
-        state = SystemState(x=x, y=y)
-        state.activations = forward_pass(joint.substrate, joint.geometry, x)
-        dynamics.settle(state, joint.geometry, joint.substrate, target=None)  # type: ignore[arg-type]
-        history = dynamics.get_free_energy_history() or []
-        free_out = _acts_list(state.activations)
-        checks = []
-        if not history or not all(torch.isfinite(torch.tensor(history))):
-            return (
-                AxisCheck(
-                    "dynamics", value, "fail", "energy history missing/non-finite"
-                ),
-            )
-        checks.append(
-            AxisCheck(
-                "dynamics",
-                value,
-                "pass" if history[-1] < history[0] else "fail",
-                f"energy {history[0]:.4f} -> {history[-1]:.4f} over {len(history)} steps",
-            )
-        )
-        monotone = all(b <= a + _MONOTONE_SLACK for a, b in zip(history, history[1:]))
-        checks.append(
-            AxisCheck(
-                "dynamics",
-                value,
-                "pass" if monotone else "fail",
-                "per-step energy non-increasing within slack",
-            )
-        )
-        nudged = SystemState(x=x, y=y)
-        nudged.activations = forward_pass(joint.substrate, joint.geometry, x)
-        dynamics.settle(nudged, joint.geometry, joint.substrate, target=y)  # type: ignore[arg-type]
-        nudged_out = _acts_list(nudged.activations)
-        responds = (
-            bool(nudged_out)
-            and bool(free_out)
-            and not torch.allclose(free_out[-1], nudged_out[-1], atol=1e-6)
-        )
-        checks.append(
-            AxisCheck(
-                "dynamics",
-                value,
-                "pass" if responds else "fail",
-                "nudged phase differs from free phase (target-responsive settle)",
-            )
-        )
-        return tuple(checks)
-
-    if value == "instantaneous":
-        acts1 = joint.geometry.forward_with_intermediates(x, joint.substrate)
-        state = SystemState(x=x, y=y)
-        joint.dynamics.settle(state, joint.geometry, joint.substrate, target=None)  # type: ignore[arg-type]
-        settled1 = _acts_list(state.activations)
-        nudged = SystemState(x=x, y=y)
-        joint.dynamics.settle(nudged, joint.geometry, joint.substrate, target=y)  # type: ignore[arg-type]
-        nudged_out = _acts_list(nudged.activations)
-        single_pass = bool(settled1) and torch.allclose(
-            settled1[-1], acts1[-1].detach(), atol=1e-6
-        )
-        state2 = SystemState(x=x, y=y)
-        joint.dynamics.settle(state2, joint.geometry, joint.substrate, target=None)  # type: ignore[arg-type]
-        settled2 = _acts_list(state2.activations)
-        idempotent = bool(settled2) and torch.allclose(
-            settled1[-1], settled2[-1], atol=1e-6
-        )
+    probe = _DYNAMICS_PROBES.get(value)
+    if probe is None:
         return (
-            AxisCheck(
-                "dynamics",
-                value,
-                "pass" if single_pass and idempotent else "fail",
-                "single pass, idempotent, no inadvertent settle"
-                if single_pass and idempotent
-                else "settle is not a faithful single pass",
-            ),
-            AxisCheck(
-                "dynamics",
-                value,
-                "pass",
-                "target-blind by spec: free ≡ nudged, so contrastive credits "
-                "receive zero phase contrast (surfaced by the credit probe)",
-            ),
+            AxisCheck("dynamics", value, "blocked", "no probe for this dynamics value"),
         )
-
-    return (
-        AxisCheck("dynamics", value, "blocked", "no probe for this dynamics value"),
-    )
+    x, y = episode_batch(0)
+    return probe(joint, x, y)
 
 
 def _check_credit_and_update(joint, parts: list[str]) -> tuple[AxisCheck, ...]:
@@ -235,7 +428,7 @@ def _check_credit_and_update(joint, parts: list[str]) -> tuple[AxisCheck, ...]:
             f"pseudo-gradient norm {norm:.3e} over {len(grads)} tensors"
             if credit_ok
             else (
-                f"non-finite pseudo-gradient"
+                "non-finite pseudo-gradient"
                 if not finite
                 else f"empty/zero pseudo-gradient (norm {norm:.3e}, "
                 f"{len(grads)} tensors)"
@@ -275,19 +468,54 @@ def _check_credit_and_update(joint, parts: list[str]) -> tuple[AxisCheck, ...]:
     )
 
 
+def _psi_max_delta(before: dict, after: dict) -> float:
+    """Max absolute element change across the ψ tensors of one step."""
+    deltas = [
+        float((after[k].detach() - v.detach()).abs().max())
+        for k, v in before.items()
+        if k in after and isinstance(v, Tensor) and isinstance(after[k], Tensor)
+    ]
+    return max(deltas, default=0.0)
+
+
+def _modulate_sensitive(plasticity, psi: dict, acts: list[Tensor]) -> bool:
+    """Zeroed-ψ vs stepped-ψ modulation must change the activations."""
+    modulate = getattr(plasticity, "modulate", None)
+    if modulate is None or not psi:
+        return True  # engagement-only primitives: sensitivity check n/a
+    zeroed = {k: torch.zeros_like(v) for k, v in psi.items() if isinstance(v, Tensor)}
+    stepped_out = modulate(acts, psi)
+    zeroed_out = modulate(acts, zeroed)
+    if isinstance(stepped_out, Tensor):
+        return not torch.allclose(stepped_out, zeroed_out, atol=1e-9)
+    if not stepped_out or not zeroed_out:
+        return False
+    return not all(
+        torch.allclose(a, b, atol=1e-9) for a, b in zip(stepped_out, zeroed_out)
+    )
+
+
 def _check_plasticity(joint, parts: list[str]) -> AxisCheck:
     value = parts[3]
     x, y = episode_batch(0)
     calls = {"step": 0}
+    trace: list[tuple[dict, dict]] = []
     original_step = joint.plasticity.step
 
-    def counting_step(*args: object, **kwargs: object):
+    def tracing_step(psi, z, context):
         calls["step"] += 1
-        return original_step(*args, **kwargs)
+        new_psi = original_step(psi, z, context)
+        trace.append((psi, new_psi))
+        return new_psi
 
-    joint.plasticity.step = counting_step  # type: ignore[method-assign]
+    joint.plasticity.step = tracing_step  # type: ignore[method-assign]
     try:
         joint.train_step(x, y)
+        psi_final = dict(trace[-1][1]) if trace else {}
+        acts = joint.geometry.forward_with_intermediates(x, joint.substrate)
+        acts_list = (
+            acts if isinstance(acts, list) else ([acts] if acts is not None else [])
+        )
     finally:
         del joint.plasticity.step  # type: ignore[attr-defined]
     if value == "null":
@@ -298,18 +526,39 @@ def _check_plasticity(joint, parts: list[str]) -> AxisCheck:
             f"ψ const across the episode ({calls['step']} plasticity steps) "
             "— as specified for NullPlasticity",
         )
-    engages = calls["step"] > 0
+    if calls["step"] == 0:
+        return AxisCheck(
+            "plasticity",
+            value,
+            "fail",
+            "plasticity.step never invoked by the episode pipeline "
+            "(run_train_step takes no M-axis and initial_psi's ψ is "
+            "discarded) — plasticity cannot modulate activity or credit",
+        )
+    delta = _psi_max_delta(*trace[-1]) if trace else 0.0
+    if delta <= 0.0:
+        return AxisCheck(
+            "plasticity",
+            value,
+            "fail",
+            f"ψ stepped {calls['step']}x but returned identical values "
+            "(non-const assertion failed — inert plasticity update)",
+        )
+    sensitive = _modulate_sensitive(joint.plasticity, psi_final, acts_list)
+    if not sensitive:
+        return AxisCheck(
+            "plasticity",
+            value,
+            "fail",
+            "ψ modulate is insensitive: zeroed-ψ and stepped-ψ produce "
+            "identical activity — plasticity cannot modulate the settle",
+        )
     return AxisCheck(
         "plasticity",
         value,
-        "pass" if engages else "fail",
-        (
-            f"ψ stepped {calls['step']}x within the episode"
-            if engages
-            else "plasticity.step never invoked by the episode pipeline "
-            "(run_train_step takes no M-axis and initial_psi's ψ is "
-            "discarded) — plasticity cannot modulate activity or credit"
-        ),
+        "pass",
+        f"ψ stepped {calls['step']}x and changed (Δ={delta:.3e}); modulate "
+        "is ψ-sensitive (zeroed-ψ ≠ stepped-ψ)",
     )
 
 
@@ -320,7 +569,20 @@ def check_coordinate_fidelity(
 ) -> CoordinateFidelity:
     """Run every fidelity probe against one campaign coordinate."""
     parts = coordinate.split("/")
-    joint = build_coordinate_system(coordinate, device=device)
+    try:
+        joint = build_coordinate_system(coordinate, device=device)
+    except IncompatibleCoordinateError as exc:
+        return CoordinateFidelity(
+            coordinate=coordinate,
+            checks=(
+                AxisCheck(
+                    "coordinate",
+                    f"{parts[2]} x {parts[4]}",
+                    "fail",
+                    f"invalid pairing (R3.9): {exc}",
+                ),
+            ),
+        )
     checks = (
         *_check_dynamics(joint, parts),
         *_check_credit_and_update(joint, parts),
