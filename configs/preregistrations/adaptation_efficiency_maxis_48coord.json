@@ -1,0 +1,83 @@
+{
+  "claim": "On the switching distribution task (Phase A: classify by cumulative sum \u2192 Phase B: classify by last symbol), FastWeightPlasticity and RoutingPlasticity each achieve a \u226530% reduction in post-switch adaptation steps versus NullPlasticity at equal or better final accuracy, evaluated over the 48 fidelity-passing coordinates from the R5.1c grid (digital substrate, energy_minimization/instantaneous dynamics, all valid M\u00d7C\u00d7U combinations)",
+  "metric": "adaptation_time_reduction_pct",
+  "threshold": 30.0,
+  "alpha": 0.05,
+  "min_seeds": 5,
+  "created": "2026-08-31",
+  "protocol": "RESEARCH3 E-1/E-11; R5b-A pre-registration on 48-coordinate fidelity manifest. Committed before any confirmatory run on the fidelity-filtered grid.",
+  "fidelity_preconditions": {
+    "treatment_arms": [
+      "fast_weights",
+      "routing"
+    ],
+    "control_arm": "null",
+    "required_fidelity_checks": {
+      "dynamics": {
+        "energy_minimization": [
+          "energy descends monotonically within slack",
+          "nudged phase differs from free phase (target-responsive settle)"
+        ],
+        "instantaneous": [
+          "single pass, idempotent, no inadvertent settle",
+          "target-blind by spec: free = nudged"
+        ]
+      },
+      "credit": {
+        "local_goodness": "pseudo-gradient norm > 0 over tensors",
+        "random_projections": "pseudo-gradient norm > 0 over tensors",
+        "thermodynamic_contrast": "pseudo-gradient norm > 0 over tensors (only valid with energy_minimization dynamics)"
+      },
+      "update": {
+        "euclidean": "parameters moved > 0 under update.step",
+        "spectral_constrained": "parameters moved > 0 under update.step"
+      },
+      "plasticity": {
+        "null": "\u03c8 const across the episode (0 plasticity steps) \u2014 as specified for NullPlasticity",
+        "fast_weights": "\u03c8 stepped 1x and changed (\u0394\u03c8 > 0); modulate is \u03c8-sensitive (zeroed-\u03c8 \u2260 stepped-\u03c8)",
+        "routing": "\u03c8 stepped 1x and changed (\u0394\u03c8 > 0); modulate is \u03c8-sensitive (zeroed-\u03c8 \u2260 stepped-\u03c8)"
+      }
+    },
+    "coordinate_filter": "Only coordinates passing ALL fidelity checks for their constituent axes are included in the attribution pool. Coordinates failing any check are excluded and listed in the fidelity report; they do NOT count toward the statistical test."
+  },
+  "broken_instrument_kill_criterion": {
+    "description": "A coordinate arm is a BROKEN INSTRUMENT (not a null effect) if the plasticity primitive's \u03c8 state fails to mutate during the adaptation phase OR if the modulate hook reports zero sensitivity (zeroed-\u03c8 == stepped-\u03c8). This is distinct from a NULL EFFECT where \u03c8 mutates and modulates correctly but the adaptation_time_reduction_pct falls below threshold.",
+    "detection": "Per-seed per-coordinate: if plasticity probe reports '\u03c8 stepped 0x' or 'modulate is NOT \u03c8-sensitive' for fast_weights or routing arms, that coordinate-seed pair is flagged BROKEN and excluded from the paired comparison. The kill criterion is evaluated BEFORE the statistical test.",
+    "effect_on_trial": "If \u226550% of treatment arm coordinate-seed pairs are flagged BROKEN, the entire trial is INCONCLUSIVE (not a refutation). The trial is re-run only after the underlying instrument defect is fixed and the fidelity gate re-passes."
+  },
+  "fidelity_failure_statement": "A fidelity failure on any coordinate in the comparison pool renders that coordinate's result INCONCLUSIVE for the purpose of this hypothesis test. It is NOT evidence against the hypothesis. The hypothesis remains untested for that coordinate until the fidelity defect is fixed and the gate passes. Only coordinates passing the full fidelity gate contribute to the paired comparison.",
+  "metric_definition": {
+    "adaptation_time": "Epochs in Phase B (post-switch) until cross-entropy loss drops below 0.5. If threshold never reached, adaptation_time = epochs_per_phase (censored).",
+    "adaptation_time_reduction_pct": "Per matched coordinate-seed pair (same geometry, dynamics, credit, update, seed): reduction_pct = 100 * (adapt_time_null - adapt_time_treatment) / adapt_time_null. Positive values favor the treatment arm (FastWeight or Routing).",
+    "final_accuracy_gate": "A treatment arm coordinate-seed pair only contributes to the reduction statistic if its final_accuracy \u2265 final_accuracy_null - 0.02 (i.e., within 2 percentage points of the Null baseline). This enforces 'at equal or better accuracy'.",
+    "aggregation": "For each treatment arm (fast_weights, routing) separately: collect all valid reduction_pct values across the 48-coordinate fidelity-passing grid, 5 seeds, 2 task families (synthetic, parity). Compute the mean reduction_pct. The claim is confirmed if the paired comparison (treatment vs null, matched on coordinate+seed) yields bootstrap 95% CI lower bound > 30% AND sign-flip permutation p < 0.05."
+  },
+  "decision_rule_full_run": "Confirm iff BOTH treatment arms (FastWeight and Routing) independently pass the paired comparison against Null on the fidelity-filtered 48-coordinate grid: (1) paired_comparison(treatment=fast_weights reduction_pct, control=null reduction_pct).passes(registration) i.e. bootstrap 95% CI lower bound > 30.0 and sign-flip p < 0.05 on \u22655 matched seeds per coordinate; (2) same for routing; (3) final_accuracy_gate satisfied for contributing pairs; (4) broken-instrument kill criterion not triggered for \u226550% of treatment pairs.",
+  "secondary_endpoints_descriptive": [
+    "Per-plasticity mean adaptation_time and final_accuracy across the 48-coordinate grid",
+    "Credit assignment interaction: does the reduction_pct differ across {local_goodness, random_projections, thermodynamic_contrast}?",
+    "Update rule interaction: does spectral_constrained amplify/reduce the plasticity advantage?",
+    "Geometry interaction: feedforward vs recurrent",
+    "Dynamics interaction: energy_minimization vs instantaneous (where valid)"
+  ],
+  "pilot_role": "E-1 rung 2 (2 seeds, 3 epochs per phase): promotion requires no NaNs, all metrics populated, adaptation_time reduction direction matches hypothesis (or interpretable pattern), sane variances to set full-run minimum detectable effect. Pilot does NOT evaluate statistically (n < MIN_SEEDS); confirmation only on promoted full run.",
+  "equal_budget_note": "All arms receive identical per-phase epoch budget (default 50), batch size (64), seq_len (10), input_dim (32), optimizer (Adam lr=0.001), and data pipeline. The switching task stream is identical across arms (Phase A then Phase B).",
+  "budget_gpu_hours_registered": 8,
+  "grid_specification": {
+    "source": "autoscientist_campaigns/r51c/records/fidelity_manifest.json",
+    "filter": "passed == true",
+    "count": 48,
+    "axes_covered": {
+      "substrate": ["digital"],
+      "geometry": ["feedforward", "recurrent"],
+      "dynamics": ["energy_minimization", "instantaneous"],
+      "plasticity": ["null", "fast_weights", "routing"],
+      "credit": ["local_goodness", "random_projections", "thermodynamic_contrast"],
+      "update": ["euclidean", "spectral_constrained"]
+    },
+    "excluded_combinations": [
+      "instantaneous x thermodynamic_contrast (R3.9 invalid pairing \u2014 fidelity fail)",
+      "instantaneous x local_goodness (zero pseudo-gradient \u2014 fidelity fail)"
+    ]
+  }
+}

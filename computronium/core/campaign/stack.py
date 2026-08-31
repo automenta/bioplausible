@@ -83,6 +83,9 @@ def _space_sampler(space: dict) -> CoordinateSampler:
 
 def space_grid(space: dict) -> list[str]:
     """Enumerate a search-space table into its full coordinate grid."""
+    # Custom grid for R5b-B fidelity-passing coordinates
+    if "_custom_grid" in space:
+        return list(space["_custom_grid"])
     axes = ("substrates", "geometries", "dynamics", "plasticity", "credits", "updates")
     return [
         "/".join(parts) for parts in itertools.product(*(space[axis] for axis in axes))

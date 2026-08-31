@@ -10,6 +10,8 @@ Runs and manages 6-D joint architecture campaigns with:
 from __future__ import annotations
 
 import argparse
+import json
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -213,6 +215,14 @@ def _get_search_space(space_name: str) -> dict:
             ],
         },
     }
+    # R5b-B: 48 fidelity-passing coordinates from R5.1c fidelity manifest
+    if space_name == "joint_fidelity_48":
+        coords_json = os.environ.get("R5B_B_FIDELITY_COORDS_JSON")
+        if coords_json:
+            coords = json.loads(coords_json)
+            return {"_custom_grid": coords}
+        # Fallback: return the full joint_grid (will be filtered by fidelity gate at attribution)
+        return spaces["joint_grid"]
     return spaces.get(space_name, spaces["joint_smoke"])
 
 

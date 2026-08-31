@@ -4,6 +4,20 @@ Append-only. One entry per pre-registration threshold, kill-criterion invocation
 
 ---
 
+## 2026-08-31 — Pre-registration: Adaptation Efficiency M-Axis on 48-Coordinate Fidelity Manifest (R5b-A / E-1/E-11)
+
+- **Artifact:** `configs/preregistrations/adaptation_efficiency_maxis_48coord.json` (committed before any confirmatory run on the fidelity-filtered grid; R5b-A deliverable per TODO8 Execution Order 10).
+- **Registered primary endpoint:** paired mean `adaptation_time_reduction_pct` (treatment − control) for FastWeight vs Null AND Routing vs Null, threshold ≥30%, α = 0.05, ≥5 seeds, paired via `validation/preregistration.paired_comparison` on matched coordinate+seed.
+- **Metric definition:** adaptation_time = epochs in Phase B (post-switch) until cross-entropy loss < 0.5 (censored at epochs_per_phase); reduction_pct = 100 × (adapt_time_null − adapt_time_treatment) / adapt_time_null per matched coordinate-seed pair; final_accuracy_gate requires treatment final_accuracy ≥ null final_accuracy − 0.02.
+- **Fidelity preconditions:** Both arms of each comparison must pass the full R5b-0 fidelity gate for their constituent axes (dynamics, credit, update, plasticity). The 48 passing coordinates from `autoscientist_campaigns/r51c/records/fidelity_manifest.json` define the comparison pool. Coordinates failing any fidelity check are excluded and listed; they do not contribute to the statistical test.
+- **Broken instrument kill criterion (distinct from null effect):** A treatment coordinate-seed pair is flagged BROKEN if the plasticity probe reports "ψ stepped 0x" or "modulate is NOT ψ-sensitive" for fast_weights or routing. If ≥50% of treatment pairs are BROKEN, the trial is INCONCLUSIVE (not a refutation). This is evaluated BEFORE the statistical test.
+- **Fidelity failure statement:** A fidelity failure on any coordinate renders that coordinate's result INCONCLUSIVE for this hypothesis. It is NOT evidence against the hypothesis. The hypothesis remains untested for that coordinate until the defect is fixed and the gate re-passes.
+- **Rationale:** RESEARCH3 L1 Adaptation Efficiency hypothesis ("FastWeight cuts post-switch re-adaptation steps by ≥30% vs Null at equal accuracy; Routing wins when switch is categorical") mapped to the 48-coordinate fidelity-passing grid. The theory-driven pre-registration supersedes the R5.1c observed delta (±0.8 dynamics delta) which was not pre-registered and involved defective coordinates.
+- **Pilot role:** E-1 rung 2 (2 seeds, 3 epochs/phase): promotion requires no NaNs, metrics populated, reduction direction matches hypothesis, sane variances. This registration is evaluated statistically only on a promoted full run.
+- **Budget:** 8 GPU-hours registered for full run (48 coords × 5 seeds × 2 families × 2 arms × 50 epochs/phase ≈ 48k model-episodes).
+
+---
+
 ## 2026-08-26 — Pre-registration: Z3 ψ-only vs θ-fine-tune adaptation speed (E-1/E-11)
 
 - **Artifact:** `configs/preregistrations/z3_psi_vs_finetune_steps.json` (committed before the Z3 pilot run launched — deliberately stricter than E-1's "after promotion, before full config" ordering, per TODO4 execution queue item 1).
