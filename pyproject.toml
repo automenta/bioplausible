@@ -211,6 +211,7 @@ select = [
     "S404",   # subprocess CLI smoke tests
     "S603",   # subprocess.run with fixed args
     "S607",   # partial-path executables (uv)
+    "S311",   # random.Random in test samplers/fixtures
     "PLR2004", # literal expected values in assertions
 ]
 

@@ -203,9 +203,7 @@ def _hypervolume_2d(
 
     # Points not strictly above the reference contribute no volume
     # (matches the 3D filter).
-    normalized = [
-        p for p in normalized if p[0] > norm_ref[0] and p[1] > norm_ref[1]
-    ]
+    normalized = [p for p in normalized if p[0] > norm_ref[0] and p[1] > norm_ref[1]]
     if not normalized:
         return 0.0
 

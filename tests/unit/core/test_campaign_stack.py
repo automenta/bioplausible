@@ -3,6 +3,7 @@ counterfactual attribution, and Pareto frontier semantics."""
 
 from __future__ import annotations
 
+import random
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -22,6 +23,7 @@ from computronium.core.campaign import (
     ParetoFrontier,
     ResourceUsage,
     SchemaVersionError,
+    episode_batch,
     pareto_frontier,
     replication_manifest,
     task_family,
@@ -55,6 +57,10 @@ def make_record(  # ruff: ignore[too-many-arguments] - record builder with indep
         resources=ResourceUsage(energy=energy),
         seed=seed,
     )
+
+
+def _bad_axis_sampler(_rng, _iteration: int, _experiment: int) -> str:
+    return "digital/bad_axis/instantaneous/null/thermodynamic_contrast/euclidean"
 
 
 # --- Schema freeze -----------------------------------------------------------
@@ -187,10 +193,7 @@ class TestCampaignStack:
         result = stack.run_campaign(
             iterations=1,
             experiments_per_iter=2,
-            sampler=lambda _rng: (
-                "digital/bad_axis/instantaneous/null/"
-                "thermodynamic_contrast/euclidean"
-            ),
+            sampler=_bad_axis_sampler,
         )
         assert all(o.status == "unsupported" for o in result.outcomes)
         assert result.records == ()
@@ -201,6 +204,109 @@ class TestCampaignStack:
         assert len(result.outcomes) == 3
         assert all(o.status == "dry_run" for o in result.outcomes)
         assert result.yaml_checkpoint is not None
+
+
+# --- Deterministic replay (improvement-10/11 locks) ----------------------------
+
+
+class TestDeterministicReplay:
+    """Resume skips recorded episodes; reconstruction replays metrics."""
+
+    COORDS = (
+        "digital/feedforward/instantaneous/null/thermodynamic_contrast/euclidean",
+        "digital/recurrent/instantaneous/null/thermodynamic_contrast/euclidean",
+    )
+
+    @staticmethod
+    def _slot_sampler(coordinates: tuple[str, ...]):
+        def sample(_rng, _iteration: int, experiment: int) -> str:
+            return coordinates[experiment % len(coordinates)]
+
+        return sample
+
+    def test_resume_skips_already_recorded_episodes(self, tmp_path: Path) -> None:
+        """Crash mid-iteration: durable episodes are skipped, not duplicated."""
+        stack = CampaignStack(tmp_path, seed=5, checkpoint_interval=1)
+        stack.run_campaign(
+            iterations=1,
+            experiments_per_iter=2,
+            campaign_id="camp_dedup",
+            sampler=self._slot_sampler(self.COORDS),
+        )
+        # Simulate a crash after one more durable episode whose iteration
+        # counter never advanced (killed between add_episode and update_iteration).
+        stack.store.add_episode(
+            campaign_id="camp_dedup",
+            branch_name="main",
+            iteration=2,
+            coordinate=self.COORDS[0],
+            task_name="synthetic",
+            frontier_record=make_record(self.COORDS[0], seed=5),
+        )
+        resumed = stack.run_campaign(
+            iterations=2,
+            experiments_per_iter=2,
+            resume=True,
+            sampler=self._slot_sampler(self.COORDS),
+        )
+        assert any(o.status == "already_recorded" for o in resumed.outcomes)
+        episodes = stack.store.get_episodes("camp_dedup")
+        keys = [(ep.iteration, ep.coordinate, ep.task_name) for ep in episodes]
+        assert len(keys) == len(set(keys))
+
+    def test_rebuild_replays_identical_metrics(self, tmp_path: Path) -> None:
+        """Same (seed, campaign, iteration, coordinate) ⇒ same θ ⇒ same metrics."""
+        runs = []
+        for run_dir in (tmp_path / "a", tmp_path / "b"):
+            stack = CampaignStack(run_dir, seed=3)
+            result = stack.run_campaign(
+                iterations=1,
+                experiments_per_iter=2,
+                campaign_id="camp_replay",
+            )
+            runs.append([(r.task_loss, r.task_accuracy) for r in result.records])
+        assert runs[0] == runs[1]
+
+    def test_records_carry_campaign_seed(self, tmp_path: Path) -> None:
+        stack = CampaignStack(tmp_path, seed=9)
+        result = stack.run_campaign(iterations=1, experiments_per_iter=1)
+        assert result.records
+        assert all(r.seed == 9 for r in result.records)
+
+    def test_unknown_task_family_rejected(self, tmp_path: Path) -> None:
+        """Real-dataset labels must not masquerade as smoke-batch families."""
+        stack = CampaignStack(tmp_path, seed=0)
+        with pytest.raises(ValueError, match="task family"):
+            stack.run_campaign(iterations=1, experiments_per_iter=1, tasks=("mnist",))
+
+    def test_task_families_produce_distinct_batches(self) -> None:
+        import torch
+
+        x_syn, y_syn = episode_batch(0, task_name="synthetic")
+        x_par, y_par = episode_batch(0, task_name="parity")
+        assert not torch.equal(x_syn, x_par)
+        assert y_par.shape == y_syn.shape
+        assert y_syn.shape[0] == x_syn.shape[0]
+
+    def test_grid_sampler_is_slot_deterministic(self) -> None:
+        from computronium.core.campaign import grid_sampler, space_grid
+
+        space = {
+            "substrates": ["digital"],
+            "geometries": ["feedforward", "recurrent"],
+            "dynamics": ["instantaneous"],
+            "plasticity": ["null"],
+            "credits": ["thermodynamic_contrast"],
+            "updates": ["euclidean"],
+        }
+        grid = space_grid(space)
+        assert len(grid) == 2
+        sample = grid_sampler(grid, experiments_per_iter=2)
+        rng_a, rng_b = random.Random(0), random.Random(1)
+        first = [sample(rng_a, 1, e) for e in range(2)]
+        again = [sample(rng_b, 1, e) for e in range(2)]
+        assert first == again
+        assert set(first) == set(grid)
 
 
 # --- Pareto over loss, stability, resources -----------------------------------
@@ -258,8 +364,7 @@ class TestParetoSemantics:
                 energy=0.3,
             ),
             make_record(
-                "digital/recurrent/instantaneous/null/"
-                "thermodynamic_contrast/euclidean",
+                "digital/recurrent/instantaneous/null/thermodynamic_contrast/euclidean",
                 loss=0.8,
                 rho=0.6,
                 energy=0.8,

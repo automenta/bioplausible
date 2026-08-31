@@ -46,7 +46,10 @@ from computronium.core.campaign.replication import (
 from computronium.core.campaign.stack import (
     CampaignRunResult,
     CampaignStack,
+    CoordinateSampler,
     EpisodeOutcome,
+    grid_sampler,
+    space_grid,
 )
 from computronium.resources import ResourceUsage
 
@@ -61,6 +64,7 @@ __all__ = [
     "CampaignState",
     "CampaignStore",
     "CheckpointManager",
+    "CoordinateSampler",
     "EpisodeOutcome",
     "EpisodeRecord",
     "FrontierRecord",
@@ -78,9 +82,11 @@ __all__ = [
     "episode_batch",
     "evaluate_episode",
     "get_kernel_cache",
+    "grid_sampler",
     "pareto_frontier",
     "replication_manifest",
     "set_kernel_cache",
+    "space_grid",
     "task_family",
     "unreplicated",
     "verify_replication",

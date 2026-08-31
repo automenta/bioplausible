@@ -119,9 +119,7 @@ def verify_replication(
         coordinate = records[0].coordinate
     relevant = [r for r in records if r.coordinate == coordinate]
     seeds = tuple(sorted({r.seed for r in relevant}))
-    families = tuple(
-        sorted({task_family(r.task_name) for r in relevant})
-    )
+    families = tuple(sorted({task_family(r.task_name) for r in relevant}))
     return ReplicationReport(
         coordinate=coordinate,
         seeds=seeds,

@@ -4,18 +4,21 @@ Consolidates persistence (CampaignStore), fault tolerance (CheckpointManager),
 episode evaluation, Pareto frontier analysis, counterfactual attribution, and
 the replication gate behind one ``run_campaign`` entry point. The CLI and
 research runners share this engine; ``run_campaign`` is deterministic per
-(campaign_id, iteration) so a resumed campaign replays the same coordinate
-proposals and bit-identical episode batches.
+(campaign_id, iteration): coordinate proposals, episode batches, and θ
+construction all replay identically across crash/resume, and resume skips
+already-recorded (iteration, coordinate, task) rows instead of duplicating
+them.
 """
 
 from __future__ import annotations
 
+import itertools
 import random
 import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from computronium.analysis.counterfactual import AxisAttribution, attribute_axis_effects
 from computronium.core.campaign.campaign_store import (
@@ -32,6 +35,7 @@ from computronium.core.campaign.evaluation import (
     UnsupportedCoordinateError,
     build_coordinate_system,
     episode_batch,
+    episode_seed,
     evaluate_episode,
 )
 from computronium.core.campaign.frontier_record import FrontierRecord
@@ -51,7 +55,60 @@ if TYPE_CHECKING:
 
 logger = get_logger()
 
-CoordinateSampler = Callable[[random.Random], str]
+
+class CoordinateSampler(Protocol):
+    """Stateless coordinate proposal for one episode slot.
+
+    Receives the per-iteration RNG and the slot's (iteration, experiment)
+    coordinates; implementations must derive proposals only from these so a
+    resumed campaign replays identical proposals without persistent state.
+    Slots are positional-only: implementations may rename them freely.
+    """
+
+    def __call__(
+        self, rng: random.Random, iteration: int, experiment: int, /
+    ) -> str: ...
+
+
+def _space_sampler(space: dict) -> CoordinateSampler:
+    """Bind a search-space table into a seeded coordinate sampler."""
+
+    axes = ("substrates", "geometries", "dynamics", "plasticity", "credits", "updates")
+
+    def sample(rng: random.Random, _iteration: int, _experiment: int) -> str:
+        return "/".join(rng.choice(space[axis]) for axis in axes)
+
+    return sample
+
+
+def space_grid(space: dict) -> list[str]:
+    """Enumerate a search-space table into its full coordinate grid."""
+    axes = ("substrates", "geometries", "dynamics", "plasticity", "credits", "updates")
+    return [
+        "/".join(parts) for parts in itertools.product(*(space[axis] for axis in axes))
+    ]
+
+
+def grid_sampler(grid: Sequence[str], experiments_per_iter: int) -> CoordinateSampler:
+    """Round-robin traversal of a fixed coordinate grid.
+
+    Stateless in (iteration, experiment): every seed-campaign sharing the
+    grid evaluates the same coordinate at the same slot, and resume replays
+    identical proposals — the shape a controlled multi-seed ablation needs.
+    """
+
+    coords = tuple(dict.fromkeys(grid))
+    if not coords:
+        raise ValueError(  # ruff: ignore[raise-vanilla-args] - one-off validation message
+            "empty coordinate grid"
+        )
+
+    def sample(_rng: random.Random, iteration: int, experiment: int) -> str:
+        return coords[(iteration * experiments_per_iter + experiment) % len(coords)]
+
+    return sample
+
+
 EventHook = Callable[[str], None]
 
 # Canonical campaign frontier: lower loss, higher stability, lower energy.
@@ -66,7 +123,9 @@ class EpisodeOutcome:
     """Result of one coordinate evaluation attempt."""
 
     coordinate: str
-    status: Literal["recorded", "guard_killed", "unsupported", "dry_run"]
+    status: Literal[
+        "recorded", "already_recorded", "guard_killed", "unsupported", "dry_run"
+    ]
     record: FrontierRecord | None = None
     detail: str = ""
 
@@ -85,9 +144,7 @@ class CampaignRunResult:
 
     @property
     def records(self) -> tuple[FrontierRecord, ...]:
-        return tuple(
-            o.record for o in self.outcomes if o.record is not None
-        )
+        return tuple(o.record for o in self.outcomes if o.record is not None)
 
     @property
     def unreplicated(self) -> tuple[ReplicationReport, ...]:
@@ -99,17 +156,6 @@ class CampaignRunResult:
         self, *, metric: str = "task_accuracy"
     ) -> list[AxisAttribution]:
         return attribute_axis_effects(self.records, metric=metric)
-
-
-def _space_sampler(space: dict) -> CoordinateSampler:
-    """Bind a search-space table into a seeded coordinate sampler."""
-
-    axes = ("substrates", "geometries", "dynamics", "plasticity", "credits", "updates")
-
-    def sample(rng: random.Random) -> str:
-        return "/".join(rng.choice(space[axis]) for axis in axes)
-
-    return sample
 
 
 class NoCampaignToResumeError(ValueError):
@@ -186,12 +232,15 @@ class CampaignStack:
         Args:
             iterations: Number of campaign iterations to run.
             experiments_per_iter: Coordinates proposed per iteration.
-            tasks: Task labels cycled across episodes (drives replication).
-            sampler: Coordinate sampler receiving a per-iteration seeded RNG;
-                defaults to the built-in joint smoke space.
+            tasks: Task-family labels rotated across episodes (drives the
+                replication gate; batches are family-aware — synthetic, parity).
+            sampler: Coordinate sampler receiving the per-iteration seeded RNG
+                plus the (iteration, experiment) slot; defaults to the built-in
+                joint smoke space.
             campaign_id: Explicit campaign ID (auto-generated when creating).
             resume: Continue the latest campaign on the branch, replaying
-                episodes lost to a crash since the last checkpoint.
+                episodes lost to a crash since the last checkpoint and skipping
+                episodes already durably recorded.
             dry_run: Propose coordinates without executing them.
             build_kwargs: Overrides for coordinate composition (input_dim,
                 output_dim, hidden_dims).
@@ -220,9 +269,15 @@ class CampaignStack:
             self._redo_unrecorded_episodes(
                 campaign_id=campaign_id,
                 last_complete=state.iteration,
-                task_name=task_cycle[0],
                 build_kwargs=build_kwargs,
             )
+            # Crash mid-iteration leaves durable episodes behind an unadvanced
+            # iteration counter; re-proposing those slots must skip, not
+            # duplicate, the recorded (iteration, coordinate, task) rows.
+            recorded = {
+                (ep.iteration, ep.coordinate, ep.task_name)
+                for ep in self.store.get_episodes(campaign_id)
+            }
             start_iteration = state.iteration
         else:
             state = self.store.create_campaign(
@@ -233,6 +288,7 @@ class CampaignStack:
             )
             campaign_id = state.campaign_id
             self._event(f"Created campaign {campaign_id} on branch {self.branch!r}")
+            recorded = set()
             start_iteration = 0
 
         sample = sampler or _space_sampler(_SMOKE_SPACE)
@@ -248,8 +304,16 @@ class CampaignStack:
             # that iteration's first recorded experiment.
             checkpointed = False
             for experiment in range(experiments_per_iter):
-                coordinate = sample(rng)
-                task_name = task_cycle[experiment % len(task_cycle)]
+                coordinate = sample(rng, iteration, experiment)
+                # Task assignment rotates across iterations so repeated
+                # coordinates cover multiple task families (replication gate).
+                task_name = task_cycle[(experiment + iteration) % len(task_cycle)]
+                if (iteration, coordinate, task_name) in recorded:
+                    self._event(f"  skipped (already recorded): [{coordinate}]")
+                    outcomes.append(
+                        EpisodeOutcome(coordinate=coordinate, status="already_recorded")
+                    )
+                    continue
                 outcome = self._evaluate(
                     campaign_id=campaign_id,
                     iteration=iteration,
@@ -276,7 +340,7 @@ class CampaignStack:
             yaml_checkpoint=yaml_path,
         )
 
-    def _evaluate(  # noqa: PLR0913 - episode context travels as one bundle
+    def _evaluate(  # ruff: ignore[too-many-arguments] - episode context travels as one bundle
         self,
         *,
         campaign_id: str,
@@ -291,6 +355,13 @@ class CampaignStack:
         if dry_run:
             return EpisodeOutcome(coordinate=coordinate, status="dry_run")
         try:
+            import torch
+
+            # θ init draws otherwise ride the ambient RNG; per-episode
+            # construction seeding makes rebuilds replay-safe across resume.
+            torch.manual_seed(
+                episode_seed(self.seed, campaign_id, iteration, coordinate)
+            )
             joint: JointSystem = build_coordinate_system(
                 coordinate, device=self.device, **build_kwargs
             )
@@ -317,6 +388,7 @@ class CampaignStack:
                 campaign_id=campaign_id,
                 episode=iteration,
                 guard_threshold=self.guard_threshold,
+                seed=self.seed,
             )
         except GuardKillError as exc:
             self._event(f"  skipped (guard kill): {exc}")
@@ -381,7 +453,6 @@ class CampaignStack:
         *,
         campaign_id: str,
         last_complete: int,
-        task_name: str,
         build_kwargs: dict,
     ) -> None:
         """Replay episodes lost to a crash between the latest checkpoint and now."""
@@ -396,10 +467,13 @@ class CampaignStack:
             )
             return
 
-        recorded = {ep.iteration for ep in self.store.get_episodes(campaign_id)}
+        task_name = checkpoint.task_name
+        recorded = {
+            (ep.iteration, ep.coordinate) for ep in self.store.get_episodes(campaign_id)
+        }
         joint = self._restore_checkpointed_joint(checkpoint, build_kwargs=build_kwargs)
         for episode in range(checkpoint.episode_index, last_complete + 1):
-            if episode in recorded:
+            if (episode, checkpoint.coordinate) in recorded:
                 continue
             try:
                 record, _metrics = evaluate_episode(
@@ -409,6 +483,7 @@ class CampaignStack:
                     campaign_id=campaign_id,
                     episode=episode,
                     guard_threshold=self.guard_threshold,
+                    seed=self.seed,
                 )
             except GuardKillError as exc:
                 self._event(f"  episode {episode} redone but guard-killed: {exc}")
@@ -439,8 +514,7 @@ class CampaignStack:
         import torch
 
         fallback = (
-            "digital/feedforward/instantaneous/null/"
-            "thermodynamic_contrast/euclidean"
+            "digital/feedforward/instantaneous/null/thermodynamic_contrast/euclidean"
         )
         joint = build_coordinate_system(
             checkpoint.coordinate or fallback,

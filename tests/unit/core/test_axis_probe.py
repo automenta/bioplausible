@@ -105,7 +105,7 @@ def test_accepted_axis_combinations_train_one_real_step(
     _, metrics = evaluate_episode(
         joint,
         coordinate=coordinate,
-        task_name="probe",
+        task_name="synthetic",
         campaign_id="harness",
         episode=0,
         guard_threshold=None,
@@ -172,7 +172,7 @@ def test_guard_kill_status_matches_known_unstable_set(
             evaluate_episode(
                 joint,
                 coordinate=coordinate,
-                task_name="probe",
+                task_name="synthetic",
                 campaign_id="harness",
                 episode=0,
             )
@@ -180,7 +180,7 @@ def test_guard_kill_status_matches_known_unstable_set(
         record, _ = evaluate_episode(
             joint,
             coordinate=coordinate,
-            task_name="probe",
+            task_name="synthetic",
             campaign_id="harness",
             episode=0,
         )
@@ -214,7 +214,7 @@ def test_cross_axis_regressions_train_one_real_step(coordinate: str) -> None:
     _, metrics = evaluate_episode(
         joint,
         coordinate=coordinate,
-        task_name="probe",
+        task_name="synthetic",
         campaign_id="harness",
         episode=0,
         guard_threshold=None,

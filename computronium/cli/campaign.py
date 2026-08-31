@@ -63,10 +63,19 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument("--seed", type=int, default=0, help="Base RNG seed")
     run_parser.add_argument(
+        "--layout",
+        choices=["random", "grid"],
+        default="random",
+        help="Coordinate proposal: random sampling from the space, or a "
+        "deterministic round-robin traversal of its full grid (multi-seed "
+        "replication runs share the identical grid)",
+    )
+    run_parser.add_argument(
         "--tasks",
         default="synthetic",
-        help="Comma-separated task labels cycled across episodes (drives "
-        "replication grouping; batches are the deterministic synthetic set)",
+        help="Comma-separated task-family labels rotated across episodes "
+        "(drives replication grouping; supported batch families: "
+        "synthetic, parity)",
     )
     run_parser.add_argument(
         "--resume", action="store_true", help="Resume from latest checkpoint"
@@ -143,6 +152,22 @@ def _get_search_space(space_name: str) -> dict:
             "credits": ["thermodynamic_contrast", "random_projections"],
             "updates": ["euclidean"],
         },
+        # 72-coordinate grid for commissioned replication campaigns (R5.1c):
+        # all-digital, C/U-axis breadth, sized so a full two-pass traversal
+        # (2 x len/epi iterations at epi=8) covers both task families per
+        # coordinate per seed.
+        "joint_grid": {
+            "substrates": ["digital"],
+            "geometries": ["feedforward", "recurrent"],
+            "dynamics": ["energy_minimization", "instantaneous"],
+            "plasticity": ["null", "routing", "fast_weights"],
+            "credits": [
+                "thermodynamic_contrast",
+                "random_projections",
+                "local_goodness",
+            ],
+            "updates": ["euclidean", "spectral_constrained"],
+        },
         "joint_full": {
             "substrates": [
                 "digital",
@@ -194,6 +219,15 @@ def _space_sampler(space: dict):
     return _space_sampler(space)
 
 
+def _layout_sampler(space: dict, layout: str, experiments_per_iter: int):
+    """Resolve the --layout flag into a coordinate sampler."""
+    if layout == "grid":
+        from computronium.core.campaign.stack import grid_sampler, space_grid
+
+        return grid_sampler(space_grid(space), experiments_per_iter)
+    return _space_sampler(space)
+
+
 def _run_campaign(args) -> int:
     """Run (or resume) a campaign via the shared CampaignStack engine."""
     from computronium.core.campaign.evaluation import (
@@ -216,7 +250,7 @@ def _run_campaign(args) -> int:
         iterations=args.iterations,
         experiments_per_iter=args.experiments_per_iter,
         tasks=tuple(t.strip() for t in args.tasks.split(",") if t.strip()),
-        sampler=_space_sampler(space),
+        sampler=_layout_sampler(space, args.layout, args.experiments_per_iter),
         campaign_id=args.campaign_id,
         resume=args.resume,
         dry_run=args.dry_run,

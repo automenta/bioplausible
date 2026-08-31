@@ -8,6 +8,7 @@ stability fields of ``FrontierRecord``, and ENTERING-episode checkpoints.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from typing import TYPE_CHECKING
@@ -79,23 +80,62 @@ class GuardKillError(RuntimeError):
         self.threshold = threshold
 
 
+def _stable_seed(*parts: object) -> int:
+    """Process-stable 64-bit digest of its parts (never Python's hash())."""
+    payload = ":".join(map(str, parts)).encode()
+    return int.from_bytes(hashlib.blake2b(payload, digest_size=8).digest(), "big")
+
+
+def episode_seed(
+    base_seed: int, campaign_id: str, iteration: int, coordinate: str
+) -> int:
+    """Deterministic construction seed for one episode's θ initialization.
+
+    Parameter init draws otherwise ride the ambient RNG stream, so a resumed
+    campaign re-drew different initializations for repeated coordinates.
+    Seeding construction from (base_seed, campaign_id, iteration, coordinate)
+    makes episode construction replay-safe across crash/resume.
+    """
+    return _stable_seed(base_seed, campaign_id, iteration, coordinate)
+
+
+def _episode_targets(
+    task_name: str, x: Tensor, generator: torch.Generator, num_classes: int
+) -> Tensor:
+    """Labels for one task family; unknown families are rejected, not faked."""
+    match task_name:
+        case "synthetic":
+            weights = torch.randn(x.shape[1], num_classes, generator=generator)
+            return (x @ weights).argmax(dim=-1)
+        case "parity":
+            return (x > 0).sum(dim=-1) % num_classes
+        case other:
+            raise ValueError(  # ruff: ignore[raise-vanilla-args] - one-off validation message
+                f"unsupported task family {other!r} (supported: synthetic, parity)"
+            )
+
+
 def episode_batch(
     episode: int,
     *,
+    task_name: str = "synthetic",
     batch_size: int = DEFAULT_BATCH_SIZE,
     input_dim: int = DEFAULT_INPUT_DIM,
     num_classes: int = DEFAULT_NUM_CLASSES,
 ) -> tuple[Tensor, Tensor]:
-    """Deterministic synthetic classification batch for one episode.
+    """Deterministic synthetic batch for one episode of the named task family.
 
     Uses a local generator so batch draws never shift the global RNG stream
-    (checkpoint redo equality depends on this).
+    (checkpoint redo equality depends on this). The "synthetic" stream keeps
+    its original ``1000 + episode`` seeding so commissioned R5.1a/b campaign
+    artifacts stay reproducible; other families derive an independent stream.
     """
-    generator = torch.Generator().manual_seed(1000 + episode)
+    seed = (
+        1000 + episode if task_name == "synthetic" else _stable_seed(task_name, episode)
+    )
+    generator = torch.Generator().manual_seed(seed)
     x = torch.randn(batch_size, input_dim, generator=generator)
-    weights = torch.randn(input_dim, num_classes, generator=generator)
-    y = (x @ weights).argmax(dim=-1)
-    return x, y
+    return x, _episode_targets(task_name, x, generator, num_classes)
 
 
 def activity_transition(
@@ -268,7 +308,7 @@ def build_coordinate_system(
     )
 
 
-def evaluate_episode(  # noqa: PLR0913 - shape triple always defaults
+def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always defaults
     joint: JointSystem,
     *,
     coordinate: str,
@@ -279,19 +319,26 @@ def evaluate_episode(  # noqa: PLR0913 - shape triple always defaults
     input_dim: int = DEFAULT_INPUT_DIM,
     num_classes: int = DEFAULT_NUM_CLASSES,
     guard_threshold: float | None = DEFAULT_GUARD_TAU,
+    seed: int = 0,
 ) -> tuple[FrontierRecord, dict[str, float]]:
     """Run one real training episode and record its frontier metrics.
 
     The shape triple travels together and always defaults; explicit keywords
     beat inventing a container type for two call sites. ``guard_threshold``
     gates kill decisions on the windowed-growth probe (``None`` records the
-    statistic without deciding — harness/capability-probe mode).
+    statistic without deciding — harness/capability-probe mode). ``seed`` is
+    stamped into the record so the replication gate can count seeds across
+    campaigns sharing one store.
 
     Batches are placed on the joint system's parameter device — the episode
     always executes where the system lives (no silent CPU fallback).
     """
     x, y = episode_batch(
-        episode, batch_size=batch_size, input_dim=input_dim, num_classes=num_classes
+        episode,
+        task_name=task_name,
+        batch_size=batch_size,
+        input_dim=input_dim,
+        num_classes=num_classes,
     )
     device = joint.device
     x, y = x.to(device), y.to(device)
@@ -322,6 +369,7 @@ def evaluate_episode(  # noqa: PLR0913 - shape triple always defaults
         registry_signature=compute_registry_signature(joint.context.registry),
         composite_state_shape=compute_composite_state_shape(joint.context),
         metadata={"guard_kill": float(decision.kill)},
+        seed=seed,
         campaign_id=campaign_id,
         episode_index=episode,
     )
