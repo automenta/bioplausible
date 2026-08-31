@@ -29,6 +29,14 @@ from computronium.core.campaign.evaluation import (
     episode_batch,
     evaluate_episode,
 )
+from computronium.core.campaign.fidelity import (
+    AxisCheck,
+    CoordinateFidelity,
+    DefectFilteredAttribution,
+    check_coordinate_fidelity,
+    defect_filtered_attribution,
+    fidelity_manifest,
+)
 from computronium.core.campaign.frontier_record import FrontierRecord
 from computronium.core.campaign.kernel_cache import (
     JointKernelCache,
@@ -64,8 +72,11 @@ __all__ = [
     "CampaignState",
     "CampaignStore",
     "CheckpointManager",
+    "CoordinateFidelity",
     "CoordinateSampler",
+    "DefectFilteredAttribution",
     "EpisodeOutcome",
+    "AxisCheck",
     "EpisodeRecord",
     "FrontierRecord",
     "GuardKillError",
@@ -78,9 +89,12 @@ __all__ = [
     "UnsupportedCoordinateError",
     "activity_transition",
     "build_coordinate_system",
+    "check_coordinate_fidelity",
     "create_resume_script",
+    "defect_filtered_attribution",
     "episode_batch",
     "evaluate_episode",
+    "fidelity_manifest",
     "get_kernel_cache",
     "grid_sampler",
     "pareto_frontier",
