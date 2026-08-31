@@ -89,6 +89,21 @@ Old P6 checklist items already satisfied: EqProp anchor 81.32% MNIST · Computro
 | 5.4 | CLI/docs polish | `comp` prog-name prints "biopl" (cosmetic); align README's "0 errors in strict mode" claim with the actual pyright policy |
 | 5.5 | Export pin | torch.export (PT2) round-trip test for FeedforwardGeometry + RecurrentGeometry (migration done; pin it) |
 
+### R5b — Discovery Demo Package (the "prove it" milestone)
+
+*Demonstrate the ontology flywheel making a discovery — end to end on Digital (CPU/GPU) substrate, every claim locked in by tests. No hardware needed: the D×C×U×M axes carry the discovery space on CPU/GPU (momentum vs plain EqProp settle convergence, spectral/Riemannian U-axis stabilizers, FastWeight/Routing adaptation vs Null, ternary/sparse substrate trade-offs). Smoke-scale L1 runs are feasible on CPU today; GPU (R1) makes sweeps credible.*
+
+| # | Item | Detail |
+|---|------|--------|
+| A | Pre-register one toy-scale hypothesis | From RESEARCH3 L1/L2/substrate-ablation catalog (e.g. "FastWeight cuts post-switch re-adaptation ≥30% vs Null at matched compute"); thresholds committed before any full run |
+| B | Locked grid campaign on GPU | `CampaignStack.run_campaign` over ~30–100 coordinates, matched budgets, ≥5 seeds; replication gate (≥2 task families) must pass |
+| C | Evidence chain | Pareto frontier over 𝒞 (compute/memory/energy/latency/plasticity) + counterfactual attribution table naming the axis that owns each knee |
+| D | **Discovery locks (tests)** | ① winner-must-replicate: pinned-seed test asserting the discovered gap within tolerance — failing test = capability regression; ② attribution lock: `analysis/counterfactual.py` ranks the discovered axis first, stable across seeds; ③ deterministic replay: same `(seed, campaign_id, iteration)` re-derives the discovery bit-for-bit |
+| E | Golden manifest | `results/<item>/<seed>/manifest.json` (config hash, git commit, env lock) + checked-in figure-regeneration script (RESEARCH3 E-3) |
+| F | Discovery Report UI | Stage 1: static HTML/JSON report from the stack (frontier, replication, attribution, timeline) — snapshot-tested. Stage 2: live Campaign tab in `demo/main.py` (719-line NiceGUI app, currently **zero** campaign/autoscientist wiring) |
+
+**Honesty ladder:** rung 1 = flywheel completes with evidence chain (any outcome demoable — nulls are results); rung 2 = validation discovery (rediscovers known non-trivial structure, attributed); rung 3 = novel discovery (RESEARCH3 Algorithm Discovery item, kill-criterion governed — never promised on a date).
+
 ## 🔬 R6 — Handoff to RESEARCH3 (old P6 absorbed)
 
 Old P6 phases map onto RESEARCH3's critical paths — execute there, not here:
@@ -119,7 +134,7 @@ Old P6 phases map onto RESEARCH3's critical paths — execute there, not here:
 - **R2:** `computronium/zoo/**` deleted · no dead stubs or duplicate Substrate · 0 xpass noise · skip census recorded
 - **R3:** DiffusionDynamics un-xfailed · every remaining xfail has a precise reason · no hardcoded geometry inference
 - **R4:** ≥2 operator families beyond settle through the Substrate API · equivalence test per port
-- **R5:** ≥1 commissioned campaign (iterate→interrupt→resume) in `autoscientist_campaigns/` · demo runs end-to-end on CUDA
+- **R5:** ≥1 commissioned campaign (iterate→interrupt→resume) in `autoscientist_campaigns/` · demo runs end-to-end on CUDA · discovery locks green (winner-replication + attribution + bit-for-bit replay)
 - **R6:** RESEARCH3 PR-1 + PR-2 merged · PR-7 shakedown green
 
 ## 🔧 Quick Commands
