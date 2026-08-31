@@ -15,6 +15,11 @@ if TYPE_CHECKING:
     from computronium.ontology.substrate import Substrate
     from computronium.state import CompositeState
 
+from computronium.ontology._settle_kernel import (
+    SubstrateSettleKernel,
+    extract_layered_params,
+)
+from computronium.ontology.geometry import _layer_stack
 
 # ============================================================
 # State type detection helpers (duck typing for SystemState + CompositeState)
@@ -65,11 +70,10 @@ def _set_state_x(state: object, value: Tensor | None) -> None:
             state.activity.pop("x", None)
         else:
             state.x = None
+    elif hasattr(state, "activity") and isinstance(state.activity, dict):
+        state.activity["x"] = value
     else:
-        if hasattr(state, "activity") and isinstance(state.activity, dict):
-            state.activity["x"] = value
-        else:
-            state.x = value
+        state.x = value
 
 
 def _set_state_activations(state: object, value: list[Tensor] | Tensor | None) -> None:
@@ -79,11 +83,10 @@ def _set_state_activations(state: object, value: list[Tensor] | Tensor | None) -
             state.activity.pop("activations", None)
         else:
             state.activations = None
+    elif hasattr(state, "activity") and isinstance(state.activity, dict):
+        state.activity["activations"] = value
     else:
-        if hasattr(state, "activity") and isinstance(state.activity, dict):
-            state.activity["activations"] = value
-        else:
-            state.activations = value
+        state.activations = value
 
 
 def _set_state_free_state(state: object, value: list[Tensor] | Tensor | None) -> None:
@@ -93,11 +96,10 @@ def _set_state_free_state(state: object, value: list[Tensor] | Tensor | None) ->
             state.activity.pop("free_state", None)
         else:
             state.free_state = None
+    elif hasattr(state, "activity") and isinstance(state.activity, dict):
+        state.activity["free_state"] = value
     else:
-        if hasattr(state, "activity") and isinstance(state.activity, dict):
-            state.activity["free_state"] = value
-        else:
-            state.free_state = value
+        state.free_state = value
 
 
 def _set_state_nudged_state(state: object, value: list[Tensor] | Tensor | None) -> None:
@@ -107,11 +109,10 @@ def _set_state_nudged_state(state: object, value: list[Tensor] | Tensor | None) 
             state.activity.pop("nudged_state", None)
         else:
             state.nudged_state = None
+    elif hasattr(state, "activity") and isinstance(state.activity, dict):
+        state.activity["nudged_state"] = value
     else:
-        if hasattr(state, "activity") and isinstance(state.activity, dict):
-            state.activity["nudged_state"] = value
-        else:
-            state.nudged_state = value
+        state.nudged_state = value
 
 
 def _set_state_loss(state: object, value: Tensor | float | None) -> None:
@@ -121,11 +122,10 @@ def _set_state_loss(state: object, value: Tensor | float | None) -> None:
             state.activity.pop("loss", None)
         else:
             state.loss = None
+    elif hasattr(state, "activity") and isinstance(state.activity, dict):
+        state.activity["loss"] = value
     else:
-        if hasattr(state, "activity") and isinstance(state.activity, dict):
-            state.activity["loss"] = value
-        else:
-            state.loss = value
+        state.loss = value
 
 
 def _set_state_metrics(state: object, value: dict[str, float] | None) -> None:
@@ -135,11 +135,10 @@ def _set_state_metrics(state: object, value: dict[str, float] | None) -> None:
             state.activity.pop("metrics", None)
         else:
             state.metrics = None
+    elif hasattr(state, "activity") and isinstance(state.activity, dict):
+        state.activity["metrics"] = value
     else:
-        if hasattr(state, "activity") and isinstance(state.activity, dict):
-            state.activity["metrics"] = value
-        else:
-            state.metrics = value
+        state.metrics = value
 
 
 def _get_state_activity(state: object) -> dict | None:
@@ -511,89 +510,6 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
     return total_energy / batch_size
 
 
-def _settle_step(
-    all_acts: list[Tensor],
-    geometry: Geometry,
-    beta: float,
-    target: Tensor | None,
-    velocity: list[Tensor] | None,
-    momentum: float,
-    step_size: float,
-    config: StateDynamicsConfig,
-) -> tuple[list[Tensor], list[Tensor] | None]:
-    """One settling step, pure function for gradient checkpointing."""
-    num_hidden = len(all_acts) - 2
-    new_acts = [all_acts[0]]  # Input layer is fixed
-    new_velocity: list[Tensor] | None = (
-        [] if momentum > 0 and velocity is not None else None
-    )
-
-    layers = _layer_stack(geometry)
-    if layers is None:
-        raise TypeError("Energy-based settling requires a layered geometry")
-    recurrent_weight = _recurrent_weight(geometry)
-    linears = [m for m in layers if isinstance(m, torch.nn.Linear)]
-    activations = [m for m in layers if not isinstance(m, torch.nn.Linear)]
-
-    # Update each hidden layer
-    for i in range(num_hidden):
-        pre = linears[i](all_acts[i])  # Bottom-up from previous layer
-
-        # Recurrent term (for RecurrentGeometry, last hidden layer only)
-        if recurrent_weight is not None and i == num_hidden - 1:
-            pre = pre + all_acts[i + 1] @ recurrent_weight.T
-
-        # Top-down drive from layer above
-        top_down = all_acts[i + 2] @ linears[i + 1].weight
-
-        total = pre + top_down
-
-        # Apply momentum (heavy-ball)
-        if velocity is not None and new_velocity is not None:
-            total = momentum * velocity[i] + total
-            new_velocity.append(total.detach().clone())
-
-        # Apply activation (ReLU), then relax toward the target state
-        # (h_{t+1} = (1-η)·h_t + η·f(...) keeps the bidirectional settle
-        # loop contractive for gain ≈ 1 topologies)
-        target_h = activations[i](total) if i < len(activations) else total
-        h_new = all_acts[i + 1] + step_size * (target_h - all_acts[i + 1])
-
-        new_acts.append(h_new)
-
-    # Output layer
-    out_layer = linears[-1] if linears else None
-    if out_layer is not None:
-        out = out_layer(new_acts[-1])
-        # Apply nudging to output layer during nudged phase
-        if beta > 0 and target is not None:
-            # Convert target to one-hot if needed
-            if target.dim() == 1:
-                target_oh = torch.zeros_like(out)
-                target_oh.scatter_(1, target.unsqueeze(1), 1.0)
-            else:
-                target_oh = target
-            out = out + beta * (target_oh - out)
-
-        new_acts.append(out)
-    else:
-        new_acts.append(all_acts[-1])
-
-    return new_acts, new_velocity
-
-
-def _layer_stack(geometry: Geometry) -> torch.nn.ModuleList | None:
-    """Return the geometry's ordered module stack if it is layer-based."""
-    layers = getattr(geometry, "_layers", None)
-    return layers if isinstance(layers, torch.nn.ModuleList) else None
-
-
-def _recurrent_weight(geometry: Geometry) -> Tensor | None:
-    """Return the geometry's recurrent weight matrix if present."""
-    weight = getattr(geometry, "_recurrent_weight", None)
-    return weight if isinstance(weight, Tensor) else None
-
-
 class EnergyMinimizationDynamics:
     """Energy-based settling (Equilibrium Propagation, Hopfield, CHL).
 
@@ -630,6 +546,17 @@ class EnergyMinimizationDynamics:
         all_acts = geometry.forward_with_intermediates(state.x, substrate)
         if not all_acts:
             return state
+
+        # Extract layered params and construct substrate-native settle kernel
+        params = extract_layered_params(geometry)
+        if params is None:
+            raise TypeError("Energy-based settling requires a layered geometry")
+        kernel = SubstrateSettleKernel(
+            substrate=substrate,
+            params=params,
+            step_size=self.config.step_size,
+            momentum=self.config.momentum,
+        )
 
         # Number of hidden layers (excluding input and output)
         # all_acts = [input, hidden1, hidden2, ..., output]
@@ -692,23 +619,28 @@ class EnergyMinimizationDynamics:
             except Exception:
                 pass  # Fall back to config value
 
+        # Kernel step function for checkpointing
+        def _kernel_step(
+            acts: list[Tensor],
+            beta_: float,
+            target_: Tensor | None,
+            velocity_: list[Tensor] | None,
+        ) -> tuple[list[Tensor], list[Tensor] | None]:
+            return kernel.step(acts, beta_, target_, velocity_)
+
         # Use gradient checkpointing if enabled
         if use_checkpointing:
             from torch.utils import checkpoint
 
             for _step in range(self.config.max_steps):
                 prev_output = all_acts[-1].detach()
-                # Checkpoint the step function
+                # Checkpoint the kernel step function
                 all_acts, self._velocity = checkpoint.checkpoint(
-                    _settle_step,
+                    _kernel_step,
                     all_acts,
-                    geometry,
                     beta,
                     target,
                     self._velocity,
-                    momentum,
-                    self.config.step_size,
-                    self.config,
                     use_reentrant=False,
                 )
 
@@ -724,17 +656,10 @@ class EnergyMinimizationDynamics:
                     if delta < self.config.convergence_threshold:
                         break
         else:
-            # Original non-checkpointed path
+            # Non-checkpointed path
             for step in range(self.config.max_steps):
-                new_acts, new_velocity = _settle_step(
-                    all_acts,
-                    geometry,
-                    beta,
-                    target,
-                    self._velocity,
-                    momentum,
-                    self.config.step_size,
-                    self.config,
+                new_acts, new_velocity = kernel.step(
+                    all_acts, beta, target, self._velocity
                 )
                 if new_velocity is not None:
                     self._velocity = new_velocity
@@ -811,6 +736,12 @@ class PredictiveSettlingDynamics:
         if x is None:
             raise ValueError("State must contain input 'x'")
 
+        # Initialize free energy history if tracking enabled
+        if self.config.track_free_energy_per_iter:
+            self._free_energy_history: list[float] | None = []
+        else:
+            self._free_energy_history = None
+
         # For TileGeometry, the forward pass already does the complete tile mesh
         # propagation. Use forward_with_intermediates to get all layer activations.
         if hasattr(geometry, "_graph"):
@@ -818,8 +749,13 @@ class PredictiveSettlingDynamics:
             acts = geometry.forward_with_intermediates(x, substrate)
             if not acts:
                 return state
+            # Track initial free energy
+            if self.config.track_free_energy_per_iter:
+                # Free energy in predictive coding = sum of squared prediction errors
+                fe = sum((a - geometry.route(a)).pow(2).sum().item() for a in acts[:-1])
+                self._free_energy_history.append(fe)
             # Last activation is the output
-            h = acts[-1] if isinstance(acts, list) else acts
+            h = acts[-1]
             new_state = _create_output_state(
                 state,
                 x=x,
@@ -834,7 +770,7 @@ class PredictiveSettlingDynamics:
         h = substrate.initial_state(x)
         op = substrate.get_forward_operator()
 
-        for step in range(self.config.max_steps):
+        for _step in range(self.config.max_steps):
             # Predictive coding update
             prediction = geometry.route(h)
             # Ensure prediction matches input dimension for shape-safe error computation
@@ -851,6 +787,10 @@ class PredictiveSettlingDynamics:
                 error,
                 geometry.params.get("weight", torch.eye(h.shape[-1], device=h.device)),
             )
+            # Track free energy per iteration
+            if self.config.track_free_energy_per_iter:
+                fe = error.pow(2).sum().item()
+                self._free_energy_history.append(fe)
 
         new_state = _create_output_state(
             state,
@@ -862,6 +802,13 @@ class PredictiveSettlingDynamics:
         )
 
         return new_state
+
+    def get_free_energy_history(self) -> list[float] | None:
+        """Return the free energy history tracked during settling.
+
+        Returns None if tracking was not enabled (track_free_energy_per_iter=False).
+        """
+        return self._free_energy_history
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
         acts = _get_state_activations(state)

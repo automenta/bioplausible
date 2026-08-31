@@ -192,12 +192,14 @@ class TestBenchmarkCLI:
     def test_benchmark_list(self):
         """Test benchmark list command."""
         import subprocess
+        import os
 
+        cwd = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         result = subprocess.run(
-            ["uv", "run", "biopl", "benchmark", "list"],
+            ["uv", "run", "comp", "benchmark", "list"],
             capture_output=True,
             text=True,
-            cwd="/home/me/computronium",
+            cwd=cwd,
         )
         assert result.returncode == 0
         assert "adaptation_efficiency" in result.stdout
@@ -209,12 +211,14 @@ class TestBenchmarkCLI:
     def test_benchmark_run_quick_adaptation(self):
         """Test quick adaptation efficiency benchmark."""
         import subprocess
+        import os
 
+        cwd = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         result = subprocess.run(
             [
                 "uv",
                 "run",
-                "biopl",
+                "comp",
                 "benchmark",
                 "run",
                 "--suite",
@@ -225,7 +229,7 @@ class TestBenchmarkCLI:
             ],
             capture_output=True,
             text=True,
-            cwd="/home/me/computronium",
+            cwd=cwd,
             timeout=60,
         )
         assert result.returncode == 0
@@ -234,12 +238,14 @@ class TestBenchmarkCLI:
     def test_benchmark_run_quick_compute(self):
         """Test quick compute efficiency benchmark."""
         import subprocess
+        import os
 
+        cwd = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         result = subprocess.run(
             [
                 "uv",
                 "run",
-                "biopl",
+                "comp",
                 "benchmark",
                 "run",
                 "--suite",
@@ -250,7 +256,7 @@ class TestBenchmarkCLI:
             ],
             capture_output=True,
             text=True,
-            cwd="/home/me/computronium",
+            cwd=cwd,
             timeout=60,
         )
         assert result.returncode == 0

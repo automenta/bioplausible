@@ -6,6 +6,7 @@ import torch
 
 @pytest.mark.slow
 @pytest.mark.gpu
+@pytest.mark.timeout(600)
 def test_backprop_vs_eqprop_mnist():
     """Both algorithms train on same architecture, achieve >50% on MNIST in 3 epochs."""
     from computronium.core.system_trainer import (

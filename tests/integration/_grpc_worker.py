@@ -19,8 +19,11 @@ def run_grpc_worker(node_id: str, port: int, ready_pipe, device_str: str) -> Non
         config = GeometryConfig(
             input_dim=16,
             output_dim=10,
+            hidden_dims=(),
             num_layers=3,
             topology_type="tile_mesh",
+            connectivity=None,
+            recurrent_weight=None,
         )
         geometry = TileGeometry(
             config,

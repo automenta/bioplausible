@@ -600,6 +600,7 @@ class TestContinualLearningIntegration:
     # Each test trains a full CL arm on SplitMNIST (minutes on CPU).
     pytestmark = pytest.mark.slow
 
+    @pytest.mark.timeout(600)
     def test_fast_weights_single_task_learning(self, device):
         """Test fast weights can learn a single task above chance."""
         config = CLConfig(
@@ -648,6 +649,7 @@ class TestContinualLearningIntegration:
 
         assert metrics.total_time_s > 0
 
+    @pytest.mark.timeout(600)
     def test_ewc_single_task_learning(self, device):
         """Test EWC arm completes."""
         config = CLConfig(
@@ -709,6 +711,9 @@ class TestContinualLearningIntegration:
 class TestSuiteRunner:
     """Test the continual learning suite runner."""
 
+    pytestmark = pytest.mark.slow
+
+    @pytest.mark.timeout(600)
     def test_suite_runner_smoke(self, device, tmp_path):
         """Test suite runner with minimal config."""
         config = CLConfig(

@@ -14,6 +14,10 @@ _POLL_DEADLINE = 5.0
 _POLL_INTERVAL = 0.05
 
 
+# Module-level markers: slow and flaky (network timing dependent)
+pytestmark = [pytest.mark.slow, pytest.mark.flaky]
+
+
 def _poll_get(node: DHTNode, key: str) -> object | None:
     """Retry `node.get(key)` until it returns non-None or the deadline elapses.
 

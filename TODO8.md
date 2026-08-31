@@ -85,20 +85,20 @@ All P1 areas resolved as side effects of the P0 triage + targeted capability fix
 
 ---
 
-### P3 — Ignored Test Files: Explicit Resolution (Week 2-3)
+### P3 — Ignored Test Files: Explicit Resolution (Week 2-3) — ✅ **COMPLETE (2026-08-30)**
 
-*These 8 files are permanently quarantined via `collect_ignore_glob` in `tests/conftest.py`. Pick ONE outcome per file.*
+*These 8 files were permanently quarantined via `collect_ignore_glob` in `tests/conftest.py`. One outcome per file; **quarantine is now empty (block removed)**.*
 
-| File | Outcome | Action |
-|------|---------|--------|
-| `test_hardware_aware.py` | **DELETE** or migrate to native API | No legacy imports; currently a *collection error* |
-| `test_benchmarks.py` (joint) | **ENABLE** | Mark `@pytest.mark.benchmark` (registered), then un-quarantine |
-| `test_diffusion_integration.py` | **XFAIL** with reason | Gradient bug in DiffusionDynamics |
-| `test_energy_invariants.py` | **ENABLE** (should pass per TODO2) | Fix to native API, re-enable |
-| `test_equitile_sparsity_robustness.py` | **DELETE** or migrate | Legacy imports |
-| `test_dht.py` | **MARK SLOW + FLAKY** | Mark, un-quarantine; `flaky` marker if env-dependent |
-| `test_grpc_seam.py` | **MARK SLOW** | Mark, un-quarantine; fix gRPC infra |
-| `test_grpc_seam_subprocess.py` | **MARK SLOW** | Mark, un-quarantine; fix gRPC infra |
+| File | Outcome | Resolution |
+|------|---------|------------|
+| `test_hardware_aware.py` | **DELETED** | Dead zoo imports (`zoo.models.eqprop.*`, removed `CoreTrainer` API); 315 lines |
+| `test_benchmarks.py` (joint) | **ENABLED** | slow-marked (already); fixed stale cwd (`/home/me/computronium`) + `biopl` → `comp` in CLI subprocess tests. 8/8 pass |
+| `test_diffusion_integration.py` | **ENABLED w/ xfails** | 2 xfail (DiffusionDynamics autograd bug), 2 pass (factory + registry) |
+| `test_energy_invariants.py` | **ENABLED** | 13 pass, 2 xfail; **required implementing free-energy tracking in `PredictiveSettlingDynamics`** (config flag existed, was unused — see P2 log) |
+| `test_equitile_sparsity_robustness.py` | **DELETED** | Legacy zoo imports (`zoo.models.deployments`, `tile_lm`) |
+| `test_dht.py` | **ENABLED** (slow+flaky) | Module-level `pytestmark = [slow, flaky]`; skips cleanly without kademlia |
+| `test_grpc_seam.py` | **ENABLED** (slow) | Module-level slow; 1 pass + 1 explicit skip (multi-process proto setup) |
+| `test_grpc_seam_subprocess.py` | **ENABLED** (slow) | Module-level slow; **fixed stale API drift** (see P3 log) — 12 pass + 1 xfail |
 
 **Un-quarantine = delete one line from `collect_ignore_glob` in `tests/conftest.py`.** Markers (`slow`/`benchmark`/`flaky`) are now first-class — quarantine is only for files that fail at *collection*, never for slow-but-working tests.
 
@@ -207,14 +207,14 @@ Substrate.quantize_weights()
 - [x] Property test files (5) passing/xfail with reasons
 - [x] Known Tile/Diffusion/FA/PEPITA issues tracked as xfails
 - [x] **Property locks: 32 ontology + 33 joint stability tests passing**
-- [ ] **Joint benchmarks runnable via `biopl benchmark`**
+- [x] **Joint benchmarks runnable via `comp benchmark`** (verified `run --suite adaptation_efficiency --quick` end-to-end; 8 CLI/API tests enabled in slow tier)
 
 ### P3 Done
-- [ ] 0 quarantined files without explicit status (collect_ignore_glob empty or each entry justified)
+- [x] **0 quarantined files**: `collect_ignore_glob` block removed from `tests/conftest.py` — 2 deleted, 6 enabled (slow/xfail-marked)
 
 ### P4 Done
-- [ ] At least one kernel family ported to Substrate operator API
-- [ ] Kernel equivalence test exists for ported operator
+- [x] At least one kernel family ported to Substrate operator API
+- [x] Kernel equivalence test exists for ported operator
 
 ### P5 Done
 - [ ] CampaignStore schema frozen
@@ -251,15 +251,17 @@ print(len(Registry.list(C.MODEL)['model']))"
 #   T0 gate (default, ~65s): uv run pytest -q
 #     - unit + property, slow/benchmark/llm auto-deselected via addopts markers
 #     - per-test timeout 60s (signal); faulthandler dumps stacks at 120s
-#     - durations=25 always; quarantine via collect_ignore_glob in tests/conftest.py
-#   T1 slow tier: uv run pytest tests -m slow   (training parity + tests/slow/, ~17min)
+#     - durations=25 always; NO quarantine left (collect_ignore_glob removed — P3 done)
+#   T1 slow tier: uv run pytest tests -m slow   (training parity + tests/slow/, ~25min)
 #     NOTE: `tests` arg required — testpaths limits bare `pytest` to unit+property
-#   T2 everything: uv run pytest tests -m ""   (1588 tests, ~17min)
+#   T2 everything: uv run pytest tests -m ""   (~1500 tests, ~23min; 0 failed 2026-08-30)
 #   Coverage (opt-in): uv run pytest tests --cov=computronium --cov-report=term-missing
 #   Single file: uv run pytest tests/unit/core/test_ontology.py -x -q
 #   NOTE: sync deps with `uv sync --extra dev --extra lightning` (plain dev
 #     sync removes lightning -> 4 collection errors). Serial is the reliable
 #     default; xdist (-n auto) hangs in this env, don't use it.
+#   NOTE: installed script is `comp` (argparse prog-name prints "biopl" —
+#     cosmetic). Subprocess tests must invoke `comp`.
 
 # Fast gates (seconds): property locks + registry + boundary
 uv run pytest tests/property/test_ontology_locks.py tests/unit/core/test_registry.py tests/unit/core/test_module_boundary.py tests/unit/test_refactor.py -q
@@ -372,7 +374,7 @@ uv run pyright computronium/ontology
 - Native smoke: **20 pass, 4 skip, 4 xfail** (diffusion_eqprop, tile_ep, tile_snn, tile_gnn xfail; tile_fa/tp/hebbian/pc skip) — unchanged, still open.
 - Settle protocol (`tests/integration/test_settle_protocol_models.py`): **18/18 pass** (incl. multi-epoch learning for TileAlgorithm, tile_pc, eqprop_mlp). NOTE: `tests/property/test_settle_protocol.py` (6 pass) is a separate file — verify both when counting toward the "29+" target.
 - Validation all (`tests/integration/test_validation_all.py`): **2 pass, 14 skip**. Skip reasons: 8 "DEFERRED per TODO7" (Conv/Graph/Attention/Homeostatic geometry + deleted legacy FA), 6 real capability blockers (native_fa, native_pepita, native_tile_ep/fa/tp/hebbian). P2 action: convert the 6 capability-blocker skips → `@pytest.mark.xfail(reason=...)`; leave geometry-DEFERRED ones as skips (they are genuinely not implemented, not broken).
-- **P3 ignored files all still pending explicit resolution** — the 8 files remain in the `IGNORED` array. Notable: `test_hardware_aware.py` (dead import), `test_benchmarks.py` (joint), `test_diffusion_integration.py` (diffusion gradient bug → xfail), `test_energy_invariants.py` (should pass per TODO2), `test_equitile_sparsity_robustness.py` (legacy), `test_dht.py`/`test_grpc_seam*.py` (infra/slow).
+- ~~P3 ignored files all still pending explicit resolution~~ → **resolved 2026-08-30 (P3 complete — see P3 Progress Log)**.
 
 ### P2 Progress Log (2026-08-30, session continuation) — P2 Complete
 
@@ -411,3 +413,87 @@ Note: These 4 now XPASS (smoke test only checks crash-free forward/train_step, n
 - Unit tests: 734 passed, 35 skipped, 1 xfailed
 - Joint tests: 130 passed, 10 skipped
 - Fast gate (`pytest -q`): ~65s, all green
+
+### P3 Progress Log (2026-08-30, session continuation) — P3 Complete
+
+**Outcome per file:** see P3 table above. Key implementation work the un-quarantine forced:
+
+1. **`PredictiveSettlingDynamics` free-energy tracking implemented** (`computronium/ontology/_dynamics.py`): `StateDynamicsConfig.track_free_energy_per_iter` was accepted by the config and consumed by `EnergyMinimizationDynamics` but silently ignored by `PredictiveSettlingDynamics` (docs/RECRYSTALLIZE claimed it was done — it wasn't). Now: per-iteration sum of squared prediction errors appended to `_free_energy_history`; added `get_free_energy_history()`. This fixed 3 Control-Lyapunov tests in `test_energy_invariants.py` that were waiting on `AttributeError`.
+2. **gRPC worker API drift fixed** (`computronium/p2p/grpc_worker.py`, `tests/integration/_grpc_worker.py`): `GeometryConfig(...)` calls used a stale signature (`num_layers`/`topology_type` without required `hidden_dims`, `connectivity`, `recurrent_weight`) → spawned workers crashed silently → parent `pipe.recv()` hung 60s per test. Same drift in the subprocess test's `StateDynamicsConfig` (→ `.energy_minimization(...)` classmethod) and `ParameterUpdateConfig` (→ `.euclidean(...)` classmethod). **This also restores the documented CLI entry point** `python -m computronium.p2p.grpc_worker`.
+3. **`integration` marker registered** in `pyproject.toml` (joint benchmark file used it unregistered → strict-markers collection error).
+4. **5 chronic timeout victims fixed** — all were compute-bound (killed mid-op, not hung), 3-4× over the global 60s timeout; verified identical failures on the pre-session tree via `git stash` A/B (not session regressions):
+   - `tests/slow/test_continual_learning.py`: 3 tests → `@pytest.mark.timeout(600)` (measured 180-203s); `TestSuiteRunner` class was missing its slow marker entirely (would fail the default `pytest tests -q` gate) → `pytestmark = slow` added.
+   - `tests/integration/test_quickstart.py::test_backprop_vs_eqprop_mnist` → `timeout(600)` (measured 204s).
+   - `tests/property/test_ontology_parity.py`: module pytestmark → `[slow, timeout(300)]` (parity tests 15-37s solo, cross 60s under full-suite load).
+5. **Backprop parity flake root-caused**: `test_create_backprop_mlp_matches_native` seeded *training* (`train_system`) but not *construction* — the two factories drew init weights from ambient RNG state mutated by every prior test → parity gap varied with suite ordering on CUDA. Fixed by `torch.manual_seed(42)` before each construction. 3/3 consistent passes after.
+
+**Certification:** full suite `pytest tests -m ""` → **1499 passed, 89 skipped, 41 xfailed, 4 xpassed, 0 failed** (23min; up from 1455 passed — +44 net from un-quarantined files). Fast gate green. Pyright (ontology + p2p workers): 70 errors / 266 warnings vs 70/268 baseline. Ruff: 0 new findings on touched files.
+
+**Note:** the CLI argparse prog-name is "biopl" (help output) but the installed script is `comp` — subprocess tests must invoke `comp`.
+
+### New Improvement Opportunities (2026-08-30, P3 session)
+- **CUDA determinism in parity tests (pattern, not just one test):** other parity classes (EqProp/FA/Tile/Research in `test_ontology_parity.py`) share the unseeded-construction pattern; only BackpropParity flaked so far, but the same `torch.manual_seed` before each factory call should be applied suite-wide when next touched.
+- **`NeuromorphicSubstrate` sparsity is cosmetic:** config carries `sparsity=0.1` but `inject_state_noise` only adds Gaussian noise — no spike dropout. Either implement dropout or drop the config field (xfail in energy invariants tracks this).
+- **`MemristiveSubstrate` `_roff/_ron` semantics lost:** the ontology substrate clamps to `weight_bounds=(0,1)`; the old conductance-range model (1/Roff, 1/Ron) from the zoo crossbar is gone. Fine for now; revisit when substrate fidelity work (P4/P6) starts.
+- **Nudged-phase free energy is not a Lyapunov function** for predictive coding (target force injects energy) — xfail documents it; if a proper V_nudged (free energy + β·loss term) is derived, the test can be strengthened instead of xfailed.
+- **DiffusionDynamics autograd bug** (P2/P3 blocker, xfailed in 2 files + native smoke): energy tensor loses grad history during settle → `torch.autograd.grad` fails. Real capability gap, smallest of the known native blockers.
+- **`test_grpc_seam.py::test_grpc_seam_multi_process`** still an explicit skip (needs full proto/multi-process harness) — candidate to fold into the subprocess file's now-working pattern and delete the skip.
+- **kademlia missing from dev deps:** `test_dht.py` (P2P DHT coverage) silently skips — consider `uv add kademlia` to dev extras to actually exercise the DHT in slow tier.
+- **axis_probe `[2-0]` flake** (full-gate only, passed in all isolated runs + later full run): suspected cross-test pollution via shared registry state; watch for recurrence before investigating.
+
+### P4 Progress Log (2026-08-31) — P4 Complete
+
+**Deliverable 1: EqProp settle kernel ported to Substrate operator API**
+
+- **New module** `computronium/ontology/_settle_kernel.py`: `SubstrateSettleKernel` class implementing the EqProp settle family entirely through the Substrate operator API:
+  - `get_forward_operator()` for true forward passes (bottom-up, output layer)
+  - `quantize_weights()` for weight synchronization (STE ternary, precision casting, bounds clamping)
+  - `get_weight_update_operator()` for contrastive consolidation (SGD on digital, pulse-bounded on memristive)
+  - Top-down and recurrent passes use raw matmul (mathematical transposes, not physical substrate processes)
+  - `extract_layered_params()` helper to pull linear layer stack from geometry
+  - `pseudo_gradient()` matching `ThermodynamicContrast.compute_pseudo_gradient` exactly
+  - `apply_weight_update()` routing through substrate update operator
+  - `effective_weights()` for inspection/export
+
+- **Rewired `EnergyMinimizationDynamics.settle`** in `computronium/ontology/_dynamics.py`:
+  - Delegates relaxation loop to `SubstrateSettleKernel` (replaces legacy `_settle_step`)
+  - Preserves gradient checkpointing, free-energy tracking, momentum, convergence early-stop
+  - Deleted local `_settle_step`, `_layer_stack`, `_recurrent_weight` (consolidated to `_settle_kernel.py` and `geometry.py`)
+  - Production settle path is now substrate-native; DigitalSubstrate = bitwise-equivalent to legacy; Memristive/Ternary/Optical substrates now inject physics during settle
+
+- **Removed parallel legacy implementations**: deleted `_settle_step` from `_dynamics.py` (the `ontology/dynamics/primitives.py` stub remains as dead code — separate cleanup)
+
+**Deliverable 2: Kernel equivalence test**
+
+- **New test file** `tests/integration/test_substrate_settle_equivalence.py` (10 tests, 1 xfail):
+  - `test_free_phase_equivalence`: kernel settle vs pure-torch F.linear reference (DigitalSubstrate) — max_diff < 1e-5
+  - `test_nudged_phase_equivalence`: with target nudge (beta=0.5) — same tolerance
+  - `test_momentum_equivalence`: heavy-ball momentum (0.9) — tolerance 2e-5 (fused vs separate matmul+add)
+  - `test_cuda_equivalence`: GPU parity (skipif no CUDA)
+  - `test_ternary_weights_quantized`: verifies STE ternary quantization applied in kernel path
+  - `test_ternary_equivalence_vs_reference`: xfail — aggressive {-1,0,1} quantization with init_scale=0.1 causes numerical instability
+  - `test_digital_update_operator_is_sgd`: digital update operator = identity (SGD semantics)
+  - `test_pseudo_gradient_matches_thermodynamic_contrast`: kernel pseudo-gradient == ThermodynamicContrast
+  - `test_deterministic_settle`: same seed → bitwise identical (L5 determinism)
+  - `test_dynamics_settle_matches_reference`: end-to-end `EnergyMinimizationDynamics.settle` via kernel matches legacy reference
+  - `test_dynamics_settle_nudged_matches_reference`: nudged phase end-to-end equivalence
+
+**Verification:**
+- Fast gate (`pytest -q`): 1152 passed, 0 failed
+- Targeted suite (settle protocol, energy invariants, ontology locks, native smoke, axis certs, new equivalence): 257 passed
+- Pyright (ontology/): 0 new errors (pre-existing duck-typing warnings only)
+- Ruff: 0 new findings on touched files
+
+**Files created/modified:**
+- Created: `computronium/ontology/_settle_kernel.py`
+- Modified: `computronium/ontology/_dynamics.py` (rewired settle, deleted legacy helpers)
+- Created: `tests/integration/test_substrate_settle_equivalence.py`
+- No test regressions; previously failing sparse substrate test now passes
+
+### New Improvement Opportunities (2026-08-31, P4 session)
+- **FA feedback projection kernel (P4 priority 2)**: port legacy FA feedback matmul to Substrate operator API — validates the API for non-settle paths
+- **MEP CUDA kernels (P4 priority 3)**: port Triton MEP kernels (Muon, Fisher whitening) to Substrate update operator
+- **Sparse substrate mask for transposes**: sparse substrate currently fails on transposed weight views; could be fixed by recognizing transpose and transposing mask, but raw matmul for top-down avoids this cleanly
+- **KernelRegistry integration**: register `SubstrateSettleKernel` backend for EQPROP family (currently `EqPropKernelBackend` registered for all targets)
+- **Ternary init_scale tuning**: equivalence test xfails due to aggressive quantization; could add `init_scale` parameter to ternary config for better numerical stability in tests
+- **Substrate noise injection during settle**: currently only forward operator injects noise; could add optional per-step `inject_state_noise` for analog/memristive substrates (gated by `noise_level > 0`)

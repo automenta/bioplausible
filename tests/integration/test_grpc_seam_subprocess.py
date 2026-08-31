@@ -33,6 +33,9 @@ from computronium.ontology import (
 from computronium.p2p.grpc_service import GRPCClient
 from tests.integration._grpc_worker import run_grpc_worker
 
+# Module-level marker: slow (multi-process gRPC)
+pytestmark = pytest.mark.slow
+
 # ----------------------------------------------------------------------
 # Test Configuration
 # ----------------------------------------------------------------------
@@ -54,6 +57,9 @@ def _create_test_system(device: torch.device):
         output_dim=OUTPUT_DIM,
         num_layers=NUM_LAYERS,
         topology_type="tile_mesh",
+        hidden_dims=(),
+        connectivity=None,
+        recurrent_weight=None,
     )
 
     geometry = TileGeometry(
@@ -66,14 +72,13 @@ def _create_test_system(device: torch.device):
     from computronium.ontology import ParameterUpdateConfig, StateDynamicsConfig
 
     dynamics = EnergyMinimizationDynamics(
-        StateDynamicsConfig(
+        StateDynamicsConfig.energy_minimization(
             max_steps=SETTLE_ITERS,
             convergence_start=SETTLE_ITERS - 1,
-            dynamics_type="energy_minimization",
         )
     )
     credit = TargetInversionCredit()
-    update = EuclideanUpdate(ParameterUpdateConfig(step_size=0.01))
+    update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))
 
     return compose_system(substrate, geometry, dynamics, credit, update)
 
@@ -85,6 +90,9 @@ def _create_dummy_geometry(device: torch.device) -> TileGeometry:
         output_dim=OUTPUT_DIM,
         num_layers=NUM_LAYERS,
         topology_type="tile_mesh",
+        hidden_dims=(),
+        connectivity=None,
+        recurrent_weight=None,
     )
     geometry = TileGeometry(
         config,
@@ -279,6 +287,9 @@ class TestGRPCSeamSubprocess:
             output_dim=OUTPUT_DIM,
             num_layers=NUM_LAYERS,
             topology_type="tile_mesh",
+            hidden_dims=(),
+            connectivity=None,
+            recurrent_weight=None,
         )
         geometry = TileGeometry(
             config,
@@ -292,14 +303,13 @@ class TestGRPCSeamSubprocess:
         )
 
         dynamics = EnergyMinimizationDynamics(
-            StateDynamicsConfig(
+            StateDynamicsConfig.energy_minimization(
                 max_steps=SETTLE_ITERS,
                 convergence_start=SETTLE_ITERS - 1,
-                dynamics_type="energy_minimization",
             )
         )
         credit = TargetInversionCredit()
-        update = EuclideanUpdate(ParameterUpdateConfig(step_size=0.01))
+        update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))
         system = compose_system(substrate, geometry, dynamics, credit, update)
 
         # Test with single node (no actual gRPC, just the trainer path)
@@ -557,6 +567,9 @@ async def test_various_geometries(
         output_dim=OUTPUT_DIM,
         num_layers=num_layers,
         topology_type="tile_mesh",
+        hidden_dims=(),
+        connectivity=None,
+        recurrent_weight=None,
     )
 
     geometry = TileGeometry(

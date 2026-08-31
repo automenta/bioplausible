@@ -3,14 +3,15 @@
 Tests the L7 Seam Lock: real gRPC transport across processes.
 """
 
-from __future__ import annotations
-
 import asyncio
 
 import pytest
 import torch
 
 from computronium.p2p.grpc_service import GRPCServer
+
+# Module-level marker: slow (multi-process gRPC)
+pytestmark = pytest.mark.slow
 
 
 def run_server(port_queue, geometry_shard, node_id, ready_event, barrier):

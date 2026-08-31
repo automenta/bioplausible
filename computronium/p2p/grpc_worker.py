@@ -30,8 +30,11 @@ def _create_dummy_geometry(device: torch.device) -> TileGeometry:
     config = GeometryConfig(
         input_dim=32,
         output_dim=10,
+        hidden_dims=(),
         num_layers=4,
         topology_type="tile_mesh",
+        connectivity=None,
+        recurrent_weight=None,
     )
     geometry = TileGeometry(
         config,

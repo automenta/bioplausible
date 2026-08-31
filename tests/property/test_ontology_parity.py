@@ -91,7 +91,7 @@ from computronium.ontology import (
 from computronium.core.system_trainer import compose_system
 
 # Every test here trains full models (2-3 epochs each); runs in the slow tier only.
-pytestmark = pytest.mark.slow
+pytestmark = [pytest.mark.slow, pytest.mark.timeout(300)]
 
 
 def make_dataloaders(device: str = "cpu", batch_size: int = 64):
@@ -162,10 +162,14 @@ class TestBackpropParity:
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
         hidden_dim = 128
 
+        # Seed each construction identically: init draws from ambient RNG
+        # state otherwise, so parity varies with suite ordering (CUDA).
+        torch.manual_seed(42)
         # Both should produce valid systems that train
         system1 = create_backprop_mlp(
             input_dim, (hidden_dim,), output_dim, lr=0.001, device=device
         )
+        torch.manual_seed(42)
         system2 = create_native_backprop_mlp(
             input_dim, hidden_dim, output_dim, lr=0.001
         )

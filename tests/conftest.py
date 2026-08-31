@@ -14,18 +14,6 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent.parent
 sys.path.append(str(ROOT_DIR))
 
-# Broken/legacy files quarantined from collection (replaces run_all_tests.sh IGNORED)
-collect_ignore_glob = [
-    "unit/test_hardware_aware.py",
-    "integration/joint/test_benchmarks.py",
-    "integration/test_diffusion_integration.py",
-    "integration/test_energy_invariants.py",
-    "integration/test_equitile_sparsity_robustness.py",
-    "integration/test_dht.py",
-    "integration/test_grpc_seam.py",
-    "integration/test_grpc_seam_subprocess.py",
-]
-
 # Configure logging for tests
 logging.basicConfig(
     level=logging.INFO,
