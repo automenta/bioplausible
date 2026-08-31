@@ -377,7 +377,7 @@ class EPOptimizerWithEWC:
         self.ewc = EWCRegularizer(model, ewc_lambda=ewc_lambda)
 
         if use_analytic:
-            from computronium.zoo.mep.optimizers import O1MemoryEPv2
+            from computronium.mep.optimizers import O1MemoryEPv2
 
             self.ep_optimizer = O1MemoryEPv2(
                 params,
@@ -389,7 +389,7 @@ class EPOptimizerWithEWC:
                 loss_type=loss_type,
             )
         else:
-            from computronium.zoo.mep.presets import smep
+            from computronium.mep.presets import smep
 
             self.ep_optimizer = smep(
                 params,
@@ -446,7 +446,7 @@ class EPOptimizerWithEWC:
         ewc_loss: torch.Tensor,
     ):
         """Custom EP step with EWC gradient added to contrast."""
-        from computronium.zoo.mep.optimizers import (
+        from computronium.mep.optimizers import (
             energy_from_states_minimal,
             settle_manual_o1,
         )

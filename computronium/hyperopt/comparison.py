@@ -10,7 +10,7 @@ from enum import Enum
 import numpy as np
 from scipy import stats
 
-from computronium.zoo import get_model_spec
+from computronium.core.model_spec import get_model_spec
 
 __all__ = [
     "AlgorithmRanking",

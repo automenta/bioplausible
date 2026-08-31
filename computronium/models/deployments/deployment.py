@@ -5,7 +5,7 @@ factory with a shared `FeatureExtractor` protocol. Eliminates ~3000 lines
 of duplicate boilerplate across the four domain-specific modules.
 
 Usage:
-    from computronium.zoo.models.deployments import create_deployment_model
+    from computronium.models.deployments import create_deployment_model
 
     # Vision
     model = create_deployment_model("vision", input_channels=3, num_classes=10)
@@ -44,7 +44,7 @@ from computronium.core.tile.feature_extractors import (
     GraphFeatureExtractor,
     TemporalFeatureExtractor,
 )
-from computronium.zoo.models.deployments._feature_extractors import tile_model_factory
+from computronium.models.deployments._feature_extractors import tile_model_factory
 
 if TYPE_CHECKING:
     from torch import Tensor
@@ -707,14 +707,14 @@ def __getattr__(name: str):
     if name in _DEPRECATED_ATTRS:
         module_name, attr_name = _DEPRECATED_ATTRS[name]
         warnings.warn(
-            f"Importing {name} from computronium.zoo.models.deployments is deprecated. "
-            f"Use computronium.zoo.models.deployments.{module_name}.{attr_name} instead, "
+            f"Importing {name} from computronium.models.deployments is deprecated. "
+            f"Use computronium.models.deployments.{module_name}.{attr_name} instead, "
             f"or use the unified create_deployment_model('{module_name}', ...) factory.",
             DeprecationWarning,
             stacklevel=2,
         )
         module = __import__(
-            f"computronium.zoo.models.deployments.{module_name}",
+            f"computronium.models.deployments.{module_name}",
             fromlist=[attr_name],
         )
         return getattr(module, attr_name)

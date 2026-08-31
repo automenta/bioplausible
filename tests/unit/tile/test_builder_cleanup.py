@@ -1,7 +1,7 @@
 import unittest
 
-from computronium.zoo.models.deployments.graph import GraphTileNet, GraphTileNetConfig
-from computronium.zoo.models.deployments.timeseries import (
+from computronium.models.deployments.graph import GraphTileNet, GraphTileNetConfig
+from computronium.models.deployments.timeseries import (
     TimeSeriesConfig,
     TimeSeriesTileNet,
 )

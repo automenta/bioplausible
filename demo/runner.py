@@ -31,11 +31,9 @@ from computronium import (
 )
 
 # Ensure the full component registry is populated. `import computronium` is
-# lazy (Sprint 0.5), so model registration no longer happens as a side effect
-# of importing the top-level package. The demo's Registry lookups (and any
-# SystemTrainer instantiations by factory functions) need the zoo imported
-# explicitly and up-front for deterministic behavior (the zoo owns the substrate
-# deployment models that used to live in the separate equitile package).
+# lazy, so model registration happens on first Registry access. Trigger it
+# explicitly and up-front so the demo's Registry lookups (and any
+# SystemTrainer instantiations by factory functions) behave deterministically.
 from computronium.core.registry import ComponentCategory, Registry
 from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
 from computronium.domains.registry import resolve_task

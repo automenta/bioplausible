@@ -30,7 +30,7 @@ from computronium.execution.events import EventSink, NullEventSink
 from computronium.execution.monitoring import InterferenceMonitor
 from computronium.hyperopt.storage import HyperoptStorage
 from computronium.tracking import ExperimentTracker
-from computronium.zoo import load_weights
+from computronium.core.model_spec import load_weights
 
 __all__ = [
     "TrialRunner",

@@ -6,7 +6,7 @@ register under the ``tile`` family (``conv_tile``, ``graph_tile``,
 ``rl_tile``, ``timeseries_tile``).
 """
 
-from computronium.zoo.models.deployments.base import (
+from computronium.models.deployments.base import (
     ConvDeploymentConfig,
     DeploymentConfig,
     GraphDeploymentConfig,
@@ -14,7 +14,7 @@ from computronium.zoo.models.deployments.base import (
     TemporalDeploymentConfig,
     build_tile_head,
 )
-from computronium.zoo.models.deployments.deployment import (
+from computronium.models.deployments.deployment import (
     DeploymentDomain,
     FeatureExtractor,
     TileDeploymentModel,
@@ -25,7 +25,7 @@ from computronium.zoo.models.deployments.deployment import (
     create_vision_model,
     register_deployment_variants,
 )
-from computronium.zoo.models.deployments.graph import (
+from computronium.models.deployments.graph import (
     GraphAttentionLayer,
     GraphTileNet,
     GraphTileNetConfig,
@@ -38,10 +38,10 @@ from computronium.zoo.models.deployments.graph import (
     scatter_mean,
     scatter_sum,
 )
-from computronium.zoo.models.deployments.graph import (
+from computronium.models.deployments.graph import (
     create_graph_model as _create_graph_model,
 )
-from computronium.zoo.models.deployments.rl import (
+from computronium.models.deployments.rl import (
     RecurrentRLTileNet,
     RLTileNet,
     RLTileNetConfig,
@@ -51,10 +51,10 @@ from computronium.zoo.models.deployments.rl import (
     create_mujoco_model,
     create_recurrent_rl_model,
 )
-from computronium.zoo.models.deployments.rl import (
+from computronium.models.deployments.rl import (
     create_rl_model as _create_rl_model,
 )
-from computronium.zoo.models.deployments.timeseries import (
+from computronium.models.deployments.timeseries import (
     TemporalAttentionLayer,
     TemporalPositionalEncoding,
     TimeSeriesConfig,
@@ -64,7 +64,7 @@ from computronium.zoo.models.deployments.timeseries import (
     create_classification_model,
     create_forecasting_model,
 )
-from computronium.zoo.models.deployments.vision import (
+from computronium.models.deployments.vision import (
     ConvFeatureExtractor,
     ConvTileNet,
     ConvTileNetConfig,
@@ -73,7 +73,7 @@ from computronium.zoo.models.deployments.vision import (
     create_imagenet_model,
     create_mnist_model,
 )
-from computronium.zoo.models.deployments.vision import (
+from computronium.models.deployments.vision import (
     create_vision_model as _create_vision_model,
 )
 

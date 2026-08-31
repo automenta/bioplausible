@@ -161,11 +161,10 @@ def perturb_nonlocal(state: SystemState, layer: int, eps: float) -> SystemState:
 # ----------------------------------------------------------------------
 def _all_registered_model_names() -> list[str]:
     """Get all registered model names from Registry."""
-    # Import zoo to trigger model registration
-    from computronium.zoo import models  # noqa: F401
     from computronium.core.registry import ComponentCategory, Registry
 
     try:
+        Registry.list()  # triggers lazy native registration
         return list(Registry._components.get(ComponentCategory.MODEL, {}).keys())
     except Exception:
         return []

@@ -70,7 +70,7 @@ class TestMEPImport:
     def test_import_composite_optimizer(self):
         """Test importing CompositeOptimizer from MEP."""
         try:
-            from computronium.zoo.mep.optimizers import CompositeOptimizer
+            from computronium.mep.optimizers import CompositeOptimizer
 
             assert CompositeOptimizer is not None
         except ImportError:
@@ -79,7 +79,7 @@ class TestMEPImport:
     def test_import_strategies(self):
         """Test importing strategy components from MEP."""
         try:
-            from computronium.zoo.mep.optimizers import (
+            from computronium.mep.optimizers import (
                 EPGradient,
                 MuonUpdate,
                 SpectralConstraint,
@@ -174,7 +174,7 @@ class TestMEPOptimizers:
     def test_composite_optimizer(self, model, data):
         """Test CompositeOptimizer."""
         try:
-            from computronium.zoo.mep.optimizers import (
+            from computronium.mep.optimizers import (
                 CompositeOptimizer,
                 EPGradient,
                 MuonUpdate,

@@ -11,7 +11,7 @@ import optuna
 from optuna.pruners import HyperbandPruner, MedianPruner
 from optuna.samplers import NSGAIISampler, TPESampler
 
-from computronium.zoo import get_model_spec
+from computronium.core.model_spec import get_model_spec
 
 __all__ = [
     "create_optuna_space",

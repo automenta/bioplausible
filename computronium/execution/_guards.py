@@ -17,7 +17,7 @@ import torch
 from computronium.core.logging import get_logger
 from computronium.execution.task import ExperimentTask
 from computronium.hyperopt.eval_tiers import PatientLevel
-from computronium.zoo import get_model_spec
+from computronium.core.model_spec import get_model_spec
 
 __all__ = [
     "ALGORITHM_FAMILY_CONSTRAINTS",

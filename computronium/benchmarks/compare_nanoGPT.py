@@ -549,7 +549,7 @@ def compare_nanoGPT(
         Comparison results
     """
     from computronium.data.lm import create_shakespeare_dataset
-    from computronium.zoo.models.tile_lm import TileLM
+    from computronium.models.tile_lm import TileLM
 
     if device == "auto":
         from computronium.core.utils.device import get_device
@@ -707,7 +707,7 @@ def run_benchmark_comparison(
             )
             model = NanoGPTModel(nanogpt_config)
         elif model_type == "equitile":
-            from computronium.zoo.models.tile_lm import TileLM
+            from computronium.models.tile_lm import TileLM
 
             model = TileLM.from_lm(
                 vocab_size=config.get("vocab_size", 1000),

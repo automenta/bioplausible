@@ -15,7 +15,7 @@ import pytest
 import torch
 
 from computronium.data.lm import CharacterTokenizer
-from computronium.zoo.models.deployments import (
+from computronium.models.deployments import (
     ConvTileNet,  # Vision; RL
     ConvTileNetConfig,
     RecurrentRLTileNet,
@@ -28,7 +28,7 @@ from computronium.zoo.models.deployments import (
     create_mnist_model,
     create_rl_model,
 )
-from computronium.zoo.models.tile_lm import TileLM
+from computronium.models.tile_lm import TileLM
 from tests.conftest import lm_train_step
 
 # =============================================================================

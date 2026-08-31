@@ -82,7 +82,9 @@ class AuditRow:
 
 def _load_registry() -> None:
     """Import the registration modules so every component is present."""
-    from computronium.zoo import models, optimizers, propagators, sparsity  # noqa: F401
+    from computronium import mep  # noqa: F401
+
+    Registry.list()  # triggers lazy native + ontology registration
 
 
 def _parity_status(name: str) -> str:

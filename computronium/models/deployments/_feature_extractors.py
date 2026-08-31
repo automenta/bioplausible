@@ -32,7 +32,7 @@ from computronium.core.tile.feature_extractors import (
 if TYPE_CHECKING:
     from torch import Tensor
 
-    from computronium.zoo.models.deployments.base import RLDeploymentConfig
+    from computronium.models.deployments.base import RLDeploymentConfig
 
 __all__ = [
     "ConvFeatureExtractor",

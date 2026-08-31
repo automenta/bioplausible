@@ -1173,8 +1173,12 @@ def register_controller(name: str | None = None, **kwargs) -> Callable:
 
 
 def list_models() -> list[str]:
-    """Convenience: list all registered model names."""
-    return list(Registry._components.get(ComponentCategory.MODEL, {}).keys())
+    """Convenience: list all registered model names (including aliases).
+
+    Delegates to :meth:`Registry.list`, so first access triggers the lazy
+    native registration exactly like every other Registry read.
+    """
+    return Registry.list(ComponentCategory.MODEL)[ComponentCategory.MODEL.value]
 
 
 __all__ = [

@@ -34,8 +34,8 @@ from computronium.core.model import BioModel
 from computronium.core.model_status import status_tag
 from computronium.core.registry import LocalityLevel, register_model
 from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
-from computronium.zoo.models.deployments import _feature_extractors as _fe
-from computronium.zoo.models.deployments.base import RLDeploymentConfig
+from computronium.models.deployments import _feature_extractors as _fe
+from computronium.models.deployments.base import RLDeploymentConfig
 
 # Re-export the shared feature extractor under its historical usage.
 RLFeatureExtractor = _fe.RLFeatureExtractor

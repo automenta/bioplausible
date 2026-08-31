@@ -21,7 +21,7 @@ from computronium.core.utils.device import get_device
 from computronium.domains import create_task
 from computronium.domains.base import DomainType
 from computronium.execution.interpretability import FeatureAttribution
-from computronium.zoo import get_model_spec
+from computronium.core.model_spec import get_model_spec
 
 __all__ = [
     "RobustnessEvaluator",

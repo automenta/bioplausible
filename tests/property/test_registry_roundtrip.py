@@ -11,7 +11,7 @@ Laws:
 
 import copy
 
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from computronium.core.registry import (
@@ -40,6 +40,7 @@ def _restore(saved):
     Registry._components.update(copy.deepcopy(saved))
 
 
+@settings(deadline=None)
 @given(
     name=name_strat,
     family=family_strat,
@@ -67,6 +68,7 @@ def test_get_returns_registered_component(name, family, bio):
         _restore(saved)
 
 
+@settings(deadline=None)
 @given(name=name_strat)
 def test_registration_then_query_finds_it(name):
     """A registered component is discoverable via query and list."""
@@ -81,6 +83,7 @@ def test_registration_then_query_finds_it(name):
         _restore(saved)
 
 
+@settings(deadline=None)
 @given(name=name_strat)
 def test_register_overwrites_returns_latest(name):
     """Re-registering a name overwrites; get returns the latest component."""
@@ -103,6 +106,7 @@ def test_register_overwrites_returns_latest(name):
         _restore(saved)
 
 
+@settings(deadline=None)
 @given(name=name_strat)
 def test_round_trip_identity(name):
     """Register/fetch preserves object identity for arbitrary callables."""

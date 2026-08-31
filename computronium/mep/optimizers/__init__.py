@@ -9,7 +9,7 @@ This module provides a composable optimizer framework for:
 - Natural gradient descent
 
 Quick Start:
-    from computronium.zoo.mep.presets import smep, sdmep, muon_backprop
+    from computronium.mep.presets import smep, sdmep, muon_backprop
 
     # SMEP with EP
     optimizer = smep(model.parameters(), model=model, mode='ep')

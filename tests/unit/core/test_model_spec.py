@@ -1,10 +1,10 @@
-"""Tests for load_weights zoo helper."""
+"""Tests for core.model_spec checkpoint-loading helper."""
 
 from pathlib import Path
 
 import torch
 
-from computronium.zoo import load_weights
+from computronium.core.model_spec import load_weights
 
 
 def test_load_weights_noop_on_empty_path():

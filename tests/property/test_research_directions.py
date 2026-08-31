@@ -15,7 +15,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from computronium.core.registry import ComponentCategory, Registry
-from computronium.zoo import get_model_spec
+from computronium.core.model_spec import get_model_spec
 
 # =============================================================================
 # Shared Fixtures & Helpers

@@ -1,8 +1,8 @@
 """Sprint 0.5 module-boundary hardening.
 
 Ensures a *light* submodule import (``computronium.core.registry``) does NOT
-drag in the heavy stack (torch, the whole zoo) or trigger side-effect model
-registration. Consumers that need the zoo must import it explicitly.
+drag in the heavy stack (torch) or trigger side-effect model registration.
+Consumers that need the full stack must import it explicitly.
 
 Run in a fresh subprocess so the parent pytest process's already-imported
 modules don't mask the boundary.
@@ -17,11 +17,14 @@ ROOT = Path(__file__).resolve().parents[3]
 _SCRIPT = """
 import sys
 import computronium.core.registry
-import computronium.core.registry as r
-registered = bool(r.list_models())
+from computronium.core.registry import ComponentCategory, Registry
+
+# Raw view: must be empty *before* any triggering read; also proves the
+# lazy-registration module was never imported as a side effect.
+raw_registered = bool(Registry._components.get(ComponentCategory.MODEL, {}))
 print("torch_loaded", "torch" in sys.modules)
-print("zoo_loaded", "computronium.zoo" in sys.modules)
-print("registered", registered)
+print("native_reg_loaded", "computronium.models.native" in sys.modules)
+print("raw_registered", raw_registered)
 """
 
 
@@ -37,11 +40,11 @@ def _run(script: str) -> dict[str, str]:
     return {k: v for k, v in (line.split() for line in out.stdout.splitlines())}
 
 
-def test_light_import_does_not_load_torch_or_zoo():
+def test_light_import_does_not_load_torch_or_register():
     r = _run(_SCRIPT)
     assert r["torch_loaded"] == "False"
-    assert r["zoo_loaded"] == "False"
-    assert r["registered"] == "False"
+    assert r["native_reg_loaded"] == "False"
+    assert r["raw_registered"] == "False"
 
 
 def test_light_import_exposes_registry_symbols_lazily():

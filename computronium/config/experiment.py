@@ -411,7 +411,7 @@ def to_system_trainer_config(config: ExperimentConfig):
 
 def to_deployment_config(config: ExperimentConfig):
     """Convert to zoo.models.deployments.base.DeploymentConfig."""
-    from computronium.zoo.models.deployments.base import DeploymentConfig
+    from computronium.models.deployments.base import DeploymentConfig
 
     # Narrow algorithm to DeploymentConfig's Literal
     algo = config.model.algorithm

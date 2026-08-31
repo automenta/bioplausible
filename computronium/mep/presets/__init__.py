@@ -20,7 +20,7 @@ from torch import nn
 from computronium.core.local_learning.rules.composite_adapter import (
     CompositeOptimizerAdapter,
 )
-from computronium.zoo.mep.optimizers import (
+from computronium.mep.optimizers import (
     BackpropGradient,
     CompositeOptimizer,
     DionUpdate,
@@ -35,7 +35,7 @@ from computronium.zoo.mep.optimizers import (
     NoFeedback,
     SpectralConstraint,
 )
-from computronium.zoo.mep.optimizers.strategies.update import (
+from computronium.mep.optimizers.strategies.update import (
     Backend,  # ruff: ignore[typing-only-first-party-import]  # annotation name resolved at runtime (no future-annotations import)
 )
 

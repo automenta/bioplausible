@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from computronium.zoo.models.tile_lm import TileLM
+from computronium.models.tile_lm import TileLM
 from tests.conftest import lm_train_step
 
 

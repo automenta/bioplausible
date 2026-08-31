@@ -80,7 +80,7 @@ The zoo provides two complementary interfaces for bio-plausible learning:
    MEP presets (smep, sdmep, ...). Use via the Registry API:
    ``Registry.get(ComponentCategory.PARAM_UPDATE, "eq_prop")``.
 
-2. Model side (`computronium.zoo.models`): Learning rules that require
+2. Model side (`computronium.models`): Learning rules that require
    model-side control of the forward/training loop (custom dual-phase passes,
    learned inverse maps, settling dynamics with internal state). These expose
    ``train_step(x, y) -> dict[str, float]`` instead of ``optimizer.step()``.
@@ -305,9 +305,9 @@ _LAZY: dict[str, tuple[str, str | None]] = {
         "native_finite_nudge_ep",
     ),
     # MEP Presets
-    "muon_backprop": ("computronium.zoo.mep.presets", "muon_backprop"),
-    "smep": ("computronium.zoo.mep.presets", "smep"),
-    "smep_fast": ("computronium.zoo.mep.presets", "smep_fast"),
+    "muon_backprop": ("computronium.mep.presets", "muon_backprop"),
+    "smep": ("computronium.mep.presets", "smep"),
+    "smep_fast": ("computronium.mep.presets", "smep_fast"),
     # NN Layers (CP-C)
     "ComputroniumLinear": ("computronium.nn", "ComputroniumLinear"),
     "replace_linear_with_computronium": (

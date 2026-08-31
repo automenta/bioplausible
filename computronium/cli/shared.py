@@ -55,7 +55,7 @@ def _set_storage(db_path_str: str | None = None) -> tuple[str, str]:
 
 # Maps the CLI family label to the canonical ``family`` value used on the
 # component registry metadata.  ``feedback_alignment`` → ``fa`` (matching the
-# registry convention seen in ``zoo/models/fa.py``).
+# registry convention used by the native model registrations).
 FAMILY_MAP: dict[str, str] = {
     "eqprop": "eqprop",
     "forward_only": "forward_only",
@@ -104,9 +104,8 @@ def _query_registry_models(reg_family: str) -> list[str]:
 def _resolve_family_models(cli_family: str) -> tuple[str, list[str]]:
     """Resolve a CLI family label to (registry_family, [model_names]).
 
-    The deployment models (``*_equitile``) register under ``family="equitile"``
-    when the zoo package is imported, which the top of this module already does
-    via ``computronium.zoo.get_model_spec``.
+    Native tile deployments register under ``family="equitile"``; registration
+    is triggered lazily by the ``Registry.query`` below.
     """
     reg_family = FAMILY_MAP.get(cli_family, cli_family)
     models = _query_registry_models(reg_family)

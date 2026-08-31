@@ -38,7 +38,7 @@ import torch
 from computronium.benchmarks.compare_nanoGPT import NanoGPTConfig, NanoGPTModel
 from computronium.data.lm import create_shakespeare_dataset
 from computronium.utils import count_parameters
-from computronium.zoo.models.tile_lm import TileLM
+from computronium.models.tile_lm import TileLM
 
 logger = get_logger()
 
