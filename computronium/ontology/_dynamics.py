@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
 
 import torch
 from torch import Tensor
@@ -14,12 +14,13 @@ if TYPE_CHECKING:
     from computronium.ontology.geometry import Geometry
     from computronium.ontology.substrate import Substrate
     from computronium.state import CompositeState
+    from computronium.state.composite import ActivityValue
 
 from computronium.ontology._settle_kernel import (
     SubstrateSettleKernel,
     extract_layered_params,
 )
-from computronium.ontology.geometry import _layer_stack
+from computronium.ontology.geometry import layer_stack
 
 # ============================================================
 # State type detection helpers (duck typing for SystemState + CompositeState)
@@ -48,104 +49,22 @@ def _get_state_free_state(state: object) -> list[Tensor] | Tensor | None:
     return getattr(state, "free_state", None)
 
 
-def _get_state_nudged_state(state: object) -> list[Tensor] | Tensor | None:
-    """Get nudged_state from either SystemState or CompositeState."""
-    return getattr(state, "nudged_state", None)
-
-
-def _get_state_loss(state: object) -> Tensor | float | None:
-    """Get loss from either SystemState or CompositeState."""
-    return getattr(state, "loss", None)
-
-
-def _get_state_metrics(state: object) -> dict[str, float] | None:
-    """Get metrics from either SystemState or CompositeState."""
-    return getattr(state, "metrics", None)
-
-
-def _set_state_x(state: object, value: Tensor | None) -> None:
-    """Set input x on either SystemState or CompositeState."""
-    if value is None:
-        if hasattr(state, "activity") and isinstance(state.activity, dict):
-            state.activity.pop("x", None)
-        else:
-            state.x = None
-    elif hasattr(state, "activity") and isinstance(state.activity, dict):
-        state.activity["x"] = value
-    else:
-        state.x = value
-
-
-def _set_state_activations(state: object, value: list[Tensor] | Tensor | None) -> None:
-    """Set activations on either SystemState or CompositeState."""
-    if value is None:
-        if hasattr(state, "activity") and isinstance(state.activity, dict):
-            state.activity.pop("activations", None)
-        else:
-            state.activations = None
-    elif hasattr(state, "activity") and isinstance(state.activity, dict):
-        state.activity["activations"] = value
-    else:
-        state.activations = value
-
-
-def _set_state_free_state(state: object, value: list[Tensor] | Tensor | None) -> None:
-    """Set free_state on either SystemState or CompositeState."""
-    if value is None:
-        if hasattr(state, "activity") and isinstance(state.activity, dict):
-            state.activity.pop("free_state", None)
-        else:
-            state.free_state = None
-    elif hasattr(state, "activity") and isinstance(state.activity, dict):
-        state.activity["free_state"] = value
-    else:
-        state.free_state = value
-
-
-def _set_state_nudged_state(state: object, value: list[Tensor] | Tensor | None) -> None:
-    """Set nudged_state on either SystemState or CompositeState."""
-    if value is None:
-        if hasattr(state, "activity") and isinstance(state.activity, dict):
-            state.activity.pop("nudged_state", None)
-        else:
-            state.nudged_state = None
-    elif hasattr(state, "activity") and isinstance(state.activity, dict):
-        state.activity["nudged_state"] = value
-    else:
-        state.nudged_state = value
-
-
-def _set_state_loss(state: object, value: Tensor | float | None) -> None:
-    """Set loss on either SystemState or CompositeState."""
-    if value is None:
-        if hasattr(state, "activity") and isinstance(state.activity, dict):
-            state.activity.pop("loss", None)
-        else:
-            state.loss = None
-    elif hasattr(state, "activity") and isinstance(state.activity, dict):
-        state.activity["loss"] = value
-    else:
-        state.loss = value
-
-
-def _set_state_metrics(state: object, value: dict[str, float] | None) -> None:
-    """Set metrics on either SystemState or CompositeState."""
-    if value is None:
-        if hasattr(state, "activity") and isinstance(state.activity, dict):
-            state.activity.pop("metrics", None)
-        else:
-            state.metrics = None
-    elif hasattr(state, "activity") and isinstance(state.activity, dict):
-        state.activity["metrics"] = value
-    else:
-        state.metrics = value
-
-
-def _get_state_activity(state: object) -> dict | None:
-    """Get activity dict from CompositeState, or None for SystemState."""
-    if hasattr(state, "activity") and isinstance(state.activity, dict):
-        return state.activity
+def _get_state_activity(state: object) -> dict[str, ActivityValue] | None:
+    """Get the activity dict from a CompositeState-shaped state, else None."""
+    if _is_composite_state(state):
+        return cast("CompositeState", state).activity
     return None
+
+
+def _energy_tensor(value: ActivityValue) -> Tensor:
+    """Coerce an activity value to the tensor form used for energy sums."""
+    match value:
+        case Tensor():
+            return value
+        case int() | float():
+            return torch.tensor(float(value))
+        case _:
+            return torch.zeros(1)
 
 
 def _create_output_state(
@@ -157,12 +76,22 @@ def _create_output_state(
     nudged_state: list[Tensor] | Tensor | None = None,
     activations: list[Tensor] | Tensor | None = None,
     spike_counts: list[Tensor] | None = None,
-) -> object:
-    """Create a new state of the same type with updated fields."""
+) -> CompositeState:
+    """Create a new state of the same type with updated fields.
+
+    The 5-D pipeline passes SystemState, the 6-D joint path passes
+    CompositeState; both are duck-typed here (circular imports forbid
+    importing them statically). Legacy SystemState results are cast to the
+    declared CompositeState contract.
+    """
     if _is_composite_state(state):
         from computronium.state import CompositeState
 
-        activity = dict(state.activity)
+        # Structural duck-typing: callers may pass either CompositeState
+        # implementation (computronium.state / core.joint.state) — circular
+        # imports forbid importing them here, hence the runtime check + cast.
+        composite = cast("CompositeState", state)
+        activity = dict(composite.activity)
         if x is not None:
             activity["x"] = x
         if output is not None:
@@ -175,34 +104,38 @@ def _create_output_state(
             activity["activations"] = activations
         if spike_counts is not None:
             activity["spike_counts"] = spike_counts
+        result: dict[str, ActivityValue] = activity
         return CompositeState(
-            activity=activity,
-            plastic=state.plastic,
-            substrate=state.substrate,
+            activity=result,
+            plastic=composite.plastic,
+            substrate=composite.substrate,
         )
     else:
         # SystemState - create new instance with updated fields
         from computronium.ontology.system import SystemState
 
-        return SystemState(
-            x=x if x is not None else getattr(state, "x", None),
-            y=getattr(state, "y", None),
-            activations=activations
-            if activations is not None
-            else getattr(state, "activations", None),
-            free_state=free_state
-            if free_state is not None
-            else getattr(state, "free_state", None),
-            nudged_state=nudged_state
-            if nudged_state is not None
-            else getattr(state, "nudged_state", None),
-            pseudo_gradients=getattr(state, "pseudo_gradients", None),
-            energy=getattr(state, "energy", None),
-            loss=getattr(state, "loss", None),
-            metrics=dict(getattr(state, "metrics", {}) or {}),
-            spike_counts=spike_counts
-            if spike_counts is not None
-            else getattr(state, "spike_counts", None),
+        return cast(
+            "CompositeState",
+            SystemState(
+                x=x if x is not None else getattr(state, "x", None),
+                y=getattr(state, "y", None),
+                activations=activations
+                if activations is not None
+                else getattr(state, "activations", None),
+                free_state=free_state
+                if free_state is not None
+                else getattr(state, "free_state", None),
+                nudged_state=nudged_state
+                if nudged_state is not None
+                else getattr(state, "nudged_state", None),
+                pseudo_gradients=getattr(state, "pseudo_gradients", None),
+                energy=getattr(state, "energy", None),
+                loss=getattr(state, "loss", None),
+                metrics=dict(getattr(state, "metrics", {}) or {}),
+                spike_counts=spike_counts
+                if spike_counts is not None
+                else getattr(state, "spike_counts", None),
+            ),
         )
 
 
@@ -582,7 +515,6 @@ class EnergyMinimizationDynamics:
             self._free_energy_history = None
 
         beta = self.config.beta if target is not None else 0.0
-        momentum = self.config.momentum
 
         # Auto-detect gradient checkpointing: never on CPU (pure overhead),
         # on GPU enable only if explicitly set OR if VRAM would be exceeded.
@@ -606,7 +538,7 @@ class EnergyMinimizationDynamics:
                 # Rough estimate: activations for all settle steps (each step has ~layers activations)
                 est_activation_mem = (
                     self.config.max_steps
-                    * (len(_layer_stack(geometry) or ()))
+                    * (len(layer_stack(geometry) or ()))
                     * batch_size
                     * hidden_size
                     * 4  # fp32 bytes
@@ -750,7 +682,9 @@ class PredictiveSettlingDynamics:
             if not acts:
                 return state
             # Track initial free energy
-            if self.config.track_free_energy_per_iter:
+            if self.config.track_free_energy_per_iter and (
+                self._free_energy_history is not None
+            ):
                 # Free energy in predictive coding = sum of squared prediction errors
                 fe = sum((a - geometry.route(a)).pow(2).sum().item() for a in acts[:-1])
                 self._free_energy_history.append(fe)
@@ -788,7 +722,9 @@ class PredictiveSettlingDynamics:
                 geometry.params.get("weight", torch.eye(h.shape[-1], device=h.device)),
             )
             # Track free energy per iteration
-            if self.config.track_free_energy_per_iter:
+            if self.config.track_free_energy_per_iter and (
+                self._free_energy_history is not None
+            ):
                 fe = error.pow(2).sum().item()
                 self._free_energy_history.append(fe)
 
@@ -818,7 +754,7 @@ class PredictiveSettlingDynamics:
         else:
             activity = _get_state_activity(state)
             h = activity.get("output", torch.zeros(1)) if activity else torch.zeros(1)
-        return h.pow(2).sum()
+        return _energy_tensor(h).pow(2).sum()
 
 
 class SpikeIntegrationDynamics:
@@ -873,7 +809,7 @@ class SpikeIntegrationDynamics:
         else:
             activity = _get_state_activity(state)
             h = activity.get("output", torch.zeros(1)) if activity else torch.zeros(1)
-        return h.pow(2).sum()
+        return _energy_tensor(h).pow(2).sum()
 
 
 class InstantaneousDynamics:
@@ -974,8 +910,8 @@ class DiffusionDynamics:
 
             substrate = DigitalSubstrate(SubstrateConfig.digital())
         else:
-            substrate = substrate_obj  # type: ignore[assignment]
-        return self.compute_energy_from_state(h, geometry, substrate)
+            substrate = cast("Substrate", substrate_obj)
+        return self.compute_energy_from_state(_energy_tensor(h), geometry, substrate)
 
 
 class LazyStateDynamics:

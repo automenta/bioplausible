@@ -7,6 +7,8 @@ acceleration) for faster convergence during settling.
 
 from __future__ import annotations
 
+import torch
+
 from computronium.core.system_trainer import compose_system
 from computronium.ontology import (
     CreditAssignmentConfig,
@@ -31,7 +33,7 @@ def create_native_momentum_eqprop(
     settle_steps: int = 30,
     lr: float = 0.01,
     momentum: float = 0.5,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Create a Momentum Equilibrium Propagation system using native 5-D composition.
 
@@ -50,7 +52,7 @@ def create_native_momentum_eqprop(
         settle_steps: Maximum settling iterations
         lr: Learning rate
         momentum: Momentum coefficient for heavy-ball dynamics (0 to 1)
-        **kwargs: Additional arguments (ignored, for compatibility)
+        device: Target device for parameter placement
 
     Returns:
         A composed System with DigitalSubstrate + RecurrentGeometry
@@ -85,7 +87,9 @@ def create_native_momentum_eqprop(
         )
     )
 
-    return compose_system(substrate, geometry, dynamics, credit, update)
+    return compose_system(
+        substrate, geometry, dynamics, credit, update, device=device
+    )
 
 
 # Alias for registry registration

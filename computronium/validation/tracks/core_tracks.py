@@ -59,9 +59,7 @@ def _train_model(
     model, X: torch.Tensor, y: torch.Tensor, epochs: int, lr: float, name: str
 ) -> list[float]:
     """Train a native model using its train_step method."""
-    from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
-
-    optimizer = create_optimizer(model, OptimizerConfig(name="adam", lr=lr))
+    del lr  # the system's own ParameterUpdate owns step_size
     losses = []
 
     for epoch in range(epochs):
@@ -90,12 +88,7 @@ def _train_model(
 def _train_model_sn(
     model, X: torch.Tensor, y: torch.Tensor, epochs: int, name: str
 ) -> list[float]:
-    """Train a native model using its train_step method (SN version uses model's internal lr)."""
-    from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
-
-    # Use the model's internal learning rate (set during creation)
-    lr = getattr(model.update.config, "step_size", 0.01)
-    optimizer = create_optimizer(model, OptimizerConfig(name="adam", lr=lr))
+    """Train a native model using its train_step method (system's own lr)."""
     losses = []
 
     for epoch in range(epochs):
@@ -166,7 +159,6 @@ def track_1_spectral_norm(verifier) -> TrackResult:
         input_dim=input_dim,
         hidden_dim=hidden_dim,
         output_dim=output_dim,
-        use_spectral_norm=False,
         beta=0.5,
         settle_steps=30,
         lr=0.05,
@@ -181,7 +173,6 @@ def track_1_spectral_norm(verifier) -> TrackResult:
         input_dim=input_dim,
         hidden_dim=hidden_dim,
         output_dim=output_dim,
-        use_spectral_norm=True,
         beta=0.5,
         settle_steps=30,
         lr=0.05,
@@ -283,7 +274,6 @@ def track_2_backprop_parity(verifier) -> TrackResult:
         input_dim=input_dim,
         hidden_dim=hidden_dim,
         output_dim=output_dim,
-        use_spectral_norm=True,
         beta=0.5,
         settle_steps=30,
         lr=0.01,
@@ -362,7 +352,6 @@ def track_3_adversarial_healing(verifier) -> TrackResult:
         input_dim=input_dim,
         hidden_dim=hidden_dim,
         output_dim=output_dim,
-        use_spectral_norm=True,
         beta=0.5,
         settle_steps=50,
         lr=0.01,

@@ -62,6 +62,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
+
+from computronium.core.utils.device import get_device
 from torch import Tensor
 
 if TYPE_CHECKING:
@@ -81,7 +83,7 @@ def create_parity_task(
     device: torch.device | str = "cpu",
 ) -> tuple[Tensor, Tensor]:
     """Parity task: classify parity of number of positive elements."""
-    device = torch.device(device)
+    device = get_device(device)
     x = torch.randn(batch_size, seq_len, input_dim, device=device)
     # Parity of positive elements across sequence
     pos_count = (x > 0).sum(dim=(1, 2))  # [batch]
@@ -96,7 +98,7 @@ def create_last_symbol_task(
     device: torch.device | str = "cpu",
 ) -> tuple[Tensor, Tensor]:
     """Last symbol task: classify by last element sign."""
-    device = torch.device(device)
+    device = get_device(device)
     x = torch.randn(batch_size, seq_len, input_dim, device=device)
     last = x[:, -1, :].mean(dim=-1)  # [batch]
     y = (last > 0).long()
@@ -110,7 +112,7 @@ def create_threshold_task(
     device: torch.device | str = "cpu",
 ) -> tuple[Tensor, Tensor]:
     """Threshold task: classify if sum exceeds threshold."""
-    device = torch.device(device)
+    device = get_device(device)
     x = torch.randn(batch_size, seq_len, input_dim, device=device)
     total = x.sum(dim=(1, 2))  # [batch]
     y = (total > 0).long()  # threshold at 0
@@ -1228,7 +1230,7 @@ def evaluate_z3(  # noqa: PLR0913 - protocol tuple stays flat
 
     torch.manual_seed(seed)
     random.seed(seed)
-    device = torch.device(device)
+    device = get_device(device)
 
     parts = coordinate.split("/")
     if len(parts) != 6:
@@ -1383,7 +1385,7 @@ def run_z3_suite(
     recipe: MetaRecipe = MetaRecipe(),
 ) -> list[dict]:
     """Run Z3 fixed weights benchmark suite."""
-    device = "cuda" if device == "auto" and torch.cuda.is_available() else device
+    device = get_device(device)
 
     config = {
         "coordinates": coordinates,

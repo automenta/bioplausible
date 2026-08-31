@@ -12,10 +12,12 @@ repos:
         language: system
         types: [python]
       - id: pyright
-        name: pyright
-        entry: uv run pyright
+        name: pyright (ontology strict gate)
+        entry: uv run pyright computronium/ontology
         language: system
         types: [python]
+        pass_filenames: false
+        always_run: true
       - id: pytest-fast
         name: pytest (property tests)
         entry: uv run pytest tests/property/ -q

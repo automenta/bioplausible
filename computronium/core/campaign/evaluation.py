@@ -238,8 +238,14 @@ def build_coordinate_system(
     input_dim: int = DEFAULT_INPUT_DIM,
     output_dim: int = DEFAULT_NUM_CLASSES,
     hidden_dims: tuple[int, ...] = (16,),
+    device: str | torch.device | None = None,
 ) -> JointSystem:
-    """Compose a JointSystem from a 6-D coordinate string."""
+    """Compose a JointSystem from a 6-D coordinate string.
+
+    Args:
+        device: Optional target device (``None`` = build in place, typically
+            CPU; ``"auto"`` = best available backend).
+    """
     parts = coordinate.split("/")
     if len(parts) != COORDINATE_AXES:
         raise UnsupportedCoordinateError("parts", coordinate)
@@ -258,6 +264,7 @@ def build_coordinate_system(
         plasticity_cfg,
         credit_cfg,
         update_cfg,
+        device=device,
     )
 
 
@@ -279,10 +286,15 @@ def evaluate_episode(  # noqa: PLR0913 - shape triple always defaults
     beat inventing a container type for two call sites. ``guard_threshold``
     gates kill decisions on the windowed-growth probe (``None`` records the
     statistic without deciding — harness/capability-probe mode).
+
+    Batches are placed on the joint system's parameter device — the episode
+    always executes where the system lives (no silent CPU fallback).
     """
     x, y = episode_batch(
         episode, batch_size=batch_size, input_dim=input_dim, num_classes=num_classes
     )
+    device = joint.device
+    x, y = x.to(device), y.to(device)
     started = time.perf_counter()
     metrics = joint.train_step(x, y)
     latency = time.perf_counter() - started

@@ -586,6 +586,18 @@ class GradientCredit:
             for p, g in zip(params, grads, strict=True)
         ]
 
+    def surrogate_objective(
+        self,
+        free_state: SystemState,
+        nudged_state: SystemState,
+        geometry: Geometry,
+    ) -> Tensor:
+        """The nudged loss is the surrogate objective for true gradients."""
+        loss = nudged_state.loss
+        if isinstance(loss, Tensor):
+            return loss
+        return torch.tensor(0.0)
+
 
 # Alias for backwards compatibility
 BackpropCredit = GradientCredit

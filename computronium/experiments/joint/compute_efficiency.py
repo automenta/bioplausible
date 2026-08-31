@@ -18,6 +18,8 @@ import time
 from pathlib import Path
 
 import torch
+
+from computronium.core.utils.device import get_device
 import torch.nn.functional as F
 from torch import Tensor, nn
 
@@ -37,7 +39,7 @@ def create_moe_task(
     Each input belongs to one expert (cluster).
     Target is expert index.
     """
-    device = torch.device(device)
+    device = get_device(device)
 
     # Generate cluster centers
     centers = torch.randn(num_experts, input_dim, device=device) * 2
@@ -188,7 +190,7 @@ def evaluate_compute_efficiency(
 
     torch.manual_seed(seed)
     random.seed(seed)
-    device = torch.device(device)
+    device = get_device(device)
     start_time = time.perf_counter()
 
     parts = coordinate.split("/")
@@ -327,7 +329,7 @@ def run_compute_efficiency_suite(
     device: str = "auto",
 ) -> list[dict]:
     """Run compute efficiency benchmark suite."""
-    device = "cuda" if device == "auto" and torch.cuda.is_available() else device
+    device = get_device(device)
 
     all_results = []
 

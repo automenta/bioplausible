@@ -6,8 +6,9 @@ import dataclasses
 from typing import TYPE_CHECKING
 
 import torch
-from torch import Tensor
+from torch import Tensor, nn
 
+from computronium.core.utils.device import get_device
 from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
@@ -85,8 +86,14 @@ def compose_system[
     dynamics: TD,
     credit: TC,
     update: TU,
+    *,
+    device: str | torch.device | None = None,
 ) -> System[TS, TG, TD, TC, TU]:
     """Compose a System from five orthogonal components.
+
+    Args:
+        device: Optional target device; parameters are placed on it at
+            construction (``None`` keeps components where they were built).
 
     This is the primary factory function for creating computronium systems
     from the 5-D ontology primitives.
@@ -271,10 +278,39 @@ def compose_system[
             """Return an iterator over all learnable parameters (from geometry)."""
             return self.geometry.params.values()
 
+        def named_parameters(self):
+            """Return an iterator over (name, parameter) pairs (nn.Module compat)."""
+            return iter(self.geometry.params.items())
+
+        def zero_grad(self, set_to_none: bool = True) -> None:
+            """Clear parameter gradients (torch.optim.Optimizer compat)."""
+            for param in self.geometry.params.values():
+                if set_to_none:
+                    param.grad = None
+                elif param.grad is not None:
+                    param.grad.zero_()
+
+        @property
+        def device(self) -> torch.device:
+            """Device of the learnable parameters (CPU when unparameterized)."""
+            for param in self.geometry.params.values():
+                return param.device
+            return torch.device("cpu")
+
         def to(self, device: torch.device | str) -> _ComposedSystem:
-            """Move learnable parameters to ``device`` (nn.Module compatibility)."""
-            for name, param in self.geometry.params.items():
-                self.geometry.params[name] = param.to(device)
+            """Move learnable parameters to ``device`` (nn.Module semantics).
+
+            The geometry is an ``nn.Module``; ``Module.to`` rebinds its
+            parameters in place, unlike a plain ``param.to`` which would only
+            mutate the returned dict view.
+            """
+            target = get_device(device)
+            geometry = self.geometry
+            if isinstance(geometry, nn.Module):
+                geometry.to(target)
+            self.substrate.config = dataclasses.replace(
+                self.substrate.config, device=str(target)
+            )
             return self
 
         @property
@@ -292,13 +328,16 @@ def compose_system[
             self._training = False
             return self
 
-    return _ComposedSystem[TS, TG, TD, TC, TU](
+    system = _ComposedSystem[TS, TG, TD, TC, TU](
         substrate=substrate,
         geometry=geometry,
         dynamics=dynamics,
         credit=credit,
         update=update,
-    )  # type: ignore[return-value]
+    )
+    if device is not None:
+        system.to(device)
+    return system  # type: ignore[return-value]
 
 
 # Convenience factory for common compositions

@@ -6,6 +6,8 @@ with direct composition of the 5 Protocols, bypassing ModelAdapter.
 
 from __future__ import annotations
 
+import torch
+
 from computronium.core.system_trainer import compose_system
 from computronium.ontology import (
     CreditAssignmentConfig,
@@ -31,7 +33,7 @@ def create_native_holomorphic_ep(
     beta: float = 0.5,
     settle_steps: int = 30,
     lr: float = 0.01,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Create a Holomorphic Equilibrium Propagation system using native 5-D composition.
 
@@ -47,7 +49,7 @@ def create_native_holomorphic_ep(
         beta: Nudge strength for energy-based methods
         settle_steps: Maximum settling iterations
         lr: Learning rate
-        **kwargs: Additional arguments (ignored, for compatibility)
+        device: Target device for parameter placement
 
     Returns:
         A composed System with QuantumSubstrate (complex64) + RecurrentGeometry
@@ -83,7 +85,9 @@ def create_native_holomorphic_ep(
         )
     )
 
-    return compose_system(substrate, geometry, dynamics, credit, update)
+    return compose_system(
+        substrate, geometry, dynamics, credit, update, device=device
+    )
 
 
 def create_native_directed_ep(
@@ -95,7 +99,7 @@ def create_native_directed_ep(
     settle_steps: int = 30,
     lr: float = 0.01,
     feedback_scale: float = 0.01,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Create a Directed Equilibrium Propagation system using native 5-D composition.
 
@@ -112,7 +116,7 @@ def create_native_directed_ep(
         settle_steps: Maximum settling iterations
         lr: Learning rate
         feedback_scale: Scaling factor for random feedback matrices
-        **kwargs: Additional arguments (ignored, for compatibility)
+        device: Target device for parameter placement
 
     Returns:
         A composed System with DigitalSubstrate + RecurrentGeometry
@@ -149,7 +153,9 @@ def create_native_directed_ep(
         )
     )
 
-    return compose_system(substrate, geometry, dynamics, credit, update)
+    return compose_system(
+        substrate, geometry, dynamics, credit, update, device=device
+    )
 
 
 def create_native_finite_nudge_ep(
@@ -160,7 +166,7 @@ def create_native_finite_nudge_ep(
     beta: float = 1.0,  # Large beta (finite nudge) is the defining feature
     settle_steps: int = 30,
     lr: float = 0.01,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Create a Finite-Nudge Equilibrium Propagation system using native 5-D composition.
 
@@ -176,7 +182,7 @@ def create_native_finite_nudge_ep(
         beta: Nudge strength (typically >= 1.0 for finite nudge)
         settle_steps: Maximum settling iterations
         lr: Learning rate
-        **kwargs: Additional arguments (ignored, for compatibility)
+        device: Target device for parameter placement
 
     Returns:
         A composed System with DigitalSubstrate + RecurrentGeometry
@@ -210,7 +216,9 @@ def create_native_finite_nudge_ep(
         )
     )
 
-    return compose_system(substrate, geometry, dynamics, credit, update)
+    return compose_system(
+        substrate, geometry, dynamics, credit, update, device=device
+    )
 
 
 # Aliases for registry registration

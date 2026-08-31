@@ -1,0 +1,29 @@
+{
+  "typeCheckingMode": "basic",
+  "pythonVersion": "3.14",
+  "include": [
+    "computronium"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "archive",
+    "computronium.egg-info"
+  ],
+  "executionEnvironments": [
+    {
+      "root": "computronium/ontology",
+      "typeCheckingMode": "standard",
+      "reportIncompatibleMethodOverride": "error",
+      "reportIncompatibleVariableOverride": "error",
+      "reportPossiblyUnboundVariable": "error",
+      "reportUnusedImport": "error",
+      "reportUnusedFunction": "error",
+      "reportUnusedVariable": "error",
+      "reportMissingTypeArgument": "error",
+      "reportPrivateUsage": "none",
+      "extraPaths": [
+        "."
+      ]
+    }
+  ]
+}

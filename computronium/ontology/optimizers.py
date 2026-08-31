@@ -11,7 +11,7 @@ from torch.optim import RMSprop as TorchRMSprop
 
 from computronium.core.registry import register_param_update
 
-__all__ = ["Adam", "AdamW", "RMSprop", "SGD"]
+__all__ = ["SGD", "Adam", "AdamW", "RMSprop"]
 
 
 @register_param_update("sgd", family="optimizer")

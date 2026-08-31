@@ -6,22 +6,10 @@ from abc import abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 import torch
 from torch import Tensor
-
-if TYPE_CHECKING:
-    from computronium.core.substrates.complex_substrate import (
-        ComplexSubstrate as ComplexSubstrateImpl,
-    )
-    from computronium.core.substrates.sparse_substrate import (
-        SparseSubstrate as SparseSubstrateImpl,
-    )
-    from computronium.core.substrates.ternary_substrate import (
-        TernarySubstrate as TernarySubstrateImpl,
-    )
-
 
 # ============================================================
 # Substrate Type and Configuration
@@ -294,11 +282,6 @@ class Substrate(Protocol):
 # ============================================================
 # Default/Reference Substrate Implementations
 # ============================================================
-
-
-def _set_param_name(tensor: Tensor, name: str) -> None:
-    """Tag a parameter tensor with its substrate keying name."""
-    setattr(tensor, "_param_name", name)
 
 
 class DigitalSubstrate:

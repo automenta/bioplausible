@@ -6,8 +6,9 @@ import dataclasses
 from typing import TYPE_CHECKING
 
 import torch
-from torch import Tensor
+from torch import Tensor, nn
 
+from computronium.core.utils.device import get_device
 from computronium.core.joint.transition import NullPlasticity, PlasticityConfig
 from computronium.core.plasticity import (
     NullPlasticity as _NullPlasticity,
@@ -99,8 +100,17 @@ def compose_joint_system[
     plasticity: TP,
     credit: TC,
     update: TU,
+    *,
+    device: str | torch.device | None = None,
 ) -> JointSystem[TS, TG, TD, TP, TC, TU]:
     """Compose a JointSystem from six orthogonal components.
+
+    Args:
+        device: Optional target device; parameters are placed on it at
+            construction (``None`` keeps components where they were built).
+
+    This is the primary factory function for creating computronium joint systems
+    from the 6-D ontology primitives (S ⊗ G ⊗ D ⊗ M ⊗ C ⊗ U).
 
     This is the primary factory function for creating computronium joint systems
     from the 6-D ontology primitives (S ⊗ G ⊗ D ⊗ M ⊗ C ⊗ U).
@@ -190,6 +200,27 @@ def compose_joint_system[
                 x,
                 y,
             )
+
+        @property
+        def device(self) -> torch.device:
+            """Device of the learnable parameters (CPU when unparameterized)."""
+            for param in self.geometry.params.values():
+                return param.device
+            return torch.device("cpu")
+
+        def to(self, device: torch.device | str) -> _JointSystem:
+            """Move learnable parameters and plasticity state to ``device``."""
+            target = get_device(device)
+            geometry = self.geometry
+            if isinstance(geometry, nn.Module):
+                geometry.to(target)
+            mover = getattr(self.plasticity, "to", None)
+            if callable(mover):
+                mover(target)
+            self.substrate.config = dataclasses.replace(
+                self.substrate.config, device=str(target)
+            )
+            return self
 
         def forward(self, x: Tensor) -> Tensor:
             from computronium.core.pipeline import run_forward
@@ -307,6 +338,8 @@ def compose_joint_system[
         from computronium.core.system_trainer.factory import compose_system
 
         base_system = compose_system(substrate, geometry, dynamics, credit, update)
+        if device is not None:
+            base_system.to(device)
 
         # Wrap with a null plasticity interface
         class _NullJointSystem[
@@ -333,6 +366,16 @@ def compose_joint_system[
 
             def forward(self, x: Tensor) -> Tensor:
                 return self._system.forward(x)
+
+            @property
+            def device(self) -> torch.device:
+                """Device of the learnable parameters."""
+                return self._system.device
+
+            def to(self, device: torch.device | str) -> _NullJointSystem:
+                """Move learnable parameters to ``device``."""
+                self._system.to(device)
+                return self
 
             @property
             def context(self) -> SystemContext:
@@ -407,14 +450,17 @@ def compose_joint_system[
 
         return _NullJointSystem[TS, TG, TD, TC, TU](base_system)  # type: ignore[return-value]
 
-    return _JointSystem[TS, TG, TD, TP, TC, TU](
+    joint = _JointSystem[TS, TG, TD, TP, TC, TU](
         substrate=substrate,
         geometry=geometry,
         dynamics=dynamics,
         plasticity=plasticity,
         credit=credit,
         update=update,
-    )  # type: ignore[return-value]
+    )
+    if device is not None:
+        joint.to(device)
+    return joint  # type: ignore[return-value]
 
 
 def compose_joint_system_from_configs(
@@ -424,6 +470,8 @@ def compose_joint_system_from_configs(
     plasticity: PlasticityConfig,
     credit: CreditAssignmentConfig,
     update: ParameterUpdateConfig,
+    *,
+    device: str | torch.device | None = None,
 ) -> JointSystem[
     Substrate,
     Geometry,
@@ -433,6 +481,10 @@ def compose_joint_system_from_configs(
     ParameterUpdate,
 ]:
     """Compose a JointSystem from six configuration objects.
+
+    Args:
+        device: Optional target device; parameters are placed on it at
+            construction (``None`` keeps components where they were built).
 
     This is the inverse of extract_config(), enabling the round-trip:
     JointSystem --extract_config--> configs --compose_joint_system_from_configs--> JointSystem
@@ -519,6 +571,7 @@ def compose_joint_system_from_configs(
         plasticity_instance,
         credit_instance,
         update_instance,
+        device=device,
     )
 
 

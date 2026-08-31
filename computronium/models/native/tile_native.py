@@ -6,6 +6,8 @@ composition of the 5 Protocols, bypassing ModelAdapter.
 
 from __future__ import annotations
 
+import torch
+
 from computronium.core.system_trainer import compose_system
 from computronium.ontology import (
     CreditAssignmentConfig,
@@ -37,7 +39,7 @@ def create_native_tile_ep(
     lr: float = 0.001,
     beta: float = 0.1,
     settle_steps: int = 30,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Create a Tile EP (Equilibrium Propagation) system using native 5-D composition.
 
@@ -51,7 +53,7 @@ def create_native_tile_ep(
         lr: Learning rate
         beta: Nudge strength
         settle_steps: Maximum settling iterations
-        **kwargs: Additional arguments (ignored, for compatibility)
+        device: Target device for parameter placement
 
     Returns:
         A composed System with TileGeometry + EnergyMinimizationDynamics
@@ -88,7 +90,9 @@ def create_native_tile_ep(
         )
     )
 
-    return compose_system(substrate, geometry, dynamics, credit, update)
+    return compose_system(
+        substrate, geometry, dynamics, credit, update, device=device
+    )
 
 
 def create_native_tile_fa(
@@ -99,7 +103,7 @@ def create_native_tile_fa(
     neurons_per_tile: int = 48,
     tiles_per_layer: int = 4,
     lr: float = 0.001,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Create a Tile FA (Feedback Alignment) system using native 5-D composition.
 
@@ -111,7 +115,7 @@ def create_native_tile_fa(
         neurons_per_tile: Neurons per tile
         tiles_per_layer: Tiles per layer
         lr: Learning rate
-        **kwargs: Additional arguments (ignored, for compatibility)
+        device: Target device for parameter placement
 
     Returns:
         A composed System with TileGeometry + InstantaneousDynamics
@@ -144,7 +148,9 @@ def create_native_tile_fa(
         )
     )
 
-    return compose_system(substrate, geometry, dynamics, credit, update)
+    return compose_system(
+        substrate, geometry, dynamics, credit, update, device=device
+    )
 
 
 def create_native_tile_tp(
@@ -157,7 +163,7 @@ def create_native_tile_tp(
     lr: float = 0.001,
     beta: float = 0.1,
     settle_steps: int = 30,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Create a Tile TP (Target Propagation) system using native 5-D composition.
 
@@ -171,7 +177,7 @@ def create_native_tile_tp(
         lr: Learning rate
         beta: Nudge strength
         settle_steps: Maximum settling iterations
-        **kwargs: Additional arguments (ignored, for compatibility)
+        device: Target device for parameter placement
 
     Returns:
         A composed System with TileGeometry + PredictiveSettlingDynamics
@@ -209,7 +215,9 @@ def create_native_tile_tp(
         )
     )
 
-    return compose_system(substrate, geometry, dynamics, credit, update)
+    return compose_system(
+        substrate, geometry, dynamics, credit, update, device=device
+    )
 
 
 def create_native_tile_snn(
@@ -220,7 +228,7 @@ def create_native_tile_snn(
     neurons_per_tile: int = 48,
     tiles_per_layer: int = 4,
     lr: float = 0.001,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Create a Tile SNN (Spiking Neural Network) system using native 5-D composition.
 
@@ -232,7 +240,7 @@ def create_native_tile_snn(
         neurons_per_tile: Neurons per tile
         tiles_per_layer: Tiles per layer
         lr: Learning rate
-        **kwargs: Additional arguments (ignored, for compatibility)
+        device: Target device for parameter placement
 
     Returns:
         A composed System with TileGeometry + SpikeIntegrationDynamics
@@ -269,7 +277,9 @@ def create_native_tile_snn(
         )
     )
 
-    return compose_system(substrate, geometry, dynamics, credit, update)
+    return compose_system(
+        substrate, geometry, dynamics, credit, update, device=device
+    )
 
 
 def create_native_tile_hebbian(
@@ -280,7 +290,7 @@ def create_native_tile_hebbian(
     neurons_per_tile: int = 48,
     tiles_per_layer: int = 4,
     lr: float = 0.001,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Create a Tile Hebbian system using native 5-D composition.
 
@@ -292,7 +302,7 @@ def create_native_tile_hebbian(
         neurons_per_tile: Neurons per tile
         tiles_per_layer: Tiles per layer
         lr: Learning rate
-        **kwargs: Additional arguments (ignored, for compatibility)
+        device: Target device for parameter placement
 
     Returns:
         A composed System with TileGeometry + InstantaneousDynamics
@@ -324,7 +334,9 @@ def create_native_tile_hebbian(
         )
     )
 
-    return compose_system(substrate, geometry, dynamics, credit, update)
+    return compose_system(
+        substrate, geometry, dynamics, credit, update, device=device
+    )
 
 
 def create_native_tile_pc(
@@ -337,7 +349,7 @@ def create_native_tile_pc(
     lr: float = 0.001,
     beta: float = 0.1,
     settle_steps: int = 30,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Create a Tile Predictive Coding system using native 5-D composition.
 
@@ -351,7 +363,7 @@ def create_native_tile_pc(
         lr: Learning rate
         beta: Nudge strength
         settle_steps: Maximum settling iterations
-        **kwargs: Additional arguments (ignored, for compatibility)
+        device: Target device for parameter placement
 
     Returns:
         A composed System with TileGeometry + PredictiveSettlingDynamics
@@ -388,7 +400,9 @@ def create_native_tile_pc(
         )
     )
 
-    return compose_system(substrate, geometry, dynamics, credit, update)
+    return compose_system(
+        substrate, geometry, dynamics, credit, update, device=device
+    )
 
 
 def create_native_tile_gnn(
@@ -401,7 +415,7 @@ def create_native_tile_gnn(
     lr: float = 0.001,
     beta: float = 0.1,
     settle_steps: int = 30,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Create a Tile GNN system using native 5-D composition.
 
@@ -415,7 +429,7 @@ def create_native_tile_gnn(
         lr: Learning rate
         beta: Nudge strength
         settle_steps: Maximum settling iterations
-        **kwargs: Additional arguments (ignored, for compatibility)
+        device: Target device for parameter placement
 
     Returns:
         A composed System with TileGeometry + EnergyMinimizationDynamics
@@ -452,7 +466,9 @@ def create_native_tile_gnn(
         )
     )
 
-    return compose_system(substrate, geometry, dynamics, credit, update)
+    return compose_system(
+        substrate, geometry, dynamics, credit, update, device=device
+    )
 
 
 # Aliases for registry registration

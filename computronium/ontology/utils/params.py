@@ -37,8 +37,3 @@ def apply_pseudo_gradients(
         param = params[name]
         updated[name] = transform(name, param, grad.detach().to(param.device))
     return updated
-
-
-def _set_param_name(tensor: Tensor, name: str) -> None:
-    """Attach a name attribute to a tensor for debugging/introspection."""
-    tensor._param_name = name  # type: ignore[attr-defined]

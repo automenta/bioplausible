@@ -132,7 +132,7 @@ class SubstrateSettleKernel:
 
             total = pre + top_down
 
-            if new_velocity is not None:
+            if new_velocity is not None and velocity is not None:
                 total = self.momentum * velocity[i] + total
                 new_velocity.append(total.detach().clone())
 

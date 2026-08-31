@@ -19,6 +19,8 @@ Supports multiple FA variants via the unified RandomProjectionsCredit:
 
 from __future__ import annotations
 
+import torch
+
 from computronium.core.system_trainer import compose_system
 from computronium.ontology import (
     CreditAssignmentConfig,
@@ -41,7 +43,7 @@ def create_native_fa_mlp(
     num_layers: int = 2,
     lr: float = 0.001,
     feedback_scale: float = 0.01,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Create a Feedback Alignment system using native 5-D composition.
 
@@ -52,7 +54,7 @@ def create_native_fa_mlp(
         num_layers: Number of hidden layers
         lr: Learning rate
         feedback_scale: Scale of feedback weights
-        **kwargs: Additional arguments (ignored, for compatibility)
+        device: Target device for parameter placement
 
     Returns:
         A composed System with FeedforwardGeometry + InstantaneousDynamics
@@ -86,7 +88,7 @@ def create_native_fa_mlp(
         )
     )
 
-    return compose_system(substrate, geometry, dynamics, credit, update)
+    return compose_system(substrate, geometry, dynamics, credit, update, device=device)
 
 
 # Convenience factory functions for each variant (all use the same
@@ -100,7 +102,7 @@ def create_native_fa_fixed(
     num_layers: int = 2,
     lr: float = 0.001,
     feedback_scale: float = 0.01,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Standard fixed random Feedback Alignment."""
     return create_native_fa_mlp(
@@ -110,7 +112,7 @@ def create_native_fa_fixed(
         num_layers,
         lr,
         feedback_scale=feedback_scale,
-        **kwargs,
+        device=device,
     )
 
 
@@ -121,7 +123,7 @@ def create_native_fa_adaptive(
     num_layers: int = 2,
     lr: float = 0.001,
     feedback_scale: float = 0.01,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Adaptive Feedback Alignment."""
     return create_native_fa_mlp(
@@ -131,7 +133,7 @@ def create_native_fa_adaptive(
         num_layers,
         lr,
         feedback_scale=feedback_scale,
-        **kwargs,
+        device=device,
     )
 
 
@@ -142,7 +144,7 @@ def create_native_fa_stochastic(
     num_layers: int = 2,
     lr: float = 0.001,
     feedback_scale: float = 0.01,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Stochastic Feedback Alignment."""
     return create_native_fa_mlp(
@@ -152,7 +154,7 @@ def create_native_fa_stochastic(
         num_layers,
         lr,
         feedback_scale=feedback_scale,
-        **kwargs,
+        device=device,
     )
 
 
@@ -163,7 +165,7 @@ def create_native_fa_contrastive(
     num_layers: int = 2,
     lr: float = 0.001,
     feedback_scale: float = 0.01,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Contrastive Feedback Alignment."""
     return create_native_fa_mlp(
@@ -173,7 +175,7 @@ def create_native_fa_contrastive(
         num_layers,
         lr,
         feedback_scale=feedback_scale,
-        **kwargs,
+        device=device,
     )
 
 
@@ -184,7 +186,7 @@ def create_native_fa_sign_symmetric(
     num_layers: int = 2,
     lr: float = 0.001,
     feedback_scale: float = 0.01,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Sign-Symmetric Feedback Alignment."""
     return create_native_fa_mlp(
@@ -194,7 +196,7 @@ def create_native_fa_sign_symmetric(
         num_layers,
         lr,
         feedback_scale=feedback_scale,
-        **kwargs,
+        device=device,
     )
 
 
@@ -205,7 +207,7 @@ def create_native_fa_direct(
     num_layers: int = 2,
     lr: float = 0.001,
     feedback_scale: float = 0.01,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Direct Feedback Alignment (DFA)."""
     return create_native_fa_mlp(
@@ -215,7 +217,7 @@ def create_native_fa_direct(
         num_layers,
         lr,
         feedback_scale=feedback_scale,
-        **kwargs,
+        device=device,
     )
 
 
@@ -226,7 +228,7 @@ def create_native_fa_energy_guided(
     num_layers: int = 2,
     lr: float = 0.001,
     feedback_scale: float = 0.01,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Energy-Guided Feedback Alignment."""
     return create_native_fa_mlp(
@@ -236,7 +238,7 @@ def create_native_fa_energy_guided(
         num_layers,
         lr,
         feedback_scale=feedback_scale,
-        **kwargs,
+        device=device,
     )
 
 
@@ -247,7 +249,7 @@ def create_native_fa_energy_minimizing(
     num_layers: int = 2,
     lr: float = 0.001,
     feedback_scale: float = 0.01,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Energy-Minimizing Feedback Alignment."""
     return create_native_fa_mlp(
@@ -257,7 +259,7 @@ def create_native_fa_energy_minimizing(
         num_layers,
         lr,
         feedback_scale=feedback_scale,
-        **kwargs,
+        device=device,
     )
 
 
@@ -268,7 +270,7 @@ def create_native_fa_equilibrium_alignment(
     num_layers: int = 2,
     lr: float = 0.001,
     feedback_scale: float = 0.01,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Equilibrium Alignment."""
     return create_native_fa_mlp(
@@ -278,7 +280,7 @@ def create_native_fa_equilibrium_alignment(
         num_layers,
         lr,
         feedback_scale=feedback_scale,
-        **kwargs,
+        device=device,
     )
 
 
@@ -289,7 +291,7 @@ def create_native_fa_layerwise_equilibrium(
     num_layers: int = 2,
     lr: float = 0.001,
     feedback_scale: float = 0.01,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Layerwise Equilibrium FA."""
     return create_native_fa_mlp(
@@ -299,7 +301,7 @@ def create_native_fa_layerwise_equilibrium(
         num_layers,
         lr,
         feedback_scale=feedback_scale,
-        **kwargs,
+        device=device,
     )
 
 
@@ -310,7 +312,7 @@ def create_native_fa_deep_dfa(
     num_layers: int = 2,
     lr: float = 0.001,
     feedback_scale: float = 0.01,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Deep DFA-EqProp."""
     return create_native_fa_mlp(
@@ -320,7 +322,7 @@ def create_native_fa_deep_dfa(
         num_layers,
         lr,
         feedback_scale=feedback_scale,
-        **kwargs,
+        device=device,
     )
 
 
@@ -337,3 +339,20 @@ native_fa_energy_minimizing = create_native_fa_energy_minimizing
 native_fa_equilibrium_alignment = create_native_fa_equilibrium_alignment
 native_fa_layerwise_equilibrium = create_native_fa_layerwise_equilibrium
 native_fa_deep_dfa = create_native_fa_deep_dfa
+
+
+# All FA variants for parametrized verification (placement guard, parity).
+FA_FACTORY_VARIANTS = (
+    create_native_fa_mlp,
+    create_native_fa_fixed,
+    create_native_fa_adaptive,
+    create_native_fa_stochastic,
+    create_native_fa_contrastive,
+    create_native_fa_sign_symmetric,
+    create_native_fa_direct,
+    create_native_fa_energy_guided,
+    create_native_fa_energy_minimizing,
+    create_native_fa_equilibrium_alignment,
+    create_native_fa_layerwise_equilibrium,
+    create_native_fa_deep_dfa,
+)

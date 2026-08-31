@@ -6,17 +6,16 @@ import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Protocol, TypeVar, runtime_checkable
+from typing import Protocol, TypeVar, cast, runtime_checkable
 
 import torch
 from torch import Tensor, nn
 
-from computronium.core.registry import ComputeProfile
+from computronium.core.registry import ComponentMetadata, ComputeProfile
 from computronium.ontology.credit import (
     CreditAssignment,
     CreditAssignmentConfig,
     GradientCredit,
-    Phase,
 )
 from computronium.ontology.dynamics import (
     InstantaneousDynamics,
@@ -24,56 +23,22 @@ from computronium.ontology.dynamics import (
     StateDynamicsConfig,
 )
 from computronium.ontology.geometry import FeedforwardGeometry, Geometry, GeometryConfig
-from computronium.ontology.substrate import DigitalSubstrate, Substrate, SubstrateConfig
+from computronium.ontology.substrate import (
+    AnalogSubstrate,
+    DigitalSubstrate,
+    MemristiveSubstrate,
+    NeuromorphicSubstrate,
+    OpticalSubstrate,
+    QuantumSubstrate,
+    Substrate,
+    SubstrateConfig,
+)
 from computronium.ontology.update import (
     EuclideanUpdate,
     ParameterUpdate,
     ParameterUpdateConfig,
 )
 from computronium.state import PlasticityConfig
-
-# ============================================================
-# Helper Functions
-# ============================================================
-
-
-def _set_param_name(tensor: Tensor, name: str) -> None:
-    """Tag a parameter tensor with its substrate keying name."""
-    setattr(tensor, "_param_name", name)
-
-
-def _learnable_weight_names(params: dict[str, Tensor]) -> list[str]:
-    """Parameter names that receive pseudo-gradients (2-D weight matrices).
-
-    Credits emit exactly one pseudo-gradient per learnable weight, in this
-    order. Biases and other auxiliary parameters never receive gradients
-    from the local learning rules.
-    """
-    return [n for n, p in params.items() if "weight" in n and p.ndim == 2]
-
-
-def apply_pseudo_gradients(
-    params: dict[str, Tensor],
-    pseudo_grads: list[Tensor],
-    transform: Callable[[str, Tensor, Tensor], Tensor],
-) -> dict[str, Tensor]:
-    """Pair pseudo-gradients with their parameters by learnable-weight order.
-
-    The single choke point for update rules: non-weight parameters pass
-    through untouched (fixes the index-pairing crash on bias interleaving),
-    surplus gradients are ignored, and gradients are detached — pseudo-
-    gradients are consumed as plain values everywhere in this pipeline.
-
-    Args:
-        params: Current parameters (name -> tensor).
-        pseudo_grads: One pseudo-gradient per learnable weight.
-        transform: ``(name, param, grad) -> updated_param`` for matched pairs.
-    """
-    updated = dict(params)
-    for name, grad in zip(_learnable_weight_names(params), pseudo_grads):
-        updated[name] = transform(name, params[name], grad.detach())
-    return updated
-
 
 # ============================================================
 # SystemState: Mutable state for 5-D pipeline
@@ -186,7 +151,7 @@ class System(Protocol[TS, TG, TD, TC, TU]):
 
         return run_forward(self.substrate, self.geometry, self.dynamics, x)
 
-    def to_spec(self) -> dict:
+    def to_spec(self) -> dict[str, object]:
         """Serialize the System to a specification dictionary.
 
         Returns:
@@ -195,7 +160,7 @@ class System(Protocol[TS, TG, TD, TC, TU]):
         ...
 
     @classmethod
-    def from_spec(cls, spec: dict) -> System:
+    def from_spec(cls, spec: dict[str, object]) -> System[TS, TG, TD, TC, TU]:
         """Reconstruct a System from a specification dictionary.
 
         Args:
@@ -512,7 +477,7 @@ class SystemConfig:
             )
 
     @classmethod
-    def valid_combinations(cls) -> list[dict]:
+    def valid_combinations(cls) -> list[dict[str, str]]:
         """Return all valid 6-D coordinate combinations for AutoScientist.
 
         Returns:
@@ -738,7 +703,9 @@ class ModelAdapter:
                     return tol
         return FAMILY_TOLERANCES["default"]
 
-    def to_system(self) -> System:
+    def to_system(
+        self,
+    ) -> System[Substrate, Geometry, StateDynamics, CreditAssignment, ParameterUpdate]:
         """Project model into 5-D ontology (best-effort inference)."""
         substrate = self._infer_substrate()
         geometry = self._infer_geometry()
@@ -1047,9 +1014,12 @@ class _AdaptedSystem:
         self._optimizer: torch.optim.Optimizer | None = None
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]:
-        # Delegate to model's training step if available
-        if hasattr(self._model, "train_step"):
-            return self._model.train_step(x, y)
+        model_train_step = cast(
+            "Callable[[Tensor, Tensor], dict[str, float]] | None",
+            getattr(self._model, "train_step", None),
+        )
+        if model_train_step is not None:
+            return model_train_step(x, y)
         from computronium.core.trainer import bptt_step
 
         if self._optimizer is None:
@@ -1059,12 +1029,15 @@ class _AdaptedSystem:
         out = bptt_step(self._model, self._optimizer, x, y)
         logits: Tensor = out["logits"]  # type: ignore[assignment]
         acc = (logits.argmax(-1) == y).float().mean().item()
-        return {"loss": float(out["loss"]), "accuracy": acc}
+        loss_raw = out["loss"]
+        if not isinstance(loss_raw, int | float | Tensor):
+            raise TypeError(f"bptt_step returned non-numeric loss: {type(loss_raw)!r}")
+        return {"loss": float(loss_raw), "accuracy": acc}
 
     def forward(self, x: Tensor) -> Tensor:
         return self._model(x)
 
-    def to_spec(self) -> dict:
+    def to_spec(self) -> dict[str, object]:
         return {
             "schema_version": "1.0",
             "substrate": self.substrate.config.__dict__,
@@ -1075,7 +1048,7 @@ class _AdaptedSystem:
         }
 
     @classmethod
-    def from_spec(cls, spec: dict) -> System:
+    def from_spec(cls, spec: dict[str, object]) -> System[TS, TG, TD, TC, TU]:
         raise NotImplementedError("Cannot reconstruct adapted system from spec")
 
 

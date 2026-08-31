@@ -18,6 +18,8 @@ import time
 from pathlib import Path
 
 import torch
+
+from computronium.core.utils.device import get_device
 from torch import Tensor, nn
 
 from computronium.core.profiling import measure_suite_resources
@@ -36,7 +38,7 @@ def create_switching_task(
     Phase A: Classify by cumulative sum (sum of sequence > 0 -> class 1)
     Phase B: Classify by last symbol (last element > 0 -> class 1)
     """
-    device = torch.device(device)
+    device = get_device(device)
     x = torch.randn(batch_size, seq_len, input_dim, device=device)
 
     if phase == "A":
@@ -190,7 +192,7 @@ def evaluate_adaptation(
 
     torch.manual_seed(seed)
     random.seed(seed)
-    device = torch.device(device)
+    device = get_device(device)
     start_time = time.perf_counter()
 
     parts = coordinate.split("/")
@@ -304,7 +306,7 @@ def run_adaptation_efficiency_suite(
     device: str = "auto",
 ) -> list[dict]:
     """Run adaptation efficiency benchmark suite."""
-    device = "cuda" if device == "auto" and torch.cuda.is_available() else device
+    device = get_device(device)
 
     all_results = []
 

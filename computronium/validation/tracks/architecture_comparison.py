@@ -185,8 +185,7 @@ def track_56_depth_architecture_comparison(verifier) -> TrackResult:
             input_dim=dim,
             hidden_dim=dim,
             output_dim=10,
-            use_spectral_norm=use_sn,
-            max_steps=20,  # Fewer steps for stability
+            settle_steps=20,  # Fewer steps for stability
         )
 
         # Test: can we get gradients to flow back to input?

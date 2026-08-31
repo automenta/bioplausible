@@ -95,10 +95,8 @@ def create_deep_model(
         hidden_dim=hidden_dim,
         output_dim=output_dim,
         num_layers=1,
-        max_steps=depth,
-        use_spectral_norm=True,
-        beta=0.5,
         settle_steps=depth,
+        beta=0.5,
         lr=0.01,
     )
 

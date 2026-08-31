@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 from computronium.core.logging import get_logger
 from computronium.core.utils.device import get_device
-from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
+from computronium.core.pipeline import apply_autograd_update
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 from computronium.models.native.sparse_eqprop_native import create_native_sparse_eqprop
 from computronium.models.native.ternary_eqprop_native import (
@@ -242,13 +242,9 @@ def track_18_thermodynamic_dna(verifier) -> TrackResult:
         input_dim,
         hidden_dim,
         output_dim,
-        use_spectral_norm=True,
         beta=0.5,
         settle_steps=30,
         lr=0.01,
-    )
-    optimizer = create_optimizer(
-        model, OptimizerConfig(name="sgd", lr=0.01, weight_decay=0.0)
     )
 
     # Thermodynamic "Temperature" - controls stochastic noise
@@ -265,7 +261,7 @@ def track_18_thermodynamic_dna(verifier) -> TrackResult:
         T = T_start - (T_start - T_end) * (epoch / verifier.epochs)
 
         model.train()
-        optimizer.zero_grad()
+        model.zero_grad()
 
         # Inject thermal noise during forward pass logic manually.
         # "Temperature" in this context creates a noisy trajectory.
@@ -302,7 +298,7 @@ def track_18_thermodynamic_dna(verifier) -> TrackResult:
                 if p.grad is not None:
                     update_cost += p.grad.pow(2).mean().item()
 
-        optimizer.step()
+        apply_autograd_update(model)
 
         total_energy = metabolic_cost + update_cost
 

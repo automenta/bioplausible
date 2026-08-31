@@ -31,7 +31,14 @@ if TYPE_CHECKING:
 
 type PhaseStates = Mapping[Phase, SystemState]
 
-__all__ = ["forward_pass", "phase_states", "run_forward", "run_train_step", "task_loss"]
+__all__ = [
+    "apply_autograd_update",
+    "forward_pass",
+    "phase_states",
+    "run_forward",
+    "run_train_step",
+    "task_loss",
+]
 
 
 def phase_states(
@@ -152,3 +159,28 @@ def run_forward(
     if acts is None:
         return torch.empty(0)
     return acts[-1] if isinstance(acts, list) else acts
+
+
+def apply_autograd_update(system: object) -> None:
+    """Consolidate autograd gradients through the System's own ParameterUpdate.
+
+    For harnesses that compute a custom task loss outside the standard
+    pipeline (EWC penalties, probe objectives, annealing probes): Δθ must
+    still flow through the composed update rule — never an external torch
+    optimizer, which would bypass the U-axis entirely.
+    """
+    from computronium.ontology.utils import _learnable_weight_names
+
+    geometry = system.geometry  # type: ignore[attr-defined]
+    params = geometry.params
+    names = _learnable_weight_names(params)
+    grads = [params[n].grad for n in names]
+    if all(g is None for g in grads):
+        return
+    pseudo_grads = [
+        g if g is not None else torch.zeros_like(params[n])
+        for n, g in zip(names, grads, strict=True)
+    ]
+    geometry.update_params(
+        system.update.step(params, pseudo_grads, geometry)  # type: ignore[attr-defined]
+    )

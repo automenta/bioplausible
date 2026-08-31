@@ -710,11 +710,12 @@ class AutoScientistCampaign:
         """
         from computronium.core.registry import ComponentCategory, Registry
         from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
+        from computronium.core.utils.device import get_device
         from computronium.domains.factory import create_task
 
         task = create_task(
             proposal.task or "mnist",
-            device="cpu",
+            device=str(get_device()),
             quick_mode=True,
             num_workers=0,  # campaign trials are small; workers cost more than they save
         )

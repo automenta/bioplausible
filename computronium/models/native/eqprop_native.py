@@ -6,6 +6,8 @@ composition of the 5 Protocols, bypassing ModelAdapter.
 
 from __future__ import annotations
 
+import torch
+
 from computronium.core.system_trainer import compose_system
 from computronium.ontology import (
     CreditAssignmentConfig,
@@ -29,7 +31,7 @@ def create_native_eqprop_mlp(
     beta: float = 0.5,
     settle_steps: int = 30,
     lr: float = 0.01,
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Create an Equilibrium Propagation system using native 5-D composition.
 
@@ -41,7 +43,7 @@ def create_native_eqprop_mlp(
         beta: Nudge strength for energy-based methods
         settle_steps: Maximum settling iterations
         lr: Learning rate
-        **kwargs: Additional arguments (ignored, for compatibility)
+        device: Target device for parameter placement
 
     Returns:
         A composed System with RecurrentGeometry + EnergyMinimizationDynamics
@@ -75,7 +77,9 @@ def create_native_eqprop_mlp(
         )
     )
 
-    return compose_system(substrate, geometry, dynamics, credit, update)
+    return compose_system(
+        substrate, geometry, dynamics, credit, update, device=device
+    )
 
 
 # Alias for registry registration

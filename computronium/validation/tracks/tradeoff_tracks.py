@@ -32,7 +32,6 @@ from typing import TYPE_CHECKING
 import psutil
 import torch
 import torch.nn.functional as F
-from torch import optim
 
 from computronium.core.logging import get_logger
 from computronium.core.utils.device import get_device
@@ -67,10 +66,13 @@ def get_memory_usage():
     return process.memory_info().rss / 1024 / 1024
 
 
-def train_and_measure(
-    model, optimizer, train_loader, test_loader, epochs, device, name
-):
-    """Train model and measure everything."""
+def train_and_measure(model, train_loader, test_loader, epochs, device, name):
+    """Train a composed System and measure everything.
+
+    Each step runs the full 5-axis pipeline via ``model.train_step`` — the
+    system's own CreditAssignment and ParameterUpdate own the update; no
+    external torch optimizer is involved.
+    """
 
     # Initial memory
     torch.cuda.empty_cache() if torch.cuda.is_available() else None
@@ -98,15 +100,10 @@ def train_and_measure(
             x_batch = x_batch.view(x_batch.size(0), -1)
             x_batch, y_batch = x_batch.to(device), y_batch.to(device)
 
-            optimizer.zero_grad()
-            out = model(x_batch)
-            loss = F.cross_entropy(out, y_batch)
-            loss.backward()
-            optimizer.step()
+            metrics = model.train_step(x_batch, y_batch)
 
-            total_loss += loss.item()
-            pred = out.argmax(dim=1)
-            correct += (pred == y_batch).sum().item()
+            total_loss += metrics["loss"]
+            correct += metrics["accuracy"] * y_batch.size(0)
             total += y_batch.size(0)
 
         train_loss = total_loss / len(train_loader)
@@ -242,16 +239,13 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
             input_dim=784,
             hidden_dim=hidden_dim,
             output_dim=10,
-            use_spectral_norm=True,
-            max_steps=max_steps,
+            settle_steps=max_steps,
         ).to(device)
 
         eqprop_params = count_parameters(eqprop_model)
-        eqprop_opt = optim.Adam(eqprop_model.parameters(), lr=0.001)
 
         eqprop_results = train_and_measure(
             eqprop_model,
-            eqprop_opt,
             train_loader,
             test_loader,
             epochs,
@@ -266,11 +260,9 @@ def track_57_honest_tradeoff_analysis(verifier) -> TrackResult:
         ).to(device)
 
         backprop_params = count_parameters(backprop_model)
-        backprop_opt = optim.Adam(backprop_model.parameters(), lr=0.001)
 
         backprop_results = train_and_measure(
             backprop_model,
-            backprop_opt,
             train_loader,
             test_loader,
             epochs,

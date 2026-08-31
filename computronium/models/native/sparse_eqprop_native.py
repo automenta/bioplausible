@@ -7,6 +7,8 @@ efficient sparse matrix multiplication.
 
 from __future__ import annotations
 
+import torch
+
 from computronium.core.substrates.sparse_substrate import SparseSubstrate
 from computronium.core.system_trainer import compose_system
 from computronium.ontology import (
@@ -37,7 +39,7 @@ def create_native_sparse_eqprop(
     update_mask_frequency: int = 100,
     prune_criterion: str = "magnitude",
     regrow_criterion: str = "gradient",
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Create a Sparse Equilibrium Propagation system using native 5-D composition.
 
@@ -64,7 +66,7 @@ def create_native_sparse_eqprop(
         update_mask_frequency: Steps between mask updates
         prune_criterion: "magnitude", "gradient", "random", or "snip"
         regrow_criterion: "gradient" or "random"
-        **kwargs: Additional arguments (ignored, for compatibility)
+        device: Target device for parameter placement
 
     Returns:
         A composed System with SparseSubstrate + RecurrentGeometry
@@ -106,7 +108,9 @@ def create_native_sparse_eqprop(
         )
     )
 
-    return compose_system(substrate, geometry, dynamics, credit, update)
+    return compose_system(
+        substrate, geometry, dynamics, credit, update, device=device
+    )
 
 
 # Alias for registry registration

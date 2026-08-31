@@ -116,13 +116,14 @@ class FastWeightPlasticity:
         """Create initial plastic state.
 
         Args:
-            context: System context (unused, kept for protocol compliance).
+            context: System context supplying the target device (unused otherwise).
             batch_size: Batch size for the plastic state tensors.
 
         Returns:
             Dict with fast_weights initialized to zero.
         """
-        return {"fast_weights": torch.zeros(batch_size, self.fast_weight_dim)}
+        device = context.device if context is not None else None
+        return {"fast_weights": torch.zeros(batch_size, self.fast_weight_dim, device=device)}
 
     def step(
         self,

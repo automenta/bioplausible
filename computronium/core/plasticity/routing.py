@@ -88,15 +88,16 @@ class RoutingPlasticity:
         """Create initial plastic state.
 
         Args:
-            context: System context (unused, kept for protocol compliance).
+            context: System context supplying the target device (unused otherwise).
             batch_size: Batch size for the plastic state tensors.
 
         Returns:
             Dict with gate_logits and active_routes initialized to zero.
         """
+        device = context.device if context is not None else None
         return {
-            "gate_logits": torch.zeros(batch_size, self.gate_dim),
-            "active_routes": torch.zeros(batch_size, self.gate_dim),
+            "gate_logits": torch.zeros(batch_size, self.gate_dim, device=device),
+            "active_routes": torch.zeros(batch_size, self.gate_dim, device=device),
         }
 
     def step(

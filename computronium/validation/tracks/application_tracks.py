@@ -10,7 +10,7 @@ from torch import nn
 from computronium.config.unified import ModelConfig
 from computronium.core.logging import get_logger
 from computronium.core.losses import compute_accuracy
-from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
+from computronium.core.pipeline import apply_autograd_update
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 
 from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
@@ -57,7 +57,6 @@ def track_20_transfer_learning(verifier) -> TrackResult:
         input_dim=input_dim,
         hidden_dim=hidden_dim,
         output_dim=5,
-        use_spectral_norm=True,
         beta=0.5,
         settle_steps=30,
         lr=0.01,
@@ -73,7 +72,6 @@ def track_20_transfer_learning(verifier) -> TrackResult:
         input_dim=input_dim,
         hidden_dim=hidden_dim,
         output_dim=5,
-        use_spectral_norm=True,
         beta=0.5,
         settle_steps=30,
         lr=0.01,
@@ -104,7 +102,6 @@ def track_20_transfer_learning(verifier) -> TrackResult:
         input_dim=input_dim,
         hidden_dim=hidden_dim,
         output_dim=5,
-        use_spectral_norm=True,
         beta=0.5,
         settle_steps=30,
         lr=0.01,
@@ -174,7 +171,6 @@ def track_21_continual_learning(verifier) -> TrackResult:
         input_dim=input_dim,
         hidden_dim=hidden_dim,
         output_dim=10,
-        use_spectral_norm=True,
         beta=0.5,
         settle_steps=30,
         lr=0.01,
@@ -214,10 +210,9 @@ def track_21_continual_learning(verifier) -> TrackResult:
     # 3. Train Task B with EWC regularization
     logger.info("\n[21c] Learning Task B with EWC regularization...")
     ewc_lambda = 1000.0  # EWC regularization strength
-    optimizer = create_optimizer(model, OptimizerConfig(name="adam", lr=0.01))
 
     for epoch in range(verifier.epochs):
-        optimizer.zero_grad()
+        model.zero_grad()
         out = model(X_B)
         ce_loss = nn.functional.cross_entropy(out, y_B)
 
@@ -229,7 +224,7 @@ def track_21_continual_learning(verifier) -> TrackResult:
 
         total_loss = ce_loss + (ewc_lambda / 2.0) * ewc_loss
         total_loss.backward()
-        optimizer.step()
+        apply_autograd_update(model)
 
         acc = compute_accuracy(out, y_B, scale=100)
         log_msg = (

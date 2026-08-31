@@ -1,13 +1,17 @@
 # TODO8.md — Consolidated Plan
 
-> **Rev 2026-08-31.** P0–P5 session logs consolidated away (full history in `git log`).
+> **Rev 2026-08-31 (b).** P0–P5 session logs consolidated away (full history in `git log`).
 > Research catalog lives in [RESEARCH3.md](RESEARCH3.md); this doc owns the engineering that unblocks it.
 >
-> **State:** P0–P4 complete · P5 complete (minus pyright policy) · gate `pytest -q` green (~65s) ·
-> full suite 0 failed since 2026-08-30 (latest cert: 1499 passed / 89 skipped / 41 xfailed / 4 xpassed).
+> **State:** P0–P5 **complete incl. pyright policy** · R1 **complete** (device threading, placement
+> guard, runner auto-device, EqProp CUDA epoch ≈ 5.6 s) · U-bypass sweep complete (see audit below) ·
+> gate `pytest -q` green (1190 passed / 66 skipped / 25 xfailed / 4 xpassed, ~73 s) ·
+> placement guard `tests/property/test_native_device_placement.py` 31 green on CUDA.
 >
 > **Policy:** zero backwards compatibility · GPU-first for all training paths · no new tests for broken
-> capability (xfail with precise reasons) · serial pytest only (xdist hangs in this env).
+> capability (xfail with precise reasons) · serial pytest only (xdist hangs in this env) ·
+> **the System's own ParameterUpdate owns Δθ — external torch optimizers must not drive composed systems**
+> (custom-loss harnesses route through `core.pipeline.apply_autograd_update`).
 
 ## ✅ Completed Record (2026-08-30/31)
 
@@ -19,6 +23,9 @@
 | P3 | Quarantine emptied (2 deleted, 6 enabled), free-energy tracking implemented, gRPC worker API drift fixed, 5 timeout victims fixed, parity flake root-caused — 1499 passed / 0 failed |
 | P4 | `SubstrateSettleKernel` ported; `EnergyMinimizationDynamics.settle` substrate-native (Digital bitwise-equal to legacy); 10-test equivalence suite |
 | P5 | Campaign schema freeze (migrations + `SchemaVersionError`), replication gate, counterfactual attribution, `CampaignStack` facade, 8 rankable objectives, migration smoke in CI, CLI validated end-to-end |
+| P5 close | `pyrightconfig.json` (basic repo-wide, elevated-standard on `computronium/ontology`: 0 errors) + pre-commit hook `uv run pyright computronium/ontology`. Fixed 11 latent NameErrors in `ontology/system.py` (unimported substrate classes / `ComponentMetadata`), `GradientCredit` protocol conformance, `_settle_kernel` optional-subscript. Dead code deleted: `ontology/utils/state.py`, `ontology/dynamics/primitives.py`, 9 dead state helpers in `_dynamics.py`, duplicate `_layer_stack`/`_recurrent_weight`/`_learnable_weight_names`/`_set_param_name` copies, `_AdaptedSystem` dead `apply_pseudo_gradients` |
+| R1 | `device` explicit on all native factories (unknown kwargs now raise), `compose_system`/`compose_joint_system`/`build_coordinate_system` take `device`; `_ComposedSystem.to()` **was a silent no-op** (dict reassignment never moved module params) — fixed via `nn.Module.to`; `device` property on both system shapes; runner auto-device (`AutoScientist._execute_proposal`, `CampaignStack` incl. checkpoints, `evaluate_episode` batch placement, `evaluate_migration` + joint suites via `get_device`); ψ init (`RoutingPlasticity`/`FastWeightPlasticity`) device-aware; placement guard over all 28 factories; EqProp MNIST epoch ≈ 5.6 s on CUDA |
+| U-sweep | External-optimizer audit of every `torch.optim.*`/`create_optimizer` site: 4 ontology violations fixed (tradeoff ×2, hardware [18a], application [21c]), 2 dead strays deleted (core_tracks), 8 fake `use_spectral_norm`/`max_steps` kwargs removed (silently ignored → SN "ablations" compared identical models); new primitive `core.pipeline.apply_autograd_update` for custom-loss harnesses |
 
 Old P6 checklist items already satisfied: EqProp anchor 81.32% MNIST · ComputroniumLinear (26 tests) · torch.jit → torch.export migration in `deployment.py`.
 
@@ -30,29 +37,62 @@ Old P6 checklist items already satisfied: EqProp anchor 81.32% MNIST · Computro
 4. **Old P6 (Research Phases 4/5/6) absorbed by RESEARCH3's critical paths.** This doc ends where RESEARCH3 begins; R6 is the handoff.
 5. **Sequencing:** R1 → R5.1a (CPU smoke, **not** GPU-gated) → R5.1b/c; R2/R3/R4 interleave but never block the first commissioned campaign; R6 last.
 6. **Bitwise determinism deprioritized:** discovery/replay locks use tolerance + environment-locked manifests on GPU; bitwise equality is an opt-in extra (CPU reference or explicit deterministic mode), never a requirement.
+7. **U-axis ownership enforced (2026-08-31):** codebase-wide optimizer sweep — external torch optimizers may no longer drive composed Systems; audit table below documents the fixed and the legitimately-external sites.
 
 ---
 
-## 🎯 R1 — GPU-First Runners + Close P5 (do first)
+## 🔍 U-Axis Bypass Audit (2026-08-31, complete)
 
-*Verified: `create_native_*` factories have no `device` param (`**kwargs` silently ignored → tensors always construct on CPU even under CUDA trainers); `ontology/system.py` (5 sites), `autoscientist/campaign.py:717`, `core/system_trainer/factory.py` + `joint.py` hardcode `device="cpu"`. Threading `device` through native factories is the #1 acceleration target (2026-08-30 tiering discovery).*
+**Rule:** a composed System (`compose_system`/`compose_joint_system`/native factory) is only ever
+updated through its own ParameterUpdate axis. Custom-loss harnesses call
+`core.pipeline.apply_autograd_update(system)` (autograd grads → pseudo-grads → `update.step` →
+`geometry.update_params`); plain-`nn.Module` baselines are out of scope.
 
-| # | Task | Detail |
+**Fixed this session (violations — external optimizer drove a composed System):**
+
+| Site | Was | Now |
+|------|-----|-----|
+| `validation/tracks/tradeoff_tracks.py` [57a/57b] | `optim.Adam` + `loss.backward()` loop on native EqProp/Backprop systems; "EqProp" arm never settled (D/C axes dead) | `train_and_measure` drives `model.train_step` (full 5-axis pipeline) |
+| `validation/tracks/hardware_tracks.py` [18a] | `create_optimizer(sgd)` + `optimizer.step()` on native EqProp | `apply_autograd_update(model)` |
+| `validation/tracks/application_tracks.py` [21c] EWC | `create_optimizer(adam)` + manual EWC penalty + `optimizer.step()` on native EqProp | EWC penalty loss → autograd → `apply_autograd_update(model)` (canonical route remains an `ElasticConsolidationUpdate` coordinate — future switch) |
+| `validation/tracks/core_tracks.py` `_train_model`/`_train_model_sn` | `create_optimizer` created, never stepped (dead stray) | deleted |
+
+Also removed: 8 silently-ignored `use_spectral_norm`/`max_steps` factory kwargs (see R3.9 note —
+those "SN ablation" tracks compared identical models; the comparison signal was fake).
+
+**Audited legitimate (no action; listed so future sweeps don't re-litigate):**
+
+| Site | Why it's not a violation |
+|------|--------------------------|
+| `experiments/joint/*` (`PlasticityModel`, `PlasticityModulatedModel` + `torch.optim.Adam`) | benchmark harness models, not composed Systems; no U-axis exists to bypass. Optimizer-phase hygiene (rebuild Adam between meta-train and ψ-adaptation) = RESEARCH3 PR-1 |
+| `ontology/system.py` `_AdaptedSystem.train_step` fallback SGD | Strangler-Fig seam: legacy `nn.Module` models can't be driven by the ontology update; System `EuclideanUpdate` supplies `step_size` |
+| `core/trainer.py` `dispatch_train_step` | BPTT fallback requires an optimizer only when the model has no learning rule; System models take the `train_step` path |
+| `core/local_learning/**` (`BioOptimizer` etc.) | legacy model layer; the optimizer *is* the learning-rule implementation |
+| `zoo/**` | deprecated (R2.1), scheduled for deletion — do not fix |
+| `training/rl.py`, `sklearn_interface.py`, `graph/training.py`, `domains/trainer.py`, `benchmarks/rigorous.py`, `benchmarks/algorithm_migration.py`, `deployment/quantization.py`, `lightning_/module.py`, `core/ebm.py`, `core/dynamics/adapters.py`, `core/nebc.py`, `scripts/z3_reverification_audit.py` | plain `nn.Module` baselines / infra / distillation targets; no composed System in the loop |
+
+---
+
+## 🎯 R1 — GPU-First Runners + Close P5 (do first) — ✅ COMPLETE
+
+*Verified: `create_native_*` factories had no `device` param (`**kwargs` silently ignored → tensors always construct on CPU even under CUDA trainers); `autoscientist/campaign.py:717`, `core/system_trainer/factory.py` + `joint.py` hardcoded `device="cpu"`. Additionally discovered: `_ComposedSystem.to()` moved params into a throwaway dict view (no-op) — fixed.*
+
+| # | Task | Status |
 |---|------|--------|
-| 1.1 | `device` through native factories | Explicit `device` param on every `create_native_*`; propagate into configs/parameter construction; **unknown kwargs rejected, not silently ignored** |
-| 1.2 | Auto-device in runners | `"cuda" if torch.cuda.is_available() else "cpu"` for `SystemTrainerConfig` default, `AutoScientist._execute_proposal`, `CampaignStack`, benchmark suites, `evaluate_migration`. CPU only for tiny equivalence/determinism probes |
-| 1.3 | CUDA placement guard | Parametrized over **all 28 native factories**: construct with `device="cuda"` → fail if any param/buffer lands on CPU. Kills the silent-CPU failure mode permanently (previous "GPU available" runs may have silently executed on CPU — a correctness and observability problem, not just performance debt) |
-| 1.4 | Suite-wide construction seeding | `torch.manual_seed` before every factory call in parity tests (P3 Backprop flake pattern — other parity classes share the unseeded-construction bug) |
-| 1.5 | **Close P5: pyright policy** | `pyrightconfig.json` (basic everywhere, `strict` on `computronium/ontology`) + pre-commit hook running `uv run pyright computronium/ontology`. Configure the policy — don't manually chase errors. Satisfies RESEARCH3 PR-0's typing gate |
+| 1.1 | `device` through native factories | ✅ explicit `device: str \| torch.device = "cpu"` on all factories via `compose_system(device=…)`; `**kwargs` removed → unknown kwargs raise `TypeError` |
+| 1.2 | Auto-device in runners | ✅ `get_device()` (single resolver, `core/utils/device.py`) in `AutoScientist._execute_proposal`, `CampaignStack(device="auto")` + checkpoint restore, `evaluate_episode` (batches follow the joint's parameter device), `evaluate_migration` (default `"auto"`), joint suites |
+| 1.3 | CUDA placement guard | ✅ `tests/property/test_native_device_placement.py` — all 28 factories + buffers + substrate-metadata agreement + kwargs-rejection + CPU default |
+| 1.4 | Suite-wide construction seeding | ⬜ pending (P3 Backprop flake pattern likely affects other parity classes) |
+| 1.5 | Close P5: pyright policy | ✅ `pyrightconfig.json`: basic repo-wide, elevated-standard on `computronium/ontology` (0 errors); pre-commit hook gated. Note: pyright's `strict` array cannot be downgraded per-rule, so full `strict` on ontology (131 findings, mostly torch `Unknown` tracking) is deferred — see improvement opportunities |
 
-**Done when:** every factory accepts explicit `device` and rejects unknown kwargs · placement guard green over all 28 factories · EqProp single-epoch MNIST on CUDA in seconds · runners default to CUDA when available · pyright policy enforced in pre-commit.
+**Done when:** ✅ every factory accepts explicit `device` and rejects unknown kwargs · ✅ placement guard green over all 28 factories · ✅ EqProp single-epoch MNIST on CUDA ≈ 5.6 s (256-batch, 20 settle steps) · ✅ runners default to CUDA when available · ✅ pyright policy enforced in pre-commit.
 
 ## 🧹 R2 — Retirement & Signal Honesty (stability; interleavable, never blocks R5)
 
 | # | Task | Detail |
 |---|------|--------|
 | 2.1 | Zoo retirement | Audit first (grep zoo for `@register`/`Registry.register`/presets/PARAM_UPDATE entries), extract still-live registrations (MEP presets, MEP PARAM_UPDATE) into first-class ontology modules, full suite → delete `computronium/zoo/**` incl. `tile_models.py`/`tile_fa.py`/`tile_lm.py` → full suite again. User directive: zoo deprecated for the ontology API — don't fix zoo components |
-| 2.2 | Dead/duplicate sweep | Delete `ontology/dynamics/primitives.py` stub; resolve `Substrate` duplication (`ontology/_substrate.py` vs `ontology/substrate/`); grep for other parallel legacy/new pairs |
+| 2.2 | Dead/duplicate sweep | **Partially done (2026-08-31):** `ontology/dynamics/primitives.py` deleted, `ontology/utils/state.py` deleted, dead state helpers + duplicate helper copies removed. Remaining: `Substrate` naming (`ontology/_substrate.py` impl vs `ontology/substrate/` facade — facade is fine, consider merge); grep for other parallel legacy/new pairs |
 | 2.3 | Registry API unification | `Registry.list()` vs `list_models()` alias asymmetry (module-boundary test pins the raw view); alias `get_metadata` projects from canonical |
 | 2.4 | xpass noise fix | Native smoke tile tests are xfail-but-xpass (smoke checks crash-freedom only). Split: crash-free smoke (strict pass) + learning-capability test (true xfail). **Must precede R5b discovery locks** |
 | 2.5 | Skip census (one pass, then done) | 89 skips → fixed categories: missing optional dep / CUDA unavailable / DEFERRED geometry → `skip(reason=…)` · known broken capability → `xfail(reason=…)` · env flake → `flaky` + ticket · dead legacy → delete. After the census the skip count becomes meaningful instead of suspicious |
@@ -126,12 +166,12 @@ Old P6 phases map onto RESEARCH3's critical paths — execute there, not here:
 
 ## 🗓 Execution Order (7 sessions)
 
-1. **Close P5** — `pyrightconfig.json` + pre-commit hook; mark the pyright item done
-2. **R1 device threading** — factories, kwargs rejection, placement guard, runner auto-device
-3. **R1 validation** — construction seeding; EqProp MNIST epoch seconds-level on CUDA; zero silent CPU fallback
-4. **R5.1a CPU smoke campaign** (not GPU-gated) — start → interrupt → resume → complete → artifacts
-5. **R5.1b GPU quick campaign** — placement + speedup + replication/frontier output
-6. **R2 signal honesty** — xpass split, skip census, dead stubs; prepare zoo extraction list
+1. ~~**Close P5** — `pyrightconfig.json` + pre-commit hook~~ ✅ done 2026-08-31
+2. ~~**R1 device threading** — factories, kwargs rejection, placement guard, runner auto-device~~ ✅ done 2026-08-31
+3. ~~**R1 validation** — construction seeding~~ ⬜ 1.4 open · ✅ EqProp MNIST epoch 5.6 s on CUDA · ✅ zero silent CPU fallback (placement guard)
+4. **R5.1a CPU smoke campaign** (not GPU-gated) — start → interrupt → resume → complete → artifacts — **next**
+5. **R5.1b GPU quick campaign** — placement + speedup + replication/frontier output (unblocked: CampaignStack runs end-to-end on CUDA; verified 2026-08-31)
+6. **R2 signal honesty** — xpass split, skip census; prepare zoo extraction list
 7. **R5.1c commissioned campaign** — lock config, run, replicate, persist to `autoscientist_campaigns/`, report
 
 Then R5b and RESEARCH3 become real. Everything else (zoo deletion, kernel breadth, capability xfails) is important but must not block the first commissioned campaign.
@@ -145,6 +185,17 @@ Then R5b and RESEARCH3 become real. Everything else (zoo deletion, kernel breadt
 | Discovery locks brittle — too tight flakes, too loose prove nothing | Pre-registered effect thresholds; multi-seed robust deltas; tolerance + env lock on GPU, never bitwise |
 | Zoo deletion breaks hidden registrations | Audit → extract live registrations → full suite → delete → full suite |
 | R3 becomes capability creep | Track as xfail/invalid-coordinate unless the commissioned grid needs that coordinate |
+
+## 💡 New Improvement Opportunities (2026-08-31 session)
+
+1. **`_ComposedSystem.to()` was a silent no-op** — it reassigned entries in the `geometry.params` dict view instead of moving the underlying `nn.Module` parameters. Anyone "training on GPU" via `system.to("cuda")` was on CPU. Fixed (delegates to `nn.Module.to`); pinned by the placement guard. *Lesson: parameter-dict views hide mutation bugs — prefer module-level placement.*
+2. **`use_spectral_norm` was a fake knob** — accepted-and-ignored by factories, so SN "ablations" ([56b], [1a/1b], negative_results) compared identical models and reported fabricated contrasts. kwargs are now rejected; making those ablations real means composing `SpectralConstrainedUpdate` U-axis coordinates (pairs with R3.9 / MEP Kinetics campaigns).
+3. **ψ-device coupling** — `initial_psi` for Routing/FastWeight created CPU tensors regardless of θ device; now derives device from `SystemContext.device`. RuleState already device-aware. When adding plasticity primitives, always key ψ off `context.device`.
+4. **Pyright policy floor** — `strict` on ontology surfaces 131 findings (mostly torch `Unknown` tracking + private-import usage); pyright forbids downgrading rules inside `strict` paths, so the policy uses elevated-standard there (0 errors). Raising to full `strict` = annotation work in `_dynamics`/`geometry`/`update`; repo-wide basic is ~2.5k findings (pre-existing, never gated).
+5. **Dead helper consolidation** — `_layer_stack`/`_learnable_weight_names`/`_set_param_name` each had 2–3 live copies across `geometry.py`/`utils/`/`system.py`/`_substrate.py`; consolidated (canonical: `geometry.py` for `_layer_stack`/`_set_param_name`, `utils/params.py` for `_learnable_weight_names`). `_layer_stack` renamed public (`layer_stack`) — it is cross-module API.
+6. **R2.4 xpass split still open** — 4 xpassed in native smoke (tile tests crash-free but xfail-marked); must precede R5b discovery locks.
+7. **R1.4 construction seeding** — parity tests still call factories without `torch.manual_seed`; the P3 Backprop flake pattern likely recurs elsewhere.
+8. **`compute_energy` duplication** — Energy/Spike/Instantaneous/Diffusion dynamics each carry near-identical `compute_energy` bodies over duck-typed states; extract to one `_energy_from_state(state, geometry)` helper next touch.
 
 ---
 
@@ -160,7 +211,7 @@ Then R5b and RESEARCH3 become real. Everything else (zoo deletion, kernel breadt
 
 ## ✅ Definition of Done
 
-- **R1:** EqProp MNIST epoch on CUDA in seconds · `pytest -q` green · pyright policy in pre-commit
+- **R1:** ✅ EqProp MNIST epoch on CUDA in ~5.6 s · `pytest -q` green · pyright policy in pre-commit (R1.4 construction seeding open)
 - **R2:** `computronium/zoo/**` deleted · no dead stubs or duplicate Substrate · 0 xpass noise · skip census recorded
 - **R3:** DiffusionDynamics un-xfailed · every remaining xfail has a precise reason · no hardcoded geometry inference
 - **R4:** ≥2 operator families beyond settle through the Substrate API · equivalence test per port
@@ -180,6 +231,9 @@ uv run pytest tests -m slow
 # Fast gates (seconds): property locks + registry + boundary
 uv run pytest tests/property/test_ontology_locks.py tests/unit/core/test_registry.py \
   tests/unit/core/test_module_boundary.py tests/unit/test_refactor.py -q
+
+# CUDA placement guard (all 28 native factories; skips without CUDA)
+uv run pytest tests/property/test_native_device_placement.py -q
 
 # Native smoke / settle protocol / joint benchmarks
 uv run pytest tests/property/test_native_smoke.py -v

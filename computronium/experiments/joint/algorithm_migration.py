@@ -18,6 +18,8 @@ import time
 from pathlib import Path
 
 import torch
+
+from computronium.core.utils.device import get_device
 from torch import Tensor
 
 from computronium.core.profiling import measure_suite_resources
@@ -31,7 +33,7 @@ def create_task_a0(
     device: torch.device | str = "cpu",
 ) -> tuple[Tensor, Tensor]:
     """Task A0: Classify by cumulative sum (sum > 0 -> class 1)."""
-    device = torch.device(device)
+    device = get_device(device)
     x = torch.randn(batch_size, seq_len, input_dim, device=device)
     cumsum = x.sum(dim=1).mean(dim=-1)  # [batch]
     y = (cumsum > 0).long()
@@ -45,7 +47,7 @@ def create_task_a1(
     device: torch.device | str = "cpu",
 ) -> tuple[Tensor, Tensor]:
     """Task A1: Classify by last symbol (last > 0 -> class 1)."""
-    device = torch.device(device)
+    device = get_device(device)
     x = torch.randn(batch_size, seq_len, input_dim, device=device)
     last = x[:, -1, :].mean(dim=-1)  # [batch]
     y = (last > 0).long()
@@ -59,7 +61,7 @@ def evaluate_migration(
     batch_size: int = 64,
     seq_len: int = 10,
     input_dim: int = 32,
-    device: torch.device | str = "cpu",
+    device: torch.device | str = "auto",
     seed: int = 42,
 ) -> dict:
     """Evaluate algorithm migration for a coordinate."""
@@ -68,7 +70,7 @@ def evaluate_migration(
 
     torch.manual_seed(seed)
     random.seed(seed)
-    device = torch.device(device)
+    device = get_device(device)
     start_time = time.perf_counter()
 
     parts = coordinate.split("/")
@@ -273,7 +275,7 @@ def run_algorithm_migration_suite(
     device: str = "auto",
 ) -> list[dict]:
     """Run algorithm migration benchmark suite."""
-    device = "cuda" if device == "auto" and torch.cuda.is_available() else device
+    device = get_device(device)
 
     all_results = []
 

@@ -18,6 +18,8 @@ from pathlib import Path
 
 import torch
 
+from computronium.core.utils.device import get_device
+
 from computronium.core.profiling import measure_suite_resources
 from computronium.experiments.joint import CLAIMS_SCOPE_PLUMBING_ONLY
 
@@ -155,7 +157,7 @@ def evaluate_structural_robustness(
 
     torch.manual_seed(seed)
     random.seed(seed)
-    device = torch.device(device)
+    device = get_device(device)
     start_time = time.perf_counter()
 
     parts = coordinate.split("/")
@@ -301,7 +303,7 @@ def run_structural_robustness_suite(
     device: str = "auto",
 ) -> list[dict]:
     """Run structural robustness benchmark suite."""
-    device = "cuda" if device == "auto" and torch.cuda.is_available() else device
+    device = get_device(device)
 
     all_results = []
 

@@ -6,6 +6,8 @@ composition of the 5 Protocols, bypassing ModelAdapter.
 
 from __future__ import annotations
 
+import torch
+
 from computronium.core.system_trainer import compose_system
 from computronium.ontology import (
     CreditAssignmentConfig,
@@ -17,7 +19,6 @@ from computronium.ontology import (
     LocalGoodnessCredit,
     ParameterUpdateConfig,
     StateDynamicsConfig,
-    SubstrateConfig,
     System,
 )
 
@@ -28,8 +29,7 @@ def create_native_pepita_mlp(
     output_dim: int,
     num_layers: int = 2,
     lr: float = 0.01,
-    device: str = "cpu",
-    **kwargs,
+    device: str | torch.device = "cpu",
 ) -> System:
     """Create a PEPITA system using native 5-D composition.
 
@@ -42,8 +42,7 @@ def create_native_pepita_mlp(
         output_dim: Output dimension
         num_layers: Number of hidden layers
         lr: Learning rate
-        device: Target device
-        **kwargs: Additional arguments (ignored, for compatibility)
+        device: Target device for parameter placement
 
     Returns:
         A composed System with FeedforwardGeometry + InstantaneousDynamics
@@ -62,7 +61,7 @@ def create_native_pepita_mlp(
         recurrent_weight=None,
     )
 
-    substrate = DigitalSubstrate(SubstrateConfig.digital(device=device))
+    substrate = DigitalSubstrate()
     geometry = FeedforwardGeometry(geometry_cfg)
     dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
     credit = LocalGoodnessCredit(
@@ -72,7 +71,9 @@ def create_native_pepita_mlp(
     )
     update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=lr))
 
-    return compose_system(substrate, geometry, dynamics, credit, update)
+    return compose_system(
+        substrate, geometry, dynamics, credit, update, device=device
+    )
 
 
 # Alias for registry registration

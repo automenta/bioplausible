@@ -19,19 +19,19 @@ from computronium.ontology._substrate import (
 from computronium.ontology.substrate.factory import substrate_from_config
 
 __all__ = [
-    "SubstrateType",
-    "SubstrateConfig",
-    "Substrate",
-    "DigitalSubstrate",
     "AnalogSubstrate",
+    "ComplexSubstrate",
+    "DigitalSubstrate",
     "MemristiveSubstrate",
     "NeuromorphicSubstrate",
+    "NoisySubstrate",
     "OpticalSubstrate",
+    "QuantizedSubstrate",
     "QuantumSubstrate",
     "SparseSubstrate",
+    "Substrate",
+    "SubstrateConfig",
+    "SubstrateType",
     "TernarySubstrate",
-    "ComplexSubstrate",
-    "NoisySubstrate",
-    "QuantizedSubstrate",
     "substrate_from_config",
 ]

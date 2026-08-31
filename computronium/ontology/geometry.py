@@ -41,7 +41,7 @@ class GeometryConfig:
     hidden_dims: tuple[int, ...]
     num_layers: int
     topology_type: str
-    connectivity: dict | None
+    connectivity: dict[str, object] | None
     recurrent_weight: list[list[float]] | None
     init_scale: float = 0.1
 
@@ -118,16 +118,10 @@ def _set_param_name(tensor: Tensor, name: str) -> None:
     setattr(tensor, "_param_name", name)
 
 
-def _layer_stack(geometry: Geometry) -> nn.ModuleList | None:
+def layer_stack(geometry: Geometry) -> nn.ModuleList | None:
     """Return the geometry's ordered module stack if it is layer-based."""
     layers = getattr(geometry, "_layers", None)
     return layers if isinstance(layers, nn.ModuleList) else None
-
-
-def _recurrent_weight(geometry: Geometry) -> Tensor | None:
-    """Return the geometry's recurrent weight matrix if present."""
-    weight = getattr(geometry, "_recurrent_weight", None)
-    return weight if isinstance(weight, Tensor) else None
 
 
 @runtime_checkable
@@ -204,16 +198,6 @@ class Geometry(Protocol):
 # ============================================================
 # Default/Reference Geometry Implementations
 # ============================================================
-
-
-def _learnable_weight_names(params: dict[str, Tensor]) -> list[str]:
-    """Parameter names that receive pseudo-gradients (2-D weight matrices).
-
-    Credits emit exactly one pseudo-gradient per learnable weight, in this
-    order. Biases and other auxiliary parameters never receive gradients
-    from the local learning rules.
-    """
-    return [n for n, p in params.items() if "weight" in n and p.ndim == 2]
 
 
 class FeedforwardGeometry(nn.Module):

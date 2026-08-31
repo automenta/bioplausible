@@ -11,7 +11,6 @@ from .._dynamics import (
     StateDynamics,
     StateDynamicsConfig,
 )
-from .primitives import _compute_hopfield_energy, _settle_step
 
 __all__ = [
     "DiffusionDynamics",
@@ -22,6 +21,4 @@ __all__ = [
     "SpikeIntegrationDynamics",
     "StateDynamics",
     "StateDynamicsConfig",
-    "_settle_step",
-    "_compute_hopfield_energy",
 ]

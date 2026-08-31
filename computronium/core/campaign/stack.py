@@ -45,6 +45,8 @@ from computronium.core.campaign.replication import (
 from computronium.core.logging import get_logger
 
 if TYPE_CHECKING:
+    import torch
+
     from computronium.core.system_trainer import JointSystem
 
 logger = get_logger()
@@ -130,6 +132,8 @@ class CampaignStack:
         db_path: Optional explicit DB path (default ``root/campaign.db``).
         checkpoint_dir: Optional explicit checkpoint directory.
         on_event: Optional sink for human-readable progress events.
+        device: Episode execution device (``"auto"`` = best available
+            backend, ``None`` = build in place); θ restore copies honor it.
     """
 
     def __init__(  # ruff: ignore[too-many-arguments] - facade surface, all independently settable
@@ -143,11 +147,15 @@ class CampaignStack:
         db_path: str | Path | None = None,
         checkpoint_dir: str | Path | None = None,
         on_event: EventHook | None = None,
+        device: str | torch.device | None = "auto",
     ):
+        from computronium.core.utils.device import get_device
+
         self.root = Path(root)
         self.branch = branch
         self.guard_threshold = guard_threshold
         self.seed = seed
+        self.device = None if device is None else get_device(device)
         self.store = CampaignStore(
             db_path or (self.root / "campaign.db"),
             checkpoint_dir or (self.root / "checkpoints"),
@@ -284,7 +292,7 @@ class CampaignStack:
             return EpisodeOutcome(coordinate=coordinate, status="dry_run")
         try:
             joint: JointSystem = build_coordinate_system(
-                coordinate, **build_kwargs
+                coordinate, device=self.device, **build_kwargs
             )
         except UnsupportedCoordinateError as exc:
             self._event(f"  skipped (unsupported): {exc}")
@@ -436,6 +444,7 @@ class CampaignStack:
         )
         joint = build_coordinate_system(
             checkpoint.coordinate or fallback,
+            device=self.device,
             **build_kwargs,
         )
         with torch.no_grad():
