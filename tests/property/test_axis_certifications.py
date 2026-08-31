@@ -906,9 +906,6 @@ class TestSAxisSubstrateCertification:
             f"Substrate {substrate_name}: train_step should produce loss"
         )
 
-    @pytest.mark.skip(
-        reason="RiemannianOrthogonalUpdate has known limitations with non-square matrices and parameter ordering"
-    )
     @pytest.mark.parametrize(
         "substrate_name,substrate_factory",
         _standard_substrate_factories(),

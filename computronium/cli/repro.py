@@ -1,4 +1,4 @@
-"""``biopl-repro-check`` — Sprint 1.4 deterministic-seeding gate.
+"""``comp repro`` — Sprint 1.4 deterministic-seeding gate.
 
 Runs a one-epoch training pass for every registered model family twice under
 an identical global seed and asserts the resulting parameter state dicts are
@@ -14,8 +14,8 @@ Migrated to native compositions after legacy zoo removal.
 
 Usage::
 
-    uv run biopl-repro-check --seed 42 --device cpu
-    uv run biopl-repro-check --models native_eqprop_mlp,native_fa_mlp --device cuda
+    uv run comp repro --seed 42 --device cpu
+    uv run comp repro --models native_eqprop_mlp,native_fa_mlp --device cuda
 """
 
 import argparse
@@ -250,7 +250,7 @@ def _report_stages(path: str) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="biopl-repro-check",
+        prog="comp repro",
         description="Verify bitwise reproducibility of every model family "
         "under a fixed global seed (Sprint 1.4).",
     )

@@ -38,6 +38,7 @@ import inspect
 import math
 import types as _types
 import typing
+from collections.abc import Callable
 from dataclasses import dataclass
 from dataclasses import fields as _dataclass_fields
 
@@ -129,10 +130,26 @@ class Consumption:
         return knob in self.accepted or self.has_catch_all
 
 
+def _construction_callable(model_cls: object) -> Callable[..., object]:
+    """The callable that actually builds the model.
+
+    Registered factories may be plain functions (native model factories) or
+    classes; reflecting on ``__init__`` for a function would resolve to
+    ``object.__init__`` and report a spurious catch-all ``**kwargs``.
+    """
+    target = model_cls if inspect.isroutine(model_cls) else model_cls.__init__  # type: ignore[union-attr]
+    return typing.cast("Callable[..., object]", target)
+
+
+def _init_signature(model_cls: object) -> inspect.Signature:
+    """Signature of the construction callable; may raise on unreflectable targets."""
+    return inspect.signature(_construction_callable(model_cls))
+
+
 def _config_param_accepts_modelconfig(model_cls: object) -> bool:
     """Check if the model's ``config`` param is annotated to accept ``ModelConfig``."""
     try:
-        sig = inspect.signature(model_cls.__init__)  # type: ignore[misc]
+        sig = _init_signature(model_cls)
     except TypeError, ValueError:
         return False
     param = sig.parameters.get("config")
@@ -140,7 +157,7 @@ def _config_param_accepts_modelconfig(model_cls: object) -> bool:
         return False
     # Use get_type_hints to evaluate string annotations (from __future__ import annotations)
     try:
-        hints = typing.get_type_hints(model_cls.__init__)
+        hints = typing.get_type_hints(_construction_callable(model_cls))
     except Exception:
         hints = {}
     ann = hints.get("config", param.annotation)
@@ -154,9 +171,9 @@ def _config_param_accepts_modelconfig(model_cls: object) -> bool:
 
 
 def resolve_consumption(model_cls: object) -> Consumption:
-    """Resolve a model's consumer contract by reflecting on its ``__init__``."""
+    """Resolve a model's consumer contract by reflecting on its constructor."""
     try:
-        sig = inspect.signature(model_cls.__init__)  # type: ignore[misc]
+        sig = _init_signature(model_cls)
     except TypeError, ValueError:
         return Consumption(frozenset(), False, False)
     params = set(sig.parameters)

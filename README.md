@@ -536,7 +536,7 @@ These are biologically motivated constraints/hypotheses encoded as property test
 | Registry audit | 0 missing critical fields |
 | Reproducibility | Models bitwise reproducible |
 | Backprop parity | Runs successfully |
-| Static typing | 0 errors in strict mode |
+| Static typing | 0 errors on `computronium/ontology` (pyright elevated-standard, pre-commit gated); repo-wide basic |
 | Formatting | Clean |
 
 ### 🧪 Test Commands

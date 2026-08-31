@@ -1,8 +1,8 @@
-"""Validation tracks CLI (``biopl validate``).
+"""Validation tracks CLI (``comp validate``).
 
 Runs the comprehensive verification suite and optionally records results
-to the knowledge base for integration with ``biopl report`` and
-``biopl failure-manifesto``.
+to the knowledge base for integration with ``comp report`` and
+``comp failure-manifesto``.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="biopl validate",
+        prog="comp validate",
         description="Run validation tracks and record to knowledge base",
     )
     parser.add_argument(
@@ -43,7 +43,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--record-kb",
         action="store_true",
-        help="Record track results to knowledge base (for biopl report / failure-manifesto)",
+        help="Record track results to knowledge base "
+        "(for comp report / failure-manifesto)",
     )
     parser.add_argument(
         "--output-dir",
@@ -61,7 +62,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Console-script entry point for ``biopl validate``."""
+    """Console-script entry point for ``comp validate``."""
     args = _build_parser().parse_args(argv)
 
     # Determine mode

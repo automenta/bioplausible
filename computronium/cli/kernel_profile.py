@@ -500,7 +500,7 @@ def _generate_html_report(results: list[ProfileResult], output_path: Path):
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="biopl benchmark profile",
+        prog="comp benchmark profile",
         description="Profile joint system kernels",
     )
     parser.add_argument(

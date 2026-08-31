@@ -43,7 +43,7 @@ def main() -> None:
     add_verify_subparsers(subparsers)
     add_pareto_subparsers(subparsers)
     add_portfolio_subparsers(subparsers)
-    # benchmark delegates to biopl benchmark CLI
+    # benchmark delegates to comp benchmark CLI
     subparsers.add_parser("benchmark", help="Run cross-domain benchmark suite")
     add_list_subparsers(subparsers)
 

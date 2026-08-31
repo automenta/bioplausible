@@ -1,4 +1,5 @@
-"""``biopl-export-kernel`` — export a kernel backend to a deployment target.
+"""``python -m computronium.cli.export_kernel`` — export a kernel
+backend to a deployment target.
 
 Builds a :class:`~computronium.acceleration.kernel_backend.KernelBackend` from the
 registry for an algorithm family + hardware target, initializes it, and exports
@@ -7,9 +8,12 @@ its weights + hardware manifest via
 
 Usage::
 
-    uv run biopl-export-kernel --algorithm backprop --target cpu --output ./exports
-    uv run biopl-export-kernel --algorithm eqprop --target fpga --output ./hls
-    uv run biopl-export-kernel --algorithm spiking --target neuromorphic --output ./n
+    uv run python -m computronium.cli.export_kernel \
+        --algorithm backprop --target cpu --output ./exports
+    uv run python -m computronium.cli.export_kernel \
+        --algorithm eqprop --target fpga --output ./hls
+    uv run python -m computronium.cli.export_kernel \
+        --algorithm spiking --target neuromorphic --output ./n
 """
 
 import argparse

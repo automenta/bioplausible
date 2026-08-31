@@ -1,4 +1,4 @@
-"""CLI entry point for biopl-hpo.
+"""CLI entry point for comp hpo.
 
 Thin shim that delegates to :mod:`computronium.cli.run` (the full experiment
 runner). When invoked with no subcommand it defaults to ``search`` so that the

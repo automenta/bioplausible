@@ -1,4 +1,4 @@
-"""Joint Benchmark CLI (``biopl benchmark``).
+"""Joint Benchmark CLI (``comp benchmark``).
 
 Runs benchmark suites for 6-D joint architecture coordinates.
 """
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="biopl benchmark",
+        prog="comp benchmark",
         description="Run joint architecture benchmark suites",
     )
     subparsers = parser.add_subparsers(dest="subcommand", help="Benchmark subcommand")
@@ -708,7 +708,7 @@ def _profile_kernels(args) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Console-script entry point for ``biopl benchmark``."""
+    """Console-script entry point for ``comp benchmark``."""
     args = _build_parser().parse_args(argv)
 
     if not args.subcommand:

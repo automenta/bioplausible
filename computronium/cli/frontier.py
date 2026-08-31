@@ -1,4 +1,4 @@
-"""``biopl-frontier`` — plan §9/§11 Pareto-frontier report over a probe JSONL.
+"""``comp frontier`` — plan §9/§11 Pareto-frontier report over a probe JSONL.
 
 Reads an experiment report (the app hash append-only probe JSONL from
 :class:`~computronium.experiment.report.Report`) and reports, per model:
@@ -13,7 +13,7 @@ number that decides "deploy or not" for the autonomous pipeline (§8).
 
 Usage::
 
-    uv run biopl-frontier --report parity_mnist_trio.report.jsonl --backprop backprop_mlp
+    uv run comp frontier --report parity_mnist_trio.report.jsonl --backprop backprop_mlp
 """
 
 from __future__ import annotations

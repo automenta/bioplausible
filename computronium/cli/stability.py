@@ -1,4 +1,4 @@
-"""Stability Report CLI (``biopl stability``).
+"""Stability Report CLI (``comp stability``).
 
 Generates stability reports for joint architecture evaluations.
 """
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="biopl stability",
+        prog="comp stability",
         description="Generate stability reports for joint architecture coordinates",
     )
     subparsers = parser.add_subparsers(dest="subcommand", help="Stability subcommand")
@@ -383,7 +383,7 @@ def _summary_stability(args) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Console-script entry point for ``biopl stability``."""
+    """Console-script entry point for ``comp stability``."""
     args = _build_parser().parse_args(argv)
 
     if not args.subcommand:

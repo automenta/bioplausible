@@ -384,6 +384,7 @@ name = "computronium"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [
+    { name = "kademlia" },
     { name = "numpy" },
     { name = "omegaconf" },
     { name = "pydantic" },
@@ -553,6 +554,7 @@ requires-dist = [
     { name = "gymnasium", marker = "extra == 'dev'" },
     { name = "gymnasium", marker = "extra == 'rl'" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.0" },
+    { name = "kademlia", specifier = ">=2.2.3" },
     { name = "kademlia", marker = "extra == 'p2p'" },
     { name = "matplotlib", marker = "extra == 'dev'" },
     { name = "matplotlib", marker = "extra == 'plot'" },

@@ -1,4 +1,5 @@
-"""``biopl-export-trained-kernel`` — train a kernel-backed model and export its weights.
+"""``python -m computronium.cli.export_trained_kernel`` — train a
+kernel-backed model and export its weights.
 
 Builds a model via ``CoreTrainer(use_kernel=True)``, runs training (or loads a
 checkpoint), then exports the bound backend's state dict + hardware manifest via
@@ -6,8 +7,11 @@ checkpoint), then exports the bound backend's state dict + hardware manifest via
 
 Usage::
 
-    uv run biopl-export-trained-kernel --algorithm fa --target triton --epochs 20 --output ./trained_fa
-    uv run biopl-export-trained-kernel --algorithm backprop --target cpu --checkpoint ./checkpoints/best.pt --output ./trained_bp
+    uv run python -m computronium.cli.export_trained_kernel \
+        --algorithm fa --target triton --epochs 20 --output ./trained_fa
+    uv run python -m computronium.cli.export_trained_kernel \
+        --algorithm backprop --target cpu \
+        --checkpoint ./checkpoints/best.pt --output ./trained_bp
 """
 
 from __future__ import annotations

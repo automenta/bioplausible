@@ -1,4 +1,4 @@
-"""AutoScientist CLI (``biopl scientist``).
+"""AutoScientist CLI (``comp scientist``).
 
 Autonomous exploration of the 6-D joint architecture space.
 Provides campaign runner, result browser, and hypothesis templates.
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="biopl scientist",
+        prog="comp scientist",
         description="AutoScientist: Autonomous 6-D architecture exploration",
     )
     subparsers = parser.add_subparsers(
@@ -614,7 +614,7 @@ def _hypothesis(args) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Console-script entry point for ``biopl scientist``."""
+    """Console-script entry point for ``comp scientist``."""
     args = _build_parser().parse_args(argv)
 
     if not args.subcommand:

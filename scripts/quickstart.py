@@ -11,6 +11,7 @@ Expected output:
 """
 
 import multiprocessing
+import os
 import signal
 import sys
 import time
@@ -29,6 +30,9 @@ from computronium.domains.factory import create_task
 
 # Global trainer reference for signal handler cleanup
 _current_trainer: SystemTrainer | None = None
+
+# Epoch budget override for the slow-tier smoke (tests/slow/test_quickstart_smoke.py)
+EPOCHS = int(os.environ.get("QUICKSTART_EPOCHS", "3"))
 
 
 def _signal_handler(signum, frame):
@@ -63,62 +67,6 @@ def make_dataloaders(task_name: str, batch_size: int = 64, device: str = "cpu"):
     train_loader = _FlattenLoader(task.get_dataloader("train"))
     val_loader = _FlattenLoader(task.get_dataloader("val"))
     return train_loader, val_loader, task
-
-
-def train_backprop(system, train_loader, val_loader, epochs: int, device: str):
-    """Train a system using SystemTrainer and return final accuracy."""
-    trainer_config = SystemTrainerConfig(
-        max_epochs=epochs,
-        batch_size=64,
-        device=device,
-        seed=42,
-        log_every_n_steps=100,
-    )
-
-    trainer = SystemTrainer(
-        system=system,
-        config=trainer_config,
-        train_data=train_loader,
-        val_data=val_loader,
-    )
-
-    with trainer:
-        history = trainer.fit()
-
-    if history:
-        final_acc = history[-1].get("val_acc", history[-1].get("train_acc", 0.0))
-    else:
-        final_acc = 0.0
-
-    return final_acc * 100
-
-
-def train_forward_forward(system, train_loader, val_loader, epochs: int, device: str):
-    """Train Forward-Forward system using SystemTrainer."""
-    trainer_config = SystemTrainerConfig(
-        max_epochs=epochs,
-        batch_size=64,
-        device=device,
-        seed=42,
-        log_every_n_steps=100,
-    )
-
-    trainer = SystemTrainer(
-        system=system,
-        config=trainer_config,
-        train_data=train_loader,
-        val_data=val_loader,
-    )
-
-    with trainer:
-        history = trainer.fit()
-
-    if history:
-        final_acc = history[-1].get("val_acc", history[-1].get("train_acc", 0.0))
-    else:
-        final_acc = 0.0
-
-    return final_acc * 100
 
 
 def main():
@@ -186,7 +134,7 @@ def main():
     print("=" * 60)
     start_time = time.time()
     trainer_config = SystemTrainerConfig(
-        max_epochs=3,
+        max_epochs=EPOCHS,
         batch_size=64,
         device=device,
         seed=42,
@@ -215,7 +163,7 @@ def main():
     print("=" * 60)
     start_time = time.time()
     trainer_config = SystemTrainerConfig(
-        max_epochs=3,
+        max_epochs=EPOCHS,
         batch_size=64,
         device=device,
         seed=42,
@@ -242,8 +190,8 @@ def main():
     print("\n" + "=" * 60)
     print("SUMMARY")
     print("=" * 60)
-    print(f"Backprop:        {backprop_acc:.1f}% accuracy (3 epochs, {bp_time:.1f}s)")
-    print(f"Forward-Forward: {ff_acc:.1f}% accuracy (3 epochs, {ff_time:.1f}s)")
+    print(f"Backprop:        {backprop_acc:.1f}% accuracy ({EPOCHS} epochs, {bp_time:.1f}s)")
+    print(f"Forward-Forward: {ff_acc:.1f}% accuracy ({EPOCHS} epochs, {ff_time:.1f}s)")
     print()
     print("Both achieve competitive accuracy on MNIST!")
     print()

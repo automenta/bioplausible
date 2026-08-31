@@ -366,12 +366,9 @@ def test_credit_adapter_preserves_joint_trajectory_shape():
 # ============================================================
 
 
+@pytest.mark.xfail(reason="EnergyToInstantaneousAdapter has bug: modifies frozen config", strict=True)
 def test_substrate_then_dynamics_adapter_composition():
     """Composing substrate and dynamics adapters should preserve joint structure."""
-    import pytest
-
-    pytest.skip("EnergyToInstantaneousAdapter has bug: modifies frozen config")
-
     geometry = _create_base_geometry()
 
     # Substrate adapter
@@ -403,12 +400,9 @@ def test_substrate_then_dynamics_adapter_composition():
     registry.validate(z)
 
 
+@pytest.mark.xfail(reason="EnergyToInstantaneousAdapter has bug: modifies frozen config", strict=True)
 def test_adapter_stack_preserves_registry():
     """Stack of adapters should preserve StateRegistry validation."""
-    import pytest
-
-    pytest.skip("EnergyToInstantaneousAdapter has bug: modifies frozen config")
-
     geometry = _create_base_geometry()
 
     # Stack: substrate -> dynamics -> credit
@@ -515,12 +509,9 @@ def test_substrate_adapter_projection_respects_substrate_physics():
     assert not torch.isnan(y).any()
 
 
+@pytest.mark.xfail(reason="EnergyToInstantaneousAdapter has bug: modifies frozen config", strict=True)
 def test_dynamics_adapter_projection_preserves_energy_descent():
     """Dynamics adapter should preserve energy descent property."""
-    import pytest
-
-    pytest.skip("EnergyToInstantaneousAdapter has bug: modifies frozen config")
-
     geometry = _create_base_geometry()
     substrate = DigitalSubstrate(SubstrateConfig.digital())
 

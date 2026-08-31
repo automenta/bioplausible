@@ -1,4 +1,4 @@
-"""Joint architecture validation CLI (``biopl joint-validate``).
+"""Joint architecture validation CLI (``comp joint-validate``).
 
 Validates arbitrary 6-D coordinates (S × G × D × M × C × U) against
 joint property locks and lifecycle invariants.
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="biopl joint-validate",
+        prog="comp joint-validate",
         description="Validate 6-D joint architecture coordinates against property locks",
     )
     parser.add_argument(
@@ -500,7 +500,7 @@ def _run_composability_tests(num_samples: int, seed: int) -> bool:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Console-script entry point for ``biopl joint-validate``."""
+    """Console-script entry point for ``comp joint-validate``."""
     args = _build_parser().parse_args(argv)
 
     if args.list_axes:

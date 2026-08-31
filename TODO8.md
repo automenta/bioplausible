@@ -1,13 +1,17 @@
 # TODO8.md — Consolidated Plan
 
-> **Rev 2026-08-31 (b).** P0–P5 session logs consolidated away (full history in `git log`).
+> **Rev 2026-08-31 (c).** P0–P5 session logs consolidated away (full history in `git log`).
 > Research catalog lives in [RESEARCH3.md](RESEARCH3.md); this doc owns the engineering that unblocks it.
 >
 > **State:** P0–P5 **complete incl. pyright policy** · R1 **complete incl. construction seeding**
 > (device threading, placement guard, runner auto-device, EqProp CUDA epoch ≈ 5.6 s) · U-bypass
 > sweep complete (see audit below) · **R5.1a CPU smoke campaign commissioned** (mid-flight
 > SIGKILL → resume → complete, artifacts in `autoscientist_campaigns/smoke_cpu/`) ·
-> gate `pytest -q` green (1221 passed / 66 skipped / 25 xfailed / 4 xpassed, ~74 s) ·
+> **R5.1b GPU quick campaign commissioned** (seeds 0/1/2 in `quick_gpu*/`, 33 episodes each,
+> kill→resume lifecycle intact) · **R2 signal-honesty pass complete** (R2.4 xpass split,
+> R2.5 skip census, R2.6 kademlia+grpc seam; R2.1 extraction list prepped, deletion pending) ·
+> **R5.3/5.4/5.5 complete** (quickstart truth-checked + slow smoke, prog-name fixed, PT2 pin) ·
+> gate `pytest -q` green (1230 passed / 54 skipped / 33 xfailed / **0 xpassed**, ~75 s) ·
 > placement guard `tests/property/test_native_device_placement.py` 31 green on CUDA.
 >
 > **Policy:** zero backwards compatibility · GPU-first for all training paths · no new tests for broken
@@ -30,6 +34,14 @@
 | U-sweep | External-optimizer audit of every `torch.optim.*`/`create_optimizer` site: 4 ontology violations fixed (tradeoff ×2, hardware [18a], application [21c]), 2 dead strays deleted (core_tracks), 8 fake `use_spectral_norm`/`max_steps` kwargs removed (silently ignored → SN "ablations" compared identical models); new primitive `core.pipeline.apply_autograd_update` for custom-loss harnesses |
 | R1.4 | Suite-wide construction seeding for the parity classes (`construction_seed()` helper in `test_ontology_parity.py`; applied to the 4 presets-vs-native pairs + threshold-bearing credit composition). Parity file green with seeded inits: 30 passed / 1 skipped / 2 xfailed — all parity thresholds hold |
 | R5.1a | CPU smoke campaign commissioned via `scripts/commission_smoke_campaign.py`: mid-flight SIGKILL (process group) at 1 durable episode of iteration 1 → CLI `--resume` → completed through iteration 6, 13 episodes. Artifacts in `autoscientist_campaigns/smoke_cpu/records/`: `manifest.json` (git commit, torch/CUDA, seed, budget, kill/resume timeline), `report.md` (episodes, Pareto frontier, counterfactual attribution, replication gate), `run_first.txt`/`run_resume.txt`, YAML checkpoint copy. DB + `checkpoints/` gitignored by design |
+| R5.1b | **GPU quick campaign commissioned 2026-08-31** — 3 seeds (0/1/2) × `quick_gpu{,_seed1,_seed2}`/`campaign-id quick_r51b_s*`: 4 coords/iter, 8 iterations, **33 episodes each**, kill@1-episode → resume lifecycle (~5.5 s + ~7.5 s per seed on RTX 3080). Manifest records `device_requested=cuda`/`cuda_available=true`; metrics/resources recorded; report renders frontier + counterfactuals + replication table. **Speedup caveat:** at smoke scale (8-dim synthetic, batch 16) episodes are kernel-launch bound — GPU ≈ CPU latency or worse per coordinate (measured from artifacts; e.g. recurrent/energy_minimization 2.2 ms CPU vs 9.3 ms GPU). Speedup evidence remains training-scale (EqProp MNIST epoch ≈ 5.6 s CUDA). Multi-seed via separate output dirs (script assumes one campaign per DB) — fold into R5.1c script extension if convenient |
+| R2.4 | **xpass split complete 2026-08-31.** Native smoke tile tests split by measured ground truth (param-move probe): `tile_fa/tp/hebbian/pc` crash-free → strict-pass smoke; new `test_native_tile_learning_capability` locks learning signal (params must move after `train_step`) as strict xfail — all four leave 17/17 params frozen (the old xfail reasons were substantively right about learning, wrong about crash-freedom). `tile_ep/gnn` crash (`Energy-based settling requires a layered geometry` → candidate invalid coordinate, R3.9), `tile_snn` crash (tensor 16 vs 212 → implementation bug, R3.4) — precise strict xfails. Gate now: 0 xpassed |
+| R2.5 | **Skip census complete 2026-08-31** (one pass). Dead legacy deleted: `tests/integration/test_algorithms_integration.py` (Sprint-7 removals), `tests/integration/test_triton_integration.py` (placeholder-only), `tests/unit/test_verify_bias.py` (`_MODEL_SPECS` gone), `TestC_SurrogateLocks` shells in `test_ontology_locks.py`, placeholder `test_equilibrium_gradients_match_bptt_looped_mlp` (native gradient equivalence already covered by `test_gradient_equivalence.py`), dead `test_feedback_alignment_eqprop` in `test_validation_all.py`. Skips→xfails: 5× `EnergyToInstantaneousAdapter modifies frozen config` (adapter bug, strict; includes J6 lock) — capability recovered: 5× `test_substrate_with_riemannian_update` un-skipped and passing on all substrates (the "known limitations" were stale). Legitimate residuals: axis_probe exhausted/pairwise-fenced (34), DEFERRED geometry (11), research-directions `build()` conditional (9), adapter coverage-gap params (7), biology/scaling conditional weight-lookup (5), optional deps (wandb/Triton-CPU) (4). Skip count now meaningful: 66→54 in gate |
+| R2.6 | `uv add kademlia` (main dep — p2p DHT skips now exercise); `test_grpc_seam.py` rewritten: dead `test_grpc_seam_multi_process` stub + orphaned server scaffolding deleted (real-transport multi-process seam lives in `test_grpc_seam_subprocess.py`, slow-marked); fault-injection contract pinned locally. axis_probe `[2-0]` flake: no recurrence observed this session — still watching |
+| R5.3 | Quickstart truth-checked **end-to-end on CUDA**: Backprop 93.3% / FF 92.9% @ 3 epochs (45 s / 66 s) — matches documented expectations; dead never-called `train_backprop`/`train_forward_forward` helpers deleted; `EPOCHS` env knob (`QUICKSTART_EPOCHS`, default 3) added for smoke use. `demo/main.py` compiles clean against current API (719-line NiceGUI app, still zero campaign wiring — R5b-F Stage 2). Slow-tier smoke added: `tests/slow/test_quickstart_smoke.py` (1-epoch subprocess run, asserts output contract) |
+| R5.4 | `comp` prog-name fixed: `prog="biopl …"` → `comp …` across all CLI adapters; docstring/help `biopl` references normalized (module-entry commands point at `python -m computronium.cli.export_kernel` etc.); README "0 errors in strict mode" claim aligned with actual policy (elevated-standard on ontology, repo-wide basic). cli/ ruff diagnostics 268→264 (net negative) |
+| R5.5 | PT2 export round-trip pin: `tests/integration/test_pt2_export_roundtrip.py` — FeedforwardGeometry (backprop) + RecurrentGeometry (EqProp) export via `deployment.export_to_pt2`, reload with `torch.export.load`, outputs bitwise-equal to eager on CPU. Note: `_ComposedSystem` is not an `nn.Module` — the geometry module is the export unit |
+| R3-adjacent | **`core/construction.py` reflection bug fixed**: `resolve_consumption` reflected on `model_cls.__init__` — for plain function factories that resolves to `object.__init__`, reporting a spurious `**kwargs` catch-all, so hyperopt trials forwarded stale sampled kwargs (`learning_rate`, `max_steps`, …) into native factories and crashed against R1's kwargs rejection. Fixed via `_construction_callable` (reflect on the function itself); `tests/integration/test_hyperopt_integration.py` + `test_phase2_integration.py` now pass (were failing outside the gate) |
 
 Old P6 checklist items already satisfied: EqProp anchor 81.32% MNIST · ComputroniumLinear (26 tests) · torch.jit → torch.export migration in `deployment.py`.
 
@@ -95,12 +107,12 @@ those "SN ablation" tracks compared identical models; the comparison signal was 
 
 | # | Task | Detail |
 |---|------|--------|
-| 2.1 | Zoo retirement | Audit first (grep zoo for `@register`/`Registry.register`/presets/PARAM_UPDATE entries), extract still-live registrations (MEP presets, MEP PARAM_UPDATE) into first-class ontology modules, full suite → delete `computronium/zoo/**` incl. `tile_models.py`/`tile_fa.py`/`tile_lm.py` → full suite again. User directive: zoo deprecated for the ontology API — don't fix zoo components |
+| 2.1 | Zoo retirement | Audit done (2026-08-31). **Extraction list:** (a) MEP presets + strategies: `zoo/mep/_registration.py` registers `smep`/`smep_fast`/… as CREDIT_ASSIGNMENT and MEP optimizers (Dion/Fisher/Muon/Plain) as PARAM_UPDATE — `computronium/__init__.py` lazy table routes `muon_backprop`/`smep`/`smep_fast` here; (b) `zoo/optimizers/` PARAM_UPDATE registrations `ewc`/`spectral`/`sgd`/`adam`/`adamw`/`rmsprop` — check alias-redundancy against ontology U-axis (`ElasticConsolidationUpdate`/`SpectralConstrainedUpdate`/`EuclideanUpdate`) before extraction; (c) `zoo/models/tile_models.py`+`tile_fa.py`+`tile_lm.py` `register_model` entries — superseded by native tile factories, but `TileLM` is imported by `cli/shared.py` (needs first-class home or deletion); (d) `zoo/models/deployments/{vision,rl,timeseries,graph}.py` `register_model` blocks + `DeploymentConfig`. **Fan-in to preserve:** `get_model_spec`/`load_weights` consumed by `cli/shared.py`, `hyperopt/*`, `core/audit.py`, `config/experiment.py`, `execution/{_guards,robustness}.py`, `benchmarks/{compare_nanoGPT,rigorous}.py`. Then: extract → full suite → delete `computronium/zoo/**` → full suite. User directive: zoo deprecated for the ontology API — don't fix zoo components |
 | 2.2 | Dead/duplicate sweep | **Partially done (2026-08-31):** `ontology/dynamics/primitives.py` deleted, `ontology/utils/state.py` deleted, dead state helpers + duplicate helper copies removed. Remaining: `Substrate` naming (`ontology/_substrate.py` impl vs `ontology/substrate/` facade — facade is fine, consider merge); grep for other parallel legacy/new pairs |
 | 2.3 | Registry API unification | `Registry.list()` vs `list_models()` alias asymmetry (module-boundary test pins the raw view); alias `get_metadata` projects from canonical |
-| 2.4 | xpass noise fix | Native smoke tile tests are xfail-but-xpass (smoke checks crash-freedom only). Split: crash-free smoke (strict pass) + learning-capability test (true xfail). **Must precede R5b discovery locks** |
-| 2.5 | Skip census (one pass, then done) | 89 skips → fixed categories: missing optional dep / CUDA unavailable / DEFERRED geometry → `skip(reason=…)` · known broken capability → `xfail(reason=…)` · env flake → `flaky` + ticket · dead legacy → delete. After the census the skip count becomes meaningful instead of suspicious |
-| 2.6 | Small items | `uv add kademlia` (DHT actually exercised in slow tier); fold `test_grpc_seam_multi_process` skip into the working subprocess pattern; watch axis_probe `[2-0]` flake for recurrence |
+| 2.4 | xpass noise fix | ✅ **Done 2026-08-31** — native smoke tile tests split into crash-free strict smoke + strict-xfail learning-capability locks (see Completed Record). Gate 0 xpassed. Discovery-lock prereq satisfied |
+| 2.5 | Skip census (one pass, then done) | ✅ **Done 2026-08-31** — dead legacy deleted, adapter-bug skips→strict xfails, stale Riemannian restrictions lifted (tests now pass), residuals categorized (see Completed Record). Skip count now meaningful: gate 66→54 |
+| 2.6 | Small items | ✅ **Done 2026-08-31** — `uv add kademlia`; grpc-seam stub folded into the working subprocess pattern (dead scaffolding deleted); axis_probe `[2-0]` flake: no recurrence this session |
 
 ## 🧩 R3 — Capability Completeness (smallest blocker first)
 
@@ -130,12 +142,12 @@ those "SN ablation" tracks compared identical models; the comparison signal was 
 | # | Task | Detail |
 |---|------|--------|
 | 5.1a | ✅ CPU smoke campaign | **Commissioned 2026-08-31** — `autoscientist_campaigns/smoke_cpu/`: 2–5 coords/iter from `joint_smoke`, seed 0, synthetic task (8-dim, batch 16). Lifecycle: start → checkpoint (ENTERING-episode, interval 1) → **mid-flight SIGKILL at 1 durable episode** (iteration 0 in DB) → CLI `--resume` → completed through iteration 6 (13 episodes; interrupted iteration 1 re-ran its deterministic coordinate stream → documented overlap). Manifest + report + logs + YAML checkpoint in `records/`. Regenerate: `uv run scripts/commission_smoke_campaign.py --fresh` |
-| 5.1b | GPU quick campaign | 5–20 coordinates, 2–3 seeds on CUDA: no silent CPU fallback (placement guard), visible speedup, metrics/resources recorded |
-| 5.1c | **Commissioned campaign** | 30–100 coordinates, ≥5 seeds for winners, ≥2 task families (replication gate), frontier + counterfactual + golden manifest persisted into `autoscientist_campaigns/`. The first real artifact — nothing consumes the stack until this exists |
-| 5.2 | One-command demo on GPU | `comp campaign run` → Pareto + replication + counterfactual report, end-to-end on CUDA, documented. The commissioning script already renders that report on CPU; R5.1b reuses it (`--device cuda`), R5.2 reduces to documenting the one-liner |
-| 5.3 | Demo/quickstart truth-check | `scripts/quickstart.py`, `demo/main.py`, README factory examples verified against current API (the autoscientist package was unimportable until P5 — demos may be stale); add slow-tier smoke |
-| 5.4 | CLI/docs polish | `comp` prog-name prints "biopl" (cosmetic); align README's "0 errors in strict mode" claim with the actual pyright policy |
-| 5.5 | Export pin | torch.export (PT2) round-trip test for FeedforwardGeometry + RecurrentGeometry (migration done; pin it) |
+| 5.1b | ✅ GPU quick campaign | **Commissioned 2026-08-31** — 3 seeds in `quick_gpu{,_seed1,_seed2}` (campaign-ids `quick_r51b_s*`), 4 coords/iter × 8 iters, **33 episodes each**, kill→resume intact, manifest `device_requested=cuda`, metrics/resources recorded, frontier + counterfactual + replication rendered. Placement guard green; **no speedup at smoke scale** (launch-bound toy task — measured, documented in README + Completed Record); speedup evidence = training-scale (EqProp MNIST ≈ 5.6 s/epoch CUDA). Improvement-10 note: iteration 1 re-ran post-kill, duplicating recorded coordinates (uniqueness fix still open) |
+| 5.1c | **Commissioned campaign** | 30–100 coordinates, ≥5 seeds for winners, ≥2 task families (replication gate), frontier + counterfactual + golden manifest persisted into `autoscientist_campaigns/`. The first real artifact — nothing consumes the stack until this exists. **Next session's headline.** Script extension needed: multi-seed + multi-task-family in one campaign dir (currently one campaign per DB/seed) |
+| 5.2 | One-command demo on GPU | `comp campaign run` → Pareto + replication + counterfactual report, end-to-end on CUDA, documented. The commissioning script renders that report (R5.1a/b prove it on CPU/CUDA); R5.2 reduces to documenting the one-liner — fold into R5.1c write-up |
+| 5.3 | ✅ Demo/quickstart truth-check | **Done 2026-08-31** — quickstart verified end-to-end on CUDA (93.3%/92.9%), dead helpers deleted, `QUICKSTART_EPOCHS` knob, slow-tier smoke `tests/slow/test_quickstart_smoke.py` added; `demo/main.py` compiles vs current API (campaign wiring still zero — R5b-F Stage 2) |
+| 5.4 | ✅ CLI/docs polish | **Done 2026-08-31** — prog-name `biopl`→`comp` across CLI adapters, docstring entry-points normalized, README pyright claim aligned |
+| 5.5 | ✅ Export pin | **Done 2026-08-31** — `tests/integration/test_pt2_export_roundtrip.py`: PT2 round-trip bitwise-equal for Feedforward + Recurrent geometry modules |
 
 ### R5b — Discovery Demo Package (the "prove it" milestone)
 
@@ -146,7 +158,7 @@ those "SN ablation" tracks compared identical models; the comparison signal was 
 | A | Pre-register one toy-scale hypothesis | From RESEARCH3 L1/L2/substrate-ablation catalog (e.g. "FastWeight cuts post-switch re-adaptation ≥30% vs Null at matched compute"); thresholds committed before any full run |
 | B | Locked grid campaign on GPU | `CampaignStack.run_campaign` over ~30–100 coordinates, matched budgets, ≥5 seeds; replication gate (≥2 task families) must pass |
 | C | Evidence chain | Pareto frontier over 𝒞 (compute/memory/energy/latency/plasticity) + counterfactual attribution table naming the axis that owns each knee |
-| D | **Discovery locks (tests)** | ① winner-must-replicate: pinned-seed test asserting the discovered gap within tolerance — failing test = capability regression; ② attribution lock: `analysis/counterfactual.py` ranks the discovered axis first, stable across seeds; ③ replay lock: same `(seed, campaign_id, iteration)` re-derives the discovery **within tight tolerance on GPU** — bitwise replay is deprioritized (opt-in: CPU reference or explicit deterministic mode); manifest records torch/CUDA/GPU versions and deterministic flags. ⚠️ Prereqs: R2.4 (xpass split) and improvement-11 θ-init determinism — episode replay currently re-draws init on resume |
+| D | **Discovery locks (tests)** | ① winner-must-replicate: pinned-seed test asserting the discovered gap within tolerance — failing test = capability regression; ② attribution lock: `analysis/counterfactual.py` ranks the discovered axis first, stable across seeds; ③ replay lock: same `(seed, campaign_id, iteration)` re-derives the discovery **within tight tolerance on GPU** — bitwise replay is deprioritized (opt-in: CPU reference or explicit deterministic mode); manifest records torch/CUDA/GPU versions and deterministic flags. ⚠️ Prereqs: ~~R2.4 (xpass split)~~ ✅ done 2026-08-31; improvement-11 θ-init determinism still open — episode replay currently re-draws init on resume |
 | E | Golden manifest (mandatory from R5.1c on) | Every commissioned campaign writes: git commit, config hash, dependency lock, torch/CUDA versions, device, deterministic mode, seed list, task family, budget, replication summary → `results/<item>/<seed>/manifest.json` + checked-in figure-regeneration script (RESEARCH3 E-3) |
 | F | Discovery Report UI | Stage 1: static HTML/JSON report from the stack (frontier, replication, attribution, timeline) — snapshot-tested. Stage 2: live Campaign tab in `demo/main.py` (719-line NiceGUI app, currently **zero** campaign/autoscientist wiring) |
 
@@ -174,9 +186,9 @@ Old P6 phases map onto RESEARCH3's critical paths — execute there, not here:
 2. ~~**R1 device threading** — factories, kwargs rejection, placement guard, runner auto-device~~ ✅ done 2026-08-31
 3. ~~**R1 validation** — construction seeding~~ ✅ 1.4 done 2026-08-31 (parity classes seeded; parity file 30 pass) · ✅ EqProp MNIST epoch 5.6 s on CUDA · ✅ zero silent CPU fallback (placement guard)
 4. ~~**R5.1a CPU smoke campaign**~~ ✅ commissioned 2026-08-31 — start → checkpoint → **mid-flight kill** → resume → complete → artifacts (`autoscientist_campaigns/smoke_cpu/`)
-5. **R5.1b GPU quick campaign** — placement + speedup + replication/frontier output (unblocked: CampaignStack runs end-to-end on CUDA; verified 2026-08-31). Command in `autoscientist_campaigns/README.md` — **next**
-6. **R2 signal honesty** — xpass split, skip census; prepare zoo extraction list
-7. **R5.1c commissioned campaign** — lock config, run, replicate, persist to `autoscientist_campaigns/`, report
+5. ~~**R5.1b GPU quick campaign**~~ ✅ commissioned 2026-08-31 — 3 seeds, 33 episodes each, CUDA placement verified, lifecycle intact; smoke-scale speedup honestly measured as absent (launch-bound toy task) — see Completed Record
+6. ~~**R2 signal honesty** — xpass split, skip census, zoo extraction list~~ ✅ done 2026-08-31 (R2.4/2.5/2.6 complete; 2.1 extraction list prepped, deletion next)
+7. **R5.1c commissioned campaign** — lock config, run, replicate, persist to `autoscientist_campaigns/`, report — **next** (needs script extension: multi-seed + ≥2 task families per campaign)
 
 Then R5b and RESEARCH3 become real. Everything else (zoo deletion, kernel breadth, capability xfails) is important but must not block the first commissioned campaign.
 
@@ -197,12 +209,17 @@ Then R5b and RESEARCH3 become real. Everything else (zoo deletion, kernel breadt
 3. **ψ-device coupling** — `initial_psi` for Routing/FastWeight created CPU tensors regardless of θ device; now derives device from `SystemContext.device`. RuleState already device-aware. When adding plasticity primitives, always key ψ off `context.device`.
 4. **Pyright policy floor** — `strict` on ontology surfaces 131 findings (mostly torch `Unknown` tracking + private-import usage); pyright forbids downgrading rules inside `strict` paths, so the policy uses elevated-standard there (0 errors). Raising to full `strict` = annotation work in `_dynamics`/`geometry`/`update`; repo-wide basic is ~2.5k findings (pre-existing, never gated).
 5. **Dead helper consolidation** — `_layer_stack`/`_learnable_weight_names`/`_set_param_name` each had 2–3 live copies across `geometry.py`/`utils/`/`system.py`/`_substrate.py`; consolidated (canonical: `geometry.py` for `_layer_stack`/`_set_param_name`, `utils/params.py` for `_learnable_weight_names`). `_layer_stack` renamed public (`layer_stack`) — it is cross-module API.
-6. **R2.4 xpass split still open** — 4 xpassed in native smoke (tile tests crash-free but xfail-marked); must precede R5b discovery locks.
+6. ~~**R2.4 xpass split still open**~~ ✅ done 2026-08-31 — tile smoke split into strict crash-free pass + strict-xfail learning-capability locks; gate 0 xpassed. See Completed Record.
 7. ~~**R1.4 construction seeding**~~ ✅ done — parity classes seeded via `construction_seed()` helper; see Completed Record.
 8. **`compute_energy` duplication** — Energy/Spike/Instantaneous/Diffusion dynamics each carry near-identical `compute_energy` bodies over duck-typed states; extract to one `_energy_from_state(state, geometry)` helper next touch.
 9. **SIGKILL to `uv` orphans the worker python (2026-08-31)** — killing the `uv` wrapper leaves the `comp` child alive, which kept executing the campaign to completion in the background. Campaign runners must `killpg` the session (`scripts/commission_smoke_campaign.py::_kill_tree`, `start_new_session=True`). Same hazard applies to spot-instance teardown and the gRPC worker launcher.
-10. **Resume can duplicate episodes (2026-08-31)** — `add_episode` has no uniqueness on (campaign_id, iteration, coordinate); a crash mid-iteration + resume re-runs the whole iteration from the deterministic coordinate stream, so already-recorded coordinates land twice (observed: iteration 1 with 3 episodes). Harmless for lifecycle, but it skews counterfactual `n_pairs` means and would contaminate R5b-D winner-replication locks. Fix shape: per-(campaign, iteration, coordinate) uniqueness or skip-recorded-coordinates when re-running an interrupted iteration.
+10. **Resume can duplicate episodes (2026-08-31)** — `add_episode` has no uniqueness on (campaign_id, iteration, coordinate); a crash mid-iteration + resume re-runs the whole iteration from the deterministic coordinate stream, so already-recorded coordinates land twice (observed: iteration 1 with 3 episodes; **reproduced in all three R5.1b seeds**). Harmless for lifecycle, but it skews counterfactual `n_pairs` means and would contaminate R5b-D winner-replication locks. Fix shape: per-(campaign, iteration, coordinate) uniqueness or skip-recorded-coordinates when re-running an interrupted iteration.
 11. **θ init draws ride the ambient RNG across resume (2026-08-31)** — repeated coordinates after resume get different metrics (observed: same coordinate 2.1026 pre-kill vs 2.1247 post-resume). Coordinate + batch streams are deterministic per (seed, campaign_id, iteration); parameter construction is not. R5b-D replay locks therefore need either per-episode construction seeding derived from (seed, campaign_id, episode) inside `run_campaign`, or redo executed from the checkpointed θ — decide before writing discovery locks.
+12. **`resolve_consumption` mis-reflected function factories (2026-08-31, fixed)** — it reflected on `model_cls.__init__`, which for plain function factories resolves to `object.__init__` → spurious `**kwargs` catch-all → hyperopt forwarded stale sampled kwargs (`learning_rate`, `max_steps`, …) into native factories, crashing trials against R1's kwargs rejection. Fixed via `_construction_callable` (reflect on the function itself); hyperopt/phase2 integration tests green. *Lesson: `obj.__init__` reflection lies for functions — pair it with `inspect.isroutine`.*
+13. **Skips hid recovered capability (2026-08-31)** — `test_substrate_with_riemannian_update` was skip-marked for "known limitations" that no longer exist; un-skipped, all 5 substrates pass. *Lesson: the census isn't paperwork — stale skips mask fixed capabilities and dead tests mask removed APIs.*
+14. **Smoke-scale campaigns cannot demonstrate GPU speedup (2026-08-31)** — 8-dim/batch-16 episodes are kernel-launch bound; measured GPU ≈ CPU or worse per coordinate (recurrent/settle worst at ~0.24×). Any R5.1c/R5b claim involving speedup must be task-scale-qualified (MNIST-scale settle loops, larger batches) or scoped to lifecycle/placement only. Consequence: R5.1c should vary task family *and* scale if compute-efficiency contrasts are wanted from campaign artifacts alone.
+15. **Don't mutate the tree while the gate runs (2026-08-31, process note)** — a mid-run `git stash`/`pop` for a ruff HEAD-comparison killed a census pytest run mid-flight (truncated output, no summary). Run comparisons before/after test batches, never concurrently.
+16. **`_ComposedSystem` is not an `nn.Module` (2026-08-31)** — torch.export requires a module; the geometry module is the export unit (pinned by `test_pt2_export_roundtrip.py`). If whole-system export is ever wanted, `_ComposedSystem` needs an `nn.Module` facade — currently deliberate (dataclass system, module per axis).
 
 ---
 
@@ -219,16 +236,16 @@ Then R5b and RESEARCH3 become real. Everything else (zoo deletion, kernel breadt
 ## ✅ Definition of Done
 
 - **R1:** ✅ EqProp MNIST epoch on CUDA in ~5.6 s · ✅ parity classes construction-seeded · `pytest -q` green · pyright policy in pre-commit → **R1 complete**
-- **R2:** `computronium/zoo/**` deleted · no dead stubs or duplicate Substrate · 0 xpass noise · skip census recorded
-- **R3:** DiffusionDynamics un-xfailed · every remaining xfail has a precise reason · no hardcoded geometry inference
+- **R2:** `computronium/zoo/**` deleted (extraction list ready; extraction + deletion remain) · no dead stubs or duplicate Substrate · ✅ 0 xpass noise · ✅ skip census recorded → **R2.4/2.5/2.6 complete, 2.1/2.2/2.3 remain**
+- **R3:** DiffusionDynamics un-xfailed · every remaining xfail has a precise reason (✅ enforced this session) · no hardcoded geometry inference
 - **R4:** ≥2 operator families beyond settle through the Substrate API · equivalence test per port
-- **R5:** ≥1 commissioned campaign (iterate→interrupt→resume) in `autoscientist_campaigns/` with golden manifest · demo runs end-to-end on CUDA · discovery locks green (winner-replication + attribution + tolerance replay)
+- **R5:** ✅ R5.1a+b commissioned campaigns (kill→interrupt→resume) in `autoscientist_campaigns/` with manifests · R5.1c commissioned campaign (golden manifest, replication gate) remains · ✅ demo/quickstart verified on CUDA · discovery locks green (winner-replication + attribution + tolerance replay) — blocked on 5.1c + improvement-10/11
 - **R6:** RESEARCH3 PR-1 + PR-2 merged · PR-7 shakedown green
 
 ## 🔧 Quick Commands
 
 ```bash
-# Gate (default, ~65s): unit+property; slow/benchmark/llm auto-deselected; 60s per-test timeout
+# Gate (default, ~75s): unit+property; slow/benchmark/llm auto-deselected; 60s per-test timeout
 uv run pytest -q
 # Slow tier (~25min; `tests` arg required — testpaths limits bare pytest to unit+property)
 uv run pytest tests -m slow
@@ -242,19 +259,28 @@ uv run pytest tests/property/test_ontology_locks.py tests/unit/core/test_registr
 # CUDA placement guard (all 28 native factories; skips without CUDA)
 uv run pytest tests/property/test_native_device_placement.py -q
 
-# Commission a smoke campaign: start → mid-flight kill → resume → artifacts
-uv run scripts/commission_smoke_campaign.py --fresh
-# `comp campaign run` accepts --device (default auto) / --seed / --tasks
-
 # Native smoke / settle protocol / joint benchmarks
 uv run pytest tests/property/test_native_smoke.py -v
 uv run pytest tests/integration/test_settle_protocol_models.py -q
 uv run pytest tests/integration/joint/test_benchmarks.py -v
 
-# Type check (policy: strict on ontology/, basic elsewhere)
+# Commission a smoke campaign: start → mid-flight kill → resume → artifacts
+uv run scripts/commission_smoke_campaign.py --fresh
+# GPU quick campaign (3 seeds commissioned; see autoscientist_campaigns/README.md):
+uv run scripts/commission_smoke_campaign.py --fresh --device cuda \
+  --output-dir autoscientist_campaigns/quick_gpu --campaign-id quick_r51b \
+  --experiments-per-iter 4 --iterations-first 6 --iterations-resume 8
+# `comp campaign run` accepts --device (default auto) / --seed / --tasks
+
+# Quickstart smoke (slow tier, ~1 min on CUDA via QUICKSTART_EPOCHS=1)
+uv run pytest tests/slow/test_quickstart_smoke.py -m slow -q
+# PT2 export round-trip pin
+uv run pytest tests/integration/test_pt2_export_roundtrip.py -q
+
+# Type check (policy: elevated-standard on ontology/, basic elsewhere)
 uv run pyright computronium/ontology
 
 # NOTE: sync with `uv sync --extra dev --extra lightning` (plain dev sync removes
 #   lightning -> 4 collection errors). Serial only — xdist hangs in this env.
-#   Installed script is `comp`; help output prints prog-name "biopl" (cosmetic).
+#   kademlia is a main dependency (DHT exercised in slow tier).
 ```

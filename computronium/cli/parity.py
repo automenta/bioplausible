@@ -1,4 +1,4 @@
-"""``biopl-parity`` — Backprop-baseline parity CLI.
+"""``comp-parity`` — Backprop-baseline parity CLI.
 
 Trains two configurations via ``SystemTrainer`` under one global seed and reports
 the final accuracy gap (percentage points).
@@ -8,8 +8,8 @@ last per-epoch accuracy (preferring ``train_acc``, falling back to ``val_acc``).
 
 Usage::
 
-    uv run biopl parity --config-a backprop --config-b eqprop --task mnist
-    uv run biopl parity --config-a fa --config-b backprop --seed 7 --json
+    uv run comp parity --config-a backprop --config-b eqprop --task mnist
+    uv run comp parity --config-a fa --config-b backprop --seed 7 --json
 """
 
 import argparse
@@ -198,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
             args.device,
         )
     except Exception as e:
-        logger.error("biopl-parity failed: %s", e)
+        logger.error("comp parity failed: %s", e)
         return 2
 
     if args.json:

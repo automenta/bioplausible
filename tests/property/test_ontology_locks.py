@@ -922,28 +922,6 @@ def test_u_elastic_moves_toward_old_params() -> None:
 # ======================================================================
 
 
-# A1 — LocalGoodnessCredit & TargetInversionCredit: Surrogate Objective Locks
-class TestC_SurrogateLocks:
-    """Surrogate objective property tests using check_surrogate_equivalence.
-
-    Skipped: computronium.validation.gradient_check imports validation tracks which
-    have legacy LoopedMLP imports (removed in Sprint 9). These tests are
-    part of the validation tracks infrastructure, not the core ontology locks.
-    """
-
-    @pytest.mark.skip(
-        reason="Depends on validation tracks with legacy LoopedMLP imports"
-    )
-    def test_local_goodness_surrogate(self) -> None:
-        """LocalGoodnessCredit surrogate objective FD check."""
-
-    @pytest.mark.skip(
-        reason="Depends on validation tracks with legacy LoopedMLP imports"
-    )
-    def test_target_inversion_surrogate(self) -> None:
-        """TargetInversionCredit surrogate objective FD check."""
-
-
 # A2 — TemporalTraceCredit: STDP Window Property Tests
 class TestC_TemporalTraceSTDP:
     """STDP window property tests for TemporalTraceCredit."""

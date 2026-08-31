@@ -12,6 +12,7 @@ These tests verify the lifecycle invariants of the 6-D joint architecture:
 
 from __future__ import annotations
 
+import pytest
 import torch
 from torch import Tensor
 
@@ -589,12 +590,11 @@ def test_j6_substrate_adapter_preserves_registry_semantics():
     registry.validate(z)
 
 
+@pytest.mark.xfail(
+    reason="EnergyToInstantaneousAdapter modifies frozen config - bug in adapter", strict=True
+)
 def test_j6_dynamics_adapter_preserves_shape():
     """J6: Dynamics adapter preserves CompositeState structure."""
-    import pytest
-
-    # Skip: EnergyToInstantaneousAdapter has a bug where it tries to modify frozen config
-    pytest.skip("EnergyToInstantaneousAdapter modifies frozen config - bug in adapter")
     substrate = DigitalSubstrate(SubstrateConfig.digital())
     geometry = RecurrentGeometry(
         GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),

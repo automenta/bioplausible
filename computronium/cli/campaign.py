@@ -1,4 +1,4 @@
-"""Joint Campaign CLI (``biopl campaign``).
+"""Joint Campaign CLI (``comp campaign``).
 
 Runs and manages 6-D joint architecture campaigns with:
 - Campaign persistence (SQLite + YAML)
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="biopl campaign",
+        prog="comp campaign",
         description="Run and manage 6-D joint architecture campaigns",
     )
     subparsers = parser.add_subparsers(dest="subcommand", help="Campaign subcommand")
@@ -448,7 +448,7 @@ def _export_campaign(args) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Console-script entry point for ``biopl campaign``."""
+    """Console-script entry point for ``comp campaign``."""
     args = _build_parser().parse_args(argv)
 
     if not args.subcommand:

@@ -23,7 +23,6 @@ import torch.nn.functional as F
 from torch import nn
 
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
-from computronium.models.native.backprop_native import create_native_backprop_mlp
 
 _GRAD_PARITY_TOL = 5e-2  # implicit-diff vs BPTT relative error budget
 
@@ -63,35 +62,6 @@ def _grads(bptt_model: nn.Module, eq_model: nn.Module) -> None:
     for m, gm in ((bptt_model, "bptt"), (eq_model, "equilibrium")):
         m.zero_grad()
         _forward_loss(m, x, y).backward()
-
-
-@pytest.mark.parametrize("use_sn", [True, False])
-@pytest.mark.xfail(
-    reason="GATE-0: Equilibrium gradient method drift from BPTT in native composition. "
-    "Native models use ThermodynamicContrast credit which has different gradient semantics."
-)
-def test_equilibrium_gradients_match_bptt_looped_mlp(use_sn: bool) -> None:
-    """Implicit-equilibrium gradients equal unrolled BPTT to within a tolerance."""
-    torch.manual_seed(0)
-
-    # Create native models
-    # Native models don't have gradient_method config - they use fixed credit assignment
-    # This test is kept as a regression guard but xfails due to GATE-0
-    bptt_model = create_native_backprop_mlp(8, 12, 3, num_layers=1, lr=0.01)
-    eq_model = create_native_eqprop_mlp(
-        input_dim=8,
-        hidden_dim=12,
-        output_dim=3,
-        num_layers=1,
-        beta=0.5,
-        settle_steps=10,
-        lr=0.01,
-    )
-
-    # Note: Native models are Systems, not nn.Modules
-    # They don't have named_parameters() or state_dict()
-    # This test is a placeholder for future native gradient equivalence testing
-    pytest.skip("Native models use different API - test needs redesign")
 
 
 def test_equilibrium_learns_looped_mlp_with_spectral_norm() -> None:
@@ -137,7 +107,6 @@ def test_conv_eqprop_equilibrium_learns() -> None:
     This test is skipped because ConvGeometry is not yet implemented.
     See TODO7.md P3 - Geometry Build-Out: Science vs Product Decision.
     """
-    pass
 
 
 if __name__ == "__main__":

@@ -223,10 +223,6 @@ class TestValidationAll:
     def test_homeostatic_eqprop(self):
         pass
 
-    @pytest.mark.skip(reason="FeedbackAlignmentEqProp legacy model deleted - use native_fa_mlp")
-    def test_feedback_alignment_eqprop(self):
-        pass
-
 
 if __name__ == "__main__":
     unittest.main()

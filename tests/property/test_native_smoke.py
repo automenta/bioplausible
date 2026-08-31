@@ -52,7 +52,6 @@ from computronium.models.native.tile_native import (
     create_native_tile_tp,
 )
 
-
 # Common test parameters
 INPUT_DIM = 16
 HIDDEN_DIM = 16
@@ -244,41 +243,62 @@ def test_native_research_eqprop_smoke(factory):
 # =============================================================================
 
 
+_TILE_CRASH_XFAIL = {
+    create_native_tile_ep: (
+        "EnergyMinimizationDynamics on TileMesh raises TypeError: "
+        "'Energy-based settling requires a layered geometry' — "
+        "candidate invalid coordinate (R3.9)"
+    ),
+    create_native_tile_snn: (
+        "SpikeIntegrationDynamics on TileMesh raises RuntimeError: "
+        "tensor size mismatch (16 vs 212) at dim 1 — implementation bug (R3.4)"
+    ),
+    create_native_tile_gnn: (
+        "EnergyMinimizationDynamics on TileMesh raises TypeError: "
+        "'Energy-based settling requires a layered geometry' — "
+        "candidate invalid coordinate (R3.9)"
+    ),
+}
+
+_TILE_NO_LEARNING_XFAIL = {
+    create_native_tile_fa: (
+        "FA + InstantaneousDynamics on TileMesh yields no error signal: "
+        "train_step leaves all params frozen"
+    ),
+    create_native_tile_tp: (
+        "TargetInversionCredit + PredictiveSettlingDynamics on TileMesh "
+        "yields no error signal: train_step leaves all params frozen"
+    ),
+    create_native_tile_hebbian: (
+        "LocalGoodnessCredit on TileMesh returns empty pseudo-gradients: "
+        "train_step leaves all params frozen"
+    ),
+    create_native_tile_pc: (
+        "PredictiveSettlingDynamics on TileMesh yields no error signal: "
+        "train_step leaves all params frozen"
+    ),
+}
+
+_TILE_CRASH_FREE = (
+    create_native_tile_fa,
+    create_native_tile_tp,
+    create_native_tile_hebbian,
+    create_native_tile_pc,
+)
+
+
 @pytest.mark.parametrize(
     "factory",
     [
-        pytest.param(
-            create_native_tile_ep,
-            marks=pytest.mark.xfail(reason="TileGeometry incompatible with EnergyMinimizationDynamics"),
-        ),
-        pytest.param(
-            create_native_tile_fa,
-            marks=pytest.mark.xfail(reason="FA with InstantaneousDynamics produces no error signal"),
-        ),
-        pytest.param(
-            create_native_tile_tp,
-            marks=pytest.mark.xfail(reason="TileGeometry + PredictiveSettlingDynamics not working"),
-        ),
-        pytest.param(
-            create_native_tile_snn,
-            marks=pytest.mark.xfail(reason="SpikeIntegrationDynamics tensor size mismatch with TileGeometry"),
-        ),
-        pytest.param(
-            create_native_tile_hebbian,
-            marks=pytest.mark.xfail(reason="TileGeometry + InstantaneousDynamics + LocalGoodnessCredit returns empty gradients"),
-        ),
-        pytest.param(
-            create_native_tile_pc,
-            marks=pytest.mark.xfail(reason="TileGeometry + PredictiveSettlingDynamics not working"),
-        ),
-        pytest.param(
-            create_native_tile_gnn,
-            marks=pytest.mark.xfail(reason="TileGeometry + EnergyMinimizationDynamics not working"),
+        *_TILE_NO_LEARNING_XFAIL,
+        *(
+            pytest.param(f, marks=pytest.mark.xfail(reason=r, strict=True))
+            for f, r in _TILE_CRASH_XFAIL.items()
         ),
     ],
 )
 def test_native_tile_variants_smoke(factory):
-    """All native tile variants: forward + train_step."""
+    """Crash-free smoke for tile variants: forward + train_step run."""
     model = factory(INPUT_DIM, HIDDEN_DIM, OUTPUT_DIM, lr=0.001)
     x, y = _make_batch()
     out = model(x)
@@ -287,6 +307,24 @@ def test_native_tile_variants_smoke(factory):
     result = model.train_step(x, y)
     assert "loss" in result
     assert "accuracy" in result
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [
+        pytest.param(f, marks=pytest.mark.xfail(reason=r, strict=True))
+        for f, r in _TILE_NO_LEARNING_XFAIL.items()
+    ],
+)
+def test_native_tile_learning_capability(factory):
+    """Learning-capability lock: train_step must move parameters."""
+    model = factory(INPUT_DIM, HIDDEN_DIM, OUTPUT_DIM, lr=0.001)
+    x, y = _make_batch()
+    before = [p.detach().clone() for p in model.parameters()]
+    model.train_step(x, y)
+    assert any(
+        not torch.equal(p.detach(), b) for p, b in zip(model.parameters(), before)
+    )
 
 
 if __name__ == "__main__":
