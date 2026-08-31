@@ -13,17 +13,21 @@ from computronium import (
     create_backprop_mlp,
     create_eqprop_mlp,
     create_fa_mlp,
-    create_pepita_mlp,
-    create_tp_mlp,
-    create_pc_mlp,
-    create_hebbian_mlp,
-    create_snn_mlp,
-    create_tile_mlp,
-    create_routing_mlp,
     create_fast_weight_mlp,
     create_ff_mlp,
+    create_hebbian_mlp,
+    create_pc_mlp,
+    create_pepita_mlp,
+    create_routing_mlp,
+    create_snn_mlp,
+    create_tile_mlp,
+    create_tp_mlp,
 )
-from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
+from computronium.core.system_trainer import (
+    SystemTrainer,
+    SystemTrainerConfig,
+    compose_system,
+)
 from computronium.domains.factory import create_task
 from computronium.models.native.backprop_native import create_native_backprop_mlp
 from computronium.models.native.diffusion_eqprop_native import (
@@ -31,17 +35,17 @@ from computronium.models.native.diffusion_eqprop_native import (
 )
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 from computronium.models.native.fa_native import (
-    create_native_fa_mlp,
     create_native_fa_adaptive,
-    create_native_fa_stochastic,
     create_native_fa_contrastive,
-    create_native_fa_sign_symmetric,
+    create_native_fa_deep_dfa,
     create_native_fa_direct,
     create_native_fa_energy_guided,
     create_native_fa_energy_minimizing,
     create_native_fa_equilibrium_alignment,
     create_native_fa_layerwise_equilibrium,
-    create_native_fa_deep_dfa,
+    create_native_fa_mlp,
+    create_native_fa_sign_symmetric,
+    create_native_fa_stochastic,
 )
 from computronium.models.native.momentum_eqprop_native import (
     create_native_momentum_eqprop,
@@ -52,14 +56,8 @@ from computronium.models.native.research_native import (
     create_native_finite_nudge_ep,
     create_native_holomorphic_ep,
 )
-from computronium.models.native.sparse_eqprop_native import create_native_sparse_eqprop
-from computronium.models.native.ternary_eqprop_native import (
-    create_native_ternary_eqprop,
-)
 from computronium.models.native.tile_native import (
-    create_native_tile_ep,
     create_native_tile_fa,
-    create_native_tile_gnn,
     create_native_tile_hebbian,
     create_native_tile_pc,
     create_native_tile_snn,
@@ -70,7 +68,6 @@ from computronium.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
     DigitalSubstrate,
-    EnergyMinimizationDynamics,
     EuclideanUpdate,
     FeedforwardGeometry,
     GeometryConfig,
@@ -88,7 +85,6 @@ from computronium.ontology import (
     TernarySubstrate,
     ThermodynamicContrast,
 )
-from computronium.core.system_trainer import compose_system
 
 # Every test here trains full models (2-3 epochs each); runs in the slow tier only.
 pytestmark = [pytest.mark.slow, pytest.mark.timeout(300)]
@@ -152,6 +148,11 @@ def train_system(
     return history[-1].get("val_acc", history[-1].get("train_acc", 0.0)) * 100
 
 
+def construction_seed(seed: int = 42) -> None:
+    """Pin factory init draws so parity holds regardless of suite ordering."""
+    torch.manual_seed(seed)
+
+
 class TestBackpropParity:
     """Test Backprop parity between presets factory and native."""
 
@@ -162,14 +163,11 @@ class TestBackpropParity:
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
         hidden_dim = 128
 
-        # Seed each construction identically: init draws from ambient RNG
-        # state otherwise, so parity varies with suite ordering (CUDA).
-        torch.manual_seed(42)
-        # Both should produce valid systems that train
+        construction_seed()
         system1 = create_backprop_mlp(
             input_dim, (hidden_dim,), output_dim, lr=0.001, device=device
         )
-        torch.manual_seed(42)
+        construction_seed()
         system2 = create_native_backprop_mlp(
             input_dim, hidden_dim, output_dim, lr=0.001
         )
@@ -195,6 +193,7 @@ class TestEqPropParity:
         hidden_dim = 128
 
         # Use same parameters for both (native uses settle_steps, not inference_steps)
+        construction_seed()
         system1 = create_eqprop_mlp(
             input_dim,
             (hidden_dim,),
@@ -204,6 +203,7 @@ class TestEqPropParity:
             lr=0.001,
             device=device,
         )
+        construction_seed()
         system2 = create_native_eqprop_mlp(
             input_dim, hidden_dim, output_dim, beta=0.1, settle_steps=10, lr=0.001
         )
@@ -223,6 +223,7 @@ class TestEqPropParity:
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
         hidden_dim = 128
 
+        construction_seed()
         system1 = create_eqprop_mlp(
             input_dim,
             (hidden_dim,),
@@ -232,6 +233,7 @@ class TestEqPropParity:
             lr=0.001,
             device=device,
         )
+        construction_seed()
         system2 = create_native_momentum_eqprop(
             input_dim, hidden_dim, output_dim, beta=0.1, settle_steps=10, lr=0.001
         )
@@ -272,6 +274,7 @@ class TestFAParity:
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
         hidden_dim = 128
 
+        construction_seed()
         system1 = create_fa_mlp(
             input_dim,
             (hidden_dim,),
@@ -280,6 +283,7 @@ class TestFAParity:
             feedback_scale=0.1,
             device=device,
         )
+        construction_seed()
         system2 = create_native_fa_mlp(input_dim, hidden_dim, output_dim, lr=0.001)
 
         acc1 = train_system(system1, train_loader, val_loader, epochs, device)
@@ -349,9 +353,11 @@ class TestPEPITAParity:
         train_loader, val_loader, input_dim, output_dim = make_dataloaders(device)
         hidden_dim = 128
 
+        construction_seed()
         system1 = create_pepita_mlp(
             input_dim, (hidden_dim, hidden_dim), output_dim, lr=0.01, device=device
         )
+        construction_seed()
         system2 = create_native_pepita_mlp(
             input_dim, hidden_dim, output_dim, num_layers=2, lr=0.01
         )
@@ -417,6 +423,7 @@ class TestOntologyComposition:
         credit = credit_map[credit_type]()
         update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.001))
 
+        construction_seed()
         system = compose_system(substrate, geometry, dynamics, credit, update)
         acc = train_system(system, train_loader, val_loader, 2, device)
 

@@ -57,6 +57,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Checkpoint interval (episodes)",
     )
     run_parser.add_argument(
+        "--device",
+        default="auto",
+        help="Episode execution device ('auto' = best available backend)",
+    )
+    run_parser.add_argument("--seed", type=int, default=0, help="Base RNG seed")
+    run_parser.add_argument(
+        "--tasks",
+        default="synthetic",
+        help="Comma-separated task labels cycled across episodes (drives "
+        "replication grouping; batches are the deterministic synthetic set)",
+    )
+    run_parser.add_argument(
         "--resume", action="store_true", help="Resume from latest checkpoint"
     )
     run_parser.add_argument(
@@ -130,7 +142,6 @@ def _get_search_space(space_name: str) -> dict:
             "plasticity": ["null", "routing", "fast_weights"],
             "credits": ["thermodynamic_contrast", "random_projections"],
             "updates": ["euclidean"],
-            "tasks": ["mnist"],
         },
         "joint_full": {
             "substrates": [
@@ -171,24 +182,9 @@ def _get_search_space(space_name: str) -> dict:
                 "natural_gradient",
                 "elastic_consolidation",
             ],
-            "tasks": ["mnist", "cifar10"],
         },
     }
     return spaces.get(space_name, spaces["joint_smoke"])
-
-
-def _generate_random_coordinate(space: dict) -> str:
-    """Generate a random valid 6-D coordinate from search space."""
-    import random
-
-    return "/".join([
-        random.choice(space["substrates"]),
-        random.choice(space["geometries"]),
-        random.choice(space["dynamics"]),
-        random.choice(space["plasticity"]),
-        random.choice(space["credits"]),
-        random.choice(space["updates"]),
-    ])
 
 
 def _space_sampler(space: dict):
@@ -211,12 +207,15 @@ def _run_campaign(args) -> int:
         branch=args.branch,
         checkpoint_interval=args.checkpoint_interval,
         db_path=args.db,
+        seed=args.seed,
+        device=args.device,
         on_event=print,
     )
     space = _get_search_space(args.space)
     result = stack.run_campaign(
         iterations=args.iterations,
         experiments_per_iter=args.experiments_per_iter,
+        tasks=tuple(t.strip() for t in args.tasks.split(",") if t.strip()),
         sampler=_space_sampler(space),
         campaign_id=args.campaign_id,
         resume=args.resume,
@@ -259,9 +258,8 @@ def _show_status(args) -> int:
     print(f"\nEpisodes: {len(episodes)}")
     for ep in episodes[-5:]:  # Show last 5
         fr = ep.frontier_record
-        print(
-            f"  Iter {ep.iteration}: {ep.coordinate} -> acc={fr.get('task_accuracy', 0):.4f}"
-        )
+        acc = fr.get("task_accuracy", 0)
+        print(f"  Iter {ep.iteration}: {ep.coordinate} -> acc={acc:.4f}")
 
     return 0
 
@@ -281,8 +279,10 @@ def _list_campaigns(args) -> int:
     print(f"{'Campaign ID':<15} {'Branch':<15} {'Iter':<6} {'Created':<20} {'Parent'}")
     print("-" * 80)
     for c in campaigns:
+        parent = c.parent_branch or "-"
         print(
-            f"{c.campaign_id:<15} {c.branch_name:<15} {c.iteration:<6} {c.created_at:<20} {c.parent_branch or '-'}"
+            f"{c.campaign_id:<15} {c.branch_name:<15} {c.iteration:<6} "
+            f"{c.created_at:<20} {parent}"
         )
 
     return 0
@@ -317,10 +317,12 @@ def _compare_campaigns(args) -> int:
         fr_b = best_b.frontier_record
 
         print(
-            f"\nBest A: {fr_a.get('task_accuracy', 0):.4f} acc, {fr_a.get('task_loss', 0):.4f} loss"
+            f"\nBest A: {fr_a.get('task_accuracy', 0):.4f} acc, "
+            f"{fr_a.get('task_loss', 0):.4f} loss"
         )
         print(
-            f"Best B: {fr_b.get('task_accuracy', 0):.4f} acc, {fr_b.get('task_loss', 0):.4f} loss"
+            f"Best B: {fr_b.get('task_accuracy', 0):.4f} acc, "
+            f"{fr_b.get('task_loss', 0):.4f} loss"
         )
 
     return 0
