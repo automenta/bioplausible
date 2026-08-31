@@ -423,7 +423,7 @@ class RecurrentGeometry(nn.Module):
 
             substrate = DigitalSubstrate()
         op = substrate.get_forward_operator()
-        h = x
+        h = x.flatten(1) if x.dim() > 2 else x
         for i, layer in enumerate(self._layers):
             if isinstance(layer, nn.Linear):
                 h = op(h, layer.weight)
@@ -485,7 +485,7 @@ class RecurrentGeometry(nn.Module):
 
             substrate = DigitalSubstrate()
         op = substrate.get_forward_operator()
-        h = x
+        h = x.flatten(1) if x.dim() > 2 else x
         acts = [h]
         for i, layer in enumerate(self._layers):
             if isinstance(layer, nn.Linear):

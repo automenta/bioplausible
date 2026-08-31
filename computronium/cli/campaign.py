@@ -10,19 +10,11 @@ Runs and manages 6-D joint architecture campaigns with:
 from __future__ import annotations
 
 import argparse
-import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-    from computronium.core.campaign.campaign_store import CampaignStore
-    from computronium.core.campaign.checkpoint import (
-        CheckpointManager,
-        JointCheckpoint,
-    )
-    from computronium.core.system_trainer import JointSystem
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -199,263 +191,46 @@ def _generate_random_coordinate(space: dict) -> str:
     ])
 
 
-def _restore_checkpointed_joint(
-    mgr: CheckpointManager,
-    checkpoint: JointCheckpoint,
-) -> JointSystem:
-    """Rebuild the checkpointed coordinate's joint and reload its θ + RNG.
+def _space_sampler(space: dict):
+    """Bind the CLI search-space table into a seeded coordinate sampler."""
+    from computronium.core.campaign.stack import _space_sampler
 
-    Fresh joints start from initialization; continuity requires copying the
-    checkpointed θ into geometry params before any redo work.
-    """
-    import torch
-
-    from computronium.core.campaign.evaluation import build_coordinate_system
-
-    joint = build_coordinate_system(
-        checkpoint.coordinate
-        or "digital/feedforward/instantaneous/null/thermodynamic_contrast/euclidean"
-    )
-    with torch.no_grad():
-        for name, array in checkpoint.theta.items():
-            joint.geometry.params[name].copy_(torch.from_numpy(array))
-    mgr.restore_rng_states(checkpoint)
-    return joint
+    return _space_sampler(space)
 
 
-def _redo_unrecorded_episodes(
-    store: CampaignStore,
-    mgr: CheckpointManager,
-    *,
-    campaign_id: str,
-    last_complete: int,
-    task_name: str,
-) -> None:
-    """Replay episodes lost to a crash between the latest checkpoint and now."""
-    from computronium.core.campaign.evaluation import GuardKillError, evaluate_episode
-
-    ckpt_path = mgr.get_latest_checkpoint(campaign_id)
-    if ckpt_path is None:
-        return
-    checkpoint = mgr.load_checkpoint(ckpt_path)
-    if not mgr.validate_checkpoint(checkpoint):
-        print(
-            f"  Warning: checkpoint {ckpt_path.name} failed validation; skipping redo"
-        )
-        return
-
-    recorded = {ep.iteration for ep in store.get_episodes(campaign_id)}
-    joint = _restore_checkpointed_joint(mgr, checkpoint)
-    for episode in range(checkpoint.episode_index, last_complete + 1):
-        if episode in recorded:
-            continue
-        try:
-            record, metrics = evaluate_episode(
-                joint,
-                coordinate=checkpoint.coordinate,
-                task_name=task_name,
-                campaign_id=campaign_id,
-                episode=episode,
-            )
-        except GuardKillError as exc:
-            print(f"  Episode {episode} redone but guard-killed: {exc}")
-            continue
-        episode_id = store.add_episode(
-            campaign_id=campaign_id,
-            branch_name=checkpoint.branch_name,
-            iteration=episode,
-            coordinate=record.coordinate,
-            task_name=task_name,
-            frontier_record=record,
-        )
-        store.add_registry_snapshot(
-            campaign_id=campaign_id,
-            episode_id=episode_id,
-            registry_signature=record.registry_signature,
-            composite_state_shape=record.composite_state_shape,
-            plasticity_primitive=record.plasticity_primitive,
-            plasticity_config=record.plasticity_config,
-        )
-        store.update_iteration(campaign_id, episode)
-        print(f"  Redid episode {episode}: loss={metrics['loss']:.4f}")
-
-
-def _maybe_checkpoint(
-    store: CampaignStore,
-    mgr: CheckpointManager,
-    *,
-    campaign_id: str,
-    iteration: int,
-    coordinate: str,
-    task_name: str,
-    joint: JointSystem,
-) -> bool:
-    """Snapshot the system ENTERING this episode; resume replays bit-exact."""
-    from computronium.core.campaign.evaluation import episode_batch
-    from computronium.state import CompositeState
-
-    campaign_snapshot = store.get_campaign(campaign_id)
-    if campaign_snapshot is None:
-        return False
-    path = mgr.create_checkpoint(
-        campaign_state=campaign_snapshot,
-        episode_index=iteration,
-        composite_state=CompositeState(
-            activity={"x": episode_batch(iteration)[0]},
-            plastic={},
-            substrate={},
-        ),
-        context=joint.context,
-        coordinate=coordinate,
-        task_name=task_name,
-    )
-    print(f"    checkpoint -> {path.name}")
-    return True
-
-
-def _run_campaign(args) -> int:  # noqa: PLR0914 - campaign orchestration state
-    """Run a campaign of real composed-system episodes.
-
-    Each experiment composes a fresh JointSystem from its coordinate and runs
-    one real train_step on a deterministic per-episode batch; stability fields
-    come from a windowed-growth guard probe. Checkpoints snapshot the first
-    experiment's system ENTERING an interval episode so a resumed campaign
-    replays it bit-identically (same θ, same RNG stream position).
-    """
-    from computronium.core.campaign.campaign_store import CampaignStore
-    from computronium.core.campaign.checkpoint import CheckpointManager
+def _run_campaign(args) -> int:
+    """Run (or resume) a campaign via the shared CampaignStack engine."""
     from computronium.core.campaign.evaluation import (
         DEFAULT_INPUT_DIM,
         DEFAULT_NUM_CLASSES,
-        GuardKillError,
-        UnsupportedCoordinateError,
-        build_coordinate_system,
-        evaluate_episode,
     )
+    from computronium.core.campaign.stack import CampaignStack
 
+    stack = CampaignStack(
+        args.output_dir,
+        branch=args.branch,
+        checkpoint_interval=args.checkpoint_interval,
+        db_path=args.db,
+        on_event=print,
+    )
     space = _get_search_space(args.space)
-    campaign_id = args.campaign_id or f"camp_{uuid.uuid4().hex[:8]}"
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    db_path = args.db or (output_dir / "campaign.db")
-    checkpoint_dir = output_dir / "checkpoints"
-
-    store = CampaignStore(db_path, checkpoint_dir)
-    checkpoint_mgr = CheckpointManager(
-        checkpoint_dir, checkpoint_interval=args.checkpoint_interval
+    result = stack.run_campaign(
+        iterations=args.iterations,
+        experiments_per_iter=args.experiments_per_iter,
+        sampler=_space_sampler(space),
+        campaign_id=args.campaign_id,
+        resume=args.resume,
+        dry_run=args.dry_run,
+        build_kwargs={
+            "input_dim": DEFAULT_INPUT_DIM,
+            "output_dim": DEFAULT_NUM_CLASSES,
+            "hidden_dims": (16,),
+        },
+        objective=args.objective,
     )
 
-    task_name = f"{args.space}_synthetic"
-    build_kwargs = {
-        "input_dim": DEFAULT_INPUT_DIM,
-        "output_dim": DEFAULT_NUM_CLASSES,
-        "hidden_dims": (16,),
-    }
-
-    if args.resume:
-        campaign_state = store.get_latest_on_branch(args.branch)
-        if not campaign_state:
-            print(f"No campaign found on branch '{args.branch}' to resume")
-            return 1
-        campaign_id = campaign_state.campaign_id
-        print(
-            f"Resuming campaign {campaign_id} on branch '{args.branch}'"
-            f" at iteration {campaign_state.iteration}"
-        )
-        _redo_unrecorded_episodes(
-            store,
-            checkpoint_mgr,
-            campaign_id=campaign_id,
-            last_complete=campaign_state.iteration,
-            task_name=task_name,
-        )
-    else:
-        campaign_state = store.create_campaign(
-            campaign_id=campaign_id,
-            branch_name=args.branch,
-            config={"space": args.space, "objective": args.objective},
-            metadata={"created_by": "biopl_campaign"},
-        )
-        print(f"Created campaign {campaign_id} on branch '{args.branch}'")
-
-    # Run iterations
-    for iteration in range(
-        campaign_state.iteration + 1, campaign_state.iteration + args.iterations + 1
-    ):
-        print(f"\n=== Iteration {iteration} ===")
-
-        # Generate coordinates to evaluate
-        n_experiments = args.experiments_per_iter
-        coordinates = [_generate_random_coordinate(space) for _ in range(n_experiments)]
-
-        checkpointed_this_iteration = False
-        for exp_idx, coordinate in enumerate(coordinates):
-            print(f"  [{exp_idx + 1}/{n_experiments}] Evaluating: {coordinate}")
-
-            if args.dry_run:
-                print("    [DRY RUN] Skipping execution")
-                continue
-
-            try:
-                joint = build_coordinate_system(coordinate, **build_kwargs)
-            except UnsupportedCoordinateError as exc:
-                print(f"    skipped: {exc}")
-                continue
-
-            if not checkpointed_this_iteration and checkpoint_mgr.should_checkpoint(
-                iteration
-            ):
-                checkpointed_this_iteration = _maybe_checkpoint(
-                    store,
-                    checkpoint_mgr,
-                    campaign_id=campaign_id,
-                    iteration=iteration,
-                    coordinate=coordinate,
-                    task_name=task_name,
-                    joint=joint,
-                )
-
-            try:
-                record, _metrics = evaluate_episode(
-                    joint,
-                    coordinate=coordinate,
-                    task_name=task_name,
-                    campaign_id=campaign_id,
-                    episode=iteration,
-                )
-            except GuardKillError as exc:
-                print(f"    skipped: {exc}")
-                continue
-
-            episode_id = store.add_episode(
-                campaign_id=campaign_id,
-                branch_name=args.branch,
-                iteration=iteration,
-                coordinate=coordinate,
-                task_name=task_name,
-                frontier_record=record,
-            )
-
-            store.add_registry_snapshot(
-                campaign_id=campaign_id,
-                episode_id=episode_id,
-                registry_signature=record.registry_signature,
-                composite_state_shape=record.composite_state_shape,
-                plasticity_primitive=record.plasticity_primitive,
-                plasticity_config=record.plasticity_config,
-            )
-
-            print(
-                f"    ✓ Accuracy: {record.task_accuracy:.4f},"
-                f" Loss: {record.task_loss:.4f}"
-            )
-
-        # Update campaign state
-        store.update_iteration(campaign_id, iteration)
-
-    print(f"\nCampaign {campaign_id} completed!")
-    print(f"Results stored in: {db_path}")
+    print(f"\nCampaign {result.campaign_id} completed!")
+    print(f"Results stored in: {result.db_path}")
     return 0
 
 

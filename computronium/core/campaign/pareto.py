@@ -201,18 +201,24 @@ def _hypervolume_2d(
         else:
             norm_ref.append(-val)
 
-    # Sort by first objective descending
+    # Points not strictly above the reference contribute no volume
+    # (matches the 3D filter).
+    normalized = [
+        p for p in normalized if p[0] > norm_ref[0] and p[1] > norm_ref[1]
+    ]
+    if not normalized:
+        return 0.0
+
+    # Sort by first objective descending; strip i covers
+    # (next_x, p_i.x] at height (p_i.y - ref.y).
     normalized.sort(key=lambda x: x[0], reverse=True)
 
     hv = 0.0
-    prev_x = norm_ref[0]
-    for p in normalized:
-        if p[0] <= norm_ref[0]:
-            continue
-        width = prev_x - p[0]
-        height = max(0, p[1] - norm_ref[1])
+    for i, p in enumerate(normalized):
+        next_x = normalized[i + 1][0] if i + 1 < len(normalized) else norm_ref[0]
+        width = p[0] - next_x
+        height = p[1] - norm_ref[1]
         hv += width * height
-        prev_x = p[0]
 
     return hv
 

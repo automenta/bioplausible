@@ -299,7 +299,7 @@ def _ensure_native_registered() -> None:
         return
     state["native"] = True
     from computronium.models.native import registration  # noqa: F401
-    from computronium.ontology import optimizers  # noqa: F401
+    from computronium.ontology import credit_registration, optimizers  # noqa: F401
 
 
 class Registry:

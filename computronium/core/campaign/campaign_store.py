@@ -21,8 +21,29 @@ from typing import TYPE_CHECKING
 import yaml
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.core.campaign.frontier_record import FrontierRecord
     from computronium.state import StateRegistry, SystemContext
+
+SCHEMA_VERSION = 1
+
+
+class SchemaVersionError(RuntimeError):
+    """Database schema is newer than this build (frozen schema, forward-only)."""
+
+    def __init__(self, db_version: int, supported: int) -> None:
+        super().__init__(
+            f"Campaign DB schema v{db_version} > supported v{supported}; "
+            "open it with a newer build instead"
+        )
+        self.db_version = db_version
+        self.supported = supported
+
+
+# MIGRATIONS[v] upgrades a v-old schema to v+1. Schema is frozen: every future
+# schema change appends here, never mutates earlier entries.
+MIGRATIONS: tuple[Callable[[sqlite3.Connection], None], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,70 +99,90 @@ class CampaignStore:
         self._init_db()
 
     def _init_db(self) -> None:
-        """Initialize database schema."""
+        """Initialize or migrate the database schema (frozen, versioned)."""
         with sqlite3.connect(self.db_path) as conn:
-            # Campaigns table
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS campaigns (
-                    campaign_id TEXT PRIMARY KEY,
-                    branch_name TEXT NOT NULL,
-                    parent_branch TEXT,
-                    iteration INTEGER DEFAULT 0,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    config TEXT NOT NULL,  -- JSON
-                    metadata TEXT NOT NULL  -- JSON
-                )
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_campaign_branch ON campaigns(branch_name)
-            """)
-
-            # Episodes table - stores full evaluation records
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS episodes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    campaign_id TEXT NOT NULL,
-                    branch_name TEXT NOT NULL,
-                    iteration INTEGER NOT NULL,
-                    timestamp TEXT NOT NULL,
-                    coordinate TEXT NOT NULL,       -- 6-D coordinate string
-                    task_name TEXT NOT NULL,
-                    frontier_record TEXT NOT NULL,  -- JSON serialized FrontierRecord
-                    consolidation_event TEXT,       -- JSON serialized consolidation event
-                    rng_state BLOB,                 -- Pickled RNG state
-                    FOREIGN KEY (campaign_id) REFERENCES campaigns(campaign_id)
-                )
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_episode_campaign ON episodes(campaign_id)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_episode_branch ON episodes(branch_name)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_episode_coord ON episodes(coordinate)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_episode_task ON episodes(task_name)
-            """)
-
-            # State registry snapshots
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS registry_snapshots (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    campaign_id TEXT NOT NULL,
-                    episode_id INTEGER NOT NULL,
-                    registry_signature TEXT NOT NULL,  -- Hash of StateVariable registrations
-                    composite_state_shape TEXT NOT NULL,  -- JSON: {activity: {...}, plastic: {...}, substrate: {...}}
-                    plasticity_primitive TEXT NOT NULL,
-                    plasticity_config TEXT NOT NULL,  -- JSON
-                    FOREIGN KEY (campaign_id) REFERENCES campaigns(campaign_id),
-                    FOREIGN KEY (episode_id) REFERENCES episodes(id)
-                )
-            """)
-
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
+            if version > SCHEMA_VERSION:
+                raise SchemaVersionError(version, SCHEMA_VERSION)
+            if version == SCHEMA_VERSION:
+                return
+            if version == 0 and self._is_empty(conn):
+                self._create_schema(conn)
+            elif version == 0:
+                # Legacy pre-freeze database: identical to the v1 schema.
+                pass
+            else:
+                for v in range(version, SCHEMA_VERSION):
+                    MIGRATIONS[v](conn)
+            conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             conn.commit()
+
+    @staticmethod
+    def _is_empty(conn: sqlite3.Connection) -> bool:
+        """True when no campaigns table exists (fresh database)."""
+        row = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='campaigns'"
+        ).fetchone()
+        return row is None
+
+    @staticmethod
+    def _create_schema(conn: sqlite3.Connection) -> None:
+        """Create the v1 schema."""
+        # Campaigns table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS campaigns (
+                campaign_id TEXT PRIMARY KEY,
+                branch_name TEXT NOT NULL,
+                parent_branch TEXT,
+                iteration INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                config TEXT NOT NULL,  -- JSON
+                metadata TEXT NOT NULL  -- JSON
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_campaign_branch ON campaigns(branch_name)"
+        )
+
+        # Episodes table - stores full evaluation records
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS episodes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campaign_id TEXT NOT NULL,
+                branch_name TEXT NOT NULL,
+                iteration INTEGER NOT NULL,
+                timestamp TEXT NOT NULL,
+                coordinate TEXT NOT NULL,       -- 6-D coordinate string
+                task_name TEXT NOT NULL,
+                frontier_record TEXT NOT NULL,  -- JSON serialized FrontierRecord
+                consolidation_event TEXT,       -- JSON serialized consolidation event
+                rng_state BLOB,                 -- Pickled RNG state
+                FOREIGN KEY (campaign_id) REFERENCES campaigns(campaign_id)
+            )
+        """)
+        for index in (
+            "CREATE INDEX IF NOT EXISTS idx_episode_campaign ON episodes(campaign_id)",
+            "CREATE INDEX IF NOT EXISTS idx_episode_branch ON episodes(branch_name)",
+            "CREATE INDEX IF NOT EXISTS idx_episode_coord ON episodes(coordinate)",
+            "CREATE INDEX IF NOT EXISTS idx_episode_task ON episodes(task_name)",
+        ):
+            conn.execute(index)
+
+        # State registry snapshots
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS registry_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campaign_id TEXT NOT NULL,
+                episode_id INTEGER NOT NULL,
+                registry_signature TEXT NOT NULL,  -- Hash of StateVariable registrations
+                composite_state_shape TEXT NOT NULL,  -- JSON: {activity: {...}, plastic: {...}, substrate: {...}}
+                plasticity_primitive TEXT NOT NULL,
+                plasticity_config TEXT NOT NULL,  -- JSON
+                FOREIGN KEY (campaign_id) REFERENCES campaigns(campaign_id),
+                FOREIGN KEY (episode_id) REFERENCES episodes(id)
+            )
+        """)
 
     @contextmanager
     def _conn(self):
@@ -152,6 +193,12 @@ class CampaignStore:
             yield conn
         finally:
             conn.close()
+
+    @property
+    def schema_version(self) -> int:
+        """Schema version stamped in the database (frozen at SCHEMA_VERSION)."""
+        with self._conn() as conn:
+            return int(conn.execute("PRAGMA user_version").fetchone()[0])
 
     def create_campaign(
         self,

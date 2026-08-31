@@ -5,7 +5,7 @@ Combines the Scientist (execution) with AutoScientist (reasoning/proposal)
 into a continuous discovery loop with:
   - Hypothesis generation
   - Experiment proposal
-  - Execution via Scientist or CoreTrainer
+  - Execution via SystemTrainer over ontology-composed systems
   - Result analysis
   - KnowledgeBase update
 
@@ -16,6 +16,7 @@ Features:
 """
 
 import json
+import math
 import os
 import sqlite3
 import sys
@@ -36,7 +37,6 @@ from computronium.autoscientist.proposer import ExperimentProposer
 from computronium.autoscientist.reasoner import HypothesisReasoner
 from computronium.core.exceptions import KnowledgeBaseError
 from computronium.core.logging import get_logger
-from computronium.core.trainer import CoreTrainer, TrainerConfig
 
 logger = get_logger(__name__)
 
@@ -384,7 +384,7 @@ class AutoScientistCampaign:
     Runs continuous discovery loops:
         1. Reason: Generate hypotheses from KnowledgeBase
         2. Propose: Convert hypotheses to experiment proposals
-        3. Execute: Run experiments via CoreTrainer
+        3. Execute: Run experiments via SystemTrainer
         4. Learn: Update KnowledgeBase with results
 
     Features:
@@ -445,7 +445,7 @@ class AutoScientistCampaign:
         self._config = {
             "max_concurrent": self.max_concurrent,
             "human_approval_gate": self.human_approval_gate,
-            "knowledge_base_path": str(self.knowledge_base.db_path)
+            "knowledge_base_path": str(self.knowledge_base.config.db_path)
             if self.knowledge_base
             else None,
         }
@@ -703,33 +703,46 @@ class AutoScientistCampaign:
         return results
 
     def _execute_proposal(self, proposal) -> dict[str, object]:
-        """Execute a single experiment proposal via CoreTrainer."""
-        config = TrainerConfig(
-            model=proposal.model,
-            task=proposal.task,
-            optimizer=proposal.optimizer,
-            epochs=5,
+        """Execute a proposal: registry factory -> 5-D system -> SystemTrainer.
+
+        The ontology system owns its update rule, so ``proposal.optimizer`` is
+        recorded for the KB rather than overriding the composed ParameterUpdate.
+        """
+        from computronium.core.registry import ComponentCategory, Registry
+        from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
+        from computronium.domains.factory import create_task
+
+        task = create_task(
+            proposal.task or "mnist",
+            device="cpu",
+            quick_mode=True,
+            num_workers=0,  # campaign trials are small; workers cost more than they save
+        )
+        task.setup()
+        # Vision tasks expose (C, H, W); factories want flat dims (see
+        # construction.construct_model for the same canonicalization).
+        input_dim = task.input_dim
+        assert input_dim is not None  # noqa: S101 - task must expose shape
+        if isinstance(input_dim, tuple | list):
+            input_dim = int(math.prod(input_dim))
+        factory = Registry.get(ComponentCategory.MODEL, proposal.model)
+        lr_raw = proposal.hyperparams.get("lr", 1e-3)
+        system = factory(input_dim, 64, task.output_dim, lr=float(lr_raw))  # type: ignore[arg-type]
+
+        config = SystemTrainerConfig(
+            max_epochs=5,
             batch_size=64,
             track_energy=True,
-            tags={
-                "hypothesis": proposal.hypothesis,
-                "autoscientist": True,
-                "iteration": self._iteration,
-                "campaign_id": self.campaign_id,
-                "branch": self.branch_name,
-            },
         )
 
-        if proposal.propagator:
-            config.propagator = proposal.propagator
-
-        for k, v in proposal.hyperparams.items():
-            if hasattr(config, k):
-                setattr(config, k, v)
-
-        trainer = CoreTrainer(config)
-        history = trainer.fit()
-
+        with SystemTrainer(
+            system,
+            config,
+            task.get_dataloader("train"),  # type: ignore[attr-defined]
+            task.get_dataloader("val"),  # type: ignore[attr-defined]
+        ) as trainer:
+            history = trainer.fit()
+            last = history[-1] if history else {}
         return {
             "proposal": {
                 "hypothesis": proposal.hypothesis,
@@ -740,10 +753,10 @@ class AutoScientistCampaign:
                 "justification": proposal.justification,
             },
             "status": "completed",
-            "metrics": [m.to_dict() for m in history],
-            "final_accuracy": history[-1].val_acc if history else 0.0,
-            "final_loss": history[-1].val_loss if history else 0.0,
-            "train_accuracy": history[-1].train_acc if history else 0.0,
+            "metrics": history,
+            "final_accuracy": last.get("val_acc", 0.0),
+            "final_loss": last.get("val_loss", 0.0),
+            "train_accuracy": last.get("train_acc", 0.0),
             "epochs_completed": len(history),
         }
 

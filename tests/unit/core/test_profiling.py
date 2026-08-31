@@ -70,5 +70,45 @@ class TestMemoryAccountedModel:
         assert MemoryAccountedModel is not None
 
 
+class TestEffectiveFlopsWiring:
+    """effective-FLOPs -> C vector: gate-aware FLOPs feed the compute axis."""
+
+    def test_measure_suite_resources_maps_effective_flops(self) -> None:
+        from torch import nn as _nn
+
+        from computronium.core.profiling import measure_suite_resources
+
+        model = _nn.Sequential(_nn.Linear(32, 16), _nn.Linear(16, 8))
+        usage = measure_suite_resources(
+            model,
+            coordinate="digital/feedforward/instantaneous/routing/gradient/euclidean",
+            device="cpu",
+            batch_size=4,
+            elapsed_s=0.5,
+            effective_flops=1000.0,
+        )
+        # Gate-aware effective FLOPs override the parameter-count estimate and
+        # flow into the C compute axis (compute = 3x forward FLOPs).
+        assert usage.forward_flops == pytest.approx(1000.0)
+        assert usage.effective_flops == pytest.approx(1000.0)
+        assert usage.compute == pytest.approx(3000.0)
+
+    def test_resource_vector_roundtrip_preserves_effective_flops(self) -> None:
+        from computronium.core.profiling import measure_suite_resources
+
+        model = nn.Linear(8, 4)
+        usage = measure_suite_resources(
+            model,
+            coordinate="digital/recurrent/instantaneous/fast_weights/gradient/euclidean",
+            device="cpu",
+            batch_size=2,
+            elapsed_s=0.1,
+            effective_flops=500.0,
+        )
+        restored = ResourceUsage.from_dict(usage.to_dict())
+        assert restored.effective_flops == pytest.approx(500.0)
+        assert restored.compute == pytest.approx(usage.compute)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

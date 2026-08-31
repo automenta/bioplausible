@@ -9,7 +9,7 @@ AutoScientist proposes experiments; the Bridge packages them as
 from dataclasses import dataclass, field
 
 from computronium.core.logging import get_logger
-from computronium.core.registry import ComponentCategory, Domain, Registry
+from computronium.core.registry import ComponentCategory, Registry
 
 __all__ = [
     "AutoScientistBridge",
@@ -63,7 +63,7 @@ class AutoScientistBridge:
 
     def discover_viable_combinations(
         self,
-        domain: Domain | None = None,
+        domain: str | None = None,
         min_bio_score: float = 0.0,
     ) -> list[dict[str, object]]:
         """

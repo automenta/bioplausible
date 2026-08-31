@@ -6,9 +6,11 @@ kernel caching, and fault tolerance checkpointing for 6-D joint architecture cam
 """
 
 from computronium.core.campaign.campaign_store import (
+    SCHEMA_VERSION,
     CampaignState,
     CampaignStore,
     EpisodeRecord,
+    SchemaVersionError,
 )
 from computronium.core.campaign.checkpoint import (
     CheckpointManager,
@@ -34,6 +36,18 @@ from computronium.core.campaign.kernel_cache import (
     set_kernel_cache,
 )
 from computronium.core.campaign.pareto import ParetoFrontier, pareto_frontier
+from computronium.core.campaign.replication import (
+    ReplicationReport,
+    replication_manifest,
+    task_family,
+    unreplicated,
+    verify_replication,
+)
+from computronium.core.campaign.stack import (
+    CampaignRunResult,
+    CampaignStack,
+    EpisodeOutcome,
+)
 from computronium.resources import ResourceUsage
 
 __all__ = [
@@ -41,16 +55,22 @@ __all__ = [
     "DEFAULT_GUARD_TAU",
     "DEFAULT_INPUT_DIM",
     "DEFAULT_NUM_CLASSES",
+    "SCHEMA_VERSION",
+    "CampaignRunResult",
+    "CampaignStack",
     "CampaignState",
     "CampaignStore",
     "CheckpointManager",
+    "EpisodeOutcome",
     "EpisodeRecord",
     "FrontierRecord",
     "GuardKillError",
     "JointCheckpoint",
     "JointKernelCache",
     "ParetoFrontier",
+    "ReplicationReport",
     "ResourceUsage",
+    "SchemaVersionError",
     "UnsupportedCoordinateError",
     "activity_transition",
     "build_coordinate_system",
@@ -59,5 +79,9 @@ __all__ = [
     "evaluate_episode",
     "get_kernel_cache",
     "pareto_frontier",
+    "replication_manifest",
     "set_kernel_cache",
+    "task_family",
+    "unreplicated",
+    "verify_replication",
 ]

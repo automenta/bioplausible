@@ -15,7 +15,6 @@ from computronium.core.registry import (
     ComponentCategory,
     ComponentMetadata,
     ComputeProfile,
-    Domain,
     LocalityLevel,
     Registry,
 )
@@ -42,6 +41,10 @@ class ProposalObjective(StrEnum):
     MEMORY = "memory"
     SETTLING_SPEED = "settling_speed"
     NOISE_ROBUSTNESS = "noise_robustness"
+    STABILITY = "stability"
+    ENERGY = "energy"
+    LATENCY = "latency"
+    PLASTICITY_CAPACITY = "plasticity_capacity"
 
 
 # Proxies for ranking candidates on non-accuracy axes. These are *declared*
@@ -61,6 +64,26 @@ _ROBUST_PROFILES: frozenset[ComputeProfile] = frozenset({
 })
 _ROBUST_LOCALITY: frozenset[LocalityLevel] = frozenset({
     LocalityLevel.LOCAL,
+    LocalityLevel.FORWARD_ONLY,
+})
+# Declared stability proxy: bounded/analog profiles with bounded state
+# (conductance, phase) plus energy-based local rules avoid divergent growth.
+_STABLE_PROFILES: frozenset[ComputeProfile] = frozenset({
+    ComputeProfile.ANALOG,
+    ComputeProfile.MEMRISTOR,
+})
+_STABLE_LOCALITY: frozenset[LocalityLevel] = frozenset({
+    LocalityLevel.LOCAL,
+    LocalityLevel.EQUILIBRIUM,
+})
+# Declared energy/latency proxies: event-driven/analog profiles consume less
+# energy; forward-only rules skip backward passes (latency).
+_LOW_ENERGY_PROFILES: frozenset[ComputeProfile] = frozenset({
+    ComputeProfile.NEUROMORPHIC,
+    ComputeProfile.ANALOG,
+    ComputeProfile.OPTICAL,
+})
+_FORWARD_ONLY_LOCALITY: frozenset[LocalityLevel] = frozenset({
     LocalityLevel.FORWARD_ONLY,
 })
 
@@ -98,6 +121,34 @@ def _objective_rank(
                 0.0 if robust else 1.0,
                 -_MEMORY_ORDER.get(meta.memory_complexity, 5),
             )
+        case ProposalObjective.STABILITY:
+            # Bounded-state profiles + equilibrium/local rules rank first.
+            stable = (
+                meta.compute_profile in _STABLE_PROFILES
+                or meta.locality_level in _STABLE_LOCALITY
+            )
+            return (
+                0.0 if stable else 1.0,
+                _MEMORY_ORDER.get(meta.memory_complexity, 5),
+            )
+        case ProposalObjective.ENERGY:
+            # Event-driven/analog profiles are the declared low-energy proxy,
+            # then cheaper memory.
+            low_energy = meta.compute_profile in _LOW_ENERGY_PROFILES
+            return (
+                0.0 if low_energy else 1.0,
+                _MEMORY_ORDER.get(meta.memory_complexity, 5),
+            )
+        case ProposalObjective.LATENCY:
+            # Forward-only rules skip backward passes, then cheaper memory.
+            fast = meta.locality_level in _FORWARD_ONLY_LOCALITY
+            return (
+                0.0 if fast else 1.0,
+                _MEMORY_ORDER.get(meta.memory_complexity, 5),
+            )
+        case ProposalObjective.PLASTICITY_CAPACITY:
+            # Inverse of MEMORY: richer plastic state is the point of the sweep.
+            return (-_MEMORY_ORDER.get(meta.memory_complexity, 5),)
 
 
 # Query service shape the proposer depends on (P2 read-half). Injected so the
@@ -370,7 +421,6 @@ class ExperimentProposer:
         fixed: dict[str, str | list[str]],
         sweep: str,
         sweep_values: list[str],
-        domain: str | None = None,
         n_proposals: int = 10,
         min_bio_score: float = 0.0,
         objective: ProposalObjective | str = ProposalObjective.ACCURACY,
@@ -386,7 +436,6 @@ class ExperimentProposer:
                 Values: single value or list of values
             sweep: Layer to sweep over ("substrate", "geometry", "dynamics", "credit", "update")
             sweep_values: Values to sweep for the sweep layer
-            domain: Optional domain filter
             n_proposals: Number of proposals to generate
             min_bio_score: Minimum bio-plausibility score
             objective: The axis to optimize when ranking candidates
@@ -399,7 +448,6 @@ class ExperimentProposer:
             fixed=fixed,
             sweep=sweep,
             sweep_values=sweep_values,
-            domain=Domain(domain) if domain else None,
             min_bio_score=min_bio_score,
         )
 
