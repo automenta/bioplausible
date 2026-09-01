@@ -180,6 +180,10 @@ def evaluate_migration(
             total += y.shape[0]
     a0_accuracy = correct / total
 
+    # PR-1 optimizer-phase hygiene: fresh Adam at the A0→A1 task boundary —
+    # carried A0 momentum would bias the migration-time measurement.
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
     # Migrate to Task A1 (ψ adapts, θ should stay frozen for pure migration)
     # For true migration test, we freeze θ and only allow ψ to adapt
     # But here we allow full training to see how fast it adapts

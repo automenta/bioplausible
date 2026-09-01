@@ -243,6 +243,10 @@ def evaluate_adaptation(
 
         phase_a_losses.append(loss.item())
 
+    # PR-1 optimizer-phase hygiene: fresh Adam at the A→B boundary — no stale
+    # momentum/second-moment from Phase A contaminates adaptation timing.
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
     # Phase B training (adaptation phase)
     phase_b_losses = []
     adaptation_times = []

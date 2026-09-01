@@ -226,6 +226,17 @@ def evaluate_structural_robustness(
     train_dataset = TensorDataset(train_x, train_y)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
+    # Pre-train: the damage/recovery premise requires a trained model —
+    # pre_damage_accuracy on an untrained net made recovery_ratio meaningless.
+    model.train()
+    for _ in range(epochs):
+        for x, y in train_loader:
+            optimizer.zero_grad()
+            logits = model(x)
+            loss = criterion(logits, y)
+            loss.backward()
+            optimizer.step()
+
     # Save original model state after pre-training
     original_model_state = {k: v.clone() for k, v in model.state_dict().items()}
 
@@ -251,6 +262,10 @@ def evaluate_structural_robustness(
 
         # Apply damage
         original_state = create_damage_scenarios(model, damage_type, damage_severity)
+
+        # PR-1 optimizer-phase hygiene: fresh optimizer per scenario — recovery
+        # of one damage type must not inherit momentum from another.
+        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
         # Evaluate recovery
         recovery = evaluate_recovery(

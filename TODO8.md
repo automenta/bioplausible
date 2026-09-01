@@ -1,5 +1,9 @@
-# TODO8.md — Consolidated Plan
+# TODO8.md — Consolidated Plan (CLOSED)
 
+> **CLOSED 2026-09-01 — superseded by [TODO9.md](TODO9.md)** (R6/RESEARCH3 handoff onward).
+> All TODO8 phases complete or explicitly deferred; detail below + `git log`. imp-1..41 numbering
+> is frozen here and remains canonical — new improvement items continue in TODO9.md from imp-42.
+>
 > **Rev 2026-08-31 (e).** P0–P5 session logs consolidated away (full history in `git log`).
 > Research catalog lives in [RESEARCH3.md](RESEARCH3.md); this doc owns the engineering that unblocks it.
 >
