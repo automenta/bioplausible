@@ -49,6 +49,12 @@ DEFAULT_INPUT_DIM = 8
 DEFAULT_NUM_CLASSES = 8
 COORDINATE_AXES = 6
 
+# R8.3 difficulty calibration: teacher-logit noise scale whose oracle
+# accuracy (noiseless-teacher predictor against noisy labels) sits ≈0.86 at
+# the registered shape — far above chance, with real headroom below the 1.0
+# ceiling so accumulated-performance axes cannot saturate (imp-36 class).
+CALIBRATED_TEACHER_NOISE = 0.5
+
 # PR-5 calibration: windowed_growth ROC operating point (FKR=0%, KR=100%) on
 # the Ginibre gain sweep. Real composed systems read exactly 1.000 when stable,
 # so the margin holds there too; divergent substrates (ternary unit-alpha init,
@@ -116,14 +122,39 @@ def episode_seed(
     return _stable_seed(base_seed, campaign_id, iteration, coordinate)
 
 
-def _episode_targets(
-    task_name: str, x: Tensor, generator: torch.Generator, num_classes: int
+def _episode_targets(  # ruff: ignore[too-many-arguments] - noise knob completes the calibration contract
+    task_name: str,
+    x: Tensor,
+    generator: torch.Generator,
+    num_classes: int,
+    *,
+    teacher_generator: torch.Generator | None = None,
+    teacher_noise: float = 0.0,
 ) -> Tensor:
-    """Labels for one task family; unknown families are rejected, not faked."""
+    """Labels for one task family; unknown families are rejected, not faked.
+
+    ``teacher_generator`` (R8.3): when set, the synthetic teacher is drawn
+    from the stationarity-keyed stream instead of the per-episode stream.
+    ``teacher_noise`` (R8.3 difficulty calibration): Gaussian noise on the
+    teacher logits, lowering the task's achievable accuracy below 1.0 —
+    the Bayes ceiling for a noiseless linear teacher. Drawn after the
+    weights from the same generator, so each stream's first draws (and the
+    legacy stream byte-for-byte) are untouched at the 0.0 default.
+    """
     match task_name:
         case "synthetic":
-            weights = torch.randn(x.shape[1], num_classes, generator=generator)
-            return (x @ weights).argmax(dim=-1)
+            weights = torch.randn(
+                x.shape[1],
+                num_classes,
+                generator=generator if teacher_generator is None else teacher_generator,
+            )
+            logits = x @ weights
+            if teacher_noise > 0.0:
+                source = generator if teacher_generator is None else teacher_generator
+                logits += teacher_noise * torch.randn(
+                    x.shape[0], num_classes, generator=source
+                )
+            return logits.argmax(dim=-1)
         case "parity":
             return (x > 0).sum(dim=-1) % num_classes
         case other:
@@ -132,13 +163,15 @@ def _episode_targets(
             )
 
 
-def episode_batch(
+def episode_batch(  # ruff: ignore[too-many-arguments] - stationarity key completes the contract
     episode: int,
     *,
     task_name: str = "synthetic",
     batch_size: int = DEFAULT_BATCH_SIZE,
     input_dim: int = DEFAULT_INPUT_DIM,
     num_classes: int = DEFAULT_NUM_CLASSES,
+    teacher_key: tuple[object, ...] | None = None,
+    teacher_noise: float = 0.0,
 ) -> tuple[Tensor, Tensor]:
     """Deterministic synthetic batch for one episode of the named task family.
 
@@ -146,13 +179,39 @@ def episode_batch(
     (checkpoint redo equality depends on this). The "synthetic" stream keeps
     its original ``1000 + episode`` seeding so commissioned R5.1a/b campaign
     artifacts stay reproducible; other families derive an independent stream.
+
+    ``teacher_key`` (R8.3 stationary design): when given, the synthetic
+    teacher is derived from it alone — identical across episodes, so θ can
+    accumulate learning — while inputs keep varying per episode. ``None``
+    keeps the legacy per-episode teacher redraw (imp-54: non-stationary by
+    design; per-episode-adaptation claim scope only).
+
+    ``teacher_noise`` (R8.3 difficulty calibration): see
+    ``_episode_targets``; 0.0 preserves every pre-R8.3 stream byte-for-byte.
     """
+    if teacher_key is not None and task_name != "synthetic":
+        msg = f"stationary teachers apply to the synthetic family, not {task_name!r}"
+        raise ValueError(msg)
     seed = (
         1000 + episode if task_name == "synthetic" else _stable_seed(task_name, episode)
     )
     generator = torch.Generator().manual_seed(seed)
     x = torch.randn(batch_size, input_dim, generator=generator)
-    return x, _episode_targets(task_name, x, generator, num_classes)
+    teacher_generator = (
+        None
+        if teacher_key is None
+        else torch.Generator().manual_seed(
+            _stable_seed(task_name, "teacher", *teacher_key)
+        )
+    )
+    return x, _episode_targets(
+        task_name,
+        x,
+        generator,
+        num_classes,
+        teacher_generator=teacher_generator,
+        teacher_noise=teacher_noise,
+    )
 
 
 def activity_transition(
@@ -214,6 +273,10 @@ _CREDIT_FACTORIES = {
 }
 _UPDATE_FACTORIES = {
     "euclidean": _thunk(ParameterUpdateConfig.euclidean, step_size=0.01),
+    # Planted-effect control arm (R8.5): a declared embedded control composes
+    # this explicit value as its lr=0 coordinate — θ never consolidates, so
+    # the arm must sit at chance on any learnable stream.
+    "frozen": _thunk(ParameterUpdateConfig.euclidean, step_size=0.0),
     "riemannian_orthogonal": _thunk(
         ParameterUpdateConfig.riemannian_orthogonal, step_size=0.01
     ),
@@ -401,6 +464,8 @@ def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always 
     num_classes: int = DEFAULT_NUM_CLASSES,
     guard_threshold: float | None = DEFAULT_GUARD_TAU,
     seed: int = 0,
+    stationary_teacher: bool = False,
+    teacher_noise: float = 0.0,
 ) -> tuple[FrontierRecord, dict[str, float]]:
     """Run one real training episode and record its frontier metrics.
 
@@ -411,6 +476,14 @@ def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always 
     stamped into the record so the replication gate can count seeds across
     campaigns sharing one store.
 
+    ``stationary_teacher`` (R8.3): derives the synthetic teacher from
+    (campaign_id, coordinate, seed) alone — identical across episodes, so θ
+    can accumulate learning (claim scope: accumulated learning). The default
+    ``False`` keeps the legacy per-episode teacher redraw (imp-54 stream;
+    claim scope: per-episode adaptation only). ``teacher_noise`` calibrates
+    task difficulty (see ``CALIBRATED_TEACHER_NOISE``). Both design choices
+    are stamped into the record metadata for artifact-level provenance.
+
     Batches are placed on the joint system's parameter device — the episode
     always executes where the system lives (no silent CPU fallback).
     """
@@ -420,6 +493,8 @@ def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always 
         batch_size=batch_size,
         input_dim=input_dim,
         num_classes=num_classes,
+        teacher_key=(campaign_id, coordinate, seed) if stationary_teacher else None,
+        teacher_noise=teacher_noise,
     )
     device = joint.device
     x, y = x.to(device), y.to(device)
@@ -465,6 +540,8 @@ def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always 
         metadata={
             "guard_kill": float(decision.kill),
             "nudged_fit_accuracy": nudged_fit_accuracy,
+            "teacher_stationary": float(stationary_teacher),
+            "teacher_noise": teacher_noise,
         },
         seed=seed,
         campaign_id=campaign_id,

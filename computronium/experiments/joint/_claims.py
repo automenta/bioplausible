@@ -30,11 +30,16 @@ CLAIMS_SCOPE_PSI_ENGAGED = "psi_engaged"
 # |                       |                           | θ trains concurrently     |
 # | L3 robustness         | plumbing_only             | plain-MLP damage test     |
 # | L3.5 migration        | plumbing_only             | full-training simpl.      |
-# | Z3 flagship           | gate pending              | needs ALL of: θ exact     |
-# |                       |                           | invariance (audit), ψ     |
-# |                       |                           | non-constancy, ψ-dependent|
-# |                       |                           | operator selection,       |
-# |                       |                           | above-chance probe acc,   |
-# |                       |                           | target-free metrics, and  |
-# |                       |                           | the imp-52 positive       |
-# |                       |                           | control                   |
+# | Z3 flagship           | psi_engaged (R8 gate      | gate is embedded per run  |
+# |                       | landed 2026-09-01)        | (``psi_gate``: exact θ    |
+# |                       |                           | invariance, ψ non-const., |
+# |                       |                           | ψ task-conditioning, ψ→gate|
+# |                       |                           | wiring, frozen-ψ control, |
+# |                       |                           | above-chance probe acc);  |
+# |                       |                           | a failed gate downgrades  |
+# |                       |                           | that run to plumbing_only |
+#
+# The Z3 upgrade is enforced by tests/property/test_z3_engagement.py (R8.1
+# lock + R8.2 planted-ψ positive control: engaged vs ψ-disabled arms, identical
+# θ/task/seed/budget, detected through the suite path; the disabled arm is the
+# engineered-broken variant the gate must flag).

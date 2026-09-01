@@ -23,27 +23,11 @@ import math
 from collections import defaultdict
 from pathlib import Path
 
+from computronium.validation.power_preregistration import (
+    DEFAULT_TARGET_POWER as TARGET_POWER,
+)
+from computronium.validation.power_preregistration import min_detectable_effect
 from computronium.validation.statistics import cohens_d, power_for_two_sample
-
-TARGET_POWER = 0.80
-
-
-def min_detectable_effect(n_per_group: int, alpha: float = 0.05) -> float:
-    """Cohen's d detectable at ``TARGET_POWER`` for equal groups of size n."""
-
-    def power_minus_target(d: float) -> float:
-        return power_for_two_sample(d, n_per_group, alpha=alpha) - TARGET_POWER
-
-    lo, hi = 0.0, 10.0
-    if power_minus_target(hi) < 0:
-        return float("inf")
-    for _ in range(60):
-        mid = (lo + hi) / 2
-        if power_minus_target(mid) > 0:
-            hi = mid
-        else:
-            lo = mid
-    return hi
 
 
 def audit(episodes_path: Path, alpha: float) -> list[dict[str, object]]:

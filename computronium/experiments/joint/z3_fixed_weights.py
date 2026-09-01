@@ -45,6 +45,19 @@ See DECISIONS.md for the three-way triage record.
 Every adaptation step also records a gate history (mean gate distribution,
 hard-selection histogram, entropy) so bandit dynamics during each phase are
 recoverable from artifacts without rerunning.
+
+R8 suite-level engagement gate (2026-09-01): every ``evaluate_z3`` run embeds
+its own validation — a frozen-ψ control arm (identical meta-state, task
+stream, seed, and budget; only ψ stepping disabled) plus a mechanistic ψ→gate
+wiring probe — and emits a ``psi_gate`` verdict over: exact θ invariance
+(bitwise, was tolerance-only), ψ non-constancy, ψ task-conditioning, ψ→gate
+wiring, frozen-ψ control metric sensitivity, and per-task probe accuracy
+above ``TASK_CHANCE`` + margin. Instrument items must hold at any scale; the
+above-chance item is the capability item and is expected to fail below
+meta-training scales that acquire the decoder (quick mode's 10-epoch budget
+does not — registered scale does). Per-task ψ trajectories (norm + step
+delta) and final ψ vectors are recorded so the gate is auditable from
+artifacts alone.
 """
 
 from __future__ import annotations
@@ -62,14 +75,26 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
+from torch import Tensor
 
 from computronium.core.utils.device import get_device
-from torch import Tensor
+from computronium.experiments.joint._claims import (
+    CLAIMS_SCOPE_PLUMBING_ONLY,
+    CLAIMS_SCOPE_PSI_ENGAGED,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-from computronium.core.plasticity.theta_audit import ThetaInvarianceAudit
+from computronium.core.plasticity.theta_audit import (
+    ThetaAuditReport,
+    ThetaInvarianceAudit,
+)
+
+
+class Z3InstrumentError(RuntimeError):
+    """Z3 suite instrument invariant violated (wiring probe, θ audit, gate)."""
+
 
 # ============================================================
 # Z3 Task Generators
@@ -479,6 +504,11 @@ def _is_theta_param(name: str, _p: torch.nn.Parameter) -> bool:
 _CRITERION_ACCURACY = 0.98
 _WINDOW_STEPS = 100
 
+# R8.1 gate chance levels: exact for these tasks — balanced binary labels by
+# construction — and the pre-registered above-chance margin.
+TASK_CHANCE: dict[str, float] = {"parity": 0.5, "last_symbol": 0.5, "threshold": 0.5}
+_GATE_ACCURACY_MARGIN = 0.1
+
 
 def _windowed_criterion_step(
     curve: list[float],
@@ -514,7 +544,7 @@ def _apply_task_order(tasks: list, task_order: Sequence[str] | None) -> None:
         return
     known = [name for name, _ in tasks]
     if sorted(task_order) != sorted(known):
-        raise ValueError(  # noqa: TRY003 - coordinate-level guard
+        raise ValueError(  # ruff: ignore[raise-vanilla-args] - coordinate-level guard
             f"task_order must be a permutation of {known}"
         )
     rank = {name: i for i, name in enumerate(task_order)}
@@ -572,6 +602,17 @@ class MetaRecipe:
     entropy_end: float | None = None
     replay_steps: int = 0
     adapt_entropy_beta: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class _AdaptationRecord:
+    """Per-phase adaptation outputs shared by every adaptation arm."""
+
+    losses: list[float]
+    accuracy_curve: list[float]
+    steps_to_criterion: int | None
+    gate_history: dict[str, list[list[float]]]
+    psi_history: dict[str, list[float]]
 
 
 def _eval_task_accuracy(
@@ -674,7 +715,7 @@ def _adaptation_objective(
     return loss - adapt_entropy_beta * entropy
 
 
-def _run_adaptation(  # noqa: PLR0913 - protocol tuple stays flat
+def _run_adaptation(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
     model: Z3Model,
     optimizer: torch.optim.Optimizer,
     criterion,
@@ -686,7 +727,7 @@ def _run_adaptation(  # noqa: PLR0913 - protocol tuple stays flat
     feedback: bool = True,
     adapt_entropy_beta: float = 0.0,
     adapt_temp_end: float | None = None,
-) -> tuple[list[float], list[float], int | None, dict[str, list[list[float]]]]:
+) -> _AdaptationRecord:
     """Adam steps over whatever ``requires_grad`` currently selects.
 
     One epoch = one fresh-batch gradient step; with ``feedback`` each step
@@ -694,14 +735,17 @@ def _run_adaptation(  # noqa: PLR0913 - protocol tuple stays flat
     ``adapt_entropy_beta``·H(gates) — the registered exploration floor that
     keeps entrenched routing reachable to unsampled operators. When
     ``adapt_temp_end`` is set, the gating temperature anneals linearly from
-    its phase-entry value to that target across the phase. Returns per-step
-    losses, the per-step hard-selection probe-accuracy curve, the registered
-    100-step-window criterion step (None when censored at the budget), and
-    the per-step gate history.
+    its phase-entry value to that target across the phase. Returns an
+    :class:`_AdaptationRecord` with per-step losses, the per-step
+    hard-selection probe-accuracy curve, the registered 100-step-window
+    criterion step (None when censored at the budget), the per-step gate
+    history, and the per-step ψ trajectory (norm + step delta).
     """
     losses: list[float] = []
     curve: list[float] = []
     gate_history = _new_gate_history()
+    psi_history: dict[str, list[float]] = {"norm": [], "delta_norm": []}
+    prev_psi = model.psi_state.detach().clone()
     start_temp = model.temperature
     for _epoch in range(epochs):
         if adapt_temp_end is not None:
@@ -716,10 +760,20 @@ def _run_adaptation(  # noqa: PLR0913 - protocol tuple stays flat
         optimizer.step()
         if feedback:
             model.step_plasticity(loss)
+        psi = model.psi_state.detach()
+        psi_history["norm"].append(float(psi.norm()))
+        psi_history["delta_norm"].append(float((psi - prev_psi).norm()))
+        prev_psi = psi.clone()
         losses.append(loss.item())
         curve.append(_probe_accuracy(model, probe))
         _record_gate_step(gate_history, model)
-    return losses, curve, _windowed_criterion_step(curve), gate_history
+    return _AdaptationRecord(
+        losses=losses,
+        accuracy_curve=curve,
+        steps_to_criterion=_windowed_criterion_step(curve),
+        gate_history=gate_history,
+        psi_history=psi_history,
+    )
 
 
 _REPLAY_BUFFER_CAP = 1024
@@ -753,7 +807,7 @@ def _replay_pass(
         optimizer.step()
 
 
-def _forced_episode(  # noqa: PLR0913 - protocol tuple stays flat
+def _forced_episode(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
     model: Z3Model,
     optimizer: torch.optim.Optimizer,
     criterion,
@@ -775,7 +829,7 @@ def _forced_episode(  # noqa: PLR0913 - protocol tuple stays flat
     return episode_loss / recipe.episode_len
 
 
-def _controller_episode(  # noqa: PLR0913 - protocol tuple stays flat
+def _controller_episode(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
     model: Z3Model,
     optimizer: torch.optim.Optimizer,
     criterion,
@@ -832,7 +886,7 @@ def _episode_best_op(
     return min(per_op, key=lambda op: sum(per_op[op]) / len(per_op[op]))
 
 
-def _meta_train(  # noqa: PLR0913 - protocol tuple stays flat
+def _meta_train(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
     model: Z3Model,
     optimizer: torch.optim.Optimizer,
     tasks,
@@ -919,7 +973,7 @@ def _reinit_psi(model: Z3Model) -> None:
     model.reset_psi()
 
 
-def _adapt_all_tasks(  # noqa: PLR0913 - protocol tuple stays flat
+def _adapt_all_tasks(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
     model: Z3Model,
     tasks,
     criterion,
@@ -952,7 +1006,7 @@ def _adapt_all_tasks(  # noqa: PLR0913 - protocol tuple stays flat
         model.reset_psi()
         probe = _fixed_probe(shape, task_fn, batches=probe_batches)
         pre_adapt = _probe_accuracy(model, probe)
-        losses, curve, steps, gate_history = _run_adaptation(
+        record = _run_adaptation(
             model,
             optimizer,
             criterion,
@@ -968,15 +1022,17 @@ def _adapt_all_tasks(  # noqa: PLR0913 - protocol tuple stays flat
             "accuracy": _eval_task_accuracy(model, shape, task_fn),
             "soft_eval_accuracy": _eval_task_accuracy(model, shape, task_fn, soft=True),
             "pre_adapt_accuracy": pre_adapt,
-            "adaptation_losses": losses,
-            "accuracy_curve": curve,
-            "steps_to_criterion": steps,
-            "gate_history": gate_history,
+            "adaptation_losses": record.losses,
+            "accuracy_curve": record.accuracy_curve,
+            "steps_to_criterion": record.steps_to_criterion,
+            "gate_history": record.gate_history,
+            "psi_history": record.psi_history,
+            "final_psi": [float(v) for v in model.psi_state.detach().squeeze(0)],
         }
     return rows, time.perf_counter() - started
 
 
-def _finetune_forgetting_baseline(  # noqa: PLR0913 - protocol tuple stays flat
+def _finetune_forgetting_baseline(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
     model: Z3Model,
     tasks,
     criterion,
@@ -1008,7 +1064,7 @@ def _finetune_forgetting_baseline(  # noqa: PLR0913 - protocol tuple stays flat
         probe = _fixed_probe(shape, stage_fn, batches=probe_batches)
         pre_adapt = _probe_accuracy(model, probe)
         pre_adapt_by_stage[stage_name] = pre_adapt
-        _losses, curve, steps, gate_history = _run_adaptation(
+        record = _run_adaptation(
             model,
             optimizer,
             criterion,
@@ -1020,9 +1076,9 @@ def _finetune_forgetting_baseline(  # noqa: PLR0913 - protocol tuple stays flat
             adapt_entropy_beta=adapt_entropy_beta,
             adapt_temp_end=adapt_temp_end,
         )
-        steps_by_stage[stage_name] = steps
-        curves_by_stage[stage_name] = curve
-        gate_histories_by_stage[stage_name] = gate_history
+        steps_by_stage[stage_name] = record.steps_to_criterion
+        curves_by_stage[stage_name] = record.accuracy_curve
+        gate_histories_by_stage[stage_name] = record.gate_history
         matrix[stage_name] = {
             name: _eval_task_accuracy(model, shape, fn) for name, fn in tasks
         }
@@ -1044,7 +1100,7 @@ def _finetune_forgetting_baseline(  # noqa: PLR0913 - protocol tuple stays flat
     }
 
 
-def _run_baselines(  # noqa: PLR0913 - protocol tuple stays flat
+def _run_baselines(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
     model: Z3Model,
     meta_state: dict[str, Tensor],
     tasks,
@@ -1202,7 +1258,218 @@ def _meta_train_phases(
         )
 
 
-def evaluate_z3(  # noqa: PLR0913 - protocol tuple stays flat
+def _snapshot_rng(device: torch.device) -> dict[str, Tensor]:
+    """Capture the global RNG streams consumed by the adaptation protocol."""
+    states: dict[str, Tensor] = {"cpu": torch.get_rng_state()}
+    if device.type == "cuda":
+        states["cuda"] = torch.cuda.get_rng_state(device)
+    return states
+
+
+def _restore_rng(states: dict[str, Tensor], device: torch.device) -> None:
+    """Replay the captured streams so a control arm sees identical batches."""
+    torch.set_rng_state(states["cpu"])
+    if device.type == "cuda":
+        torch.cuda.set_rng_state(states["cuda"], device)
+
+
+def _gates_respond_to_psi(model: Z3Model, shape: TaskShape, *, seed: int) -> float:
+    """Max |Δgate| between ψ=0 and a seeded nonzero ψ over one identical batch.
+
+    Mechanistic wiring probe for the ψ→selection causal link: ψ is a
+    controller input, so any nonzero weight path must move the gate
+    distribution. Uses an isolated generator so the global RNG stream — and
+    therefore the entire downstream run — is untouched; eval forward passes
+    draw no randomness.
+    """
+    gen = torch.Generator(device="cpu").manual_seed(seed)
+    x = torch.randn(shape.batch_size, shape.seq_len, shape.input_dim, generator=gen).to(
+        shape.device
+    )
+    model.eval()
+    with torch.no_grad():
+        model.reset_psi()
+        model(x)
+        gates_zero = model.last_gates
+        model.psi_state.data = torch.randn(
+            1, model.controller_hidden, generator=gen
+        ).to(shape.device)
+        model(x)
+        gates_psi = model.last_gates
+    model.reset_psi()
+    if gates_zero is None or gates_psi is None:
+        msg = "forward did not populate gates"
+        raise Z3InstrumentError(msg)
+    return float((gates_psi - gates_zero).abs().max())
+
+
+def _adapt_under_audit(  # ruff: ignore[too-many-arguments] - flat protocol tuple, file convention
+    model: Z3Model,
+    tasks: list,
+    criterion,
+    shape: TaskShape,
+    *,
+    epochs: int,
+    probe_batches: int,
+    recipe: MetaRecipe,
+    feedback: bool | None = None,
+) -> tuple[dict, float, ThetaAuditReport]:
+    """ψ-adaptation over the switching stream under the exact θ audit.
+
+    Shared by the treatment and frozen-ψ control arms. Returns per-task
+    rows, elapsed wall-clock, and the audit report; a missing report is a
+    RuntimeError, never a silent pass. ``feedback=None`` defers to
+    ``recipe.feedback``.
+    """
+    with ThetaInvarianceAudit(model, selector=_is_theta_param) as audit:
+        rows, wall = _adapt_all_tasks(
+            model,
+            tasks,
+            criterion,
+            shape,
+            epochs=epochs,
+            probe_batches=probe_batches,
+            feedback=recipe.feedback if feedback is None else feedback,
+            adapt_entropy_beta=recipe.adapt_entropy_beta,
+            adapt_temp_end=recipe.adapt_temp_end,
+        )
+    report = audit.report
+    if report is None:
+        msg = "θ audit produced no report"
+        raise Z3InstrumentError(msg)
+    return rows, wall, report
+
+
+def _psi_gate(
+    task_rows: dict[str, dict],
+    control_rows: dict[str, dict],
+    gate_response: float,
+    *,
+    theta_invariant: bool,
+    control_theta_change: float,
+) -> dict:
+    """R8.1 suite-level engagement gate over the emitted per-task records.
+
+    Instrument items must hold at any scale; ``probe_above_chance`` is the
+    capability item (per task, against ``TASK_CHANCE`` + margin) and is
+    expected to fail below meta-training scales that acquire the decoder.
+    The frozen-ψ control arm shares θ, task stream, seed, and budget with the
+    engaged arm — only ψ stepping differs (non-confounded by construction).
+    """
+    psi_moved = any(
+        max(row["psi_history"]["delta_norm"], default=0.0) > 0.0
+        for row in task_rows.values()
+    )
+    finals = [torch.tensor(row["final_psi"]) for row in task_rows.values()]
+    pairwise = [
+        float((a - b).abs().max())
+        for i, a in enumerate(finals)
+        for b in finals[i + 1 :]
+    ]
+    above = {
+        name: bool(row["accuracy_curve"])
+        and row["accuracy_curve"][-1] > TASK_CHANCE[name] + _GATE_ACCURACY_MARGIN
+        for name, row in task_rows.items()
+    }
+    gaps = {
+        name: [task_rows[name]["accuracy"], control_rows[name]["accuracy"]]
+        for name in task_rows
+    }
+    items: dict[str, object] = {
+        "theta_exact_invariant": bool(theta_invariant),
+        "psi_non_constant": psi_moved,
+        "psi_task_conditioned": any(delta > 0.0 for delta in pairwise),
+        "gates_respond_to_psi": gate_response > 0.0,
+        "frozen_psi_control_changes_metrics": any(
+            engaged != frozen for engaged, frozen in gaps.values()
+        ),
+        "probe_above_chance": above,
+    }
+    flat = {k: v for k, v in items.items() if isinstance(v, bool)}
+    flat["probe_above_chance"] = all(above.values())
+    failed = [k for k, v in flat.items() if not v]
+    return {
+        "chance": dict(TASK_CHANCE),
+        "margin": _GATE_ACCURACY_MARGIN,
+        "items": items,
+        "detail": {
+            "gate_response_max_delta": gate_response,
+            "min_pairwise_final_psi_delta": min(pairwise, default=0.0),
+            "engaged_vs_frozen_accuracy": gaps,
+            "control_theta_change": control_theta_change,
+        },
+        "passed": not failed,
+        "failed": failed,
+    }
+
+
+def _run_psi_gate_arm(  # ruff: ignore[too-many-arguments] - flat protocol tuple, file convention
+    model: Z3Model,
+    meta_state: dict[str, Tensor],
+    tasks: list,
+    task_rows: dict[str, dict],
+    shape: TaskShape,
+    *,
+    epochs: int,
+    probe_batches: int,
+    recipe: MetaRecipe,
+    entry_temperature: float,
+    rng_snapshot: dict[str, Tensor],
+    gate_response: float,
+    theta_invariant: bool,
+) -> tuple[dict, dict]:
+    """Run the embedded frozen-ψ control arm and assemble the R8.1 gate.
+
+    Planted-ψ control: identical meta-state, task stream, seed, budget, and
+    protocol temperature — only ψ stepping is disabled. The RNG streams are
+    replayed from the treatment arm's entry point so both arms see
+    bit-identical batches and probes: any metric difference is a causal ψ
+    effect, and on a ψ-disabled run the arms are bit-identical (the gate
+    item must then be False — the probe-the-probe property). Returns the
+    ``psi_control`` record and the ``psi_gate`` verdict.
+    """
+    model.load_state_dict(meta_state)
+    model.freeze_theta()
+    model.temperature = entry_temperature
+    _restore_rng(rng_snapshot, shape.device)
+    control_rows, _wall, control_report = _adapt_under_audit(
+        model,
+        tasks,
+        torch.nn.CrossEntropyLoss(),
+        shape,
+        epochs=epochs,
+        probe_batches=probe_batches,
+        recipe=recipe,
+        feedback=False,
+    )
+    psi_control = {
+        "feedback": False,
+        "theta_change": control_report.max_abs_change,
+        "tasks": {
+            name: {
+                "accuracy": row["accuracy"],
+                "pre_adapt_accuracy": row["pre_adapt_accuracy"],
+                "steps_to_criterion": row["steps_to_criterion"],
+                "accuracy_curve": row["accuracy_curve"],
+            }
+            for name, row in control_rows.items()
+        },
+    }
+    gate = _psi_gate(
+        task_rows,
+        control_rows,
+        gate_response,
+        theta_invariant=theta_invariant,
+        control_theta_change=control_report.max_abs_change,
+    )
+    if gate["passed"]:
+        print("  ψ gate: PASS")
+    else:
+        print(f"  ψ gate: FAIL — {', '.join(gate['failed'])}")
+    return psi_control, gate
+
+
+def evaluate_z3(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
     coordinate: str,
     meta_train_epochs: int = 50,
     eval_epochs_per_task: int = 20,
@@ -1305,32 +1572,45 @@ def evaluate_z3(  # noqa: PLR0913 - protocol tuple stays flat
         # optimization ones (2026-08-26 pilot rerun autopsy).
         model.temperature = recipe.adapt_temp
     assert model.verify_theta_frozen(), "θ not frozen!"
+    # Protocol state the frozen-ψ control arm must replicate exactly.
+    entry_temperature = model.temperature
+
+    # R8.1 wiring probe: ψ→gate causal link on the meta-trained controller.
+    results["psi_gate_response"] = _gates_respond_to_psi(model, shape, seed=seed)
 
     # PR-2 audit: exact-diff θ across the whole switching/adaptation phase.
     # PR-1 hygiene: _adapt_all_tasks rebuilds Adam over the trainable set so
     # no meta-training momentum survives into ψ adaptation.
-    with ThetaInvarianceAudit(model, selector=_is_theta_param) as audit:
-        results["tasks"], psi_wall = _adapt_all_tasks(
-            model,
-            tasks,
-            criterion,
-            shape,
-            epochs=eval_epochs_per_task,
-            probe_batches=probe_batches,
-            feedback=recipe.feedback,
-            adapt_entropy_beta=recipe.adapt_entropy_beta,
-            adapt_temp_end=recipe.adapt_temp_end,
-        )
+    rng_snapshot = _snapshot_rng(device)
+    results["tasks"], psi_wall, report = _adapt_under_audit(
+        model,
+        tasks,
+        criterion,
+        shape,
+        epochs=eval_epochs_per_task,
+        probe_batches=probe_batches,
+        recipe=recipe,
+    )
     results["wall_clock_s"] = {"psi_adaptation": psi_wall}
 
-    report = audit.report
-    assert report is not None, "θ audit produced no report"
+    # R8.1: exact invariance — bitwise equality, not a tolerance band.
     results["theta_change"] = report.max_abs_change
-    results["theta_invariant"] = report.is_within(1e-6)
+    results["theta_invariant"] = report.invariant
+    results["theta_sha256"] = hashlib.sha256(
+        bytes(
+            model.operator_embeddings
+            .detach()
+            .cpu()
+            .contiguous()
+            .view(-1)
+            .view(torch.uint8)
+            .tolist()
+        )
+    ).hexdigest()
 
     print(
         f"  θ change: {report.max_abs_change:.8f} "
-        f"(invariant: {results['theta_invariant']})"
+        f"(exact-invariant: {results['theta_invariant']})"
     )
     for task_name, row in results["tasks"].items():
         print(
@@ -1344,6 +1624,29 @@ def evaluate_z3(  # noqa: PLR0913 - protocol tuple stays flat
     )
     results["operator_diversity"] = entropy
     results["diversity_collapsed"] = bool(entropy < math.log(2))
+
+    # ===== R8.1/R8.2 EMBEDDED FROZEN-ψ CONTROL + ENGAGEMENT GATE =====
+    results["psi_control"], results["psi_gate"] = _run_psi_gate_arm(
+        model,
+        meta_state,
+        tasks,
+        results["tasks"],
+        shape,
+        epochs=eval_epochs_per_task,
+        probe_batches=probe_batches,
+        recipe=recipe,
+        entry_temperature=entry_temperature,
+        rng_snapshot=rng_snapshot,
+        gate_response=results["psi_gate_response"],
+        theta_invariant=results["theta_invariant"],
+    )
+    # Claims-scope audit status (R8.1): ψ-engaged iff the embedded gate passes
+    # this run; a failed gate downgrades the run to no-ψ-claim plumbing.
+    results["claims_scope"] = (
+        CLAIMS_SCOPE_PSI_ENGAGED
+        if results["psi_gate"]["passed"]
+        else CLAIMS_SCOPE_PLUMBING_ONLY
+    )
 
     # ===== BASELINES (E-10 control set) =====
     if not with_baselines:
@@ -1445,6 +1748,10 @@ def run_z3_suite(
                 ]
                 coord_results[f"mean_{task_name}_accuracy"] = sum(accs) / len(accs)
 
+            coord_results["gate_passed"] = all(
+                s["psi_gate"]["passed"] for s in coord_results["seeds"]
+            )
+
         all_results.append(coord_results)
 
     # Save results (E-3 manifest: pinned config hash + git commit next to data)
@@ -1474,7 +1781,8 @@ def run_z3_suite(
     print("Z3 Fixed Weights Benchmark Summary (Level 4)")
     print("=" * 80)
     print(
-        f"{'Coordinate':<50} {'Parity':<8} {'LastSym':<8} {'Thresh':<8} {'θ-change':<10} {'Diversity':<10}"
+        f"{'Coordinate':<50} {'Parity':<8} {'LastSym':<8} {'Thresh':<8} "
+        f"{'θ-change':<10} {'Diversity':<10} {'Gate':<6}"
     )
     print("-" * 80)
     for r in all_results:
@@ -1490,7 +1798,8 @@ def run_z3_suite(
             f"{r.get('mean_last_symbol_accuracy', 0):<8.4f} "
             f"{r.get('mean_threshold_accuracy', 0):<8.4f} "
             f"{r.get('mean_theta_change', 0):<10.8f} "
-            f"{r.get('mean_operator_diversity', 0):<10.4f} {prim}"
+            f"{r.get('mean_operator_diversity', 0):<10.4f} "
+            f"{'PASS' if r.get('gate_passed') else 'FAIL':<6} {prim}"
         )
 
     return all_results

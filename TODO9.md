@@ -52,6 +52,72 @@
 > from code defects to experimental-design defects** — successor plan: **R8** below. The old
 > null stays uninterpreted; it is a property of the old design, not a finding.
 >
+> **R8 Track 1 complete 2026-09-01 — Z3 flagship gate landed (R8.1 + R8.2).** Every
+> `evaluate_z3` run now embeds its own engagement gate + planted-ψ control: exact θ
+> invariance (bitwise; was 1e-6-tolerance; `theta_sha256` emitted for artifact-level
+> checks), ψ non-constancy + task-conditioning (per-task ψ trajectories + final ψ
+> vectors recorded), a mechanistic ψ→gate wiring probe (isolated RNG, stream-clean), an
+> RNG-aligned frozen-ψ control arm (identical meta-state/task/seed/budget — only ψ
+> stepping differs), and per-task above-chance probe accuracy (chance 0.5 + margin 0.1).
+> Gate PASSES at registered scale (50 meta/20 eval) across 3 seeds; the planted effect is
+> large — engaged vs ψ-frozen gaps: parity +0.32..0.42, last_symbol +0.20..0.34,
+> threshold +0.04..0.14. The ψ-disabled arm (recipe `feedback=False`) is the
+> engineered-broken variant: the gate flags exactly the ψ items and its embedded control
+> is bit-identical to treatment (probe-the-probe). θ sha256 identical across
+> engaged/disabled arms — the plant is non-confounded. `claims_scope: psi_engaged` is
+> emitted per run and self-downgrades to `plumbing_only` on gate failure. Locks:
+> `tests/property/test_z3_engagement.py` (12). Quick-scale read (10 meta epochs): only
+> last_symbol above chance — a capability/scale fact (the quick budget cannot acquire the
+> decoder), NOT an instrument defect; the gate is a registered-scale instrument.
+> **The Z3 flagship registered run (RESEARCH3 CP-A) is unblocked.** Gate **1317 passed /
+> 0 failed** (was 1300; +17 R8 locks), ruff/pyright net-zero on touched files.
+>
+> **R8 Track 2 started 2026-09-01 — R8.3 Option A foundation.** `episode_batch` gained
+> `teacher_key`: the synthetic teacher derives from (campaign_id, coordinate, seed)
+> alone — stationary across episodes (accumulated learning becomes representable) while
+> inputs keep varying per episode; `evaluate_episode(stationary_teacher=True)` threads
+> it through. The legacy per-episode redraw is preserved byte-for-byte (commissioned
+> artifacts stay reproducible) and the imp-54 non-stationarity stays pinned for
+> per-episode-adaptation scope. Behavioral lock: a linear probe trained on early episodes
+> generalizes >0.9 to late episodes under the stationary teacher and stays at chance
+> (<0.35) on the legacy stream (`tests/property/test_stationary_teacher.py`, 5 locks).
+> **Completed same day — R8.3 pilot + calibration, R8.4 label gate, R8.5 controls: see
+> the R8 Track 2 completion record above; R8.6 re-scoped → R9.**
+>
+> **R8 Track 2 complete 2026-09-01 — R8.3/R8.4/R8.5 landed; the instrument is
+> qualified.** R8.3: `stationary_teacher`/`teacher_noise` threaded through
+> `CampaignStack` (config-recorded, provenance-stamped per record
+> `teacher_stationary`/`teacher_noise`); difficulty calibrated —
+> `CALIBRATED_TEACHER_NOISE = 0.5` puts the oracle at ≈0.86 (band 0.125..0.86,
+> no saturation headroom problem); **stationary pilot run** (persistent-θ arms,
+> 40 episodes × 3 seeds, registered shape): controls PASSED both variants,
+> per-arm variance measured (`benchmark_results/stationary_pilot_{noiseless,
+> calibrated}.json`). R8.4: `validation/power_preregistration.py` —
+> `PowerPreregistration` (effect/variance/n/α/stratification/scope/stream),
+> derived `mde_cohens_d`/`mde_metric` + `n_for_target_power`, label gate
+> (`claim_grade`/`pilot`/`plumbing`/`instrument_check`; a declared rung CAPS
+> the label even when gates pass; accumulated_learning requires the
+> stationary stream per imp-54), JSON round-trip; `CampaignStack.run_campaign`
+> records label + prereg in the campaign config. R8.5: embedded positive
+> controls enforced — claim-grade requires a declared control arm; the
+> `frozen` (lr=0) update value composes as a planted control coordinate;
+> post-run `verify_embedded_control` over the campaign's records; failed or
+> missing control → `CampaignRunResult.quarantined`. Gate **1339 passed /
+> 0 failed** (was 1317; +22 locks: `test_power_preregistration.py` 13,
+> stationary threading/noise/calibration 9), ruff/pyright net-zero on touched
+> files.
+>
+> **R8.6 re-scoped → R9.** The pilot's power numbers (routing deficit d≈1.8 →
+> n≈6/group; fast_weights vs null d≈0.17..0.47 → n≈72..529 at 40 episodes)
+> make one thing plain: effect size is a design property, not a scaling
+> property. A registered re-commission of the same M-axis contrast on a
+> stationary stream would buy a smaller-n version of a boring question. Per
+> the 2026-09-01 strategic review: **R8 is instrument qualification; the
+> discovery phase is R9 — surgical stress tests in regimes where Backprop's
+> superpowers are liabilities and the ontology's axes are strictly
+> necessary** (R9 below). R8's gates (prereg label, embedded controls,
+> fidelity re-evaluation) are R9's commissioning machinery.
+>
 > **Numbering:** improvement items continue TODO8's append-only ledger from **imp-42**;
 > imp-1..41 remain canonical in TODO8.md.
 
@@ -175,7 +241,7 @@ both gates must pass; neither is bypassable):
   criterion is **the result becomes obvious**, and a planted effect detected at ceiling is
   the first honest datapoint, not the finish line.
 
-## 🎯 R8 — Powered, Stationary Evidence (successor to R7) — OPEN
+## 🎯 R8 — Powered, Stationary Evidence (successor to R7) — CLOSED 2026-09-01 (R8.6 re-scoped → R9)
 
 R7 established that the instrument can see a planted effect, but the commissioned campaign
 was underpowered and structurally non-stationary. R8 closes the gap between **instrument
@@ -184,24 +250,25 @@ hunt is not primarily in the code — it is in the experimental design.
 
 **Two gates, run as parallel tracks:**
 
-| # | Item | Done when |
-|---|------|-----------|
-| R8.1 | Z3 suite-level engagement lock | θ exact invariance (norm/hash equality, not tolerance-only), ψ non-constancy, ψ-dependent operator selection/behavior, above-chance probe accuracy, frozen-ψ control changes metrics — the suite fails unless all hold |
-| R8.2 | Z3 positive control | a planted ψ-mediated effect (ψ disabled/frozen vs ψ engaged) is detected through the Z3 suite itself; if not, Z3 is classified `plumbing_only` and fixed before interpretation |
-| R8.3 | Stationary task design | the campaign task family supports accumulation, or the campaign explicitly declares a per-episode-adaptation scope (imp-54). Options: (A) stationary synthetic family — teacher seed = f(campaign_id, coordinate, seed); (B) held-out probe design separating per-episode adaptation from accumulated learning; (C) task-switch phases A→B matching the L1 hypothesis |
-| R8.4 | Power preregistration | every commission declares expected effect size, variance estimate, n/group, MDE@80%, α, stratification structure; below-floor commissions are labeled `pilot`/`plumbing`/`instrument-check` (imp-55) |
-| R8.5 | Embedded positive controls | every claim-grade campaign contains a planted-effect control arm (lr=0 coordinate; ψ frozen vs engaged); control failure quarantines the campaign |
-| R8.6 | Re-commission powered campaign | n/design passes the power gate without the non-stationary synthetic stream; discovery locks + fidelity manifest re-evaluated on the new commission (R5b-D rule) |
+| # | Item | Done when | Status |
+|---|------|-----------|--------|
+| R8.1 | Z3 suite-level engagement lock | θ exact invariance (norm/hash equality, not tolerance-only), ψ non-constancy, ψ-dependent operator selection/behavior, above-chance probe accuracy, frozen-ψ control changes metrics — the suite fails unless all hold | ✅ 2026-09-01 — embedded in every `evaluate_z3` run (`psi_gate` verdict, fails loudly by name): exact θ invariance (`ThetaAuditReport.invariant`, `theta_sha256`), ψ non-constancy + task-conditioning (`psi_history`/`final_psi` per task), ψ→gate wiring probe, RNG-aligned frozen-ψ control, per-task probe > chance+0.1. PASSES ×3 seeds at registered scale; quick scale fails capability items only (named, expected). Locks: `test_z3_engagement.py` |
+| R8.2 | Z3 positive control | a planted ψ-mediated effect (ψ disabled/frozen vs ψ engaged) is detected through the Z3 suite itself; if not, Z3 is classified `plumbing_only` and fixed before interpretation | ✅ 2026-09-01 — engaged vs ψ-disabled arms (same seed → identical θ by construction: forced warm-up is ψ-independent, phase 2 freezes θ; sha256-verified) differ across all task metrics; best gap parity >0.29 every seed, direction favors ψ on all tasks. Disabled arm's gate fails with exactly the ψ items (probe-the-probe). Z3 verdict upgraded `plumbing_only` → `psi_engaged` in `_claims.py` (run-conditional emission) |
+| R8.3 | Stationary task design | the campaign task family supports accumulation, or the campaign explicitly declares a per-episode-adaptation scope (imp-54). Options: (A) stationary synthetic family — teacher seed = f(campaign_id, coordinate, seed); (B) held-out probe design separating per-episode adaptation from accumulated learning; (C) task-switch phases A→B matching the L1 hypothesis | ✅ 2026-09-01 — Option A implemented + **pilot run**: `stationary_teacher`/`teacher_noise` threaded through `CampaignStack` (config-recorded; per-record provenance metadata); difficulty calibrated (`CALIBRATED_TEACHER_NOISE = 0.5` → oracle ≈0.86, no ceiling saturation — pinned by lock); legacy stream byte-reproduced; accumulation behavioral lock green. **Pilot numbers** (persistent-θ arms, 40 ep × 3 seeds, lr=0.01): noiseless — null 0.354±0.118, fast_weights 0.394±0.011, routing 0.288±0.025, control 0.146 **PASS**; calibrated σ=0.5 — null 0.371±0.085, fw 0.360±0.010, routing 0.263±0.006, control 0.150 **PASS**. d from 3 seeds is order-of-magnitude only. *Semantics note: the CampaignStack path rebuilds θ per episode — stationary teachers make per-episode-adaptation claims stable, but accumulated-learning claims run the persistent-θ chain (the pilot harness), which is what R9.1's retention design must thread deliberately.* |
+| R8.4 | Power preregistration | every commission declares expected effect size, variance estimate, n/group, MDE@80%, α, stratification structure; below-floor commissions are labeled `pilot`/`plumbing`/`instrument-check` (imp-55) | ✅ 2026-09-01 — `validation/power_preregistration.py`: `PowerPreregistration` (claim/metric/scope/stream/effect/variance/n/α/stratification), derived `mde_cohens_d`/`mde_metric`, `n_for_target_power` planner; label gate `claim_grade`/`pilot`/`plumbing`/`instrument_check` — claim-grade derived (never declared), a declared rung caps even when gates pass, accumulated_learning demands the stationary stream (imp-54); `scripts/power_audit.py` now imports the shared MDE helper. Enforced at commission time: `CampaignStack.run_campaign(preregistration=..., require_claim_grade=...)` records label + prereg in the campaign config and fails loudly by name |
+| R8.5 | Embedded positive controls | every claim-grade campaign contains a planted-effect control arm (lr=0 coordinate; ψ frozen vs engaged); control failure quarantines the campaign | ✅ 2026-09-01 — claim-grade requires `embedded_control` in the preregistration; the `frozen` (lr=0) update value composes as an explicit planted-control coordinate (dispatch raises on unknown values as ever); post-run `verify_embedded_control` checks the control arm's mean target-free accuracy against chance ± tolerance over the campaign's records; failed/missing control → `CampaignRunResult.quarantined` + event log. Verified live in both pilot runs (control passed) |
+| R8.6 | Re-commission powered campaign | n/design passes the power gate without the non-stationary synthetic stream; discovery locks + fidelity manifest re-evaluated on the new commission (R5b-D rule) | **re-scoped → R9** 2026-09-01 — the machinery (label gate, embedded controls, stationary stream, pilot variance) is in place; the registered campaign itself moved into R9.1's retention design, where the effect is enlarged by the task structure rather than bought with n. Pilot planning numbers: routing-deficit d≈1.8 → n≈6/group; fw-vs-null d≈0.17–0.47 → n≈72–529/group at 40 episodes — episode budget and task structure are the levers, not raw n |
 
 **Claim-scope rule (pairs with R8.3/R8.4):** each campaign states up front which effect type
 its design can support — per-episode adaptation, accumulated learning, resource-efficiency,
 stability, M-axis plasticity. The old smoke campaign cannot support accumulated-learning
 claims because of imp-54; that constraint is written into any retrospective of it.
 
-**Execution order:** Track 1 (R8.1 → R8.2, bounded engineering: lock, control, run quick,
-read numbers against chance + θ-invariance, escalate or demote) runs in parallel with
-Track 2 (R8.3 → R8.4 → R8.5 → small pilot → power audit on pilot variance → R8.6 only if
-powered). Track 1 is the nearer critical path: Z3 is the next RESEARCH3 flagship.
+**Execution order (superseded):** both tracks completed 2026-09-01 — Track 1
+(R8.1 → R8.2, the Z3 gate) and Track 2 (R8.3 pilot/calibration → R8.4 label
+gate → R8.5 controls); R8.6 re-scoped into R9 (see below). Track 1's Z3 gate
+remains the registered instrument for any Z3 output; Track 2's machinery is
+the commissioning gate R9 rides on.
 
 **Do not (R8-specific):**
 - Do not re-run the old campaign at n≈376/group without redesign — scale without redesign is
@@ -214,6 +281,57 @@ powered). Track 1 is the nearer critical path: Z3 is the next RESEARCH3 flagship
   recommissioning happens under the fixed compute/energy semantics only.
 - Do not interpret the old registered null — it is explained (underpowered + non-stationary),
   not confirmed, and not refuted.
+
+## 🎯 R9 — Surgical Stress Tests (discovery phase; successor to R8) — OPEN (planned 2026-09-01)
+
+**Premise (2026-09-01 strategic review, adopted):** R8 built the most honest
+microscope in the business — but a microscope discovers nothing by looking at
+slides with nothing on them. Backprop is the undisputed king of i.i.d.,
+stationary, unconstrained optimization; asking "which algorithm learns MNIST
+fastest with unlimited memory and exact gradients" returns Backprop, or a tie,
+forever. The discovery phase changes the environment so **Backprop's
+superpowers become liabilities** (exact global gradients, global clocks,
+activation storage, stationary streams) **and the ontology's axes become
+strictly necessary** (locality, plasticity, energy, O(1) memory credit).
+Grid campaigns map known territory; R9 runs **surgical, deeply powered,
+single-hypothesis stress tests**, with the AutoScientist mapping boundary
+conditions only *after* an effect exists.
+
+**R8 is the prerequisite and the gate, not the casualty:** every R9 trial
+commissions through the R8 machinery — power preregistration + label gate
+(R8.4), embedded planted-effect control with quarantine (R8.5), stationary/
+structured task streams (R8.3), fidelity manifest re-evaluation on the new
+commission (R5b-D). An unpowered or leaky stress test just produces noisy,
+uninterpretable drama.
+
+| # | Trial | Hypothesis | Design | Metrics | Claim scope |
+|---|------|-----------|--------|---------|-------------|
+| R9.1 | **Catastrophic Forgetting Trial** (M-axis) | Routing/FastWeight plasticity retains Task A while learning Task B because ψ isolates/stores episode-local pathways; Null collapses to chance on A | **Structured task-sequence stream A→B(→C)** — e.g. digits 0–4 → 5–9 → Fashion-MNIST. Within-segment stationarity (accumulation representable per segment, R8.3 machinery per segment) + across-segment shift (retention measurable). *This is NOT the imp-54 stream — that stream is degenerate per-episode noise (unlearnable), not structured non-stationarity; a task sequence is the environment continual learning is defined on.* Prior art to revive under the R8 gates: `computronium/experiments/joint/continual_learning.py` + `configs/preregistrations/cl_backward_transfer_matched_memory.json` + `cl_retest_discriminating_probe.json` (Split-MNIST, memory-matched, verified arms). **Z3 pivot:** extend the Z3 gate with a retention arm (Task A → B → A, θ frozen, ψ switches back; retention metric) — upgrades Z3 from capability (ψ can switch) to utility (switching prevents forgetting) | Backward transfer (retention of A after B), forward transfer, per-segment adaptation time; embedded lr=0 control must sit at chance throughout | retention under structured non-stationarity (new scope alongside the claim-scope rule — `retention` joins per-episode adaptation / accumulated learning / resource-efficiency / stability / M-axis plasticity) |
+| R9.2 | **Physical Constraint Trial** (S/D axes) | Under severe substrate constraints (memristive IR-drop, analog precision caps, noise, memory ceilings), exact-global Backprop degrades or collapses while local rules (EqProp, FA, local goodness) degrade gracefully and dominate the 𝒞-Pareto frontier | The **same powered design run twice**: (a) unconstrained Digital — Backprop expected to win (the honest baseline); (b) constrained — Memristive/noisy substrate, precision-capped, memory-budgeted (no activation storage for BPTT). Resource axes are trustworthy post-imp-45 (work-derived compute/energy, state split) — the frontier shift is measurable, not fictional. Map the "Goldilocks zone" where locality beats global optimality | 𝒞-Pareto frontier shift (compute/energy/memory/latency vs accuracy), collapse boundary of the Backprop arm, graceful-degradation curves | resource-efficiency under physical constraints |
+| R9.3 | **Deep Credit Trial** (C-axis) | ThermodynamicContrast (EqProp) / PredictiveSettling (PC) learn a 50+ step temporal dependency with O(1) activation memory where BPTT OOMs or vanishes | Long-horizon recurrent task (deep parity over 50+ steps; state-space realization). Memory-profiled arms: BPTT's memory grows O(depth) and its gradients vanish; energy-based arms settle to a fixed point and credit locally | Learned temporal dependency at fixed memory; BPTT failure boundary (OOM/vanishing); settling-time cost of the local alternative | credit assignment at depth (validates the C-axis mathematics where shallow tasks cannot) |
+
+**R9 method rules:**
+- One hypothesis per trial; preregister through the R8.4 gate with the
+  embedded control (lr=0 arm at chance; ψ-frozen arm where ψ is the
+  treatment) — a moving control quarantines the trial, always.
+- Power comes from **effect-enlarging design**, not n-scaling: the pilot
+  showed a well-aimed contrast carries d≈1.8 (n≈6/group) where the old
+  design's d=0.205 needed n≈376/group. Task structure, budget, and
+  constraint severity are the levers.
+- The AutoScientist maps **boundary conditions after the effect exists**
+  (e.g., at what switch rate does routing's retention advantage disappear;
+  at what IR-drop does the local-rule Pareto dominance begin).
+- "If it works it will be obvious" is unchanged: a retention gap of 90%-vs-
+  chance, a Pareto frontier that visibly shifts, or a learned 50-step
+  dependency at O(1) memory needs no statistics to be seen — the gates exist
+  to make sure the seeing is honest.
+
+**Execution order:** R9.1 is the flagship (M-axis is the framework's
+differentiator; prior art exists; the pilot's ψ-stability signature — imp-58 —
+points exactly there). R9.2 next (substrate machinery exists; needs the
+constraint-arm harness). R9.3 last (needs the long-horizon task + memory
+profiling; EqProp-on-recurrent depth machinery exists from the native
+research directions).
 
 ## 🔁 Pull-Based Backlog (non-blocking; pull when a campaign manifest or suite needs it)
 
@@ -256,9 +374,16 @@ powered). Track 1 is the nearer critical path: Z3 is the next RESEARCH3 flagship
 - axis_probe `[2-0]` flake — no recurrence since 2026-08-31; still watching
 - CUDA tolerance boundaries shift xfail edges — CPU/GPU tests kept separate, construction seeding in place
 - Shakedown suites' harness arms are M-axis-identical (see PR-7 notes + imp-43) — pipeline-level engagement locks are green, but L1/L3 *claims* still need the harness rewired onto the ψ-engaged path (or params-moved locks) first
-- Z3 flagship gate (R8 Gate A / R8.1–R8.2): suite-level engagement lock + positive-control run through the Z3 suite itself are open (pipeline-level locks exist) — do not interpret Z3 output before both land
+- Z3 flagship gate (R8 Gate A / R8.1–R8.2): **landed 2026-09-01** — every `evaluate_z3`
+  run self-validates via its embedded `psi_gate` (exact θ invariance, ψ non-constancy +
+  task-conditioning, ψ→gate wiring, RNG-aligned frozen-ψ control, above-chance probe acc)
+  and emits `claims_scope` (`psi_engaged` iff the gate passes). Do not read any Z3 output
+  whose gate failed; the registered flagship run (CP-A) is unblocked and should re-verify
+  the gate per seed at its own scale
 - Power gate (R8.4 / imp-55): commissions must state expected n vs MDE@80% in their preregistration; below-floor commissions are labeled `pilot`/`plumbing`/`instrument-check`, never claim-grade
-- Smoke-scale campaign deltas are capped at chance by the non-stationary synthetic stream (imp-54 / R8.3) — never read pooled smoke task_loss/accuracy deltas as accumulated-learning evidence; accumulated-learning claims require a stationary design
+- Smoke-scale campaign deltas are capped at chance by the non-stationary synthetic stream (imp-54 / R8.3) — never read pooled smoke task_loss/accuracy deltas as accumulated-learning evidence; the stationary-teacher design (`stationary_teacher=True`) is the accumulation-capable path and its pilot variance is now measured (`benchmark_results/stationary_pilot_*.json`) — but note the CampaignStack path rebuilds θ per episode (per-episode-adaptation scope even with stationary teachers); accumulated-learning/retention claims run the persistent-θ chain
+- **R9 (open):** the discovery phase runs surgical stress tests (R9.1 forgetting / R9.2 constraint / R9.3 deep credit), every trial gated by R8.4/R8.5 machinery. R9.1 must build a *structured* task-sequence stream (stationary within segments, shifting across) — not the imp-54 degenerate stream; Z3's retention pivot (A→B→A) is open; R9.2 needs the constraint-arm harness; R9.3 needs the long-horizon task + memory profiling. No R9 commission interprets anything without its embedded control passing and the label gate at claim-grade
+- Control-band sizing (imp-59): at-chance embedded controls quarantine on sampling noise if the band is not sized to the control arm's scored-sample count — preregistrate the band from the registered N
 
 ## 💡 Improvement Ledger (continues TODO8's imp-N from imp-42)
 
@@ -392,6 +517,54 @@ underpowered design. *Consequence: the null stays uninterpreted, and the first s
 is quantitative — ≈376/group at current variance, or a redesign that enlarges the effect (e.g.
 stationary tasks per imp-54, ψ-gated arms per imp-43) — before re-commissioning.*
 
+56. **An embedded control must align the RNG stream, not just the seed (2026-09-01, R8.1).**
+The first frozen-ψ control arm ran after the treatment arm in the same process, so its
+batches and probes came from a later RNG position — the "ψ effect" it measured conflated ψ
+stepping with sampling noise, and on the ψ-disabled arm the control differed from treatment
+purely by batch noise (false-positive engagement: the gate item that must be False was True).
+Fix: snapshot the global RNG streams at the treatment arm's entry point and replay them
+before the control arm (`_snapshot_rng`/`_restore_rng`) — arms now see bit-identical batches
+and probes; on the disabled run they are bit-identical, which is itself the probe-the-probe
+assertion. *Lesson: "same seed" is not "same stream" — a control arm must inherit the stream
+position its treatment started from, or the comparison measures sampling noise. Same-day
+corollary: the ψ wiring probe needed the same isolation (a dedicated `torch.Generator`) or
+it would have shifted every downstream draw.*
+
+57. **Z3's registered "exact" θ invariance was actually a 1e-6 tolerance (2026-09-01, R8.1).**
+The preregistration decision rule said "max abs Δθ < 1e-6" and the suite emitted
+`theta_invariant = report.is_within(1e-6)` — a tolerance, not the claim's exact-zero
+invariant. R8.1 tightened the emission to bitwise equality (`ThetaAuditReport.invariant`;
+max-abs == 0.0 is elementwise-exact) and added `theta_sha256` for artifact-level identity
+checks (used to prove engaged/ψ-disabled arms share θ — the warm-up phase is ψ-independent
+and phase 2 freezes θ, so same-seed arms are bitwise identical). *Lesson: when a registered
+claim states an exact invariant, the emitting field must be exact too — a tolerance field
+invites a tolerance-level pass on an exactness claim. Discovered while wiring the R8 gate;
+no historical Z3 record ever showed nonzero drift (all 0.0), so nothing is quarantined.*
+
+58. **The stationary pilot's first signal: ψ-mediated accumulation is ~10× more
+seed-stable than θ accumulation — and effect size is a design property (2026-09-01, R8.3).**
+Persistent-θ arms walking the stationary stream (40 ep × 3 seeds, registered shape):
+fast_weights' late-window accuracy varied across seeds by sd ≈ 0.010–0.011 while null's
+varied by sd ≈ 0.085–0.118 (both difficulty variants; routing 0.006–0.025). Hypothesis-grade
+(3 seeds), but it is exactly the signature the M-axis hypothesis needs: the plastic state,
+not the θ trajectory, is carrying the stable part of the accumulated behavior. Power lesson
+from the same run: the routing-vs-null deficit carried d≈1.8 (n≈6/group for 80% power)
+where the old campaign's best effect (d=0.205) needed n≈376/group — **well-aimed questions
+enlarge effects; n-scaling cannot rescue a mis-aimed one** (the quantitative form of "stop
+measuring slides with nothing on them"; drove the R8.6 → R9 re-scope). *Caveat pinned: d
+from 3 seeds is order-of-magnitude only — a registered commission re-estimates variance at
+its own scale.*
+
+59. **An at-chance control band must be sized for the record count, or small
+pilots self-quarantine (2026-09-01, R8.5).** The first 8-episode pilot smoke "failed" its
+lr=0 embedded control (mean acc 0.242 vs band 0.075–0.175): with only 128 scored samples,
+per-batch chance noise alone (σ ≈ 0.029) plus init-to-init variation puts the frozen arm
+outside a ±0.05 band ~regularly. The registered pilot (40 ep × 3 seeds = 1920 samples)
+passed at 0.146/0.150. *Lesson: the control band is a statistical instrument too — width
+must scale with √N of the control arm's scored samples, or the quarantine fires on sampling
+noise (the R8.5 gate manufacturing a false defect of exactly the class it exists to catch).
+R9 trials must size the band from the registered record count at preregistration time.*
+
 ## 🔧 Quick Commands
 
 ```bash
@@ -416,6 +589,16 @@ uv run pytest tests/property/test_metric_provenance.py tests/property/test_settl
   tests/property/test_psi_engagement.py tests/property/test_positive_control.py \
   tests/property/test_fidelity_meta_validation.py -q
 uv run python scripts/power_audit.py   # MDE@80% vs observed effects over r5b_b task_loss
+
+# R8 locks (Z3 gate + stationary teacher):
+uv run pytest tests/property/test_z3_engagement.py tests/property/test_stationary_teacher.py -q
+# Z3 gate runs inside every evaluate_z3; registered-scale shakedown (~8 s/seed CPU):
+uv run python -m computronium.experiments.joint.z3_fixed_weights --meta-train-epochs 50 --eval-epochs 20 --seeds 3
+
+# R8 Track 2 (stationary pilot + power prereg + embedded controls):
+uv run python -m computronium.experiments.joint.stationary_pilot \
+  --episodes 40 --seeds 0,1,2 --output benchmark_results/stationary_pilot.json
+uv run pytest tests/property/test_power_preregistration.py tests/property/test_stationary_teacher.py -q
 
 # NOTE: sync with `uv sync --extra dev --extra lightning` (plain dev sync removes
 #   lightning -> 4 collection errors). Serial pytest only — xdist hangs in this env.

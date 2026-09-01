@@ -48,6 +48,11 @@ from computronium.core.campaign.replication import (
     replication_manifest,
 )
 from computronium.core.logging import get_logger
+from computronium.validation.power_preregistration import (
+    ControlVerdict,
+    PowerPreregistration,
+    verify_embedded_control,
+)
 
 if TYPE_CHECKING:
     import torch
@@ -159,6 +164,13 @@ class CampaignRunResult:
     outcomes: tuple[EpisodeOutcome, ...]
     checkpoint_path: Path | None = None
     yaml_checkpoint: Path | None = None
+    claim_label: str | None = None
+    embedded_control: ControlVerdict | None = None
+
+    @property
+    def quarantined(self) -> bool:
+        """A failed or missing embedded control quarantines the campaign."""
+        return self.embedded_control is not None and self.embedded_control.quarantines
 
     @property
     def records(self) -> tuple[FrontierRecord, ...]:
@@ -244,6 +256,10 @@ class CampaignStack:
         dry_run: bool = False,
         build_kwargs: dict | None = None,
         objective: str | None = None,
+        stationary_teacher: bool = False,
+        teacher_noise: float = 0.0,
+        preregistration: PowerPreregistration | None = None,
+        require_claim_grade: bool = False,
     ) -> CampaignRunResult:
         """Run (or resume) a campaign of real composed-system episodes.
 
@@ -263,6 +279,19 @@ class CampaignStack:
             build_kwargs: Overrides for coordinate composition (input_dim,
                 output_dim, hidden_dims).
             objective: Recorded in campaign config metadata for audit.
+            stationary_teacher: R8.3 task-stream design — stationary teachers
+                (accumulated-learning claim scope) vs the legacy per-episode
+                redraw (per-episode-adaptation scope only). Recorded in the
+                campaign config; resume runs must repeat their original choice.
+            teacher_noise: R8.3 difficulty calibration (see
+                ``CALIBRATED_TEACHER_NOISE``); recorded in the campaign config.
+            preregistration: R8.4 power preregistration — its derived claim
+                label and embedded control are recorded with the campaign,
+                and the control's records are verified post-run (R8.5); a
+                failed or missing control marks the run quarantined.
+            require_claim_grade: Raise at commission time unless the
+                preregistration passes every claim-grade gate (fails loudly
+                by name instead of producing an uninterpretable run).
 
         Returns:
             CampaignRunResult with per-episode outcomes and analysis handles.
@@ -274,6 +303,8 @@ class CampaignStack:
             **(build_kwargs or {}),
         }
         task_cycle = tuple(tasks) or ("synthetic",)
+        if preregistration is not None and require_claim_grade:
+            preregistration.require_claim_grade()
 
         if resume:
             state = self.store.get_latest_on_branch(self.branch)
@@ -288,6 +319,8 @@ class CampaignStack:
                 campaign_id=campaign_id,
                 last_complete=state.iteration,
                 build_kwargs=build_kwargs,
+                stationary_teacher=stationary_teacher,
+                teacher_noise=teacher_noise,
             )
             # Crash mid-iteration leaves durable episodes behind an unadvanced
             # iteration counter; re-proposing those slots must skip, not
@@ -304,7 +337,19 @@ class CampaignStack:
             state = self.store.create_campaign(
                 campaign_id=campaign_id or f"camp_{uuid.uuid4().hex[:8]}",
                 branch_name=self.branch,
-                config={"objective": objective},
+                config={
+                    "objective": objective,
+                    "stationary_teacher": stationary_teacher,
+                    "teacher_noise": teacher_noise,
+                    **(
+                        {
+                            "claim_label": preregistration.label(),
+                            "preregistration": preregistration.to_dict(),
+                        }
+                        if preregistration is not None
+                        else {}
+                    ),
+                },
                 metadata={"created_by": "CampaignStack", "seed": self.seed},
             )
             campaign_id = state.campaign_id
@@ -348,6 +393,8 @@ class CampaignStack:
                     dry_run=dry_run,
                     build_kwargs=build_kwargs,
                     checkpoint_joint=not checkpointed,
+                    stationary_teacher=stationary_teacher,
+                    teacher_noise=teacher_noise,
                 )
                 checkpointed = checkpointed or outcome.status == "recorded"
                 if outcome.status == "recorded":
@@ -366,7 +413,26 @@ class CampaignStack:
             ),
             outcomes=tuple(outcomes),
             yaml_checkpoint=yaml_path,
+            claim_label=preregistration.label() if preregistration else None,
+            embedded_control=self._verify_embedded_control(
+                preregistration, campaign_id
+            ),
         )
+
+    def _verify_embedded_control(
+        self, preregistration: PowerPreregistration | None, campaign_id: str
+    ) -> ControlVerdict | None:
+        """Post-run check of the planted control arm (R8.5)."""
+        if preregistration is None or preregistration.embedded_control is None:
+            return None
+        verdict = verify_embedded_control(
+            self.frontier_records(campaign_id),
+            preregistration.embedded_control,
+        )
+        self._event(
+            f"  embedded control {verdict.arm}: {verdict.verdict} — {verdict.detail}"
+        )
+        return verdict
 
     def _evaluate(  # ruff: ignore[too-many-arguments] - episode context travels as one bundle
         self,
@@ -378,6 +444,8 @@ class CampaignStack:
         dry_run: bool,
         build_kwargs: dict,
         checkpoint_joint: bool,
+        stationary_teacher: bool = False,
+        teacher_noise: float = 0.0,
     ) -> EpisodeOutcome:
         """Compose, checkpoint, evaluate, and persist one episode."""
         if dry_run:
@@ -417,6 +485,8 @@ class CampaignStack:
                 episode=iteration,
                 guard_threshold=self.guard_threshold,
                 seed=self.seed,
+                stationary_teacher=stationary_teacher,
+                teacher_noise=teacher_noise,
             )
         except GuardKillError as exc:
             self._event(f"  skipped (guard kill): {exc}")
@@ -482,6 +552,8 @@ class CampaignStack:
         campaign_id: str,
         last_complete: int,
         build_kwargs: dict,
+        stationary_teacher: bool = False,
+        teacher_noise: float = 0.0,
     ) -> None:
         """Replay episodes lost to a crash between the latest checkpoint and now."""
         ckpt_path = self.manager.get_latest_checkpoint(campaign_id)
@@ -512,6 +584,8 @@ class CampaignStack:
                     episode=episode,
                     guard_threshold=self.guard_threshold,
                     seed=self.seed,
+                    stationary_teacher=stationary_teacher,
+                    teacher_noise=teacher_noise,
                 )
             except GuardKillError as exc:
                 self._event(f"  episode {episode} redone but guard-killed: {exc}")

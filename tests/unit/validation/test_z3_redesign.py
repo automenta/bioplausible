@@ -74,7 +74,7 @@ def test_run_adaptation_records_gate_history(shape) -> None:
         [p for p in model.parameters() if p.requires_grad], lr=1e-3
     )
     epochs = 5
-    losses, curve, _steps, history = _run_adaptation(
+    record = _run_adaptation(
         model,
         optimizer,
         nn.CrossEntropyLoss(),
@@ -85,11 +85,16 @@ def test_run_adaptation_records_gate_history(shape) -> None:
         adapt_entropy_beta=_ADAPT_BETA,
     )
 
-    assert len(losses) == len(curve) == epochs
-    assert len(history["entropy"]) == epochs
-    assert all(len(g) == _NUM_OPERATORS for g in history["mean_gates"])
-    assert all(abs(sum(f) - 1.0) < _GATE_SUM_TOL for f in history["hard_op_fraction"])
-    assert all(math.isfinite(e[0]) and e[0] >= 0 for e in history["entropy"])
+    assert len(record.losses) == len(record.accuracy_curve) == epochs
+    assert len(record.gate_history["entropy"]) == epochs
+    assert all(len(g) == _NUM_OPERATORS for g in record.gate_history["mean_gates"])
+    assert all(
+        abs(sum(f) - 1.0) < _GATE_SUM_TOL
+        for f in record.gate_history["hard_op_fraction"]
+    )
+    assert all(
+        math.isfinite(e[0]) and e[0] >= 0 for e in record.gate_history["entropy"]
+    )
 
 
 def test_gate_history_helper_handles_missing_gates() -> None:
