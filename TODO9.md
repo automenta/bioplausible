@@ -16,6 +16,12 @@
 > interpretation of any null while a suspect remains unprobed. Termination criterion:
 > **if it works it will be obvious.**
 >
+> **R7 first pass 2026-09-01 (probes 1/2/6/7):** 2 PASS (rotation parity, construction seeding) ·
+> 1 DEFECT FOUND + FIXED (12 silent dispatch fallbacks in the 5-D compose path — imp-25 class
+> eradicated; gate 59 passed, ruff/pyright net-zero) · 1 DEFECT FOUND, fix pending
+> (`backward_flops` ≡ 0 fiction; energy records state energy, not consumed) · data-confirms
+> imp-36 saturation. The sweep produces signal.
+>
 > **Numbering:** improvement items continue TODO8's append-only ledger from **imp-42**;
 > imp-1..41 remain canonical in TODO8.md.
 
@@ -79,13 +85,13 @@ flagship (CP-A) proceeds in parallel only on validated instruments.
 
 | # | Suspect | Probe | imp | Status |
 |---|---------|-------|-----|--------|
-| 1 | Task rotation structurally broken (R5b-B 0/48 ancestor) | Every coordinate in a multi-family grid campaign appears in **both** task families across its scheduled visits — assert over commissioned artifacts, pin as lock test (rev d fixed the rotation; the invariant itself is unpinned) | imp-44 | pending |
-| 2 | Resource accounting fake (imp-17 ancestor) | `compute`/`memory`/`energy`/`latency`/`plastic_state_capacity` must **vary** across coordinates in the heterogeneous r5b_b grid — per-axis span over `records/episodes.json`; a constant axis is a fiction (imp-17/imp-35 collapse signature), not a finding | imp-45 | pending |
+| 1 | Task rotation structurally broken (R5b-B 0/48 ancestor) | Every coordinate in a multi-family grid campaign appears in **both** task families across its scheduled visits — assert over commissioned artifacts, pin as lock test (rev d fixed the rotation; the invariant itself is unpinned) | imp-44 | ✅ PASS 2026-09-01 — 48/48 coords, 240/240 (coord, seed) strata hit both families, uniform 10 visits; pin the lock test on next touch |
+| 2 | Resource accounting fake (imp-17 ancestor) | `compute`/`memory`/`energy`/`latency`/`plastic_state_capacity` must **vary** across coordinates in the heterogeneous r5b_b grid — per-axis span over `records/episodes.json`; a constant axis is a fiction (imp-17/imp-35 collapse signature), not a finding | imp-45 | ⚠️ DEFECTS 2026-09-01 — 4/5 axes genuinely vary (ψ-capacity discriminates null=0/routing=128/fast_weights=512 — real M-axis signal), **but** `backward_flops` ≡ 0 across 480 records (compute axis is forward-only fiction) and `energy_j` records *state* free energy (goes negative) rather than consumed energy. Wiring fix + artifact-semantics note pending; recorded r5b_b resource claims stay quarantined until re-commissioned |
 | 3 | ψ engagement unproven in benchmark harnesses | In each suite: does ψ actually change, and does that change alter the measured behavior? (engagement lock per harness) | imp-43 | pending |
 | 4 | Metric honesty still leaky beyond `free_accuracy` (imp-20 ancestor) | For every metric emitted by campaign/benchmark paths: trace the state it is computed on — target-free, or supervision-contaminated? Any leaky metric quarantines the evidence chain that consumes it | imp-46 | pending |
 | 5 | Settle mutation contracts ambiguous (imp-27 ancestor) | Every `settle()` caller uses the **returned** state — a caller reading the input state silently compares pre-settle activations (manufactures "non-descent"/"no-effect" results; the fidelity probe already ate this once) | imp-47 | pending |
-| 6 | Silent dispatch fallbacks remain (imp-24/imp-25 ancestor) | Grep **all** dispatch tables for bare `else:`; each must raise on unknown values — any silent fallback manufactures fake ablation arms | imp-48 | pending |
-| 7 | Construction seeding not universal (R1.4 ancestor) | Every factory call in every campaign/benchmark/harness is seeded, or θ init rides ambient RNG? Unseeded arms contaminate M-axis comparisons where ψ is supposed to be the only difference | imp-49 | pending |
+| 6 | Silent dispatch fallbacks remain (imp-24/imp-25 ancestor) | Grep **all** dispatch tables for bare `else:`; each must raise on unknown values — any silent fallback manufactures fake ablation arms | imp-48 | ✅ DEFECT FOUND + FIXED 2026-09-01 — the imp-24 fix covered only the joint compose path; `spec.py` (geometry/dynamics/update/plasticity), `factory.py` (both round-trip sites), and `joint.py` geometry still silently substituted defaults (a `diffusion` config ran Instantaneous; a typo'd update ran SGD; a typo'd plasticity ran Null — fake M-arms). 12 raise-conversions; verified gate 59 passed, ruff/pyright net-zero. Legitimate else-sites audited and left: `_credit_from_config` (already raises), MEP binary mode, activations explicit-default, pareto metadata fallback (documented, imp-35-mitigated) |
+| 7 | Construction seeding not universal (R1.4 ancestor) | Every factory call in every campaign/benchmark/harness is seeded, or θ init rides ambient RNG? Unseeded arms contaminate M-axis comparisons where ψ is supposed to be the only difference | imp-49 | ✅ PASS 2026-09-01 — every joint suite seeds θ-init (`torch.manual_seed(seed)` at each `evaluate_*` entry; structural_robustness also seeds `random`), campaign path is `episode_seed`-seeded (imp-11 lock) |
 | 8 | Fidelity probes themselves wrong | Probe-the-probe: for each fidelity probe, engineered ground truth — a deliberately broken implementation must fail it, a correct one must pass; a probe that passes a broken instrument wrong-foots the entire defect-filtering pipeline | imp-50 | pending |
 | 9 | Statistical test mis-specified | Is the 0.05 claimable floor correct? Is stratification/direction-merge implemented correctly? Is the test powered for the effect sizes/variance at this scale? A mis-specified test converts "no evidence of effect" into "evidence of no effect" — the exact error the fidelity policy forbids | imp-51 | pending |
 | 10 | The "obvious" result is missing | Not a probe — the sweep's termination criterion (Policy): keep probing until the result is obvious | — | — |
@@ -188,6 +194,22 @@ stratification, and direction-merge have not been power-checked against the camp
 effect sizes/variance. Probe: is the test correctly specified for the current scale? A
 mis-specified test converts "no evidence of effect" into "evidence of no effect" — the exact
 error the fidelity policy forbids.
+
+**R7 probe outcomes (2026-09-01, first pass — probes 1/2/6/7):** the sweep produces signal.
+- #1 PASS: the rev d rotation fix holds structurally (48/48 coords × 240/240 strata, both
+  families, uniform visits). Remaining: pin the invariant as an engine-level lock test.
+- #2 DEFECTS: `backward_flops` constant 0 across all 480 r5b_b records — the compute axis is a
+  forward-only MAC proxy, so "compute" understates learning cost by the entire backward pass;
+  `energy_j` is the target-free settled **state** energy (min −3.84), not consumed energy — a
+  state variable recorded in a consumption vector. ψ-capacity is the one clean discriminator
+  (0/128/512 by primitive). *Follow-up: wire backward MACs (≈2× forward) + a consumed-energy
+  proxy in `_episode_resources`/`measure_suite_resources`; r5b_b resource claims stay
+  quarantined until re-commissioned under the fixed semantics.*
+- #6 DEFECT FIXED: 12 silent dispatch fallbacks eradicated (see table). *Lesson: imp-24 fixed
+  one entry point and the lesson said "grep before the next axis value lands" — the census
+  should have been run the same day; the class survived in the flagship 5-D round-trip path
+  (`spec.py`/`factory.py`) where the L0 schema lock is enforced.*
+- #7 PASS: all construction sites seeded.
 
 ## 🔧 Quick Commands
 
