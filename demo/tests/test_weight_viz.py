@@ -58,18 +58,3 @@ class TestWeightViz:
         p = DemoPanel(trainer_config=default_trainer_config())
         assert weight_layers(p) == []
         assert matrix_frame(p, "x", 0) is None
-
-
-class TestWeightProbeDecimation:
-    def test_probe_captures_and_decimates(self):
-        from runner import _WeightProbe
-
-        model = torch.nn.Linear(4, 3)
-        probe = _WeightProbe(max_snaps=4)
-        for _ in range(40):
-            probe.capture(model)
-        # History bounded near max_snaps but non-empty per weight layer.
-        for snaps in probe.history.values():
-            assert 0 < len(snaps) <= 8  # at most ~2x max_snaps transiently
-        # Weights are stable tensors at every captured frame.
-        assert probe.history["weight"]  # Linear exposes param 'weight'

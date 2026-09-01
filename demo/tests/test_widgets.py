@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 from widgets import build_widget_tree
 
-from computronium.core.trainer import TrainerConfig
+from computronium.core.system_trainer import SystemTrainerConfig as TrainerConfig
 
 
 @dataclass

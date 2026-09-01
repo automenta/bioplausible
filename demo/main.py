@@ -1,9 +1,10 @@
 """Bioplausible NiceGUI demo entry point (Sprint 3 + Sprint 6 Ontology).
 
-Two modes:
+Three modes:
 - Classic: Two-panel side-by-side config comparison with flat model registry
 - Ontology: 5-D composition with dropdowns for each layer (Substrate, Geometry,
   StateDynamics, CreditAssignment, ParameterUpdate)
+- Campaign: live discovery-report view over campaign artifacts (R5b-F Stage 2)
 
 Run::
 
@@ -15,7 +16,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
 
 from compat import apply_compat_shims
 
@@ -23,6 +23,9 @@ from computronium.ontology import System
 
 apply_compat_shims()  # must run before `import nicegui`
 
+from campaign_tab import (  # ruff: ignore[module-import-not-at-top-of-file]
+    build_campaign_tab,
+)
 from charts import (  # ruff: ignore[module-import-not-at-top-of-file]
     loss_series,
     parity_explanation,
@@ -43,7 +46,7 @@ from runner import (  # ruff: ignore[module-import-not-at-top-of-file]
     default_trainer_config,
     model_metadata,
     prepare_trainer_config,
-    run_headless,
+    run_async,
 )
 from tasks import build_tasks  # ruff: ignore[module-import-not-at-top-of-file]
 from widgets import build_widget_tree  # ruff: ignore[module-import-not-at-top-of-file]
@@ -96,7 +99,9 @@ ONTOLOGY_LAYERS = {
 
 def _fresh_panel(model: str, task: str, epochs: int, lr: float) -> DemoPanel:
     cfg = default_trainer_config(model=model, task=task, epochs=epochs, lr=lr)
-    return DemoPanel(trainer_config=cfg, epochs=epochs)
+    return DemoPanel(
+        trainer_config=cfg, epochs=epochs, model_name=model, task_name=task, lr=lr
+    )
 
 
 def _cooked_panel(
@@ -110,7 +115,13 @@ def _cooked_panel(
         int(epochs),
         float(lr),
     )
-    return DemoPanel(trainer_config=cfg, epochs=int(epochs))
+    return DemoPanel(
+        trainer_config=cfg,
+        epochs=int(epochs),
+        model_name=model,
+        task_name=task,
+        lr=float(lr),
+    )
 
 
 class DemoUi:
@@ -303,9 +314,10 @@ def _create_ontology_panel(
     cfg.model = model_name
     cfg.model_kwargs = {}  # System handles its own architecture
 
-    panel = DemoPanel(trainer_config=cfg, epochs=epochs)
-    # Store the system for training
-    panel._ontology_system = system
+    panel = DemoPanel(
+        trainer_config=cfg, epochs=epochs, model_name=model_name, task_name=task
+    )
+    panel.system = system
     return panel
 
 
@@ -316,7 +328,7 @@ def create_page(demo: DemoUi) -> None:
     # --- Mode Selector ---
     with ui.row():
         mode_select = ui.select(
-            ["Classic", "Ontology (5-D)"],
+            ["Classic", "Ontology (5-D)", "Campaign"],
             value="Classic",
             label="Mode",
         ).classes("w-64")
@@ -324,6 +336,7 @@ def create_page(demo: DemoUi) -> None:
     # --- Classic Mode Controls ---
     classic_controls = ui.column()
     ontology_controls = ui.column().classes("hidden")
+    campaign_controls = ui.column().classes("hidden")
 
     with classic_controls, ui.row():
         task_sel = ui.select(
@@ -361,16 +374,19 @@ def create_page(demo: DemoUi) -> None:
                     demo.layer_selectors_b[layer_name] = sel
 
     def _toggle_mode() -> None:
-        if mode_select.value == "Ontology (5-D)":
-            classic_controls.classes("hidden")
-            ontology_controls.classes(remove="hidden")
-            demo.ontology_mode = True
-        else:
-            classic_controls.classes(remove="hidden")
-            ontology_controls.classes("hidden")
-            demo.ontology_mode = False
+        demo.ontology_mode = mode_select.value == "Ontology (5-D)"
+        for column, active in (
+            (classic_controls, mode_select.value == "Classic"),
+            (ontology_controls, demo.ontology_mode),
+            (campaign_controls, mode_select.value == "Campaign"),
+        ):
+            if active:
+                column.classes(remove="hidden")
+            else:
+                column.classes("hidden")
 
     mode_select.on("change", _toggle_mode)
+    build_campaign_tab(campaign_controls)
 
     # --- Live editable config panels (Sprint 3.2 widget tree) ---
     demo.panel_a = _fresh_panel(model_a.value, task_sel.value, 5, 0.001)
@@ -382,23 +398,6 @@ def create_page(demo: DemoUi) -> None:
     demo.meta_b.set_text(_meta_text(model_b.value))
     model_a.on("change", lambda: demo.meta_a.set_text(_meta_text(model_a.value)))
     model_b.on("change", lambda: demo.meta_b.set_text(_meta_text(model_b.value)))
-
-    def sync_a() -> None:
-        """Rebind quick-set controls (epochs/lr) onto panel A's live config."""
-        demo.panel_a.trainer_config.epochs = int(epochs.value)
-        demo.panel_a.trainer_config.optimizer_kwargs["lr"] = float(lr.value)
-
-    def sync_b() -> None:
-        demo.panel_b.trainer_config.epochs = int(epochs.value)
-        demo.panel_b.trainer_config.optimizer_kwargs["lr"] = float(lr.value)
-
-    def sync_a_ont() -> None:
-        if demo.panel_a and hasattr(demo.panel_a, "_ontology_system"):
-            # Ontology systems don't use trainer_config for epochs/lr
-            pass
-
-    def sync_b_ont() -> None:
-        demo.panel_b and hasattr(demo.panel_b, "_ontology_system")
 
     with ui.row():
         with ui.column():
@@ -470,25 +469,8 @@ def create_page(demo: DemoUi) -> None:
                 int(epochs.value),
                 float(lr.value),
             )
-            sync_a()
-            sync_b()
 
-        async def train_one(panel: DemoPanel) -> None:
-            loop = asyncio.get_running_loop()
-            executor = ThreadPoolExecutor(max_workers=1)
-            try:
-                if (
-                    hasattr(panel, "_ontology_system")
-                    and panel._ontology_system is not None
-                ):
-                    # Train using the ontology system
-                    await loop.run_in_executor(executor, _run_ontology_system, panel)
-                else:
-                    await loop.run_in_executor(executor, run_headless, panel)
-            finally:
-                executor.shutdown(wait=True)
-
-        await asyncio.gather(train_one(demo.panel_a), train_one(demo.panel_b))
+        await asyncio.gather(run_async(demo.panel_a), run_async(demo.panel_b))
 
         _refresh_charts(demo)
         _refresh_weight_viz(demo)
@@ -524,76 +506,6 @@ def create_page(demo: DemoUi) -> None:
         )
     with ui.row():
         ui.button("Export Run (CSV+PNG)", on_click=_export_run(demo, export_info))
-
-
-def _run_ontology_system(panel: DemoPanel) -> None:
-    """Run training for an ontology-composed system."""
-    import torch
-
-    from computronium.domains.registry import resolve_task
-
-    try:
-        panel.running = True
-        panel.finished = False
-        system = panel._ontology_system
-        task_spec = resolve_task(panel.trainer_config.task)
-
-        # Get data
-        from computronium.data import get_dataloaders
-
-        train_loader, val_loader = get_dataloaders(
-            panel.trainer_config.task,
-            batch_size=panel.trainer_config.batch_size,
-        )
-
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        if hasattr(system.geometry, "to"):
-            system.geometry.to(device)
-
-        for epoch in range(panel.epochs):
-            system.geometry.train()
-            epoch_loss = 0.0
-            epoch_acc = 0.0
-            num_batches = 0
-
-            for x, y in train_loader:
-                x = x.to(device)
-                y = y.to(device)
-
-                metrics = system.train_step(x, y)
-
-                epoch_loss += metrics.get("loss", 0.0)
-                epoch_acc += metrics.get("accuracy", 0.0)
-                num_batches += 1
-
-            avg_loss = epoch_loss / max(num_batches, 1)
-            avg_acc = epoch_acc / max(num_batches, 1)
-
-            panel.losses.append(avg_loss)
-            panel.accuracies.append(avg_acc)
-
-            # Validation
-            if val_loader is not None:
-                system.geometry.eval()
-                val_loss = 0.0
-                val_acc = 0.0
-                val_batches = 0
-                with torch.no_grad():
-                    for x, y in val_loader:
-                        x = x.to(device)
-                        y = y.to(device)
-                        logits = system.forward(x)
-                        loss = torch.nn.functional.cross_entropy(logits, y)
-                        acc = (logits.argmax(-1) == y).float().mean().item()
-                        val_loss += loss.item()
-                        val_acc += acc
-                        val_batches += 1
-
-        panel.finished = True
-    except Exception as e:
-        panel.error = str(e)
-    finally:
-        panel.running = False
 
 
 def _save_cfg(side: str, demo: DemoUi, status) -> Callable[[], None]:

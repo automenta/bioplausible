@@ -1,18 +1,18 @@
 """Headless training runner for the demo.
 
-Wraps :class:`SystemTrainer` and the Sprint 3.4 ``ExecutionCallback`` protocol so
-the NiceGUI UI stays a pure consumer of telemetry events — no UI object ever
-touches the training loop. Designed to run in a worker thread/event loop so the
-browser never blocks, matching the "engine stays UI-agnostic" architecture rule.
+Wraps :class:`SystemTrainer` so the NiceGUI UI stays a pure consumer of
+telemetry — no UI object ever touches the training loop. Designed to run in a
+worker thread/event loop so the browser never blocks.
 """
 
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from threading import Lock
+from typing import TYPE_CHECKING
 
 import torch
 
@@ -27,6 +27,7 @@ from computronium import (
     create_pepita_mlp,
     create_routing_mlp,
     create_snn_mlp,
+    create_tile_mlp,
     create_tp_mlp,
 )
 
@@ -37,8 +38,10 @@ from computronium import (
 from computronium.core.registry import ComponentCategory, Registry
 from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
 from computronium.domains.registry import resolve_task
-from computronium.execution.callbacks import BaseExecutionCallback
 from computronium.utils import seed_everything
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass
@@ -47,6 +50,12 @@ class DemoPanel:
 
     trainer_config: SystemTrainerConfig
     epochs: int = 10
+    model_name: str = "backprop_mlp"
+    task_name: str = "mnist"
+    hidden_dim: int | None = None
+    lr: float = 0.001
+    # Pre-composed System (ontology mode); overrides create_system.
+    system: object | None = None
     losses: list[float] = field(default_factory=list)
     accuracies: list[float] = field(default_factory=list)
     grad_norms: list[float] = field(default_factory=list)
@@ -61,86 +70,36 @@ class DemoPanel:
     seed: int | None = None
 
 
-class _WeightProbe:
-    """Online-decimated capture of training-time weight snapshots.
-
-    Records a per-layer series of weight matrices (CPU) so the UI can animate
-    how weights evolve (Sprint 3.5). Memory is bounded to ``max_snaps`` frames
-    per layer by doubling the capture stride whenever history overflows, so
-    even a 10k-step run stores at most ~max_snaps snapshots per layer.
-    """
-
-    def __init__(self, max_snaps: int = 120) -> None:
-        self.max_snaps = max(max_snaps, 4)
-        self.stride = 1
-        self._count = 0
-        self.history: dict[str, list[torch.Tensor]] = {}
-
-    def capture(self, model: torch.nn.Module) -> None:
-        self._count += 1
-        if self._count % self.stride != 0:
-            return
-        for name, param in model.named_parameters():
-            if "weight" not in name:
-                continue
-            with torch.no_grad():
-                self.history.setdefault(name, []).append(param.detach().float().cpu())
-        if any(len(v) > self.max_snaps for v in self.history.values()):
-            self._compact()
-
-    def _compact(self) -> None:
-        self.stride *= 2
-        for key in list(self.history):
-            self.history[key] = self.history[key][::2]
-
-
-class _DemoCallback(BaseExecutionCallback):
-    """Collect telemetry from SystemTrainer into a DemoPanel (thread-safe)."""
-
-    def __init__(self, panel: DemoPanel, model: torch.nn.Module | None) -> None:
-        self._panel = panel
-        self._model = model
-        self._lock = Lock()
-        self._probe = _WeightProbe()
-
-    def on_epoch_end(self, epoch: int, metrics: dict) -> None:
-        # SystemTrainer returns a dict with train_acc/val_acc, loss
-        acc = metrics.get("val_acc") or metrics.get("train_acc")
-        loss = metrics.get("loss") or metrics.get("train_loss")
-        with self._lock:
-            acc_val = float(acc) if acc is not None else float("nan")
-            self._panel.accuracies.append(acc_val)
-            if loss is not None:
-                self._panel.losses.append(float(loss))
-
-    def on_step_end(self, step: int, loss: float, grad_norms: object) -> None:
-        with self._lock:
-            self._panel.losses.append(float(loss))
-            if self._model is not None:
-                self._probe.capture(self._model)
-                self._panel.weight_history = self._probe.history
-
-    def on_settling_step(self, step: int, energy: float) -> None:
-        with self._lock:
-            self._panel.energies.append(float(energy))
-
-
 # Models the demo can train through the generic SystemTrainer path on the
 # supported tasks. Uses 5-D ontology factory functions.
-TRAINABLE_MODELS: tuple[str, ...] = (
-    "backprop_mlp",
-    "eqprop_mlp",
-    "fa_mlp",
-    "ff_mlp",
-    "pepita_mlp",
-    "tp_mlp",
-    "pc_mlp",
-    "hebbian_mlp",
-    "snn_mlp",
-    "tile_mlp",
-    "routing_mlp",
-    "fast_weight_mlp",
-)
+_FACTORIES: dict[str, Callable[..., object]] = {
+    "backprop_mlp": create_backprop_mlp,
+    "eqprop_mlp": create_eqprop_mlp,
+    "fa_mlp": create_fa_mlp,
+    "ff_mlp": create_ff_mlp,
+    "pepita_mlp": create_pepita_mlp,
+    "tp_mlp": create_tp_mlp,
+    "pc_mlp": create_pc_mlp,
+    "hebbian_mlp": create_hebbian_mlp,
+    "snn_mlp": create_snn_mlp,
+    "tile_mlp": create_tile_mlp,
+    "routing_mlp": create_routing_mlp,
+    "fast_weight_mlp": create_fast_weight_mlp,
+}
+
+# Factory kwargs beyond the shared (input_dim, hidden_dims, output_dim,
+# lr, device) signature. Families absent from the table take `lr=0.001`.
+_FACTORY_KWARGS: dict[str, dict[str, float | int]] = {
+    "eqprop_mlp": {"beta": 0.1, "inference_steps": 20},
+    "ff_mlp": {
+        "layer_lr": 0.03,
+        "classifier_lr": 0.01,
+        "threshold": 2.0,
+        "num_layers": 2,
+    },
+}
+
+TRAINABLE_MODELS: tuple[str, ...] = tuple(_FACTORIES)
 
 
 def model_metadata(model: str) -> dict[str, object]:
@@ -192,122 +151,28 @@ def default_hidden_dim(model: str) -> int:
     return _DEFAULT_HIDDEN_DIM.get(model, 128)
 
 
-def create_system(model: str, task: str, hidden_dim: int | None, device: str) -> object:
-    """Create a System using the appropriate factory function for the model."""
+def create_system(
+    model: str, task: str, hidden_dim: int | None, device: str, lr: float = 0.001
+) -> object:
+    """Create a System via the model's native factory function."""
+    factory = _FACTORIES.get(model)
+    if factory is None:
+        raise ValueError(f"Unknown model: {model}")
     spec = resolve_task(task)
     input_dim = spec.input_dim
-    output_dim = spec.output_dim
     if isinstance(input_dim, (tuple, list)):
-        import math
-
         input_dim = math.prod(input_dim)
     if hidden_dim is None:
         hidden_dim = default_hidden_dim(model)
 
-    # Map model names to factory functions
-    if model == "backprop_mlp":
-        return create_backprop_mlp(
-            input_dim=input_dim,
-            hidden_dims=(hidden_dim, hidden_dim),
-            output_dim=output_dim,
-            lr=0.001,
-            device=device,
-        )
-    elif model == "eqprop_mlp":
-        return create_eqprop_mlp(
-            input_dim=input_dim,
-            hidden_dims=(hidden_dim, hidden_dim),
-            output_dim=output_dim,
-            beta=0.1,
-            inference_steps=20,
-            lr=0.001,
-            device=device,
-        )
-    elif model == "fa_mlp":
-        return create_fa_mlp(
-            input_dim=input_dim,
-            hidden_dims=(hidden_dim, hidden_dim),
-            output_dim=output_dim,
-            lr=0.001,
-            device=device,
-        )
-    elif model == "ff_mlp":
-        return create_ff_mlp(
-            input_dim=input_dim,
-            hidden_dims=(hidden_dim, hidden_dim),
-            output_dim=output_dim,
-            layer_lr=0.03,
-            classifier_lr=0.01,
-            threshold=2.0,
-            num_layers=2,
-            device=device,
-        )
-    elif model == "pepita_mlp":
-        return create_pepita_mlp(
-            input_dim=input_dim,
-            hidden_dims=(hidden_dim, hidden_dim),
-            output_dim=output_dim,
-            lr=0.001,
-            device=device,
-        )
-    elif model == "tp_mlp":
-        return create_tp_mlp(
-            input_dim=input_dim,
-            hidden_dims=(hidden_dim, hidden_dim),
-            output_dim=output_dim,
-            lr=0.001,
-            device=device,
-        )
-    elif model == "pc_mlp":
-        return create_pc_mlp(
-            input_dim=input_dim,
-            hidden_dims=(hidden_dim, hidden_dim),
-            output_dim=output_dim,
-            lr=0.001,
-            device=device,
-        )
-    elif model == "hebbian_mlp":
-        return create_hebbian_mlp(
-            input_dim=input_dim,
-            hidden_dims=(hidden_dim, hidden_dim),
-            output_dim=output_dim,
-            lr=0.001,
-            device=device,
-        )
-    elif model == "snn_mlp":
-        return create_snn_mlp(
-            input_dim=input_dim,
-            hidden_dims=(hidden_dim, hidden_dim),
-            output_dim=output_dim,
-            lr=0.001,
-            device=device,
-        )
-    elif model == "tile_mlp":
-        return create_tile_mlp(
-            input_dim=input_dim,
-            hidden_dims=(hidden_dim, hidden_dim),
-            output_dim=output_dim,
-            lr=0.001,
-            device=device,
-        )
-    elif model == "routing_mlp":
-        return create_routing_mlp(
-            input_dim=input_dim,
-            hidden_dims=(hidden_dim, hidden_dim),
-            output_dim=output_dim,
-            lr=0.001,
-            device=device,
-        )
-    elif model == "fast_weight_mlp":
-        return create_fast_weight_mlp(
-            input_dim=input_dim,
-            hidden_dims=(hidden_dim, hidden_dim),
-            output_dim=output_dim,
-            lr=0.001,
-            device=device,
-        )
-    else:
-        raise ValueError(f"Unknown model: {model}")
+    kwargs: dict[str, float | int] = _FACTORY_KWARGS.get(model) or {"lr": lr}
+    return factory(
+        input_dim=input_dim,
+        hidden_dims=(hidden_dim, hidden_dim),
+        output_dim=spec.output_dim,
+        device=device,
+        **kwargs,
+    )
 
 
 def default_trainer_config(
@@ -371,19 +236,13 @@ def run_headless(panel: DemoPanel) -> None:
         if panel.seed is not None:
             seed_everything(panel.seed)
 
-        # Create the system using the factory function
-        # The panel.trainer_config contains the training config
-        # We need to extract model info from the panel - for now use a default
-        # The actual model is determined by the UI selection
-        # This is a simplified version - the UI should pass the model name
-
-        model_name = getattr(panel, "_model_name", "backprop_mlp")
-        task_name = getattr(panel, "_task_name", "mnist")
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        hidden_dim = getattr(panel, "_hidden_dim", None)
+        system = panel.system or create_system(
+            panel.model_name, panel.task_name, panel.hidden_dim, device, lr=panel.lr
+        )
+        from computronium.domains.factory import create_task
 
-        system = create_system(model_name, task_name, hidden_dim, device)
-        task = resolve_task(task_name)
+        task = create_task(panel.task_name, device=device, quick_mode=True)
         task.setup()
 
         # Create data loaders
@@ -411,9 +270,18 @@ def run_headless(panel: DemoPanel) -> None:
             train_data=train_loader,
             val_data=val_loader,
         )
-        trainer.add_execution_callback(_DemoCallback(panel, trainer.system.geometry))
         with trainer:
-            trainer.fit()
+            for _ in range(panel.trainer_config.max_epochs):
+                metrics = trainer.train_epoch()
+                panel.losses.append(float(metrics["train_loss"]))
+                acc = metrics.get("val_acc") or metrics.get("train_acc")
+                panel.accuracies.append(float(acc))
+                panel.energies.append(float(metrics.get("train_energy", 0.0)))
+                for name, param in system.geometry.named_parameters():
+                    if "weight" in name:
+                        panel.weight_history.setdefault(name, []).append(
+                            param.detach().float().cpu()
+                        )
     except Exception as e:
         panel.error = str(e)
     finally:

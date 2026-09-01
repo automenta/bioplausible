@@ -376,6 +376,7 @@ Launches a NiceGUI web dashboard at `http://localhost:8080` with:
 - Model training across ontology coordinates
 - Live loss/accuracy curves
 - Hyperparameter controls
+- Live Campaign tab: discovery report (𝒞-Pareto frontier, replication gate, counterfactual attribution) over commissioned campaign artifacts or in-progress campaigns
 - AutoScientist hypothesis proposals
 
 ---

@@ -107,13 +107,13 @@ class TestParityExplanation:
         # pepita's documented parity_threshold is 0.2 (20 pp) — a 12 pp gap is
         # *above* the old hardcoded 5 pp but *below* pepita's ceiling, so no
         # note must appear. Proves the note reads the YAML-backed threshold.
-        a = DemoPanel(trainer_config=default_trainer_config(model="pepita"))
+        a = DemoPanel(trainer_config=default_trainer_config(model="pepita_mlp"))
         b = DemoPanel(trainer_config=default_trainer_config(model="backprop_mlp"))
         assert parity_explanation(a, b, gap=12.0) == ""
         assert parity_explanation(a, b, gap=25.0) != ""
 
     def test_model_metadata_surfaces_parity_threshold(self):
-        assert model_metadata("pepita")["parity_threshold"] == 0.2
+        assert model_metadata("pepita_mlp")["parity_threshold"] == 0.2
         assert model_metadata("eqprop_mlp")["parity_threshold"] == 0.05
         # Backprop has no documented bio-gap ceiling; default applies.
         assert model_metadata("backprop_mlp")["parity_threshold"] == 0.05
