@@ -123,11 +123,32 @@ def _oriented_delta(attributions: Sequence, spec: DiscoverySpec) -> float | None
     return total / n if n else None
 
 
-def _merged_attributions(
-    attributions: Sequence,
-) -> list[tuple[Transition, float]]:
-    """Collapse direction-split attributions into canonical signed effects."""
-    merged: dict[Transition, list[float]] = defaultdict(list)
+@dataclass(frozen=True, slots=True)
+class CanonicalAttribution:
+    """One logical axis effect after direction merging.
+
+    Minimal pairs occur in both record orders (cross-seed/cross-family), so
+    raw attribution fragments one effect into direction-split keys; reports
+    and locks rank the canonical rows, never the raw halves.
+    """
+
+    axis: str
+    from_value: str
+    to_value: str
+    mean_delta: float
+    n_pairs: int
+
+
+def canonical_attributions(attributions: Sequence) -> list[CanonicalAttribution]:
+    """Merge direction-split attributions into canonical signed rows.
+
+    The reversed half of each minimal pair contributes its negated delta, so
+    the merged mean is the pooled effect of the logical swap regardless of
+    which order the record stream happened to emit. Rows are sorted by
+    absolute mean delta (most influential first); equal magnitudes keep
+    first-encounter order.
+    """
+    grouped: dict[Transition, list[tuple[float, int]]] = defaultdict(list)
     for attribution in attributions:
         orientation = (
             attribution.axis,
@@ -135,10 +156,31 @@ def _merged_attributions(
             attribution.to_value,
         )
         key = _canonical(orientation)
-        merged[key].append(
-            -attribution.mean_delta if key != orientation else attribution.mean_delta
+        grouped[key].append((
+            -attribution.mean_delta if key != orientation else attribution.mean_delta,
+            attribution.n_pairs,
+        ))
+    rows = [
+        CanonicalAttribution(
+            axis=key[0],
+            from_value=key[1],
+            to_value=key[2],
+            mean_delta=sum(delta for delta, _ in members) / len(members),
+            n_pairs=sum(count for _, count in members),
         )
-    return [(key, sum(deltas) / len(deltas)) for key, deltas in merged.items()]
+        for key, members in grouped.items()
+    ]
+    return sorted(rows, key=lambda row: abs(row.mean_delta), reverse=True)
+
+
+def _merged_attributions(
+    attributions: Sequence,
+) -> list[tuple[Transition, float]]:
+    """Collapse direction-split attributions into canonical signed effects."""
+    return [
+        ((row.axis, row.from_value, row.to_value), row.mean_delta)
+        for row in canonical_attributions(attributions)
+    ]
 
 
 def _top_transition(attributions: Sequence) -> Transition | None:

@@ -20,7 +20,6 @@ import argparse
 import json
 import sys
 from collections import defaultdict
-from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -124,16 +123,6 @@ def _write_manifest(manifest: dict, path: Path) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
-def _evidence(records_obj: list, manifest: dict, metric: str) -> tuple:
-    """Defect-filtered attribution, stratified attribution, and Pareto."""
-    from computronium.core.campaign.fidelity import defect_filtered_attribution
-
-    filtered = defect_filtered_attribution(records_obj, manifest, metric=metric)
-    stratified = _stratified_attribution(records_obj, manifest, metric)
-    pareto = _defect_filtered_pareto(records_obj, manifest)
-    return filtered, stratified, pareto
-
-
 def main() -> None:
     args = _parse_args()
     from computronium.core.campaign.fidelity import fidelity_manifest
@@ -153,7 +142,11 @@ def main() -> None:
     n_fenced = len(coordinates) - len(leakage)
 
     records_obj = _records_from_dicts(records)
-    evidence = _evidence(records_obj, manifest, args.metric)
+    from computronium.core.campaign.report import build_discovery_report
+
+    discovery = build_discovery_report(
+        records_obj, metric=args.metric, fidelity=manifest
+    )
 
     manifest_path = campaign / "records" / "fidelity_manifest.json"
     _write_manifest(manifest, manifest_path)
@@ -163,9 +156,7 @@ def main() -> None:
         campaign,
         manifest,
         leakage,
-        filtered=evidence[0],
-        stratified=evidence[1],
-        pareto=evidence[2],
+        discovery=discovery,
         excluded=excluded,
         passing=passing,
         n_fenced=n_fenced,
@@ -181,164 +172,14 @@ def _records_from_dicts(records: list[dict]) -> list:
     return [FrontierRecord.from_dict(r) for r in records]
 
 
-def _stratified_attribution(records_obj: list, manifest: dict, metric: str) -> dict:
-    """Per-(seed, family) attribution over passing records: rank stability."""
-    from computronium.analysis.counterfactual import attribute_axis_effects
-
-    groups: dict[tuple[int, str], list] = defaultdict(list)
-    for record in records_obj:
-        verdict = manifest.get(record.coordinate)
-        if verdict is not None and verdict.passed:
-            groups[record.seed, record.task_name].append(record)
-    result = {}
-    for (seed, task), group_records in sorted(groups.items()):
-        attributions = attribute_axis_effects(group_records, metric=metric)
-        result[f"seed={seed}/{task}"] = [
-            {"axis": a.axis, "mean_delta": a.mean_delta, "n_pairs": a.n_pairs}
-            for a in attributions
-        ]
-    return result
-
-
-PARETO_OBJECTIVES: tuple[str, ...] = (
-    "task_loss",
-    "compute",
-    "memory",
-    "energy",
-    "latency",
-    "plastic_state_capacity",
-)
-
-
-@dataclass(frozen=True, slots=True)
-class _AttributionRow:
-    axis: str
-    from_value: str
-    to_value: str
-    mean_delta: float
-    n_pairs: int = 0
-
-
-def _canonicalized(attributions) -> list:
-    """Merge direction-split attributions into canonical signed rows.
-
-    Minimal pairs occur in both record orders (cross-seed/cross-family),
-    so one logical axis effect appears as two raw rows; reports (like the
-    R5b-D locks) compare transitions canonically.
-    """
-    from computronium.core.campaign.discovery import _canonical
-
-    grouped: dict[tuple[str, str, str], list] = defaultdict(list)
-    for attribution in attributions:
-        key = _canonical(
-            (attribution.axis, attribution.from_value, attribution.to_value)
-        )
-        grouped[key].append(attribution)
-    rows = []
-    for (axis, from_value, to_value), members in grouped.items():
-        deltas = [
-            -a.mean_delta
-            if (a.from_value, a.to_value) != (from_value, to_value)
-            else a.mean_delta
-            for a in members
-        ]
-        rows.append(
-            _AttributionRow(
-                axis=axis,
-                from_value=from_value,
-                to_value=to_value,
-                mean_delta=sum(deltas) / len(deltas),
-                n_pairs=sum(a.n_pairs for a in members),
-            )
-        )
-    return sorted(rows, key=lambda r: abs(r.mean_delta), reverse=True)
-
-
-def _defect_filtered_pareto(records_obj: list, manifest: dict) -> dict:
-    """Defect-filtered Pareto frontier over the resource vector (R5b-C).
-
-    The frontier is computed only over records whose coordinates pass
-    fidelity, over (task_loss, compute, memory, energy, latency, psi-cap)
-    — all minimized except task_loss. Knee ownership = the axes on which a
-    frontier coordinate holds a value no other frontier coordinate shares.
-    """
-    from computronium.core.campaign.pareto import objective_vector, pareto_frontier
-
-    passing = [
-        r
-        for r in records_obj
-        if (v := manifest.get(r.coordinate)) is not None and v.passed
-    ]
-    if not passing:
-        return {"frontier": [], "n_passing": 0, "hypervolume": 0.0}
-    vectors = [objective_vector(r, PARETO_OBJECTIVES) for r in passing]
-    # Data-derived reference: worst passing value per objective, nudged 5%
-    # below the observed span so every frontier point contributes volume.
-    reference = tuple(
-        lo - 0.05 * ((hi - lo) or 1.0)
-        for lo, hi in zip(
-            (min(v[i] for v in vectors) for i in range(len(PARETO_OBJECTIVES))),
-            (max(v[i] for v in vectors) for i in range(len(PARETO_OBJECTIVES))),
-            strict=True,
-        )
-    )
-    frontier = pareto_frontier(
-        passing,
-        PARETO_OBJECTIVES,
-        maximize=(True,) * len(PARETO_OBJECTIVES),
-        reference_point=reference,
-    )
-    by_coordinate: dict[str, list] = defaultdict(list)
-    for record in frontier.frontier:
-        by_coordinate[record.coordinate].append(record)
-
-    def _stat(rows: list, attr: str) -> float:
-        return sum(getattr(r, attr) for r in rows) / len(rows)
-
-    def _res(rows: list, attr: str) -> float:
-        return sum(getattr(r.resources, attr) for r in rows) / len(rows)
-
-    axes = ("substrate", "geometry", "dynamics", "plasticity", "credit", "update")
-    coordinate_rows = []
-    for coordinate, rows in sorted(
-        by_coordinate.items(), key=lambda kv: _stat(kv[1], "task_loss")
-    ):
-        parts = coordinate.split("/")
-        owned = [
-            axis
-            for axis, value in zip(axes, parts, strict=True)
-            if sum(1 for c in by_coordinate if c.split("/")[axes.index(axis)] == value)
-            == 1
-        ]
-        coordinate_rows.append({
-            "coordinate": coordinate,
-            "n": len(rows),
-            "task_loss": _stat(rows, "task_loss"),
-            "compute": _res(rows, "compute"),
-            "memory": _res(rows, "memory"),
-            "energy": _res(rows, "energy"),
-            "latency_ms": _res(rows, "latency") * 1e3,
-            "psi_capacity": _res(rows, "plastic_state_capacity"),
-            "owned_axes": owned,
-        })
-    return {
-        "frontier": coordinate_rows,
-        "n_passing": len(passing),
-        "n_dominated": len(frontier.dominated),
-        "hypervolume": frontier.hypervolume,
-    }
-
-
 def _render_report(  # ruff: ignore[too-many-arguments, too-many-positional-arguments] - report context bundle
     campaign: Path,
     manifest: dict,
     leakage: dict[str, dict[str, float]],
-    filtered,
-    stratified: dict,
+    discovery,
     excluded: list[str],
     passing: set[str],
     n_fenced: int,
-    pareto: dict,
 ) -> str:
     by_class: dict[tuple[str, str], list[dict[str, float]]] = defaultdict(list)
     for coordinate, stats in leakage.items():
@@ -352,8 +193,8 @@ def _render_report(  # ruff: ignore[too-many-arguments, too-many-positional-argu
         f"- Coordinates probed: {len(manifest)} · passing: {len(passing)} · "
         f"quarantined: {len(excluded)} (of which {n_fenced} R3.9-fenced: "
         "uncomposable at composition, no leakage numbers)",
-        f"- Records: {filtered.n_records_total} total · "
-        f"{filtered.n_records_passing} survive the fidelity filter",
+        f"- Records: {discovery.n_records} total · "
+        f"{discovery.n_passing_records} survive the fidelity filter",
         "",
         "Policy: deltas on failing coordinates are quarantined from "
         "attribution — inconclusive, never a refutation.",
@@ -394,31 +235,31 @@ def _render_report(  # ruff: ignore[too-many-arguments, too-many-positional-argu
         "## Defect-filtered attribution (pooled over passing coordinates)",
         "",
     ]
-    if filtered.attributions:
+    if discovery.attribution:
         lines += [
             "| axis | from → to | mean Δ | pairs |",
             "|---|---|---|---|",
             *[
                 f"| {a.axis} | {a.from_value} → {a.to_value} "
                 f"| {a.mean_delta:+.4f} | {a.n_pairs} |"
-                for a in _canonicalized(filtered.attributions)
+                for a in discovery.attribution
             ],
         ]
     else:
         lines += ["No minimal pairs within the passing subspace."]
     lines += ["", "## Stratified attribution (per seed x family)", ""]
-    if stratified:
+    if discovery.stratified:
         lines += [
             "| stratum | top axes (|mean Δ|) |",
             "|---|---|",
             *[
-                f"| {stratum} | "
+                f"| {stratum.stratum} | "
                 + "; ".join(
-                    f"{a['axis']} {a['mean_delta']:+.4f} (n={a['n_pairs']})"
-                    for a in axes[:3]
+                    f"{a.axis} {a.mean_delta:+.4f} (n={a.n_pairs})"
+                    for a in stratum.rows[:3]
                 )
                 + " |"
-                for stratum, axes in stratified.items()
+                for stratum in discovery.stratified
             ],
         ]
     else:
@@ -437,15 +278,15 @@ def _render_report(  # ruff: ignore[too-many-arguments, too-many-positional-argu
         "smoke scale.",
         "",
     ]
-    frontier_rows = pareto["frontier"]
+    frontier_rows = discovery.frontier
     if not frontier_rows:
         lines += ["No passing records — no frontier."]
     else:
         lines += [
             f"Frontier: {len(frontier_rows)} coordinates "
-            f"({pareto['n_dominated']} of {pareto['n_passing']} passing "
+            f"({discovery.n_dominated} of {discovery.n_passing_records} passing "
             f"records dominated) · hypervolume (data-derived reference): "
-            f"{pareto['hypervolume']:.4g}",
+            f"{discovery.hypervolume:.4g}",
             "",
             "Knee ownership: the axes on which a frontier coordinate holds a "
             "value no other frontier coordinate shares — the axis whose trade-"
@@ -455,10 +296,12 @@ def _render_report(  # ruff: ignore[too-many-arguments, too-many-positional-argu
             "| latency ms | ψ-cap |",
             "|---|---|---|---|---|---|---|---|---|",
             *[
-                f"| `{r['coordinate']}` | {', '.join(r['owned_axes']) or '—'} "
-                f"| {r['n']} | {r['task_loss']:.4f} | {r['compute']:.3g} "
-                f"| {r['memory']:.4g} | {r['energy']:.4f} "
-                f"| {r['latency_ms']:.2f} | {r['psi_capacity']:.0f} |"
+                f"| `{r.coordinate}` | {', '.join(r.owned_axes) or '—'} "
+                f"| {r.records} | {r.values['task_loss']:.4f} "
+                f"| {r.values['compute']:.3g} "
+                f"| {r.values['memory']:.4g} | {r.values['energy']:.4f} "
+                f"| {r.values['latency'] * 1e3:.2f} "
+                f"| {r.values['plastic_state_capacity']:.0f} |"
                 for r in frontier_rows
             ],
         ]

@@ -295,6 +295,10 @@ def _hypervolume_monte_carlo(
     """Monte Carlo hypervolume approximation for >3 objectives."""
     import random
 
+    # Seeded local stream: the estimate must be reproducible run-to-run (the
+    # report contract) and must never consume the ambient RNG mid-campaign.
+    rng = random.Random(0)
+
     # Normalize
     normalized = []
     for p in points:
@@ -334,7 +338,7 @@ def _hypervolume_monte_carlo(
     # Monte Carlo sampling
     count = 0
     for _ in range(n_samples):
-        sample = tuple(random.uniform(b[0], b[1]) for b in bounds)
+        sample = tuple(rng.uniform(b[0], b[1]) for b in bounds)
         # Check if sample is dominated by any frontier point
         for p in normalized:
             if all(sample[i] <= p[i] for i in range(dim)):

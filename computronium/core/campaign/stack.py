@@ -16,7 +16,7 @@ import itertools
 import random
 import uuid
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Protocol
@@ -52,6 +52,7 @@ from computronium.core.logging import get_logger
 if TYPE_CHECKING:
     import torch
 
+    from computronium.core.campaign.report import DiscoveryReport
     from computronium.core.system_trainer import JointSystem
 
 logger = get_logger()
@@ -606,6 +607,22 @@ class CampaignStack:
     ) -> list[AxisAttribution]:
         """Data-grounded axis attribution over the campaign's records."""
         return attribute_axis_effects(self.frontier_records(campaign_id), metric=metric)
+
+    def discovery_report(
+        self,
+        campaign_id: str | None = None,
+        *,
+        metric: str = "task_accuracy",
+        fidelity: Mapping[str, object] | None = None,
+    ) -> DiscoveryReport:
+        """Static discovery report (R5b-F Stage 1) over persisted records."""
+        from computronium.core.campaign.report import build_discovery_report
+
+        return build_discovery_report(
+            self.frontier_records(campaign_id),
+            metric=metric,
+            fidelity=fidelity,
+        )
 
     # -- checkpoints ---------------------------------------------------------
 

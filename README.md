@@ -213,7 +213,7 @@ All subcommands of the `comp` dispatcher:
 | `comp rank` | Family ranking from HPO studies | — |
 | `comp lab` | Interactive experiments, training, benchmarks | `comp lab benchmark --domain vision --quick` |
 | `comp joint-validate` | Validate arbitrary 6-axis joint coordinates | `comp joint-validate --coordinate S=Memristive,G=TileMesh,...` |
-| `comp campaign` | Run/compare/resume joint campaigns | `comp campaign run --config <campaign.yaml>` |
+| `comp campaign` | Run/compare/resume joint campaigns; render the static discovery report (HTML/JSON) | `comp campaign run --config <campaign.yaml>` |
 | `comp stability` | Stability-plasticity frontier reports | `comp stability --model eqprop_mlp --task mnist` |
 | `comp benchmark` | Joint benchmark suites (adaptation, Z3, etc.) | `comp benchmark run --suite adaptation_efficiency` |
 

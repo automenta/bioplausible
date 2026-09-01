@@ -140,6 +140,24 @@ def _build_parser() -> argparse.ArgumentParser:
     export_parser.add_argument("--output", help="Output file path")
     export_parser.add_argument("--db", help="SQLite database path")
 
+    # report
+    report_parser = subparsers.add_parser(
+        "report",
+        help="Render the static discovery report (HTML + JSON, R5b-F Stage 1)",
+    )
+    report_parser.add_argument(
+        "--campaign-dir",
+        required=True,
+        help="Commissioned campaign directory containing records/episodes.json",
+    )
+    report_parser.add_argument(
+        "--metric", default="task_accuracy", help="Attribution metric"
+    )
+    report_parser.add_argument(
+        "--output-dir",
+        help="Output directory (default: <campaign-dir>/records)",
+    )
+
     return parser
 
 
@@ -495,6 +513,24 @@ def _export_campaign(args) -> int:
     return 0
 
 
+def _render_discovery_report(args) -> int:
+    """Render the static discovery report from a commissioned campaign."""
+    from computronium.core.campaign.report import (
+        build_discovery_report,
+        load_campaign_records,
+    )
+
+    records, fidelity = load_campaign_records(args.campaign_dir)
+    report = build_discovery_report(records, metric=args.metric, fidelity=fidelity)
+    out_dir = Path(args.output_dir or (Path(args.campaign_dir) / "records"))
+    json_path, html_path = report.write(out_dir)
+    print(
+        f"discovery report over {report.n_records} records "
+        f"({report.n_coordinates} coordinates) -> {json_path} + {html_path}"
+    )
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Console-script entry point for ``comp campaign``."""
     args = _build_parser().parse_args(argv)
@@ -510,6 +546,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "compare": _compare_campaigns,
         "checkpoint": _manage_checkpoints,
         "export": _export_campaign,
+        "report": _render_discovery_report,
     }
     handler = handlers.get(args.subcommand)
     if handler is None:
