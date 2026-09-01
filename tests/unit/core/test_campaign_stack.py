@@ -308,6 +308,44 @@ class TestDeterministicReplay:
         assert first == again
         assert set(first) == set(grid)
 
+    def test_grid_layout_replicates_both_families(self, tmp_path: Path) -> None:
+        """R5b-B parity bug pinned: an even grid cycle under the old
+        slot-parity task rotation left every coordinate on a single family
+        per seed (replication gate 0/48). Visit-count alternation must give
+        each coordinate both families per seed and certify replication."""
+        from computronium.core.campaign import grid_sampler, space_grid
+
+        space = {
+            "substrates": ["digital"],
+            "geometries": ["feedforward", "recurrent"],
+            "dynamics": ["instantaneous"],
+            "plasticity": ["null"],
+            "credits": ["random_projections"],
+            "updates": ["euclidean"],
+        }
+        sampler = grid_sampler(space_grid(space), experiments_per_iter=2)
+        records = []
+        for seed in (0, 1):
+            stack = CampaignStack(tmp_path / f"s{seed}", seed=seed)
+            stack.run_campaign(
+                iterations=2,
+                experiments_per_iter=2,
+                tasks=("synthetic", "parity"),
+                campaign_id=f"camp_families_s{seed}",
+                sampler=sampler,
+            )
+            records.extend(stack.frontier_records())
+        by_coordinate: dict[str, set[str]] = {}
+        for record in records:
+            by_coordinate.setdefault(record.coordinate, set()).add(record.task_name)
+        assert by_coordinate
+        assert all(
+            families == {"synthetic", "parity"} for families in by_coordinate.values()
+        )
+        assert all(
+            r.replicated for r in replication_manifest(records, min_seeds=2).values()
+        )
+
 
 # --- Pareto over loss, stability, resources -----------------------------------
 

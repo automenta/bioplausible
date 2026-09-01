@@ -342,6 +342,44 @@ def build_coordinate_system(
     )
 
 
+def _episode_resources(
+    joint: JointSystem,
+    metrics: dict[str, float],
+    *,
+    batch_size: int,
+    device: torch.device,
+    latency: float,
+) -> ResourceUsage:
+    """Deterministic per-episode resource accounting (imp-17).
+
+    The campaign Pareto needs resource axes that actually vary across the
+    grid: recording wall-clock latency alone left compute/memory/energy
+    constant at zero and collapsed the frontier to a single loss minimizer.
+    Compute is a deterministic MAC proxy (params x batch x settled phases x
+    settle steps — faithful in ordering across coordinates), energy is the
+    episode's own target-free settled energy, memory is fp32 parameter
+    storage, and ψ-capacity comes from the plasticity config (no RNG side
+    effects — never re-derive ``initial_psi`` here).
+    """
+    param_count = sum(p.numel() for p in joint.geometry.params.values())
+    phases = max(len(getattr(joint.credit, "phases", ()) or ()), 1)
+    settle_steps = max(int(getattr(joint.dynamics.config, "max_steps", 1) or 1), 1)
+    forward_flops = 2 * batch_size * param_count
+    psi_dims = joint.plasticity.config.plastic_state_dims or {}
+    return ResourceUsage(
+        compute=float(forward_flops * phases * settle_steps),
+        memory=param_count * 4 / 1e6,
+        energy=float(metrics.get("free_energy", metrics.get("energy", 0.0))),
+        latency=latency,
+        plastic_state_capacity=float(sum(psi_dims.values())),
+        device=str(device),
+        batch_size=batch_size,
+        forward_flops=forward_flops,
+        param_count=param_count,
+        wall_time_ms=latency * 1e3,
+    )
+
+
 def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always defaults
     joint: JointSystem,
     *,
@@ -403,7 +441,13 @@ def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always 
         lyapunov_local=0.0,
         settling_time=float(guard.window),
         basin_stability=min(1.0, 1.0 / growth),
-        resources=ResourceUsage(latency=latency),
+        resources=_episode_resources(
+            joint,
+            metrics,
+            batch_size=batch_size,
+            device=device,
+            latency=latency,
+        ),
         plasticity_primitive=coordinate.split("/")[3],
         registry_signature=compute_registry_signature(joint.context.registry),
         composite_state_shape=compute_composite_state_shape(joint.context),

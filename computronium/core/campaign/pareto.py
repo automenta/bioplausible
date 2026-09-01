@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.core.campaign.frontier_record import FrontierRecord
 
 
@@ -34,6 +36,77 @@ class ParetoFrontier:
             "objectives": self.objectives,
             "hypervolume": self.hypervolume,
         }
+
+
+_OBJECTIVE_EXTRACTORS: dict[str, Callable[[FrontierRecord], float]] = {
+    "task_accuracy": lambda r: r.task_accuracy,
+    "task_loss": lambda r: -r.task_loss,  # Minimize loss = maximize -loss
+    "stability_score": lambda r: r.stability_score(),
+    "efficiency_score": lambda r: r.efficiency_score(),
+    "rho_jacobian": lambda r: -r.rho_jacobian,  # Minimize rho
+    "lyapunov_local": lambda r: -abs(r.lyapunov_local),  # Minimize |lyapunov|
+    "settling_time": lambda r: -r.settling_time,  # Minimize settling time
+    "basin_stability": lambda r: r.basin_stability,
+    "compute": lambda r: -r.resources.compute,  # Minimize compute
+    "memory": lambda r: -r.resources.memory,  # Minimize memory
+    "latency": lambda r: -r.resources.latency,  # Minimize latency
+    "energy": lambda r: -r.resources.energy,  # Minimize energy
+    "plastic_state_capacity": lambda r: -r.resources.plastic_state_capacity,
+}
+
+
+def objective_vector(
+    record: FrontierRecord, objectives: tuple[str, ...]
+) -> tuple[float, ...]:
+    """Normalized (maximize-form) objective values for one record.
+
+    Cost objectives named in ``objectives`` are pre-negated, so callers pass
+    ``maximize=True`` for every entry. Unknown names fall back to record
+    metadata (0.0 when absent).
+    """
+    values = []
+    for objective in objectives:
+        extractor = _OBJECTIVE_EXTRACTORS.get(objective)
+        if extractor is not None:
+            values.append(extractor(record))
+        else:
+            values.append(float(record.metadata.get(objective, 0.0)))
+    return tuple(values)
+
+
+def _dominates(
+    a: tuple[float, ...], b: tuple[float, ...], maximize: tuple[bool, ...]
+) -> bool:
+    """True when a is at least as good everywhere and strictly better once."""
+    at_least_one_better = False
+    for av, bv, wants_max in zip(a, b, maximize, strict=True):
+        if wants_max:
+            if av < bv:
+                return False
+            if av > bv:
+                at_least_one_better = True
+        else:
+            if av > bv:
+                return False
+            if av < bv:
+                at_least_one_better = True
+    return at_least_one_better
+
+
+def _dominated_mask(
+    obj_values: list[tuple[float, ...]], maximize: tuple[bool, ...]
+) -> list[bool]:
+    """Pairwise dominance mask: entry i is True when some j dominates i."""
+    n = len(obj_values)
+    mask = [False] * n
+    for i in range(n):
+        if mask[i]:
+            continue
+        for j in range(n):
+            if j != i and _dominates(obj_values[j], obj_values[i], maximize):
+                mask[i] = True
+                break
+    return mask
 
 
 def pareto_frontier(
@@ -66,67 +139,9 @@ def pareto_frontier(
             hypervolume=0.0,
         )
 
-    # Extract objective values for each record
-    def get_objectives(record: FrontierRecord) -> tuple[float, ...]:
-        values = []
-        for obj in objectives:
-            if obj == "task_accuracy":
-                values.append(record.task_accuracy)
-            elif obj == "task_loss":
-                values.append(-record.task_loss)  # Minimize loss = maximize -loss
-            elif obj == "stability_score":
-                values.append(record.stability_score())
-            elif obj == "efficiency_score":
-                values.append(record.efficiency_score())
-            elif obj == "rho_jacobian":
-                values.append(-record.rho_jacobian)  # Minimize rho
-            elif obj == "lyapunov_local":
-                values.append(-abs(record.lyapunov_local))  # Minimize |lyapunov|
-            elif obj == "settling_time":
-                values.append(-record.settling_time)  # Minimize settling time
-            elif obj == "basin_stability":
-                values.append(record.basin_stability)
-            elif obj == "compute":
-                values.append(-record.resources.compute)  # Minimize compute
-            elif obj == "memory":
-                values.append(-record.resources.memory)  # Minimize memory
-            elif obj == "latency":
-                values.append(-record.resources.latency)  # Minimize latency
-            elif obj == "energy":
-                values.append(-record.resources.energy)  # Minimize energy
-            else:
-                # Try to get from metadata
-                values.append(record.metadata.get(obj, 0.0))
-        return tuple(values)
-
-    obj_values = [get_objectives(r) for r in records]
-
-    # Determine Pareto dominance
-    def dominates(a: tuple[float, ...], b: tuple[float, ...]) -> bool:
-        """Return True if a dominates b."""
-        at_least_one_better = False
-        for i, (av, bv) in enumerate(zip(a, b)):
-            if maximize[i]:
-                if av < bv:
-                    return False
-                if av > bv:
-                    at_least_one_better = True
-            else:
-                if av > bv:
-                    return False
-                if av < bv:
-                    at_least_one_better = True
-        return at_least_one_better
-
+    obj_values = [objective_vector(r, objectives) for r in records]
+    is_dominated = _dominated_mask(obj_values, maximize)
     n = len(records)
-    is_dominated = [False] * n
-
-    for i in range(n):
-        for j in range(n):
-            if i != j and not is_dominated[i]:
-                if dominates(obj_values[j], obj_values[i]):
-                    is_dominated[i] = True
-                    break
 
     frontier = [records[i] for i in range(n) if not is_dominated[i]]
     dominated = [records[i] for i in range(n) if is_dominated[i]]
@@ -135,7 +150,7 @@ def pareto_frontier(
     hypervolume = 0.0
     if reference_point and frontier:
         hypervolume = _compute_hypervolume(
-            [get_objectives(r) for r in frontier],
+            [obj_values[i] for i in range(n) if not is_dominated[i]],
             reference_point,
             maximize,
         )
@@ -309,10 +324,12 @@ def _hypervolume_monte_carlo(
         for i in range(dim)
     ]
 
-    # Volume of bounding box
+    # Volume of bounding box. A constant objective (zero span) is vacuous
+    # for dominance — every point and sample share the value — so it
+    # contributes unit width instead of collapsing the volume to zero.
     box_volume = 1.0
     for i in range(dim):
-        box_volume *= bounds[i][1] - bounds[i][0]
+        box_volume *= (bounds[i][1] - bounds[i][0]) or 1.0
 
     # Monte Carlo sampling
     count = 0

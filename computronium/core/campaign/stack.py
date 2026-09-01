@@ -15,6 +15,7 @@ from __future__ import annotations
 import itertools
 import random
 import uuid
+from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -276,9 +277,12 @@ class CampaignStack:
             )
             # Crash mid-iteration leaves durable episodes behind an unadvanced
             # iteration counter; re-proposing those slots must skip, not
-            # duplicate, the recorded (iteration, coordinate, task) rows.
+            # duplicate, the recorded (iteration, coordinate) rows. The task
+            # family is a deterministic function of the slot's visit state, so
+            # keying the skip on the task would re-execute rows written under
+            # a different rotation rule.
             recorded = {
-                (ep.iteration, ep.coordinate, ep.task_name)
+                (ep.iteration, ep.coordinate)
                 for ep in self.store.get_episodes(campaign_id)
             }
             start_iteration = state.iteration
@@ -295,6 +299,13 @@ class CampaignStack:
             start_iteration = 0
 
         sample = sampler or _space_sampler(_SMOKE_SPACE)
+        # Per-coordinate visit counts drive task-family alternation: every
+        # repeat visit of a coordinate flips the family regardless of grid
+        # cycle parity (the slot-parity rotation left each coordinate on a
+        # single family whenever the cycle was even — the R5b-B replication
+        # gate read 0/48 for exactly that reason). Counts derive from durable
+        # rows plus in-run recordings, so resume replays the same assignment.
+        visits: dict[str, int] = Counter(c for _, c in recorded)
         outcomes: list[EpisodeOutcome] = []
         for iteration in range(start_iteration + 1, start_iteration + iterations + 1):
             # Coordinate stream is derived from (seed, campaign, iteration):
@@ -308,10 +319,8 @@ class CampaignStack:
             checkpointed = False
             for experiment in range(experiments_per_iter):
                 coordinate = sample(rng, iteration, experiment)
-                # Task assignment rotates across iterations so repeated
-                # coordinates cover multiple task families (replication gate).
-                task_name = task_cycle[(experiment + iteration) % len(task_cycle)]
-                if (iteration, coordinate, task_name) in recorded:
+                task_name = task_cycle[visits.get(coordinate, 0) % len(task_cycle)]
+                if (iteration, coordinate) in recorded:
                     self._event(f"  skipped (already recorded): [{coordinate}]")
                     outcomes.append(
                         EpisodeOutcome(coordinate=coordinate, status="already_recorded")
@@ -327,6 +336,8 @@ class CampaignStack:
                     checkpoint_joint=not checkpointed,
                 )
                 checkpointed = checkpointed or outcome.status == "recorded"
+                if outcome.status == "recorded":
+                    visits[coordinate] = visits.get(coordinate, 0) + 1
                 outcomes.append(outcome)
             self.store.update_iteration(campaign_id, iteration)
 

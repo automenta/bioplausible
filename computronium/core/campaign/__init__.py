@@ -17,6 +17,15 @@ from computronium.core.campaign.checkpoint import (
     JointCheckpoint,
     create_resume_script,
 )
+from computronium.core.campaign.discovery import (
+    BuildKwargs,
+    DiscoverySpec,
+    LockVerdict,
+    verify_attribution_rank,
+    verify_fidelity_standing,
+    verify_replay,
+    verify_winner_replication,
+)
 from computronium.core.campaign.evaluation import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_GUARD_TAU,
@@ -69,6 +78,7 @@ __all__ = [
     "DEFAULT_NUM_CLASSES",
     "SCHEMA_VERSION",
     "AxisCheck",
+    "BuildKwargs",
     "CampaignRunResult",
     "CampaignStack",
     "CampaignState",
@@ -77,6 +87,7 @@ __all__ = [
     "CoordinateFidelity",
     "CoordinateSampler",
     "DefectFilteredAttribution",
+    "DiscoverySpec",
     "EpisodeOutcome",
     "EpisodeRecord",
     "FrontierRecord",
@@ -84,6 +95,7 @@ __all__ = [
     "IncompatibleCoordinateError",
     "JointCheckpoint",
     "JointKernelCache",
+    "LockVerdict",
     "ParetoFrontier",
     "ReplicationReport",
     "ResourceUsage",
@@ -105,5 +117,9 @@ __all__ = [
     "space_grid",
     "task_family",
     "unreplicated",
+    "verify_attribution_rank",
+    "verify_fidelity_standing",
+    "verify_replay",
     "verify_replication",
+    "verify_winner_replication",
 ]
