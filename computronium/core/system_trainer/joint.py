@@ -525,8 +525,10 @@ def compose_joint_system_from_configs(
             neurons_per_tile=8,
             tiles_per_layer=2,
         )
-    else:
+    elif topology_type == "feedforward":
         geometry_instance = FeedforwardGeometry(geometry)
+    else:
+        raise ValueError(f"Unknown topology_type: {topology_type!r}")
 
     # Instantiate dynamics from config — unknown values raise; a silent
     # fallback here once ran "diffusion" coordinates as Instantaneous.

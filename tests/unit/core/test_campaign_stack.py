@@ -30,8 +30,34 @@ from computronium.core.campaign import (
     verify_replication,
 )
 from computronium.core.campaign.replication import unreplicated
+from computronium.core.campaign.stack import task_for_visit
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+class TestTaskRotation:
+    """R7 imp-44 lock: the rotation invariant is visit-count alternation.
+
+    The R5b-B replication gate read 0/48 because slot-parity rotation left
+    every coordinate on one task family whenever the grid cycle was even.
+    The rev d fix (visit-count rotation) is structurally verified against
+    the commissioned artifacts; this lock pins the engine-level invariant
+    so a sampler change cannot silently reintroduce the even-cycle collapse.
+    """
+
+    @pytest.mark.parametrize("cycle_len", range(2, 6))
+    def test_visit_rotation_covers_all_families(self, cycle_len: int):
+        cycle = tuple(f"fam_{i}" for i in range(cycle_len))
+        seen = {task_for_visit(v, cycle) for v in range(cycle_len)}
+        assert seen == set(cycle)
+
+    def test_repeat_visit_flips_family(self):
+        cycle = ("synthetic", "parity")
+        assert task_for_visit(0, cycle) != task_for_visit(1, cycle)
+
+    def test_single_family_cycle_is_stable(self):
+        cycle = ("synthetic",)
+        assert task_for_visit(7, cycle) == "synthetic"
 
 
 def make_record(  # ruff: ignore[too-many-arguments] - record builder with independent defaults

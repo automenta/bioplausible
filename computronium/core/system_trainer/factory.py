@@ -13,6 +13,7 @@ from computronium.ontology import (
     CreditAssignmentConfig,
     DigitalSubstrate,
     ElasticConsolidationUpdate,
+    DiffusionDynamics,
     EnergyMinimizationDynamics,
     EuclideanUpdate,
     FeedforwardGeometry,
@@ -209,8 +210,10 @@ def compose_system[
                     neurons_per_tile=8,
                     tiles_per_layer=2,
                 )
-            else:
+            elif topology_type == "feedforward":
                 geometry = FeedforwardGeometry(geometry_cfg)
+            else:
+                raise ValueError(f"Unknown topology_type: {topology_type!r}")
 
             # Restore serialized parameters for exact round-trip
             if serialized_params is not None:
@@ -228,8 +231,12 @@ def compose_system[
                 dynamics = PredictiveSettlingDynamics(dynamics_cfg)
             elif dynamics_type == "spike_integration":
                 dynamics = SpikeIntegrationDynamics(dynamics_cfg)
-            else:
+            elif dynamics_type == "diffusion":
+                dynamics = DiffusionDynamics(dynamics_cfg)
+            elif dynamics_type == "instantaneous":
                 dynamics = InstantaneousDynamics(dynamics_cfg)
+            else:
+                raise ValueError(f"Unknown dynamics_type: {dynamics_type!r}")
 
             # Reconstruct credit
             credit_cfg = CreditAssignmentConfig(**spec["credit"])
@@ -246,8 +253,10 @@ def compose_system[
                 update = NaturalGradientUpdate(update_cfg)
             elif update_type in ("elastic_consolidation", "ewc"):
                 update = ElasticConsolidationUpdate(update_cfg)
-            else:
+            elif update_type == "euclidean":
                 update = EuclideanUpdate(update_cfg)
+            else:
+                raise ValueError(f"Unknown update_type: {update_type!r}")
 
             return compose_system(substrate, geometry, dynamics, credit, update)
 
@@ -615,8 +624,10 @@ def compose_system_from_configs(
             neurons_per_tile=8,
             tiles_per_layer=2,
         )
-    else:
+    elif topology_type == "feedforward":
         geometry_instance = FeedforwardGeometry(geometry)
+    else:
+        raise ValueError(f"Unknown topology_type: {topology_type!r}")
 
     # Instantiate dynamics from config
     dynamics_type = dynamics.dynamics_type.lower()
@@ -626,8 +637,12 @@ def compose_system_from_configs(
         dynamics_instance = PredictiveSettlingDynamics(dynamics)
     elif dynamics_type == "spike_integration":
         dynamics_instance = SpikeIntegrationDynamics(dynamics)
-    else:
+    elif dynamics_type == "diffusion":
+        dynamics_instance = DiffusionDynamics(dynamics)
+    elif dynamics_type == "instantaneous":
         dynamics_instance = InstantaneousDynamics(dynamics)
+    else:
+        raise ValueError(f"Unknown dynamics_type: {dynamics_type!r}")
 
     # Instantiate credit from config
     credit_instance = _credit_from_config(credit)
@@ -642,8 +657,10 @@ def compose_system_from_configs(
         update_instance = NaturalGradientUpdate(update)
     elif update_type in ("elastic_consolidation", "ewc"):
         update_instance = ElasticConsolidationUpdate(update)
-    else:
+    elif update_type == "euclidean":
         update_instance = EuclideanUpdate(update)
+    else:
+        raise ValueError(f"Unknown update_type: {update_type!r}")
 
     return compose_system(
         substrate_instance,

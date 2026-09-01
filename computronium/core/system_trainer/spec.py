@@ -10,6 +10,7 @@ from computronium.core.joint.transition import PlasticityConfig, PlasticityPrimi
 from computronium.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
+    DiffusionDynamics,
     ElasticConsolidationUpdate,
     EnergyMinimizationDynamics,
     EuclideanUpdate,
@@ -85,8 +86,10 @@ def _geometry_from_config(geometry: GeometryConfig) -> Geometry:
             neurons_per_tile=8,
             tiles_per_layer=2,
         )
-    else:
+    elif topology_type == "feedforward":
         return FeedforwardGeometry(geometry)
+    else:
+        raise ValueError(f"Unknown topology_type: {topology_type!r}")
 
 
 def _dynamics_from_config(dynamics: StateDynamicsConfig) -> StateDynamics:
@@ -98,8 +101,12 @@ def _dynamics_from_config(dynamics: StateDynamicsConfig) -> StateDynamics:
         return PredictiveSettlingDynamics(dynamics)
     elif dynamics_type == "spike_integration":
         return SpikeIntegrationDynamics(dynamics)
-    else:
+    elif dynamics_type == "diffusion":
+        return DiffusionDynamics(dynamics)
+    elif dynamics_type == "instantaneous":
         return InstantaneousDynamics(dynamics)
+    else:
+        raise ValueError(f"Unknown dynamics_type: {dynamics_type!r}")
 
 
 def _credit_from_config(config: CreditAssignmentConfig):
@@ -136,8 +143,10 @@ def _update_from_config(update: ParameterUpdateConfig):
         return NaturalGradientUpdate(update)
     elif update_type in ("elastic_consolidation", "ewc"):
         return ElasticConsolidationUpdate(update)
-    else:
+    elif update_type == "euclidean":
         return EuclideanUpdate(update)
+    else:
+        raise ValueError(f"Unknown update_type: {update_type!r}")
 
 
 def _plasticity_from_config(plasticity: PlasticityConfig):
@@ -159,8 +168,10 @@ def _plasticity_from_config(plasticity: PlasticityConfig):
         return create_substrate_coupled_plasticity(plasticity)
     elif plasticity_type == "rule_state":
         return create_rule_state_plasticity(plasticity)
-    else:
+    elif plasticity_type == "null":
         return NullPlasticity()
+    else:
+        raise ValueError(f"Unknown plasticity_type: {plasticity_type!r}")
 
 
 def compose_system_from_configs(

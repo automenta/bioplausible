@@ -33,7 +33,7 @@ from computronium.ontology import (
     StateDynamicsConfig,
     SubstrateConfig,
 )
-from computronium.resources import ResourceUsage
+from computronium.resources import MAC_ENERGY_J, ResourceUsage
 from computronium.stability import StabilityGuard
 from computronium.state import CompositeState
 
@@ -350,33 +350,42 @@ def _episode_resources(
     device: torch.device,
     latency: float,
 ) -> ResourceUsage:
-    """Deterministic per-episode resource accounting (imp-17).
+    """Deterministic per-episode resource accounting (imp-17, R7 imp-45).
 
     The campaign Pareto needs resource axes that actually vary across the
     grid: recording wall-clock latency alone left compute/memory/energy
     constant at zero and collapsed the frontier to a single loss minimizer.
-    Compute is a deterministic MAC proxy (params x batch x settled phases x
-    settle steps — faithful in ordering across coordinates), energy is the
-    episode's own target-free settled energy, memory is fp32 parameter
-    storage, and ψ-capacity comes from the plasticity config (no RNG side
-    effects — never re-derive ``initial_psi`` here).
+    Compute is a deterministic train-step MAC proxy: forward settle/phase
+    work (params x batch x phases x settle steps) plus a documented backward
+    estimate (backward ≈ 2x forward MACs — the R7 first pass found the
+    forward-only version understated learning cost by the whole backward
+    phase). Energy splits cleanly: the consumption axis is a work-derived
+    estimate monotone in MACs, never the state's free energy — that is a
+    state variable (may be negative) recorded separately as
+    ``state_energy_j``. ψ-capacity comes from the plasticity config (no RNG
+    side effects — never re-derive ``initial_psi`` here).
     """
     param_count = sum(p.numel() for p in joint.geometry.params.values())
     phases = max(len(getattr(joint.credit, "phases", ()) or ()), 1)
     settle_steps = max(int(getattr(joint.dynamics.config, "max_steps", 1) or 1), 1)
     forward_flops = 2 * batch_size * param_count
+    settle_macs = forward_flops * phases * settle_steps
+    backward_flops = 2 * settle_macs
+    consumed_energy = (settle_macs + backward_flops) * MAC_ENERGY_J
     psi_dims = joint.plasticity.config.plastic_state_dims or {}
     return ResourceUsage(
-        compute=float(forward_flops * phases * settle_steps),
+        compute=float(settle_macs + backward_flops),
         memory=param_count * 4 / 1e6,
-        energy=float(metrics.get("free_energy", metrics.get("energy", 0.0))),
+        energy=consumed_energy,
         latency=latency,
         plastic_state_capacity=float(sum(psi_dims.values())),
         device=str(device),
         batch_size=batch_size,
         forward_flops=forward_flops,
+        backward_flops=backward_flops,
         param_count=param_count,
         wall_time_ms=latency * 1e3,
+        state_energy_j=float(metrics.get("free_energy", metrics.get("energy", 0.0))),
     )
 
 

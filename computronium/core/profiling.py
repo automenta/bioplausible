@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch import nn
 
-from computronium.resources import ResourceUsage
+from computronium.resources import MAC_ENERGY_J, ResourceUsage
 from computronium.utils import count_parameters
 
 if TYPE_CHECKING:
@@ -172,6 +172,7 @@ def measure_suite_resources(
         backward_flops=2 * forward_flops,
         param_count=sum(p.numel() for p in model.parameters()),
         effective_flops=effective_flops if effective_flops is not None else 0.0,
+        energy=float(3 * forward_flops * MAC_ENERGY_J),
     )
 
 

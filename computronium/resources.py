@@ -8,6 +8,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+MAC_ENERGY_J: float = 1e-9
+"""Nominal software-scale energy per MAC (1 pJ) for work-derived consumption
+estimates. A documented constant that makes consumed energy monotone in
+arithmetic work (more settle steps / MACs → more estimated energy) — an
+estimate for proxy-tier reporting, never a physical measurement."""
+
 
 @dataclass(frozen=True, slots=True)
 class ResourceUsage:
@@ -17,6 +23,12 @@ class ResourceUsage:
     vector and the campaign resource vector): an aggregable five-axis
     consumption vector (compute / memory / energy / latency / ψ-capacity)
     plus detailed measurement fields for frontier records.
+
+    Energy semantics (R7 imp-45): the ``energy`` consumption axis is a
+    work-derived estimate (``consumed_energy_estimate_j``, monotone in MACs
+    via ``MAC_ENERGY_J``) — never the system's state free energy, which is a
+    state variable that may be negative and is recorded separately as
+    ``state_energy_j``. Consumption and state are never mixed in one vector.
 
     Aggregation semantics: additive axes sum; peak-like axes (memory,
     ψ-capacity, param count, per-tensor memories) take the max.
@@ -49,6 +61,17 @@ class ResourceUsage:
     spectral_radius: float | None = None
     lyapunov_exponent: float | None = None
     effective_flops: float = 0.0
+    state_energy_j: float = 0.0
+
+    @property
+    def consumed_energy_estimate_j(self) -> float:
+        """The consumption axis ``energy`` under its unit-explicit name.
+
+        A derived alias, not stored state — the aggregable ``energy`` field
+        is the single source of truth, so constructor callers and
+        serialization cannot drift apart (the R7 imp-45 split).
+        """
+        return self.energy
 
     @property
     def total_flops(self) -> float:
@@ -121,6 +144,7 @@ class ResourceUsage:
             spectral_radius=self.spectral_radius,
             lyapunov_exponent=self.lyapunov_exponent,
             effective_flops=self.effective_flops / divisor,
+            state_energy_j=self.state_energy_j / divisor,
         )
 
     def to_dict(self) -> dict[str, float | int | str]:
@@ -128,7 +152,8 @@ class ResourceUsage:
         return {
             "compute": self.compute,
             "memory_mb": self.memory,
-            "energy_j": self.energy,
+            "state_energy_j": self.state_energy_j,
+            "consumed_energy_estimate_j": self.consumed_energy_estimate_j,
             "latency_s": self.latency,
             "plastic_state_capacity_bytes": self.plastic_state_capacity,
             "coordinate": self.coordinate,
@@ -151,7 +176,7 @@ class ResourceUsage:
         return cls(
             compute=float(data.get("compute", 0.0)),
             memory=float(data.get("memory_mb", 0.0)),
-            energy=float(data.get("energy_j", 0.0)),
+            energy=float(data.get("consumed_energy_estimate_j", 0.0)),
             latency=float(data.get("latency_s", 0.0)),
             plastic_state_capacity=float(data.get("plastic_state_capacity_bytes", 0.0)),
             coordinate=str(data.get("coordinate", "")),
@@ -167,6 +192,7 @@ class ResourceUsage:
             energy_proxy=float(data.get("energy_proxy", 0.0)),
             substrate_overhead=float(data.get("substrate_overhead", 0.0)),
             effective_flops=float(data.get("effective_flops", 0.0)),
+            state_energy_j=float(data.get("state_energy_j", 0.0)),
         )
 
     @classmethod

@@ -72,6 +72,19 @@ class CoordinateSampler(Protocol):
     ) -> str: ...
 
 
+def task_for_visit(visit_count: int, task_cycle: tuple[str, ...]) -> str:
+    """Task family for a coordinate's nth visit.
+
+    Visit-count alternation, not slot parity: consecutive visits of one
+    coordinate cycle through every family regardless of grid-cycle parity —
+    the slot-parity rule left each coordinate on a single family whenever
+    the cycle was even (the R5b-B replication gate read 0/48 for exactly
+    that reason). Counts derive from durable rows plus in-run recordings,
+    so resume replays the same assignment.
+    """
+    return task_cycle[visit_count % len(task_cycle)]
+
+
 def _space_sampler(space: dict) -> CoordinateSampler:
     """Bind a search-space table into a seeded coordinate sampler."""
 
@@ -320,7 +333,7 @@ class CampaignStack:
             checkpointed = False
             for experiment in range(experiments_per_iter):
                 coordinate = sample(rng, iteration, experiment)
-                task_name = task_cycle[visits.get(coordinate, 0) % len(task_cycle)]
+                task_name = task_for_visit(visits.get(coordinate, 0), task_cycle)
                 if (iteration, coordinate) in recorded:
                     self._event(f"  skipped (already recorded): [{coordinate}]")
                     outcomes.append(

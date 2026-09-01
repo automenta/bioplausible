@@ -18,9 +18,16 @@
 >
 > **R7 first pass 2026-09-01 (probes 1/2/6/7):** 2 PASS (rotation parity, construction seeding) ·
 > 1 DEFECT FOUND + FIXED (12 silent dispatch fallbacks in the 5-D compose path — imp-25 class
-> eradicated; gate 59 passed, ruff/pyright net-zero) · 1 DEFECT FOUND, fix pending
-> (`backward_flops` ≡ 0 fiction; energy records state energy, not consumed) · data-confirms
-> imp-36 saturation. The sweep produces signal.
+> eradicated) · 1 DEFECT FOUND (`backward_flops` ≡ 0; energy recorded state energy) ·
+> data-confirms imp-36 saturation. The sweep produces signal.
+>
+> **R7 second pass 2026-09-01 (first-pass closures):** all four closed — ① rotation invariant
+> **pinned** (`TestTaskRotation`) · ② compute/energy semantics **fixed** (total train-step MACs
+> incl. documented 2× backward estimate; state vs consumed energy split; drift-proof derived
+> alias) · ③ **campaign exposure audit CLEAN** — all six commissioned campaigns (1200 artifact
+> records + 62 SQLite coords): zero silent-substitution exposure, defect was latent · ④ full
+> gate **1258 passed / 0 failed**, ruff/pyright net-zero. Remaining probes: 4 → 5 → 3 → 9 → 8
+> + positive control (imp-52).
 >
 > **Numbering:** improvement items continue TODO8's append-only ledger from **imp-42**;
 > imp-1..41 remain canonical in TODO8.md.
@@ -85,20 +92,31 @@ flagship (CP-A) proceeds in parallel only on validated instruments.
 
 | # | Suspect | Probe | imp | Status |
 |---|---------|-------|-----|--------|
-| 1 | Task rotation structurally broken (R5b-B 0/48 ancestor) | Every coordinate in a multi-family grid campaign appears in **both** task families across its scheduled visits — assert over commissioned artifacts, pin as lock test (rev d fixed the rotation; the invariant itself is unpinned) | imp-44 | ✅ PASS 2026-09-01 — 48/48 coords, 240/240 (coord, seed) strata hit both families, uniform 10 visits; pin the lock test on next touch |
-| 2 | Resource accounting fake (imp-17 ancestor) | `compute`/`memory`/`energy`/`latency`/`plastic_state_capacity` must **vary** across coordinates in the heterogeneous r5b_b grid — per-axis span over `records/episodes.json`; a constant axis is a fiction (imp-17/imp-35 collapse signature), not a finding | imp-45 | ⚠️ DEFECTS 2026-09-01 — 4/5 axes genuinely vary (ψ-capacity discriminates null=0/routing=128/fast_weights=512 — real M-axis signal), **but** `backward_flops` ≡ 0 across 480 records (compute axis is forward-only fiction) and `energy_j` records *state* free energy (goes negative) rather than consumed energy. Wiring fix + artifact-semantics note pending; recorded r5b_b resource claims stay quarantined until re-commissioned |
-| 3 | ψ engagement unproven in benchmark harnesses | In each suite: does ψ actually change, and does that change alter the measured behavior? (engagement lock per harness) | imp-43 | pending |
+| 1 | Task rotation structurally broken (R5b-B 0/48 ancestor) | Every coordinate in a multi-family grid campaign appears in **both** task families across its scheduled visits — assert over commissioned artifacts, pin as lock test (rev d fixed the rotation; the invariant itself is unpinned) | imp-44 | ✅ PASS + LOCKED 2026-09-01 — 48/48 coords / 240/240 strata both families; engine-level lock pinned (`TestTaskRotation`: visit-count alternation covers all families, repeat visit flips family) |
+| 2 | Resource accounting fake (imp-17 ancestor) | `compute`/`memory`/`energy`/`latency`/`plastic_state_capacity` must **vary** across coordinates in the heterogeneous r5b_b grid — per-axis span over `records/episodes.json`; a constant axis is a fiction (imp-17/imp-35 collapse signature), not a finding | imp-45 | ✅ FIXED 2026-09-01 — episode path records total train-step MACs (forward settle/phase work + documented 2× backward estimate) and splits energy: consumption axis = work-derived estimate (monotone via `MAC_ENERGY_J`), state free energy → `state_energy_j`; suite path wired likewise; serializer/loader made drift-proof (`consumed_energy_estimate_j` is a derived alias, not stored state). Pre-fix r5b_b/r51c **resource records quarantined for resource claims** (task_loss attribution unaffected — discovery locks re-verified green). ψ-capacity was already a real discriminator (0/128/512 by primitive) |
+| 3 | ψ engagement unproven in benchmark harnesses | In each suite: does ψ actually change, and does that change alter the measured behavior? (engagement lock per harness) | imp-43 | pending — **HARD GATE** for any M-axis claim including Z3 flagship interpretation (θ exact-invariance + ψ non-constancy + ψ-dependent selection + above-chance performance) |
 | 4 | Metric honesty still leaky beyond `free_accuracy` (imp-20 ancestor) | For every metric emitted by campaign/benchmark paths: trace the state it is computed on — target-free, or supervision-contaminated? Any leaky metric quarantines the evidence chain that consumes it | imp-46 | pending |
 | 5 | Settle mutation contracts ambiguous (imp-27 ancestor) | Every `settle()` caller uses the **returned** state — a caller reading the input state silently compares pre-settle activations (manufactures "non-descent"/"no-effect" results; the fidelity probe already ate this once) | imp-47 | pending |
-| 6 | Silent dispatch fallbacks remain (imp-24/imp-25 ancestor) | Grep **all** dispatch tables for bare `else:`; each must raise on unknown values — any silent fallback manufactures fake ablation arms | imp-48 | ✅ DEFECT FOUND + FIXED 2026-09-01 — the imp-24 fix covered only the joint compose path; `spec.py` (geometry/dynamics/update/plasticity), `factory.py` (both round-trip sites), and `joint.py` geometry still silently substituted defaults (a `diffusion` config ran Instantaneous; a typo'd update ran SGD; a typo'd plasticity ran Null — fake M-arms). 12 raise-conversions; verified gate 59 passed, ruff/pyright net-zero. Legitimate else-sites audited and left: `_credit_from_config` (already raises), MEP binary mode, activations explicit-default, pareto metadata fallback (documented, imp-35-mitigated) |
+| 6 | Silent dispatch fallbacks remain (imp-24/imp-25 ancestor) | Grep **all** dispatch tables for bare `else:`; each must raise on unknown values — any silent fallback manufactures fake ablation arms | imp-48 | ✅ DEFECT FOUND + FIXED 2026-09-01 — the imp-24 fix covered only the joint compose path; `spec.py` (geometry/dynamics/update/plasticity), `factory.py` (both round-trip sites), and `joint.py` geometry still silently substituted defaults (a `diffusion` config ran Instantaneous; a typo'd update ran SGD; a typo'd plasticity ran Null — fake M-arms). 12 raise-conversions. **Exposure audit: CLEAN** — all six commissioned campaigns (r51c/r5b_b artifacts: 1200 records; quick_gpu×3/smoke_cpu SQLite: 62 coords) contain zero silent-substitution values; the defect was latent, no historical records quarantined. Legitimate else-sites audited and left: `_credit_from_config` (already raises), MEP binary mode, activations explicit-default, pareto metadata fallback (documented, imp-35-mitigated) |
 | 7 | Construction seeding not universal (R1.4 ancestor) | Every factory call in every campaign/benchmark/harness is seeded, or θ init rides ambient RNG? Unseeded arms contaminate M-axis comparisons where ψ is supposed to be the only difference | imp-49 | ✅ PASS 2026-09-01 — every joint suite seeds θ-init (`torch.manual_seed(seed)` at each `evaluate_*` entry; structural_robustness also seeds `random`), campaign path is `episode_seed`-seeded (imp-11 lock) |
 | 8 | Fidelity probes themselves wrong | Probe-the-probe: for each fidelity probe, engineered ground truth — a deliberately broken implementation must fail it, a correct one must pass; a probe that passes a broken instrument wrong-foots the entire defect-filtering pipeline | imp-50 | pending |
-| 9 | Statistical test mis-specified | Is the 0.05 claimable floor correct? Is stratification/direction-merge implemented correctly? Is the test powered for the effect sizes/variance at this scale? A mis-specified test converts "no evidence of effect" into "evidence of no effect" — the exact error the fidelity policy forbids | imp-51 | pending |
+| 9 | Statistical test mis-specified | Is the 0.05 claimable floor correct? Is stratification/direction-merge implemented correctly? Is the test powered for the effect sizes/variance at this scale? A mis-specified test converts "no evidence of effect" into "evidence of no effect" — the exact error the fidelity policy forbids | imp-51 | pending — output shape: min detectable effect @80% power vs observed top effect → powered / underpowered / mis-specified |
 | 10 | The "obvious" result is missing | Not a probe — the sweep's termination criterion (Policy): keep probing until the result is obvious | — | — |
+| 11 | The microscope has never seen a known effect end-to-end | **Positive control (imp-52):** plant an obvious synthetic effect (lr=0 vs lr>0; trained vs untrained; correct credit vs deliberately inert credit; ψ engaged vs ψ frozen where ψ modulates output) and require the instrument to detect it with high confidence. An instrument self-test, not a scientific claim. **Policy: no campaign is interpreted unless the positive-control probe detects the planted effect.** | imp-52 | pending |
 
-**Proposed order** (cheap + high-information first): 1 → 2 → 6 → 7 (data checks + grep censuses)
-→ 4 → 5 (code audits) → 3 (engagement locks) → 9 (stats audit) → 8 (meta-validation, hardest).
-Re-run the affected campaign tier after any defect fix.
+**Second-pass execution order** (first-pass closures done — 1 ✅ lock, 2 ✅ fix, 6 ✅ fix+audit,
+7 ✅ pass): **4** (metric provenance table: emitter × computed-state × target-free? ×
+claim-consumer; rename leaky metrics `nudged_*`/`target_fit_*` and quarantine them from
+learning claims) → **5** (settle caller census; fix return-ignoring callers; decide the
+canonical mutation contract, or add a debug-mode canary: return-object ≠ input and unbound ⇒
+raise/warn) → **3** (ψ engagement locks; mark suites PLUMBING_ONLY where ψ cannot affect
+metrics; Z3 gated on the strongest lock) → **imp-52 positive control** → **9** (power/spec
+audit: MDE @80% power vs observed top effect) → **8** (fidelity-probe meta-validation:
+broken variant must fail each probe). Re-commission affected campaign tiers only after the
+instrument defects are fixed. Guardrails: do not interpret the registered null; do not re-run
+campaigns for fresh numbers; do not treat pre-fix r5b_b/r51c resource records as valid for
+resource claims; do not close R7 because probes pass — the termination criterion is **the
+result becomes obvious**, and right now it is not.
 
 ## 🔁 Pull-Based Backlog (non-blocking; pull when a campaign manifest or suite needs it)
 
@@ -195,21 +213,35 @@ effect sizes/variance. Probe: is the test correctly specified for the current sc
 mis-specified test converts "no evidence of effect" into "evidence of no effect" — the exact
 error the fidelity policy forbids.
 
-**R7 probe outcomes (2026-09-01, first pass — probes 1/2/6/7):** the sweep produces signal.
-- #1 PASS: the rev d rotation fix holds structurally (48/48 coords × 240/240 strata, both
-  families, uniform visits). Remaining: pin the invariant as an engine-level lock test.
-- #2 DEFECTS: `backward_flops` constant 0 across all 480 r5b_b records — the compute axis is a
-  forward-only MAC proxy, so "compute" understates learning cost by the entire backward pass;
-  `energy_j` is the target-free settled **state** energy (min −3.84), not consumed energy — a
-  state variable recorded in a consumption vector. ψ-capacity is the one clean discriminator
-  (0/128/512 by primitive). *Follow-up: wire backward MACs (≈2× forward) + a consumed-energy
-  proxy in `_episode_resources`/`measure_suite_resources`; r5b_b resource claims stay
-  quarantined until re-commissioned under the fixed semantics.*
-- #6 DEFECT FIXED: 12 silent dispatch fallbacks eradicated (see table). *Lesson: imp-24 fixed
-  one entry point and the lesson said "grep before the next axis value lands" — the census
-  should have been run the same day; the class survived in the flagship 5-D round-trip path
-  (`spec.py`/`factory.py`) where the L0 schema lock is enforced.*
-- #7 PASS: all construction sites seeded.
+**R7 probe outcomes (2026-09-01 — first pass + second-pass closures):** the sweep produces signal.
+- #1 PASS + LOCKED: the rev d rotation fix holds structurally (48/48 coords × 240/240 strata,
+  both families, uniform visits); engine-level lock pinned in `TestTaskRotation` — a sampler
+  change cannot silently reintroduce the even-cycle collapse.
+- #2 FIXED: `backward_flops` was constant 0 across all 480 r5b_b records (the compute axis was a
+  forward-only MAC proxy, understating learning cost by the entire backward pass) and `energy_j`
+  held the target-free settled *state* energy (min −3.84) inside a consumption vector. Now:
+  total train-step MACs + a documented 2× backward estimate; consumption energy work-derived and
+  monotone (`MAC_ENERGY_J`); state energy split out (`state_energy_j`). Pre-fix r5b_b/r51c
+  resource records are quarantined for resource claims — never silently reinterpreted.
+  ψ-capacity was already a real M-axis discriminator (0/128/512 by primitive).
+- #6 DEFECT FIXED + EXPOSURE AUDITED: 12 silent dispatch fallbacks eradicated (see table).
+  *Lesson: imp-24 fixed one entry point and the lesson said "grep before the next axis value
+  lands" — the census should have been run the same day; the class survived in the flagship
+  5-D round-trip path (`spec.py`/`factory.py`) where the L0 schema lock is enforced.*
+  Exposure audit across all six commissioned campaigns (r51c/r5b_b artifacts: 1200 records;
+  quick_gpu×3/smoke_cpu SQLite: 62 coords): **zero records executed unknown axis values** —
+  the defect was latent, nothing historically contaminated.
+- #7 PASS: all construction sites seeded (`torch.manual_seed` at every suite entry,
+  `episode_seed` on the campaign path).
+- Confirmed with data: imp-36's stability saturation is literal — one distinct
+  (ρ, lyapunov, settling, basin) tuple across 480 records.
+
+52. **R7 positive control — planted-effect instrument self-test (2026-09-01).** The termination
+criterion ("if it works it will be obvious") needs a concrete detector: plant an obvious synthetic
+effect (lr=0 vs lr>0, trained vs untrained, correct vs deliberately inert credit, ψ engaged vs ψ
+frozen where ψ modulates output) and require the instrument to detect it with high confidence
+before any campaign is interpreted. An instrument self-test, not a scientific claim — it proves
+the microscope can see *something*, which the null alone cannot.
 
 ## 🔧 Quick Commands
 
