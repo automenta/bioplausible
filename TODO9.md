@@ -43,16 +43,19 @@
 > engineered broken variants fail their probes, correct ones pass. Gate **1300 passed /
 > 0 failed** (42 new lock tests), ruff/pyright net-zero on touched files.
 >
-> **R7 is no longer blocked on known instrument suspects — it is blocked on scale and the
-> Z3 gate.** The null remains uninterpreted: the microscope now sees a planted effect, but
-> the campaign as sized cannot detect its own top observed effect (probe #9), and the Z3
-> flagship still lacks its suite-level engagement lock + positive-control run (pipeline-
-> level locks exist; suite-level wiring does not).
+> **R7 closes 2026-09-01 with a meaning change: the null is now explained, not merely
+> uninterpreted.** The instrument sees a planted effect end-to-end through the campaign claim
+> chain (imp-52); the commissioned campaign was structurally incapable of producing a
+> learnable signal (imp-54: teacher redraw every episode) and underpowered even for the
+> per-episode effects it did show (imp-55: MDE@80% 0.314 vs top observed d 0.205). The known
+> code-level instrument lies are fixed and probe-the-probe locked. **The defect hunt moves
+> from code defects to experimental-design defects** — successor plan: **R8** below. The old
+> null stays uninterpreted; it is a property of the old design, not a finding.
 >
 > **Numbering:** improvement items continue TODO8's append-only ledger from **imp-42**;
 > imp-1..41 remain canonical in TODO8.md.
 
-## Policy (carried from TODO8, unchanged)
+## Policy (carried from TODO8; extended by R7/R8)
 
 - Zero backwards compatibility · GPU-first for all training paths · serial pytest only (xdist hangs in this env)
 - No new tests for broken capability — xfail with precise reasons
@@ -60,6 +63,9 @@
 - **No scientific conclusion from any campaign delta until both arms pass an implementation-fidelity check.** A failed fidelity check is *inconclusive*, never a refutation. Deltas on known-defective axes are quarantined from attribution, not interpreted.
 - Observed-but-unregistered deltas are never interpreted (pre-registration precedes comparison)
 - **A null is a symptom, not a result.** No null is read as evidence of no effect while an R7 instrument suspect remains unprobed; each probe either finds a defect (fix it, re-run the affected campaign tier) or passes (pin it where cheap, move on)
+- **Construct validity gates claims, not just metric honesty (R8).** Metric honesty (imp-46) and construct validity (imp-54) are different: honest metrics on a non-stationary stream still cannot support accumulated-learning claims. Every campaign declares its claim scope (per-episode adaptation / accumulated learning / resource-efficiency / stability / M-axis plasticity) up front
+- **Power preregistration (imp-55).** A commission that does not state expected effect size, variance estimate, n/group, and MDE@80% — or that sits below the power floor — is labeled `pilot` / `plumbing` / `instrument-check`, never claim-grade
+- **Embedded positive controls (imp-52 extension).** Claim-grade campaigns carry a planted-effect control arm (e.g. lr=0 coordinate, ψ-frozen arm) inside the commission itself; if the embedded control fails, the campaign is quarantined — every campaign self-validates
 - **Termination criterion — "if it works it will be obvious":** the evidence of a working microscope is a robust, replicable, stratified-stable effect that survives fidelity filtering, a Pareto frontier with real tradeoffs, and ψ engagement with measurable behavioral differences — keep probing until the result is obvious
 
 ## ✅ Carried Complete (detail: TODO8.md Completed Record + git log)
@@ -96,7 +102,7 @@ but recovery/adaptation timing is θ-optimizer-driven); the ontology-pipeline pa
 with imp-22 ψ wiring) is where M-axis contrasts become interpretable — see imp-43 before any L1/L3
 *claim*. L3.5's nonzero θ-change is by design there (both phases train θ; the Δθ=0 claim lives in Z3).
 
-## 🎯 R7 — Instrument-Honesty Sweep (the null is a symptom) — ACTIVE
+## 🎯 R7 — Instrument-Honesty Sweep (the null is a symptom) — CLOSED 2026-09-01 (superseded by R8)
 
 The registered null (top pooled effect stratified-unstable at the 0.05 floor) is **not interpreted**.
 If the microscope worked, the evidence would be obvious: a robust, replicable, stratified-stable
@@ -149,18 +155,65 @@ revalidation → 9 → 8, all closed; 42 new lock tests, gate 1300/0):
 7. **#8 probe-the-probe (imp-50):** 18 engineered variants — every probe detects its
    broken case and passes its correct case.
 
-**What remains before any campaign interpretation:**
-- Re-commission campaign tiers at a size that passes the power gate (n≈376/group at current
-  variance, or a redesigned comparison with a larger expected effect), then re-verify the
-  discovery locks on the new commission (R5b-D rule).
-- Z3 flagship: wire a suite-level ψ-engagement lock (θ exact invariance + ψ non-constancy +
-  ψ-dependent operator selection + above-chance probe accuracy) and run the positive-control
-  arms through the Z3 suite itself; only then can Z3 results be read.
+**What remains before any campaign interpretation** (superseded by the R8 gates below —
+both gates must pass; neither is bypassable):
+- **Gate A — Z3 flagship gate:** suite-level ψ engagement lock (θ exact invariance + ψ
+  non-constancy + ψ-dependent operator selection/behavior + above-chance probe accuracy +
+  frozen-ψ control) and a planted-ψ-effect positive control run through the Z3 suite itself.
+  Pipeline-level locks exist; suite-level wiring does not — Z3 output stays unread until both
+  land. Definition of done: Z3 quick mode either passes the gate or fails with a precise,
+  named instrument defect (else Z3 is classified `plumbing_only` and fixed).
+- **Gate B — powered, stationary campaign redesign:** a claim-scope decision, a stationary
+  task design (or an explicit per-episode scope), power preregistration, and embedded
+  positive controls — re-commission only when the design passes the power gate, then
+  re-verify the discovery locks on the new commission (R5b-D rule). Definition of done: a
+  future campaign can pass the power gate without relying on the non-stationary synthetic
+  stream.
 - Guardrails unchanged: do not interpret the registered null; do not treat pre-fix
   r5b_b/r51c resource records as valid; do not treat the saturated stability axis as
   evidence of no stability tradeoff; do not close R7 because probes pass — the termination
   criterion is **the result becomes obvious**, and a planted effect detected at ceiling is
   the first honest datapoint, not the finish line.
+
+## 🎯 R8 — Powered, Stationary Evidence (successor to R7) — OPEN
+
+R7 established that the instrument can see a planted effect, but the commissioned campaign
+was underpowered and structurally non-stationary. R8 closes the gap between **instrument
+validity** (what R7 delivered) and **claim validity** (what R8 must deliver). The next defect
+hunt is not primarily in the code — it is in the experimental design.
+
+**Two gates, run as parallel tracks:**
+
+| # | Item | Done when |
+|---|------|-----------|
+| R8.1 | Z3 suite-level engagement lock | θ exact invariance (norm/hash equality, not tolerance-only), ψ non-constancy, ψ-dependent operator selection/behavior, above-chance probe accuracy, frozen-ψ control changes metrics — the suite fails unless all hold |
+| R8.2 | Z3 positive control | a planted ψ-mediated effect (ψ disabled/frozen vs ψ engaged) is detected through the Z3 suite itself; if not, Z3 is classified `plumbing_only` and fixed before interpretation |
+| R8.3 | Stationary task design | the campaign task family supports accumulation, or the campaign explicitly declares a per-episode-adaptation scope (imp-54). Options: (A) stationary synthetic family — teacher seed = f(campaign_id, coordinate, seed); (B) held-out probe design separating per-episode adaptation from accumulated learning; (C) task-switch phases A→B matching the L1 hypothesis |
+| R8.4 | Power preregistration | every commission declares expected effect size, variance estimate, n/group, MDE@80%, α, stratification structure; below-floor commissions are labeled `pilot`/`plumbing`/`instrument-check` (imp-55) |
+| R8.5 | Embedded positive controls | every claim-grade campaign contains a planted-effect control arm (lr=0 coordinate; ψ frozen vs engaged); control failure quarantines the campaign |
+| R8.6 | Re-commission powered campaign | n/design passes the power gate without the non-stationary synthetic stream; discovery locks + fidelity manifest re-evaluated on the new commission (R5b-D rule) |
+
+**Claim-scope rule (pairs with R8.3/R8.4):** each campaign states up front which effect type
+its design can support — per-episode adaptation, accumulated learning, resource-efficiency,
+stability, M-axis plasticity. The old smoke campaign cannot support accumulated-learning
+claims because of imp-54; that constraint is written into any retrospective of it.
+
+**Execution order:** Track 1 (R8.1 → R8.2, bounded engineering: lock, control, run quick,
+read numbers against chance + θ-invariance, escalate or demote) runs in parallel with
+Track 2 (R8.3 → R8.4 → R8.5 → small pilot → power audit on pilot variance → R8.6 only if
+powered). Track 1 is the nearer critical path: Z3 is the next RESEARCH3 flagship.
+
+**Do not (R8-specific):**
+- Do not re-run the old campaign at n≈376/group without redesign — scale without redesign is
+  a precise answer to the wrong question (teacher redraw, stability saturation, small effect
+  size, and quarantined resource records all survive an n bump).
+- Do not read claim-grade task_loss as a learning claim — metric honesty ≠ construct validity.
+- Do not read the stability axis's saturation as evidence of no stability tradeoff — it did
+  not discriminate (imp-36); that is a measurement defect, not a null.
+- Do not resurrect pre-fix r5b_b/r51c resource records for resource claims — resource
+  recommissioning happens under the fixed compute/energy semantics only.
+- Do not interpret the old registered null — it is explained (underpowered + non-stationary),
+  not confirmed, and not refuted.
 
 ## 🔁 Pull-Based Backlog (non-blocking; pull when a campaign manifest or suite needs it)
 
@@ -203,9 +256,9 @@ revalidation → 9 → 8, all closed; 42 new lock tests, gate 1300/0):
 - axis_probe `[2-0]` flake — no recurrence since 2026-08-31; still watching
 - CUDA tolerance boundaries shift xfail edges — CPU/GPU tests kept separate, construction seeding in place
 - Shakedown suites' harness arms are M-axis-identical (see PR-7 notes + imp-43) — pipeline-level engagement locks are green, but L1/L3 *claims* still need the harness rewired onto the ψ-engaged path (or params-moved locks) first
-- Z3 flagship gate: suite-level engagement lock + positive-control run through the Z3 suite itself are open (pipeline-level locks exist) — do not interpret Z3 output before both land
-- Power gate: re-commissioned campaigns must state expected n vs MDE@80% (imp-55) in their preregistration; a commission below the power floor is a quarantined commission
-- Smoke-scale campaign deltas are capped at chance by the non-stationary synthetic stream (imp-54) — never read pooled smoke task_loss/accuracy deltas as learning evidence
+- Z3 flagship gate (R8 Gate A / R8.1–R8.2): suite-level engagement lock + positive-control run through the Z3 suite itself are open (pipeline-level locks exist) — do not interpret Z3 output before both land
+- Power gate (R8.4 / imp-55): commissions must state expected n vs MDE@80% in their preregistration; below-floor commissions are labeled `pilot`/`plumbing`/`instrument-check`, never claim-grade
+- Smoke-scale campaign deltas are capped at chance by the non-stationary synthetic stream (imp-54 / R8.3) — never read pooled smoke task_loss/accuracy deltas as accumulated-learning evidence; accumulated-learning claims require a stationary design
 
 ## 💡 Improvement Ledger (continues TODO8's imp-N from imp-42)
 
