@@ -17,8 +17,8 @@ from computronium.core.local_learning.settling import (
     SettleProtocol,
     SettleTelemetry,
 )
-from computronium.models.native.tile_native import native_tile_pc
 from computronium.models.native.eqprop_native import native_eqprop_mlp
+from computronium.models.native.tile_native import native_tile_pc
 
 
 def _run_model_settle(model, x, max_steps=10, convergence_threshold=1e-3, **kwargs):
@@ -68,7 +68,8 @@ class TestNativeEqPropSettleProtocol:
         result = model.train_step(x, y)
         assert isinstance(result, dict)
         assert "loss" in result
-        assert "accuracy" in result
+        assert "nudged_fit_accuracy" in result
+        assert "free_accuracy" in result
 
 
 class TestNativeTilePCSettleProtocol:
@@ -110,7 +111,8 @@ class TestNativeTilePCSettleProtocol:
         result = model.train_step(x, y)
         assert isinstance(result, dict)
         assert "loss" in result
-        assert "accuracy" in result
+        assert "nudged_fit_accuracy" in result
+        assert "free_accuracy" in result
 
 
 class TestTileAlgorithmSettleProtocol:
@@ -212,7 +214,7 @@ class TestTileAlgorithmSettleProtocol:
         result = model.train_step(x, y)
         assert isinstance(result, dict)
         assert "loss" in result
-        assert "accuracy" in result
+        assert "accuracy" in result  # TileAlgorithm BPTT: target-free forward fit
 
 
 class TestSettleProtocolMultiEpochLearning:
@@ -291,7 +293,9 @@ class TestSettleProtocolMultiEpochLearning:
         for epoch in range(5):
             result = model.train_step(x, y)
             losses.append(result["loss"])
-            accuracies.append(result["accuracy"])
+            # Pipeline systems: post-update target-free; TileAlgorithm BPTT:
+            # plain target-free forward fit (both honest learning signals).
+            accuracies.append(result.get("free_accuracy", result["accuracy"]))
 
         # Loss should generally decrease (allow small fluctuation)
         assert losses[-1] <= losses[0] + 0.2

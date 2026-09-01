@@ -118,7 +118,7 @@ def test_accepted_axis_combinations_train_one_real_step(
         episode=0,
         guard_threshold=None,
     )
-    assert {"loss", "energy", "accuracy"} <= set(metrics)
+    assert {"loss", "energy", "nudged_fit_accuracy"} <= set(metrics)
     assert all(isinstance(v, float) for k, v in metrics.items() if k in metrics)
 
 
@@ -239,7 +239,7 @@ def test_cross_axis_regressions_train_one_real_step(coordinate: str) -> None:
         episode=0,
         guard_threshold=None,
     )
-    assert {"loss", "energy", "accuracy"} <= set(metrics)
+    assert {"loss", "energy", "nudged_fit_accuracy"} <= set(metrics)
 
 
 def test_neuromorphic_state_io_stays_float32() -> None:

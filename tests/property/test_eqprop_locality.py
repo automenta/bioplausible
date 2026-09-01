@@ -773,7 +773,7 @@ def test_full_train_step_gradient_locality(
 
     # Verify loss and accuracy are computed
     assert "loss" in metrics
-    assert "accuracy" in metrics
+    assert "nudged_fit_accuracy" in metrics
     assert "energy" in metrics
 
     # Verify parameters changed (gradients were applied)

@@ -208,9 +208,9 @@ class TestRunContinualTrainStep:
 
         assert "loss" in metrics
         assert "energy" in metrics
-        assert "accuracy" in metrics
+        assert "nudged_fit_accuracy" in metrics
         assert isinstance(metrics["loss"], float)
-        assert isinstance(metrics["accuracy"], float)
+        assert isinstance(metrics["nudged_fit_accuracy"], float)
         assert psi is not None
         assert "fast_weights" in psi
         assert psi["fast_weights"].shape[1] == 512  # fast_weight_dim

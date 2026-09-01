@@ -333,6 +333,14 @@ class StateDynamics(Protocol):
 
         Returns:
             Updated state with settled activations in state.activations
+
+        Note:
+            Canonical mutation contract (imp-27/imp-47): ``settle`` always
+            returns the state to use — implementations may rebuild rather
+            than mutate. Callers must bind and use the returned state;
+            reading the input state after the call reads pre-settle
+            activations. Enforced by the caller census AST lock
+            (``tests/property/test_settle_caller_census.py``).
         """
         ...
 

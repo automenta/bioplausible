@@ -395,7 +395,7 @@ class TestPLTrialIntegration:
                 )
 
                 assert result is not None
-                assert "accuracy" in result
+                assert "nudged_fit_accuracy" in result
 
     def test_pl_trial_returns_none_on_failure(self):
         """Test run_pl_trial returns None gracefully on failure."""

@@ -29,6 +29,26 @@
 > gate **1258 passed / 0 failed**, ruff/pyright net-zero. Remaining probes: 4 → 5 → 3 → 9 → 8
 > + positive control (imp-52).
 >
+> **R7 third pass 2026-09-01 — sweep complete: all registered probes run.** #4 metric
+> honesty census → provenance table (`docs/metric_provenance.md`), pipeline schema closed
+> (`METRIC_SCHEMA`), `accuracy` → `nudged_fit_accuracy` everywhere, **1 defect found+fixed**
+> (distributed trainer's `train_acc` silently constant 0.0) · #5 settle caller census →
+> 26/26 sites bind the returned state, AST lint lock pinned · #3 ψ engagement locks →
+> pipeline-level chain green (ψ moves → modulate reaches activations → frozen-ψ control
+> changes metrics) for routing/fast_weights · **imp-52 positive control → instrument sees
+> the planted effect** (lr=0 stays chance, lr=0.1 hits ceiling on a stationary task, stable
+> across seeds; task-stream non-stationarity property discovered + pinned) · resource
+> revalidation → compute/energy vary, nonnegative, state split holds · #9 power audit →
+> **UNDERPOWERED** (MDE@80% = 0.314 vs top observed d = 0.205) · #8 probe-the-probe → 18
+> engineered broken variants fail their probes, correct ones pass. Gate **1300 passed /
+> 0 failed** (42 new lock tests), ruff/pyright net-zero on touched files.
+>
+> **R7 is no longer blocked on known instrument suspects — it is blocked on scale and the
+> Z3 gate.** The null remains uninterpreted: the microscope now sees a planted effect, but
+> the campaign as sized cannot detect its own top observed effect (probe #9), and the Z3
+> flagship still lacks its suite-level engagement lock + positive-control run (pipeline-
+> level locks exist; suite-level wiring does not).
+>
 > **Numbering:** improvement items continue TODO8's append-only ledger from **imp-42**;
 > imp-1..41 remain canonical in TODO8.md.
 
@@ -94,29 +114,53 @@ flagship (CP-A) proceeds in parallel only on validated instruments.
 |---|---------|-------|-----|--------|
 | 1 | Task rotation structurally broken (R5b-B 0/48 ancestor) | Every coordinate in a multi-family grid campaign appears in **both** task families across its scheduled visits — assert over commissioned artifacts, pin as lock test (rev d fixed the rotation; the invariant itself is unpinned) | imp-44 | ✅ PASS + LOCKED 2026-09-01 — 48/48 coords / 240/240 strata both families; engine-level lock pinned (`TestTaskRotation`: visit-count alternation covers all families, repeat visit flips family) |
 | 2 | Resource accounting fake (imp-17 ancestor) | `compute`/`memory`/`energy`/`latency`/`plastic_state_capacity` must **vary** across coordinates in the heterogeneous r5b_b grid — per-axis span over `records/episodes.json`; a constant axis is a fiction (imp-17/imp-35 collapse signature), not a finding | imp-45 | ✅ FIXED 2026-09-01 — episode path records total train-step MACs (forward settle/phase work + documented 2× backward estimate) and splits energy: consumption axis = work-derived estimate (monotone via `MAC_ENERGY_J`), state free energy → `state_energy_j`; suite path wired likewise; serializer/loader made drift-proof (`consumed_energy_estimate_j` is a derived alias, not stored state). Pre-fix r5b_b/r51c **resource records quarantined for resource claims** (task_loss attribution unaffected — discovery locks re-verified green). ψ-capacity was already a real discriminator (0/128/512 by primitive) |
-| 3 | ψ engagement unproven in benchmark harnesses | In each suite: does ψ actually change, and does that change alter the measured behavior? (engagement lock per harness) | imp-43 | pending — **HARD GATE** for any M-axis claim including Z3 flagship interpretation (θ exact-invariance + ψ non-constancy + ψ-dependent selection + above-chance performance) |
-| 4 | Metric honesty still leaky beyond `free_accuracy` (imp-20 ancestor) | For every metric emitted by campaign/benchmark paths: trace the state it is computed on — target-free, or supervision-contaminated? Any leaky metric quarantines the evidence chain that consumes it | imp-46 | pending |
-| 5 | Settle mutation contracts ambiguous (imp-27 ancestor) | Every `settle()` caller uses the **returned** state — a caller reading the input state silently compares pre-settle activations (manufactures "non-descent"/"no-effect" results; the fidelity probe already ate this once) | imp-47 | pending |
+| 3 | ψ engagement unproven in benchmark harnesses | In each suite: does ψ actually change, and does that change alter the measured behavior? (engagement lock per harness) | imp-43 | ✅ LOCKED (pipeline level) 2026-09-01 — `tests/property/test_psi_engagement.py`: ψ moves under task input, `modulate` reaches activations, and a frozen-ψ DI control changes train-step metrics (routing + fast_weights). Suite verdicts + Z3 gate checklist pinned in `_claims.py` (`psi_engaged` scope added). L1/L3 harnesses stay `plumbing_only`; **Z3 flagship remains gated** on a suite-level engagement lock + positive-control run |
+| 4 | Metric honesty still leaky beyond `free_accuracy` (imp-20 ancestor) | For every metric emitted by campaign/benchmark paths: trace the state it is computed on — target-free, or supervision-contaminated? Any leaky metric quarantines the evidence chain that consumes it | imp-46 | ✅ DEFECTS FOUND + FIXED, LOCKED 2026-09-01 — census in `docs/metric_provenance.md` (emitter × state × target-free × claim-consumer × verdict). Pipeline schema closed (`METRIC_SCHEMA`); bare `accuracy` → `nudged_fit_accuracy` (quarantined); `evaluate_episode` claim reads made strict (`free_loss`/`free_accuracy`/`free_energy` only — leaky emitter now KeyErrors, proven by meta-test); trainer `train_acc` switched free-first; **distributed trainer's `train_acc` was silently constant 0.0** (read a metrics key nothing writes) — now computed from free-state activations. Locks: `test_metric_provenance.py`. Task-loss attribution upgraded provisional → claim-grade for the campaign chain |
+| 5 | Settle mutation contracts ambiguous (imp-27 ancestor) | Every `settle()` caller uses the **returned** state — a caller reading the input state silently compares pre-settle activations (manufactures "non-descent"/"no-effect" results; the fidelity probe already ate this once) | imp-47 | ✅ PASS + LOCKED 2026-09-01 — census: all 26 `.settle(` call sites bind or return the settled state, zero violations. Canonical contract pinned on the `StateDynamics` protocol docstring. Enforcement: `tests/property/test_settle_caller_census.py` AST lock (rejects bare-expression `.settle(...)` statements; self-checks scan-not-blind ≥20 sites + flags a planted violation) |
 | 6 | Silent dispatch fallbacks remain (imp-24/imp-25 ancestor) | Grep **all** dispatch tables for bare `else:`; each must raise on unknown values — any silent fallback manufactures fake ablation arms | imp-48 | ✅ DEFECT FOUND + FIXED 2026-09-01 — the imp-24 fix covered only the joint compose path; `spec.py` (geometry/dynamics/update/plasticity), `factory.py` (both round-trip sites), and `joint.py` geometry still silently substituted defaults (a `diffusion` config ran Instantaneous; a typo'd update ran SGD; a typo'd plasticity ran Null — fake M-arms). 12 raise-conversions. **Exposure audit: CLEAN** — all six commissioned campaigns (r51c/r5b_b artifacts: 1200 records; quick_gpu×3/smoke_cpu SQLite: 62 coords) contain zero silent-substitution values; the defect was latent, no historical records quarantined. Legitimate else-sites audited and left: `_credit_from_config` (already raises), MEP binary mode, activations explicit-default, pareto metadata fallback (documented, imp-35-mitigated) |
 | 7 | Construction seeding not universal (R1.4 ancestor) | Every factory call in every campaign/benchmark/harness is seeded, or θ init rides ambient RNG? Unseeded arms contaminate M-axis comparisons where ψ is supposed to be the only difference | imp-49 | ✅ PASS 2026-09-01 — every joint suite seeds θ-init (`torch.manual_seed(seed)` at each `evaluate_*` entry; structural_robustness also seeds `random`), campaign path is `episode_seed`-seeded (imp-11 lock) |
-| 8 | Fidelity probes themselves wrong | Probe-the-probe: for each fidelity probe, engineered ground truth — a deliberately broken implementation must fail it, a correct one must pass; a probe that passes a broken instrument wrong-foots the entire defect-filtering pipeline | imp-50 | pending |
-| 9 | Statistical test mis-specified | Is the 0.05 claimable floor correct? Is stratification/direction-merge implemented correctly? Is the test powered for the effect sizes/variance at this scale? A mis-specified test converts "no evidence of effect" into "evidence of no effect" — the exact error the fidelity policy forbids | imp-51 | pending — output shape: min detectable effect @80% power vs observed top effect → powered / underpowered / mis-specified |
+| 8 | Fidelity probes themselves wrong | Probe-the-probe: for each fidelity probe, engineered ground truth — a deliberately broken implementation must fail it, a correct one must pass; a probe that passes a broken instrument wrong-foots the entire defect-filtering pipeline | imp-50 | ✅ PASS + LOCKED 2026-09-01 — `tests/property/test_fidelity_meta_validation.py`: 18 cases, each probe gets a correct (passes) and engineered-broken (fails) variant — identity/noisy settle, zero pseudo-gradient, step_size=0 update, inert ψ, ψ-insensitive modulate, θ mutation vs audit, even-cycle sampler, constant resource stub, leaky metric emitter. All detectors work; the manifest means something |
+| 9 | Statistical test mis-specified | Is the 0.05 claimable floor correct? Is stratification/direction-merge implemented correctly? Is the test powered for the effect sizes/variance at this scale? A mis-specified test converts "no evidence of effect" into "evidence of no effect" — the exact error the fidelity policy forbids | imp-51 | ✅ VERDICT: UNDERPOWERED 2026-09-01 — `scripts/power_audit.py` over r5b_b task_loss (claim-grade per imp-46): MDE@80% = **0.314** (n=160/group, α=0.05) vs top observed d = **0.205** (null vs fast_weights, power 0.45); pooled d = 0.138 (power 0.23). The 0.05 floor is correctly specified but unreachable at this scale — the registered null is **not** evidence of no effect. Detecting the top observed effect needs ≈2.3× group size (n≈376/group) or a design that enlarges the effect |
 | 10 | The "obvious" result is missing | Not a probe — the sweep's termination criterion (Policy): keep probing until the result is obvious | — | — |
-| 11 | The microscope has never seen a known effect end-to-end | **Positive control (imp-52):** plant an obvious synthetic effect (lr=0 vs lr>0; trained vs untrained; correct credit vs deliberately inert credit; ψ engaged vs ψ frozen where ψ modulates output) and require the instrument to detect it with high confidence. An instrument self-test, not a scientific claim. **Policy: no campaign is interpreted unless the positive-control probe detects the planted effect.** | imp-52 | pending |
+| 11 | The microscope has never seen a known effect end-to-end | **Positive control (imp-52):** plant an obvious synthetic effect (lr=0 vs lr>0; trained vs untrained; correct credit vs deliberately inert credit; ψ engaged vs ψ frozen where ψ modulates output) and require the instrument to detect it with high confidence. An instrument self-test, not a scientific claim. **Policy: no campaign is interpreted unless the positive-control probe detects the planted effect.** | imp-52 | ✅ PASS + LOCKED 2026-09-01 — `tests/property/test_positive_control.py`: through the real `evaluate_episode` claim chain, lr=0 arm stays at chance while lr=0.1 arm reaches ceiling (acc 1.0) on a stationary task, stable across 3 seeds; resource revalidation rides along (compute/energy vary, nonnegative, state split, ψ-capacity discriminates). **Discovery:** the per-episode `synthetic` stream redraws the teacher every episode — no fixed θ can accumulate learning across the smoke-scale stream (pinned as `test_per_episode_stream_is_non_stationary_by_design`; see imp-54). Control D (ψ) locked at pipeline level by `test_psi_engagement.py` |
 
-**Second-pass execution order** (first-pass closures done — 1 ✅ lock, 2 ✅ fix, 6 ✅ fix+audit,
-7 ✅ pass): **4** (metric provenance table: emitter × computed-state × target-free? ×
-claim-consumer; rename leaky metrics `nudged_*`/`target_fit_*` and quarantine them from
-learning claims) → **5** (settle caller census; fix return-ignoring callers; decide the
-canonical mutation contract, or add a debug-mode canary: return-object ≠ input and unbound ⇒
-raise/warn) → **3** (ψ engagement locks; mark suites PLUMBING_ONLY where ψ cannot affect
-metrics; Z3 gated on the strongest lock) → **imp-52 positive control** → **9** (power/spec
-audit: MDE @80% power vs observed top effect) → **8** (fidelity-probe meta-validation:
-broken variant must fail each probe). Re-commission affected campaign tiers only after the
-instrument defects are fixed. Guardrails: do not interpret the registered null; do not re-run
-campaigns for fresh numbers; do not treat pre-fix r5b_b/r51c resource records as valid for
-resource claims; do not close R7 because probes pass — the termination criterion is **the
-result becomes obvious**, and right now it is not.
+**Third-pass execution record** (2026-09-01 — order 4 → 5 → 3 → imp-52 → resource
+revalidation → 9 → 8, all closed; 42 new lock tests, gate 1300/0):
+
+1. **#4 metric honesty (imp-46):** census table `docs/metric_provenance.md`; pipeline
+   schema closed (`METRIC_SCHEMA` in `core/pipeline.py`); `accuracy` → `nudged_fit_accuracy`
+   (quarantined) with strict `free_*` claim reads in `evaluate_episode`; trainer/lightning/
+   tradeoff-track consumers switched free-first; distributed trainer silent-zero `train_acc`
+   defect fixed. *Task-loss attribution upgraded provisional → claim-grade for the campaign
+   chain; suite-level training-loss-threshold metrics (adaptation/migration time) remain
+   diagnostics — any adaptation *claim* must re-trigger on a target-free probe metric.*
+2. **#5 settle callers (imp-47):** 26/26 clean; contract on the Protocol; AST lint lock with
+   self-checks (planted violation flagged, scan floor enforced).
+3. **#3 ψ engagement (imp-43):** pipeline-level chain green for routing/fast_weights;
+   suite verdict table + Z3 gate checklist in `_claims.py`. L1/L3 harness M-arms stay
+   `plumbing_only` — a harness-level engagement rewire is the upgrade path, not a fix.
+4. **imp-52 positive control:** instrument detects the planted lr effect end-to-end through
+   `evaluate_episode` claim fields; stationary-task control vs per-episode stream
+   distinction pinned (imp-54).
+5. **Resource revalidation:** guardrail folded into the positive-control suite (variance,
+   nonnegativity, state/consumption split, ψ-capacity discriminator).
+6. **#9 power audit (imp-51):** UNDERPOWERED — see table; scale-up or redesign required
+   before the null can mean anything.
+7. **#8 probe-the-probe (imp-50):** 18 engineered variants — every probe detects its
+   broken case and passes its correct case.
+
+**What remains before any campaign interpretation:**
+- Re-commission campaign tiers at a size that passes the power gate (n≈376/group at current
+  variance, or a redesigned comparison with a larger expected effect), then re-verify the
+  discovery locks on the new commission (R5b-D rule).
+- Z3 flagship: wire a suite-level ψ-engagement lock (θ exact invariance + ψ non-constancy +
+  ψ-dependent operator selection + above-chance probe accuracy) and run the positive-control
+  arms through the Z3 suite itself; only then can Z3 results be read.
+- Guardrails unchanged: do not interpret the registered null; do not treat pre-fix
+  r5b_b/r51c resource records as valid; do not treat the saturated stability axis as
+  evidence of no stability tradeoff; do not close R7 because probes pass — the termination
+  criterion is **the result becomes obvious**, and a planted effect detected at ceiling is
+  the first honest datapoint, not the finish line.
 
 ## 🔁 Pull-Based Backlog (non-blocking; pull when a campaign manifest or suite needs it)
 
@@ -137,7 +181,7 @@ result becomes obvious**, and right now it is not.
 | imp-19 | `FrontierRecord.seed` legacy default 42 — make required at the next schema break |
 | imp-23 | `substrate_coupled` plasticity was engagement-verified only — probe for fixed-dim `step` assumptions on next touch |
 | imp-26 | Params-moved learning locks for the remaining README-table factories (FA lock exists; probe the rest on next touch) |
-| imp-27 | `settle` protocol has two mutation contracts (in-place vs new-state) — document on the Protocol and make one canonical, or rename the rebuilders |
+| imp-27 | `settle` protocol: canonical return-state contract is now documented + caller-census locked (R7 #5); remaining: rename any rebuilder-style implementations if their names mislead on next touch |
 | imp-29 | Nudge-unwired settle paths (predictive_settling target clamp; diffusion target term) — repair only when a campaign manifest needs them |
 | imp-30 | Deployments' `family="tile"` registrations CLI-orphaned — fold into `family="equitile"` or drop the metamodel member at next touch |
 | imp-36 | Campaign stability axis non-discriminative — wire a cheap per-episode proxy if a manifest needs stability contrast |
@@ -158,7 +202,10 @@ result becomes obvious**, and right now it is not.
 
 - axis_probe `[2-0]` flake — no recurrence since 2026-08-31; still watching
 - CUDA tolerance boundaries shift xfail edges — CPU/GPU tests kept separate, construction seeding in place
-- Shakedown suites' harness arms are M-axis-identical (see PR-7 notes + imp-43) — any L1/L3 *claim* must route through the ψ-engaged path first
+- Shakedown suites' harness arms are M-axis-identical (see PR-7 notes + imp-43) — pipeline-level engagement locks are green, but L1/L3 *claims* still need the harness rewired onto the ψ-engaged path (or params-moved locks) first
+- Z3 flagship gate: suite-level engagement lock + positive-control run through the Z3 suite itself are open (pipeline-level locks exist) — do not interpret Z3 output before both land
+- Power gate: re-commissioned campaigns must state expected n vs MDE@80% (imp-55) in their preregistration; a commission below the power floor is a quarantined commission
+- Smoke-scale campaign deltas are capped at chance by the non-stationary synthetic stream (imp-54) — never read pooled smoke task_loss/accuracy deltas as learning evidence
 
 ## 💡 Improvement Ledger (continues TODO8's imp-N from imp-42)
 
@@ -236,17 +283,66 @@ error the fidelity policy forbids.
 - Confirmed with data: imp-36's stability saturation is literal — one distinct
   (ρ, lyapunov, settling, basin) tuple across 480 records.
 
+**R7 probe outcomes (2026-09-01 — third pass, sweep complete):** the microscope now sees.
+- #4 DEFECTS FOUND + FIXED + LOCKED: distributed trainer's `train_acc` silently constant 0.0
+  (imp-53); `nudged_fit_accuracy` quarantine + closed pipeline schema + strict free-only claim
+  reads; provenance table is `docs/metric_provenance.md`. Task-loss attribution is now
+  claim-grade for the campaign chain.
+- #5 PASS + LOCKED: 26/26 settle call sites bind the returned state; AST lint lock with
+  probe-the-probe self-checks.
+- #3 LOCKED (pipeline level): ψ moves → modulate reaches activations → frozen-ψ control shifts
+  metrics, for routing + fast_weights. Suite-level verdicts pinned; Z3 still gated.
+- imp-52 PASS + LOCKED: the instrument detects the planted lr effect at ceiling through the
+  campaign claim chain; non-stationary smoke-stream property discovered and pinned (imp-54).
+- #9 UNDERPOWERED: MDE@80% 0.314 vs top observed 0.205 (imp-55) — the null is not evidence of
+  no effect; scale or redesign first.
+- #8 PASS + LOCKED: every fidelity probe fails its engineered broken variant and passes its
+  correct variant (18 meta-cases).
+
 52. **R7 positive control — planted-effect instrument self-test (2026-09-01).** The termination
 criterion ("if it works it will be obvious") needs a concrete detector: plant an obvious synthetic
 effect (lr=0 vs lr>0, trained vs untrained, correct vs deliberately inert credit, ψ engaged vs ψ
 frozen where ψ modulates output) and require the instrument to detect it with high confidence
 before any campaign is interpreted. An instrument self-test, not a scientific claim — it proves
 the microscope can see *something*, which the null alone cannot.
+**Outcome (same day): PASS.** Through the real `evaluate_episode` claim chain, lr=0 stays at
+chance while lr=0.1 reaches acc 1.0 on a stationary task (stable across 3 seeds; locks in
+`tests/property/test_positive_control.py`). Building it surfaced a task-design property with
+interpretation consequences (imp-54).
+
+53. **Metric-honesty census found a silently dead metric, not just names (2026-09-01, R7 #4).**
+`DistributedSystemTrainer` epoch `train_acc` read `free_state.metrics["accuracy"]` — a key only
+`task_loss` writes, and the distributed settle path never calls it — so it reported exactly 0.0
+for its whole life. Fixed with `_accuracy_from_state` (computed from free-state activations).
+Same-day renames: pipeline `accuracy` → `nudged_fit_accuracy` (quarantined; schema closed via
+`METRIC_SCHEMA`), `evaluate_episode` claim reads made strict free-only (a leaky emitter now
+KeyErrors — proven by a meta-test), trainer/lightning/tradeoff-track consumers switched
+free-first. *Lesson: imp-20 fixed the campaign's headline key and stopped there; the same leak
+class survived in every consumer of the shared pipeline schema — the census needed to walk the
+whole claim chain, not the emitter.*
+
+54. **The smoke-scale campaign task stream is non-stationary by design (2026-09-01, imp-52).**
+`episode_batch`'s `synthetic` family redraws a fresh random teacher every episode, so a single θ
+cannot accumulate learning across a smoke campaign — pooled smoke-scale task_loss/task_accuracy
+deltas are capped at chance-level by construction for every arm, including a learning one.
+Pinned as `test_per_episode_stream_is_non_stationary_by_design`. *Consequence: smoke-campaign
+deltas measure per-episode adaptation under continual teacher change, never accumulation; any
+"learning" claim from pooled smoke artifacts is structurally impossible, and their null deltas
+say nothing about learning machinery. Stationary-task or held-out-probe designs are required
+for accumulation claims.*
+
+55. **The registered null is underpowered, not just unstable (2026-09-01, R7 #9).**
+`scripts/power_audit.py`: MDE@80% = 0.314 at n=160/group vs top observed d = 0.205 (power 0.45;
+pooled 0.138, power 0.23). Even the largest effect the campaign exhibited was beyond its
+detectable range — "stratified-unstable at the 0.05 floor" was the readable edge of an
+underpowered design. *Consequence: the null stays uninterpreted, and the first scale question
+is quantitative — ≈376/group at current variance, or a redesign that enlarges the effect (e.g.
+stationary tasks per imp-54, ψ-gated arms per imp-43) — before re-commissioning.*
 
 ## 🔧 Quick Commands
 
 ```bash
-uv run pytest -q                       # gate (~75s): unit+property; slow/benchmark/llm auto-deselected
+uv run pytest -q                       # gate (~90s): unit+property; slow/benchmark/llm auto-deselected
 uv run pytest tests -m slow            # slow tier (~25min; `tests` arg required)
 uv run pyright computronium/ontology   # type policy: elevated-standard on ontology, basic repo-wide
 
@@ -255,12 +351,18 @@ uv run python -m computronium.experiments.joint.algorithm_migration --quick
 uv run python -m computronium.experiments.joint.adaptation_efficiency --quick
 uv run python -m computronium.experiments.joint.compute_efficiency --quick
 uv run python -m computronium.experiments.joint.structural_robustness --quick
-# Z3 flagship (Level 4):
+# Z3 flagship (Level 4) — GATED: needs suite-level engagement lock + positive control first:
 comp benchmark run --suite z3_fixed_weights --seeds 5 --device cuda
 
 # R5b campaign stack (built in TODO8; discovery locks pin the registered null):
 uv run pytest tests/property/test_discovery_locks.py tests/property/test_campaign_fidelity.py -q
 uv run scripts/fidelity_gate_report.py --campaign-dir autoscientist_campaigns/r5b_b
+
+# R7 instrument locks (third pass):
+uv run pytest tests/property/test_metric_provenance.py tests/property/test_settle_caller_census.py \
+  tests/property/test_psi_engagement.py tests/property/test_positive_control.py \
+  tests/property/test_fidelity_meta_validation.py -q
+uv run python scripts/power_audit.py   # MDE@80% vs observed effects over r5b_b task_loss
 
 # NOTE: sync with `uv sync --extra dev --extra lightning` (plain dev sync removes
 #   lightning -> 4 collection errors). Serial pytest only — xdist hangs in this env.

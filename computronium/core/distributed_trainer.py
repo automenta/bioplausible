@@ -341,7 +341,7 @@ class DistributedSystemTrainer:
             metrics = await self._distributed_train_step(x, y)
 
             epoch_loss += metrics.get("loss", 0.0)
-            epoch_acc += metrics.get("accuracy", 0.0)
+            epoch_acc += metrics.get("free_accuracy", 0.0)
             epoch_energy += metrics.get("energy", 0.0)
             num_batches += 1
             self.global_step += 1
@@ -445,7 +445,7 @@ class DistributedSystemTrainer:
             "energy": free_state.energy.item()
             if free_state.energy is not None
             else 0.0,
-            "accuracy": free_state.metrics.get("accuracy", 0.0),
+            "free_accuracy": self._accuracy_from_state(free_state),
         }
 
     async def _distributed_forward(self, x: Tensor, substrate: Substrate) -> Tensor:
@@ -723,6 +723,20 @@ class DistributedSystemTrainer:
             return torch.tensor(0.0, device=y.device)
         logits = acts[-1] if isinstance(acts, list) else acts
         return torch.nn.functional.cross_entropy(logits, y)
+
+    @staticmethod
+    def _accuracy_from_state(state: SystemState) -> float:
+        """Target-free accuracy from the state's output activations.
+
+        ``state.metrics["accuracy"]`` is only written by ``task_loss``, which
+        the distributed settle path never calls — reading it silently
+        returned 0.0 for every batch (imp-46 census).
+        """
+        acts = state.activations
+        if acts is None:
+            return 0.0
+        logits = acts[-1] if isinstance(acts, list) else acts
+        return float((logits.argmax(dim=-1) == state.y).float().mean().item())
 
     def validate(self) -> dict[str, float]:
         """Run validation epoch."""

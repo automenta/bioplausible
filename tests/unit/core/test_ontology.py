@@ -396,7 +396,7 @@ class TestStateDynamics:
         y = torch.randint(0, 3, (4,))
         metrics = system.train_step(x, y)
         assert "loss" in metrics
-        assert "accuracy" in metrics
+        assert "nudged_fit_accuracy" in metrics
         assert "energy" in metrics
 
 
@@ -530,7 +530,7 @@ class TestSystemComposition:
         y = torch.randint(0, 3, (4,))
         metrics = system.train_step(x, y)
         assert "loss" in metrics
-        assert "accuracy" in metrics
+        assert "nudged_fit_accuracy" in metrics
         assert "energy" in metrics
 
     def test_system_forward(self):

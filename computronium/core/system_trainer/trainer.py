@@ -74,17 +74,21 @@ class SystemTrainer:
             metrics = self.system.train_step(x, y)
 
             epoch_loss += metrics.get("loss", 0.0)
-            epoch_acc += metrics.get("accuracy", 0.0)
+            epoch_acc += metrics.get(
+                "free_accuracy", metrics.get("nudged_fit_accuracy", 0.0)
+            )
             epoch_energy += metrics.get("energy", 0.0)
             num_batches += 1
             self.global_step += 1
 
             if self.global_step % self.config.log_every_n_steps == 0:
                 logger.info(
-                    "Step %d: loss=%.4f, acc=%.4f, energy=%.4f",
+                    "Step %d: loss=%.4f, free_acc=%.4f, energy=%.4f",
                     self.global_step,
                     metrics.get("loss", 0.0),
-                    metrics.get("accuracy", 0.0),
+                    metrics.get(
+                        "free_accuracy", metrics.get("nudged_fit_accuracy", 0.0)
+                    ),
                     metrics.get("energy", 0.0),
                 )
 

@@ -201,12 +201,18 @@ def _metrics_equal(
 
 
 def _assert_metrics_valid(metrics: dict[str, float]) -> None:
-    """Assert metrics have expected keys and valid ranges."""
+    """Assert metrics have expected keys and valid ranges (imp-46 schema).
+
+    Claim-grade keys are the ``free_*`` post-update target-free metrics; the
+    output-phase fit is quarantined under ``nudged_fit_accuracy``.
+    """
     assert metrics is not None
     assert "loss" in metrics
     assert metrics["loss"] >= 0
-    assert "accuracy" in metrics
-    assert 0 <= metrics["accuracy"] <= 1
+    assert "free_accuracy" in metrics
+    assert 0 <= metrics["free_accuracy"] <= 1
+    assert "nudged_fit_accuracy" in metrics
+    assert 0 <= metrics["nudged_fit_accuracy"] <= 1
 
 
 def _setup_system_device(sys: System, device: torch.device) -> System:

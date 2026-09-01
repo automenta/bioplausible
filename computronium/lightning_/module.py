@@ -168,7 +168,7 @@ class BioLightningModule(pl.LightningModule):
             metrics = {}
 
         loss = metrics.get("loss", 0.0)
-        acc = metrics.get("accuracy", 0.0)
+        acc = metrics.get("free_accuracy", metrics.get("nudged_fit_accuracy", 0.0))
 
         self.log("train_loss", loss, prog_bar=True, on_step=True)
         self.log("train_acc", acc, prog_bar=True, on_step=True)

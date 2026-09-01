@@ -82,7 +82,7 @@ def test_native_backprop_mlp_smoke():
 
     result = model.train_step(x, y)
     assert "loss" in result
-    assert "accuracy" in result
+    assert "nudged_fit_accuracy" in result
 
 
 # =============================================================================
@@ -101,7 +101,7 @@ def test_native_eqprop_mlp_smoke():
 
     result = model.train_step(x, y)
     assert "loss" in result
-    assert "accuracy" in result
+    assert "nudged_fit_accuracy" in result
 
 
 @pytest.mark.xfail(reason="DiffusionDynamics has gradient computation bug")
@@ -116,7 +116,7 @@ def test_native_diffusion_eqprop_smoke():
 
     result = model.train_step(x, y)
     assert "loss" in result
-    assert "accuracy" in result
+    assert "nudged_fit_accuracy" in result
 
 
 def test_native_momentum_eqprop_smoke():
@@ -130,7 +130,7 @@ def test_native_momentum_eqprop_smoke():
 
     result = model.train_step(x, y)
     assert "loss" in result
-    assert "accuracy" in result
+    assert "nudged_fit_accuracy" in result
 
 
 def test_native_sparse_eqprop_smoke():
@@ -144,7 +144,7 @@ def test_native_sparse_eqprop_smoke():
 
     result = model.train_step(x, y)
     assert "loss" in result
-    assert "accuracy" in result
+    assert "nudged_fit_accuracy" in result
 
 
 def test_native_ternary_eqprop_smoke():
@@ -158,7 +158,7 @@ def test_native_ternary_eqprop_smoke():
 
     result = model.train_step(x, y)
     assert "loss" in result
-    assert "accuracy" in result
+    assert "nudged_fit_accuracy" in result
 
 
 # =============================================================================
@@ -191,7 +191,7 @@ def test_native_fa_variants_smoke(factory):
 
     result = model.train_step(x, y)
     assert "loss" in result
-    assert "accuracy" in result
+    assert "nudged_fit_accuracy" in result
 
 
 # =============================================================================
@@ -210,7 +210,7 @@ def test_native_pepita_mlp_smoke():
 
     result = model.train_step(x, y)
     assert "loss" in result
-    assert "accuracy" in result
+    assert "nudged_fit_accuracy" in result
 
 
 # =============================================================================
@@ -235,7 +235,7 @@ def test_native_research_eqprop_smoke(factory):
 
     result = model.train_step(x, y)
     assert "loss" in result
-    assert "accuracy" in result
+    assert "nudged_fit_accuracy" in result
 
 
 # =============================================================================
@@ -306,7 +306,7 @@ def test_native_tile_variants_smoke(factory):
 
     result = model.train_step(x, y)
     assert "loss" in result
-    assert "accuracy" in result
+    assert "nudged_fit_accuracy" in result
 
 
 @pytest.mark.parametrize(

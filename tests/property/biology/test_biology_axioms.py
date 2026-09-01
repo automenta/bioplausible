@@ -459,7 +459,7 @@ class TestNativeModelCompositions:
         result = model.train_step(xb, yb)
         assert isinstance(result, dict)
         assert "loss" in result
-        assert "accuracy" in result
+        assert "nudged_fit_accuracy" in result
 
     def test_native_fa_composes_and_trains(self, synthetic_mlp_task):
         """native_fa_mlp should compose and train."""
@@ -472,7 +472,7 @@ class TestNativeModelCompositions:
         result = model.train_step(xb, yb)
         assert isinstance(result, dict)
         assert "loss" in result
-        assert "accuracy" in result
+        assert "nudged_fit_accuracy" in result
 
 
 # =============================================================================

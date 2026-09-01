@@ -72,7 +72,7 @@ class TestGradientEquivalence:
 
         assert "loss" in result
         assert "energy" in result
-        assert "accuracy" in result
+        assert "nudged_fit_accuracy" in result
 
     def test_thermodynamic_contrast_produces_gradients(self):
         """ThermodynamicContrast system should run a training step."""
@@ -86,7 +86,7 @@ class TestGradientEquivalence:
 
         assert "loss" in result
         assert "energy" in result
-        assert "accuracy" in result
+        assert "nudged_fit_accuracy" in result
 
     def test_fa_feedback_fixed_at_init(self):
         """FA backward weights should be fixed at init and seed-independent."""
@@ -286,7 +286,7 @@ def test_eqprop_joint_system():
 
     assert "loss" in result
     assert "energy" in result
-    assert "accuracy" in result
+    assert "nudged_fit_accuracy" in result
 
 
 def test_fa_produces_gradients():
@@ -327,7 +327,7 @@ def test_fa_produces_gradients():
 
     assert "loss" in result
     assert "energy" in result
-    assert "accuracy" in result
+    assert "nudged_fit_accuracy" in result
 
 
 if __name__ == "__main__":

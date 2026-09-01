@@ -31,11 +31,9 @@ from typing import TYPE_CHECKING
 
 import psutil
 import torch
-import torch.nn.functional as F
 
 from computronium.core.logging import get_logger
 from computronium.core.utils.device import get_device
-from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
 from computronium.models.native.backprop_native import create_native_backprop_mlp
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 from computronium.utils import count_parameters
@@ -103,7 +101,9 @@ def train_and_measure(model, train_loader, test_loader, epochs, device, name):
             metrics = model.train_step(x_batch, y_batch)
 
             total_loss += metrics["loss"]
-            correct += metrics["accuracy"] * y_batch.size(0)
+            correct += metrics.get(
+                "free_accuracy", metrics.get("nudged_fit_accuracy", 0.0)
+            ) * y_batch.size(0)
             total += y_batch.size(0)
 
         train_loss = total_loss / len(train_loader)

@@ -385,7 +385,7 @@ def _episode_resources(
         backward_flops=backward_flops,
         param_count=param_count,
         wall_time_ms=latency * 1e3,
-        state_energy_j=float(metrics.get("free_energy", metrics.get("energy", 0.0))),
+        state_energy_j=float(metrics["free_energy"]),
     )
 
 
@@ -436,14 +436,16 @@ def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always 
     decision = guard.decide(growth)
 
     # task_accuracy = post-update target-free forward accuracy (honest learning metric)
-    # legacy nudged-settle accuracy stored in metadata for comparison
-    task_accuracy = metrics.get("free_accuracy", metrics.get("accuracy", 0.0))
-    nudged_fit_accuracy = metrics.get("accuracy", 0.0)
+    # nudged-settle fit stored in metadata for comparison only (imp-46 quarantine).
+    # Strict free_* reads: the pipeline schema is closed (imp-46) — no fallback
+    # to output-phase diagnostics, which would re-open the leakage channel.
+    task_accuracy = metrics["free_accuracy"]
+    nudged_fit_accuracy = metrics["nudged_fit_accuracy"]
 
     record = FrontierRecord(
         coordinate=coordinate,
         task_name=task_name,
-        task_loss=metrics.get("free_loss", metrics["loss"]),
+        task_loss=metrics["free_loss"],
         task_accuracy=task_accuracy,
         adaptation_time=1,
         rho_jacobian=growth,
@@ -472,7 +474,7 @@ def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always 
         "episode %d [%s]: loss=%.4f free_acc=%.4f nudged_acc=%.4f growth=%.3f kill=%s",
         episode,
         coordinate,
-        metrics.get("free_loss", metrics["loss"]),
+        metrics["free_loss"],
         task_accuracy,
         nudged_fit_accuracy,
         growth,

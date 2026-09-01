@@ -14,3 +14,27 @@ Scopes are AUDIT STATUS, not verdicts:
 
 CLAIMS_SCOPE_PLUMBING_ONLY = "plumbing_only"
 CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED = "psi_wired_uncontrolled"
+CLAIMS_SCOPE_PSI_ENGAGED = "psi_engaged"
+
+# R7 probe #3 (imp-43) engagement verdicts per suite. A suite may only carry
+# an M-axis claim at PSI_ENGAGED. Locks: tests/property/test_psi_engagement.py
+# (pipeline-level: ψ moves, modulate reaches activations, metrics respond to
+# a frozen-ψ control).
+#
+# | Suite                 | Verdict                   | Blocking gap              |
+# |-----------------------|---------------------------|---------------------------|
+# | L1 adaptation         | plumbing_only             | harness ψ never modulates |
+# |                       |                           | forward; M-arms identical |
+# | L2 compute_efficiency | psi_wired_uncontrolled    | gate entropy/FLOPs        |
+# |                       |                           | discriminate routing, but |
+# |                       |                           | θ trains concurrently     |
+# | L3 robustness         | plumbing_only             | plain-MLP damage test     |
+# | L3.5 migration        | plumbing_only             | full-training simpl.      |
+# | Z3 flagship           | gate pending              | needs ALL of: θ exact     |
+# |                       |                           | invariance (audit), ψ     |
+# |                       |                           | non-constancy, ψ-dependent|
+# |                       |                           | operator selection,       |
+# |                       |                           | above-chance probe acc,   |
+# |                       |                           | target-free metrics, and  |
+# |                       |                           | the imp-52 positive       |
+# |                       |                           | control                   |

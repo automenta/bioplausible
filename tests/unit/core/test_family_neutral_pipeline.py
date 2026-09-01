@@ -36,7 +36,7 @@ EXPECTED_PHASES: dict[str, tuple[Phase, ...]] = {
     "backprop": (Phase.FREE, Phase.NUDGED),
     "temporal_trace": (Phase.FREE,),
 }
-METRIC_PARITY_KEYS = {"loss", "energy", "accuracy"}
+METRIC_PARITY_KEYS = {"loss", "energy", "nudged_fit_accuracy"}
 
 
 def _build(credit: str):

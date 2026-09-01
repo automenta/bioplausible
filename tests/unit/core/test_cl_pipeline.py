@@ -60,7 +60,7 @@ class TestTaskMasking:
         )
 
         assert "loss" in metrics
-        assert "accuracy" in metrics
+        assert "nudged_fit_accuracy" in metrics
         assert psi is not None
 
     def test_different_tasks_different_slices(self, fast_weight_model, device):

@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 type PhaseStates = Mapping[Phase, SystemState]
 
 __all__ = [
+    "METRIC_SCHEMA",
     "apply_autograd_update",
     "forward_pass",
     "phase_states",
@@ -39,6 +40,18 @@ __all__ = [
     "run_train_step",
     "task_loss",
 ]
+
+# imp-46: closed metric schema of ``run_train_step``. Claim-grade keys are the
+# post-update target-free ``free_*`` reads; output-phase diagnostics carry the
+# ``nudged_fit_accuracy`` name. A bare ``accuracy`` key must never reappear.
+METRIC_SCHEMA: frozenset[str] = frozenset({
+    "loss",
+    "energy",
+    "nudged_fit_accuracy",
+    "free_loss",
+    "free_energy",
+    "free_accuracy",
+})
 
 
 def phase_states(
@@ -110,8 +123,10 @@ def run_train_step(  # ruff: ignore[too-many-arguments, too-many-positional-argu
     ψ mutates only via ``plasticity.step``.
 
     Returns:
-        Metrics with parity-guaranteed keys ``loss``/``energy``/``accuracy``
-        plus ``free_loss``/``free_energy``/``free_accuracy`` (imp-20).
+        Metrics with parity-guaranteed keys ``loss``/``energy``/``nudged_fit_accuracy``
+        (output-phase state — target-conditioned for contrastive credits; training
+        diagnostics only) plus ``free_loss``/``free_energy``/``free_accuracy``
+        (post-update target-free settle — the only claim-grade metrics, imp-20/imp-46).
     """
     grad_ctx = nullcontext() if credit.requires_autograd else torch.no_grad()
     with grad_ctx:
@@ -173,9 +188,9 @@ def run_train_step(  # ruff: ignore[too-many-arguments, too-many-positional-argu
         metrics = {
             "loss": _scalar(loss),
             "energy": _scalar(output.energy),
-            "accuracy": output.metrics.get(
+            "nudged_fit_accuracy": output.metrics.get(
                 "accuracy", 0.0
-            ),  # nudged-settle fit (legacy)
+            ),  # output-phase fit; target-conditioned when a NUDGED phase ran
             "free_loss": _scalar(free_loss),
             "free_energy": _scalar(free_energy),
             "free_accuracy": free_accuracy,
@@ -183,7 +198,8 @@ def run_train_step(  # ruff: ignore[too-many-arguments, too-many-positional-argu
         metrics.update({
             k: v
             for k, v in output.metrics.items()
-            if isinstance(v, (int, float)) and k not in {"accuracy", "free_accuracy"}
+            if isinstance(v, (int, float))
+            and k not in {"accuracy", "free_accuracy", "nudged_fit_accuracy"}
         })
         return metrics
 

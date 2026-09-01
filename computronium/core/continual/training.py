@@ -25,7 +25,7 @@ def _masked_task_loss(state, local_y: Tensor, task_start: int, task_end: int) ->
     loss = F.cross_entropy(task_logits, local_y)
     with torch.no_grad():
         acc = (task_logits.argmax(dim=-1) == local_y).float().mean().item()
-    state.metrics = {**state.metrics, "accuracy": acc}
+    state.metrics = {**state.metrics, "nudged_fit_accuracy": acc}
     return loss
 
 
@@ -139,12 +139,13 @@ def run_continual_train_step(
         metrics = {
             "loss": loss_val,
             "energy": energy_val,
-            "accuracy": output.metrics.get("accuracy", 0.0),
+            "nudged_fit_accuracy": output.metrics.get("nudged_fit_accuracy", 0.0),
         }
         metrics.update({
             k: v
             for k, v in output.metrics.items()
-            if isinstance(v, (int, float)) and k != "accuracy"
+            if isinstance(v, (int, float))
+            and k not in {"accuracy", "nudged_fit_accuracy"}
         })
         return metrics, psi
 
@@ -257,12 +258,12 @@ def _continual_step(
     metrics: dict[str, float] = {
         "loss": loss_val,
         "energy": energy_val,
-        "accuracy": output.metrics.get("accuracy", 0.0),
+        "nudged_fit_accuracy": output.metrics.get("nudged_fit_accuracy", 0.0),
     }
     metrics.update({
         k: v
         for k, v in output.metrics.items()
-        if isinstance(v, (int, float)) and k != "accuracy"
+        if isinstance(v, (int, float)) and k not in {"accuracy", "nudged_fit_accuracy"}
     })
     return metrics
 
