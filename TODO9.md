@@ -11,6 +11,11 @@
 > PR-5 guard calibration. Verification: touched-file tests 3 passed / 0 failed,
 > shakedown suites green, ruff/pyright net-zero on touched files.
 >
+> **R7 opened 2026-09-01 — instrument-honesty sweep.** The registered null is **reclassified:
+> a symptom, not a result**. Ten suspect-instrument areas, one probe each (R7 below); no
+> interpretation of any null while a suspect remains unprobed. Termination criterion:
+> **if it works it will be obvious.**
+>
 > **Numbering:** improvement items continue TODO8's append-only ledger from **imp-42**;
 > imp-1..41 remain canonical in TODO8.md.
 
@@ -21,6 +26,8 @@
 - **The System's own ParameterUpdate owns Δθ — external torch optimizers must not drive composed systems** (custom-loss harnesses route through `core.pipeline.apply_autograd_update`)
 - **No scientific conclusion from any campaign delta until both arms pass an implementation-fidelity check.** A failed fidelity check is *inconclusive*, never a refutation. Deltas on known-defective axes are quarantined from attribution, not interpreted.
 - Observed-but-unregistered deltas are never interpreted (pre-registration precedes comparison)
+- **A null is a symptom, not a result.** No null is read as evidence of no effect while an R7 instrument suspect remains unprobed; each probe either finds a defect (fix it, re-run the affected campaign tier) or passes (pin it where cheap, move on)
+- **Termination criterion — "if it works it will be obvious":** the evidence of a working microscope is a robust, replicable, stratified-stable effect that survives fidelity filtering, a Pareto frontier with real tradeoffs, and ψ engagement with measurable behavioral differences — keep probing until the result is obvious
 
 ## ✅ Carried Complete (detail: TODO8.md Completed Record + git log)
 
@@ -55,6 +62,37 @@ all M-arms report identical means in L1/L3 (`PlasticityModulatedModel`/`SimpleML
 but recovery/adaptation timing is θ-optimizer-driven); the ontology-pipeline path (`run_train_step`
 with imp-22 ψ wiring) is where M-axis contrasts become interpretable — see imp-43 before any L1/L3
 *claim*. L3.5's nonzero θ-change is by design there (both phases train θ; the Δθ=0 claim lives in Z3).
+
+## 🎯 R7 — Instrument-Honesty Sweep (the null is a symptom) — ACTIVE
+
+The registered null (top pooled effect stratified-unstable at the 0.05 floor) is **not interpreted**.
+If the microscope worked, the evidence would be obvious: a robust, replicable, stratified-stable
+effect surviving fidelity filtering; a Pareto frontier with real tradeoffs; ψ engagement producing
+measurable behavioral differences. Everything dissolving into "inconclusive"/"unstable" is evidence
+the instrument still lies somewhere. The job is not to interpret the null — it is to find the next
+defect.
+
+**Rule of engagement:** take the next probe → if it finds a defect, fix it and re-run the affected
+campaign tier; if it passes, pin it as a lock test where cheap and move on. Discovery locks and the
+fidelity manifest re-evaluate on any re-commission — never silently preserved (R5b-D rule). Z3
+flagship (CP-A) proceeds in parallel only on validated instruments.
+
+| # | Suspect | Probe | imp | Status |
+|---|---------|-------|-----|--------|
+| 1 | Task rotation structurally broken (R5b-B 0/48 ancestor) | Every coordinate in a multi-family grid campaign appears in **both** task families across its scheduled visits — assert over commissioned artifacts, pin as lock test (rev d fixed the rotation; the invariant itself is unpinned) | imp-44 | pending |
+| 2 | Resource accounting fake (imp-17 ancestor) | `compute`/`memory`/`energy`/`latency`/`plastic_state_capacity` must **vary** across coordinates in the heterogeneous r5b_b grid — per-axis span over `records/episodes.json`; a constant axis is a fiction (imp-17/imp-35 collapse signature), not a finding | imp-45 | pending |
+| 3 | ψ engagement unproven in benchmark harnesses | In each suite: does ψ actually change, and does that change alter the measured behavior? (engagement lock per harness) | imp-43 | pending |
+| 4 | Metric honesty still leaky beyond `free_accuracy` (imp-20 ancestor) | For every metric emitted by campaign/benchmark paths: trace the state it is computed on — target-free, or supervision-contaminated? Any leaky metric quarantines the evidence chain that consumes it | imp-46 | pending |
+| 5 | Settle mutation contracts ambiguous (imp-27 ancestor) | Every `settle()` caller uses the **returned** state — a caller reading the input state silently compares pre-settle activations (manufactures "non-descent"/"no-effect" results; the fidelity probe already ate this once) | imp-47 | pending |
+| 6 | Silent dispatch fallbacks remain (imp-24/imp-25 ancestor) | Grep **all** dispatch tables for bare `else:`; each must raise on unknown values — any silent fallback manufactures fake ablation arms | imp-48 | pending |
+| 7 | Construction seeding not universal (R1.4 ancestor) | Every factory call in every campaign/benchmark/harness is seeded, or θ init rides ambient RNG? Unseeded arms contaminate M-axis comparisons where ψ is supposed to be the only difference | imp-49 | pending |
+| 8 | Fidelity probes themselves wrong | Probe-the-probe: for each fidelity probe, engineered ground truth — a deliberately broken implementation must fail it, a correct one must pass; a probe that passes a broken instrument wrong-foots the entire defect-filtering pipeline | imp-50 | pending |
+| 9 | Statistical test mis-specified | Is the 0.05 claimable floor correct? Is stratification/direction-merge implemented correctly? Is the test powered for the effect sizes/variance at this scale? A mis-specified test converts "no evidence of effect" into "evidence of no effect" — the exact error the fidelity policy forbids | imp-51 | pending |
+| 10 | The "obvious" result is missing | Not a probe — the sweep's termination criterion (Policy): keep probing until the result is obvious | — | — |
+
+**Proposed order** (cheap + high-information first): 1 → 2 → 6 → 7 (data checks + grep censuses)
+→ 4 → 5 (code audits) → 3 (engagement locks) → 9 (stats audit) → 8 (meta-validation, hardest).
+Re-run the affected campaign tier after any defect fix.
 
 ## 🔁 Pull-Based Backlog (non-blocking; pull when a campaign manifest or suite needs it)
 
@@ -116,6 +154,40 @@ substrate_coupled): the harness models construct ψ but adaptation/recovery timi
 needs either the ontology-pipeline path (`run_train_step` + imp-22 ψ wiring) or a params-moved/
 ψ-engagement lock in the harness first (pairs with imp-26). `compute_efficiency` is the exception:
 its gate-entropy/effective-FLOPs metrics genuinely discriminate routing (1.0 vs 8.0 active routes).
+44. **R7 suspect #1 — task-rotation structural parity (2026-09-01).** The R5b-B ancestor (0/48
+replication from even grid cycles) was fixed rev d (visit-count family alternation), but the
+invariant "every coordinate visits both task families across its scheduled visits" has no dedicated
+lock — the replication gate implies it only indirectly. Probe: assert the invariant over the
+commissioned artifacts and pin it as a lock test so an even-cycle regression cannot silently
+reproduce the 0/48 collapse.
+45. **R7 suspect #2 — resource-vector variance (2026-09-01).** imp-17 wired the 𝒞 axes and imp-35
+killed zero-span MC boxes, but nobody has verified the five axes actually vary across the
+heterogeneous r5b_b grid. Probe: per-axis span/variance over `r5b_b/records/episodes.json`; a
+constant axis is a fiction (the imp-17/imp-35 collapse signature), not a finding.
+46. **R7 suspect #4 — metric-honesty census (2026-09-01).** imp-20 fixed `free_accuracy` only.
+Probe: for every metric emitted by campaign/benchmark paths, trace the state it is computed on —
+target-free or supervision-contaminated? Any leaky metric quarantines the evidence chain that
+consumes it.
+47. **R7 suspect #5 — settle() caller census (2026-09-01).** imp-27 documented the two mutation
+contracts; the fidelity probe already ate this bug once. Probe: every `settle()` caller must use
+the returned state — a caller reading the input state silently compares pre-settle activations
+(manufactures "non-descent"/"no-effect" results).
+48. **R7 suspect #6 — bare-`else:` dispatch census (2026-09-01).** imp-24/imp-25 fixed three
+dispatches and left the lesson "grep for bare `else:` before the next axis value lands". Probe:
+run that census now over all dispatch tables — any silent fallback manufactures fake ablation arms.
+49. **R7 suspect #7 — construction-seeding universality (2026-09-01).** Campaign paths seed via
+`episode_seed`; parity classes seed via `construction_seed`. Probe: every factory call in every
+campaign/benchmark/harness — seeded, or riding ambient RNG? Unseeded arms contaminate M-axis
+comparisons where ψ is supposed to be the only difference.
+50. **R7 suspect #8 — fidelity-probe meta-validation (2026-09-01).** The gate is only as good as
+its probes. Probe: for each fidelity probe, engineered ground truth (a deliberately broken
+implementation must fail it, a correct one must pass) — a probe that passes a broken instrument
+wrong-foots the entire defect-filtering pipeline.
+51. **R7 suspect #9 — statistical specification audit (2026-09-01).** The 0.05 claimable floor,
+stratification, and direction-merge have not been power-checked against the campaign's actual
+effect sizes/variance. Probe: is the test correctly specified for the current scale? A
+mis-specified test converts "no evidence of effect" into "evidence of no effect" — the exact
+error the fidelity policy forbids.
 
 ## 🔧 Quick Commands
 
