@@ -7,7 +7,7 @@ one place.
 
 Usage::
 
-    comp <run|report|parity|repro|hpo|audit|frontier|rank|lab|validate|joint-validate|campaign|stability|benchmark> [args]
+    comp <run|report|parity|repro|hpo|audit|frontier|rank|lab|validate|joint-validate|campaign|stability|benchmark|gallery> [args]
 """
 
 from __future__ import annotations
@@ -36,6 +36,7 @@ _SUBCOMMANDS: dict[str, tuple[str, str]] = {
     "scientist": ("computronium.cli.scientist", "main"),
     "stability": ("computronium.cli.stability", "main"),
     "benchmark": ("computronium.cli.benchmark", "main"),
+    "gallery": ("computronium.cli.gallery", "main"),
 }
 
 _USAGE = "comp <" + "|".join(_SUBCOMMANDS) + "> [args]"

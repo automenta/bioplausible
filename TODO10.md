@@ -30,18 +30,18 @@
 > present: evidence regenerated at HEAD on every commit cannot have a
 > provenance problem.
 >
-> **State:** OPEN — R10.2 in design. All five registered artifacts exist under
-> `benchmark_results/` (schemas verified 2026-09-02); they are demoted to
-> historical corroboration — context in RESULTS.md, never load-bearing. The
-> compositional API has no test that *demonstrates* it. R10.2.1/R10.2.2 were
-> pre-flighted 2026-09-02 (one throwaway probe, then reverted — no
-> implementation has landed): the audit findings are recorded in R10.2.1,
-> R10.2.2, and Register C. D3 and D4 were pre-flighted the same day
-> (run_trial/memory-wall probes — throwaway scripts, also reverted): D3 has
-> a visible regime (R10.2.4), D4's verdict semantics and depth requirement
-> are pinned (R10.2.5). No new experiments are
-> commissioned this round. Termination criterion unchanged in spirit: **if
-> it works it will be obvious.**
+> **State:** OPEN — R10.2 **implemented 2026-09-02** (same day as design).
+> R10.2.0–R10.2.10 and R10.1.1–R10.1.4 are landed; the acceptance evidence
+> stack is in place and green (three consecutive demo-gate runs, zero flakes:
+> 75.8 s / 77.2 s / 79.4 s — five capabilities in under two minutes, as
+> checkpoint 1 requires). All five registered artifacts exist under
+> `benchmark_results/` and are demoted to historical corroboration — now
+> written up as such in `docs/RESULTS.md` (R10.2.9). What remains open:
+> R10.1.5 (corroboration figures into RESULTS appendix — the depth-50 cliff
+> has no figure file yet), committing `docs/figures/manifest.json` +
+> `run_records/` as the evidence layer, and R10.3's standing rules as
+> enforced CI (the locks exist as tests; wiring them into the CI gate order
+> is a one-line workflow edit). Next capability in line: D6 (substrate axis).
 
 ---
 
@@ -100,7 +100,7 @@ Figures are rendered **from the demo suite's own deterministic outputs at
 HEAD** — fixed seeds, CPU, current code. The figure is what the test shows,
 drawn. Nothing frozen, nothing to re-verify.
 
-- [ ] **R10.1.1** `computronium/visualization/gallery.py` (new package;
+- [x] **R10.1.1** `computronium/visualization/gallery.py` (new package;
   matplotlib is already a core dependency) — figure factory, one pure function
   per figure, each consuming the run records the demo suite emits
   (`run_records`: metrics per step/arm, feasibility verdicts, θ hashes,
@@ -112,13 +112,13 @@ drawn. Nothing frozen, nothing to re-verify.
   the capability id, the demo-test path, the run-record provenance (git
   commit, config hash), and the scope label. One shared style module; no
   per-figure copy-paste.
-- [ ] **R10.1.2** Demo runners emit run records deterministically: same seed →
+- [x] **R10.1.2** Demo runners emit run records deterministically: same seed →
   same record → same figure. The suite already pins seeds and CPU; emission is
   one JSON dump per test (assert-light, recorded even on assertion paths).
-- [ ] **R10.1.3** Output to `docs/figures/*.png` + `docs/figures/manifest.json`
+- [x] **R10.1.3** Output to `docs/figures/*.png` + `docs/figures/manifest.json`
   (per-figure: capability id, demo-test path, run-record provenance, scope
   label).
-- [ ] **R10.1.4** **Figure lock with teeth.** A lock test regenerates every
+- [x] **R10.1.4** **Figure lock with teeth.** A lock test regenerates every
   figure and compares **data-layer** checksums (recorded metric values, not
   pixels). A mismatch means one of two things, both caught: the code changed
   what it demonstrates (review the diff, re-pin deliberately) or the demo
@@ -146,7 +146,7 @@ Google-style, behavior-focused); assertions explain themselves. **They assert
 what the runner can see** — and they fail if the API breaks, the property
 regresses, *or the demonstration stops being visible*.
 
-- [ ] **R10.2.0** **Demonstration design protocol.**
+- [x] **R10.2.0** **Demonstration design protocol.**
   - **Two tiers.** `compose_6axis`, `swap_credit`, `swap_plasticity` are the
     simple tier (≤50 lines, straightforward). `memory_budget` and
     `z3_frozen_theta` are the **hard tier** — multi-arm, multi-phase — with
@@ -174,7 +174,7 @@ regresses, *or the demonstration stops being visible*.
     requires detection) stays a standing fast-gate member: the microscope
     proves it still sees on every commit. If it ever fails, every demo claim
     is silently suspended by construction — that is the point.
-- [ ] **R10.2.1** **API surface audit.** `computronium/__init__.py` exposes the
+- [x] **R10.2.1** **API surface audit.** `computronium/__init__.py` exposes the
   compositional API via `__all__` plus the `_LAZY` map (both must be edited in
   lockstep — that is the file's export mechanism, per AGENTS.md): `System`/
   `compose_system`/`compose_joint_system`, ontology primitives,
@@ -198,7 +198,7 @@ regresses, *or the demonstration stops being visible*.
   no implementation in the tree — either it lands as a Register-B pull with
   a demo test, or the R10.2.7 README restructure marks the row Planned.
   Root exports are the contract; backwards compatibility is explicitly none.
-- [ ] **R10.2.2** `test_demo_compose_6axis.py` — the flagship. Full six-axis
+- [x] **R10.2.2** `test_demo_compose_6axis.py` — the flagship. Full six-axis
   composition via `compose_joint_system` (Digital × Recurrent ×
   EnergyMinimization × Null × ThermodynamicContrast × Euclidean; canonical
   home is `computronium/core/system_trainer/` — `joint.py` for composition,
@@ -222,13 +222,13 @@ regresses, *or the demonstration stops being visible*.
   dicts (abs_tol 1e-7) and `torch.equal` θ afterwards. The joint
   `to_spec`/`from_spec` round-trip is broken (Register C) — the demo uses
   the 5-D L6 pair, not the joint spec.
-- [ ] **R10.2.3** `test_demo_swap_credit.py` — one trainer, three credit rules.
+- [x] **R10.2.3** `test_demo_swap_credit.py` — one trainer, three credit rules.
   Same coordinate trained three times with the C-axis swapped (gradient /
   ThermodynamicContrast / RandomProjections) through identical `SystemTrainer`
   wiring. Shows: all three learn; the wiring code is byte-identical across
   arms except the constructor argument. *The comparison is one line.* Emits
   the D2 run record.
-- [ ] **R10.2.4** `test_demo_swap_plasticity.py` — the M-axis swap, seen. Null
+- [x] **R10.2.4** `test_demo_swap_plasticity.py` — the M-axis swap, seen. Null
   vs RoutingPlasticity on the segmented switching stream (R8.3 machinery:
   `create_switching_task` in `experiments/joint/adaptation_efficiency.py`,
   segment-keyed stationary teachers via `evaluate_episode(segment=…)` in
@@ -254,7 +254,7 @@ regresses, *or the demonstration stops being visible*.
   reading retention** (routing masters A slower: 0.28–0.50 vs null
   0.58–0.67), and run the ≥10-seed calibration — the trial costs ~1 s/seed
   at toy dims, so calibration is cheap.
-- [ ] **R10.2.5** `test_demo_memory_budget.py` — honest feasibility.
+- [x] **R10.2.5** `test_demo_memory_budget.py` — honest feasibility.
   **Hard tier — budget extra time** (multi-arm). Memory profiler's feasibility
   grid at demo scale — machinery to reuse, not rebuild:
   `experiments/joint/memory_wall.py` (`MemoryAccountedModel`,
@@ -272,7 +272,7 @@ regresses, *or the demonstration stops being visible*.
   demo composes through `memory_budget_trial`'s depth environments (its
   `_compose`/`_feasibility_grid` path) to make the walled cell actually
   wall.
-- [ ] **R10.2.6** `test_demo_z3_frozen_theta.py` — the lifecycle guarantee,
+- [x] **R10.2.6** `test_demo_z3_frozen_theta.py` — the lifecycle guarantee,
   bitwise. **Hard tier — budget extra time** (multi-phase: freeze → adapt →
   switch → restore → probe). Reuse the retention-arm machinery in
   `z3_fixed_weights.py` (`_run_retention_arm`: ψ-*system* snapshot/restore —
@@ -283,7 +283,7 @@ regresses, *or the demonstration stops being visible*.
   *exactly*, above-chance probe accuracy post-switch at the visible regime
   chosen per R10.2.0. Emits the D5 run record. *J2, demonstrated, not just
   locked.*
-- [ ] **R10.2.7** **README refresh — the index stays complete.** README.md
+- [x] **R10.2.7** **README refresh — the index stays complete.** README.md
   remains the cheat-sheet: a complete index to the entire scope of
   functionality and capability — the ontology-axis table, the 13-factory
   table, the CLI reference, the capability matrix, the substrate table, the
@@ -301,21 +301,21 @@ regresses, *or the demonstration stops being visible*.
   `create_memristive_mlp` row (implement-as-pull or mark Planned);
   (d) where a gallery figure exists for a capability, link it as evidence
   beside that capability's table row.
-- [ ] **R10.2.8** **Drift lock (designated snippets only).** The few
+- [x] **R10.2.8** **Drift lock (designated snippets only).** The few
   designated README code blocks are checked verbatim against their source
   demo tests (small extraction script under `scripts/` + lock test under
   `tests/`; each locked block declares its source test in a sidecar map).
   Tables and prose are the hand-maintained index — deliberately **not**
   locked. A locked snippet that no longer matches its test fails CI — no
   snippet/doc drift, by construction, with minimal lock surface.
-- [ ] **R10.2.9** **`docs/RESULTS.md` — capabilities first, history second.**
+- [x] **R10.2.9** **`docs/RESULTS.md` — capabilities first, history second.**
   Front section: per axis (S/G/D/M/C/U), what the abstraction is, the one-line
   swap, the live demonstration, the figure. Back section — clearly labeled
   *Historical corroboration*: the registered studies, their preregistered
   scope, their numbers, their provenance status (including "unknown" where
   archaeology fails), and what they do **not** mean. The front never cites the
   back.
-- [ ] **R10.2.10** **`comp gallery`** (`computronium/cli/gallery.py` with
+- [x] **R10.2.10** **`comp gallery`** (`computronium/cli/gallery.py` with
   `main()`, registered as one entry in the `_SUBCOMMANDS` map of
   `computronium/cli/__main__.py` — the dispatcher's lazy-resolution pattern,
   so gallery imports stay out of the CLI's import graph): runs the demo suite
@@ -432,6 +432,9 @@ blocks on a later one.
 
 | Item | Pull condition |
 |------|----------------|
+| Root `PlasticityConfig` still resolves to `computronium.state`'s twin, which is a **different class** from `core.joint.transition.PlasticityConfig` (found in the R10.2.1 audit; pyright flags the resulting confusion in `core/system_trainer/joint.py`). Same parallel legacy/new pair as the `state/` vs `core/joint/` split itself | Next merge of `computronium/state/` with `computronium/core/joint/` (R2.2-residual pattern); the root-exports lock test pins what exists today |
+| R10.2 demo flake watch (2026-09-02): the first `pytest -k demo` invocation after the tests landed reported 3 failures in 40 s that never reproduced across four subsequent full runs (75–79 s each). Suspected transient MNIST DataLoader worker crash (`num_workers=2`); no failure signature captured. If it recurs, capture the traceback and consider `create_task(..., num_workers=0)` inside the demo tests | Any recurrence |
+| D1/D2 dominate the demo-suite wall clock (~70 s of ~80 s; MNIST quick-mode, 1 epoch each). If slower CI machines push the suite past the 2-minute checkpoint, cap the D1/D2 train loaders (e.g. a `_take(loader, 800)` wrapper) and re-pin the regime assertions (FA floor 0.25 was calibrated at the full epoch) | First slow-CI gate failure, or any D1/D2 regime change |
 | Joint `to_spec`→`from_spec` round-trip broken — `from_spec` calls `GeometryConfig(**spec["geometry"])` but `to_spec` embeds `params`/`recurrent_weight` keys → TypeError; found in the 2026-09-02 pre-flight | Next touch of `core/system_trainer/joint.py` (or when a demo/figure needs joint-spec round-trips) |
 | imp-4 — Pyright full `strict` on ontology (131 findings; torch `Unknown` tracking; annotation work in `_dynamics`/`geometry`/`update`) | Next annotation pass on those modules |
 | imp-8 — `compute_energy` duplication across Energy/Spike/Instantaneous/Diffusion → extract `_energy_from_state(state, geometry)` | Next touch of any dynamics module |
@@ -487,10 +490,66 @@ blocks on a later one.
   under every budget that admits it — never read walled arms' absence as
   "lost", or feasible arms' repeated readout as new evidence.
 - `_LAZY` map and `__all__` can drift apart silently (both hand-maintained) —
-  if the R10.2.1 audit finds divergence, add a one-shot consistency lock test
-  rather than trusting discipline.
+  **resolved 2026-09-02**: the R10.2.1 audit found divergence (15 `_LAZY`
+  names missing from `__all__`, one dead `OntologyConfig` entry) and added
+  the standing lock `tests/unit/core/test_root_exports.py` (lockstep +
+  every lazy entry resolves).
+- **Demo-suite evidence layer must be committed**:
+  `docs/figures/manifest.json` and `docs/figures/run_records/*.json` are
+  the figure lock's pinned data layer (PNGs are gitignored and regenerated
+  by `comp gallery`). Untracked artifacts make the lock vacuous on a fresh
+  clone.
+- The z3 demo pins `meta_train_epochs=4` for `MetaRecipe()` defaults
+  (fresh-ψ floor ≈ 0.68, restored beats floor+0.1 at 1.0). If `MetaRecipe`
+  defaults or the task generators change, the gate items will move —
+  re-run the calibration sweep (3/4/5 epochs) before re-pinning.
+
+## 🗺️ Implementation Map (what landed 2026-09-02; how to extend)
+
+**Landed files.**
+
+| Piece | Path |
+|-------|------|
+| Root export mechanism fixes + `create_task`/`create_tile_mlp`/`create_spiking_snn_mlp` exports, `NullPlasticity` re-point to `computronium.core.plasticity` | `computronium/__init__.py` |
+| `_LAZY`↔`__all__` consistency lock | `tests/unit/core/test_root_exports.py` |
+| Demo tests D1–D5 (regimes pinned in module docstrings; each emits its run record **before** asserting) | `tests/integration/test_demo_compose_6axis.py`, `test_demo_swap_credit.py`, `test_demo_swap_plasticity.py`, `test_demo_memory_budget.py`, `test_demo_z3_frozen_theta.py` |
+| Run-record emitter fixture (deterministic payload; git commit + config sha256 provenance; no timestamps) | `tests/integration/conftest.py` → `emit_run_record(capability_id, capability_name, data)` |
+| Figure factories + `FigureMeta` + `render_gallery` (one pure function per figure; `_FACTORIES` map keyed by capability name) | `computronium/visualization/gallery.py`, `_style.py`, `__init__.py` |
+| Figure lock | `tests/integration/test_gallery_lock.py` |
+| README drift lock (extraction script + sidecar map + test; blocks marked `<!-- lock: <id> -->`) | `scripts/readme_snippet_lock.py`, `scripts/readme_snippets.json`, `tests/unit/core/test_readme_snippet_lock.py` |
+| `comp gallery` (lazy `_SUBCOMMANDS` entry; `--run` executes the demo suite first; exits nonzero on missing/drifted records) | `computronium/cli/gallery.py`, registered in `computronium/cli/__main__.py` |
+| Capabilities-first results doc with labeled historical corroboration | `docs/RESULTS.md` |
+
+**Pinned regimes (assertion floors chosen from live calibration, recorded
+in each docstring).** D1: MNIST quick, 1 epoch, hidden (32,), EM
+max_steps=5 β=0.5 → acc ≈ 0.89, J1 metrics equal 1e-7 + θ bitwise, L6
+round-trip on configs. D2: EM max_steps=3, Euclidean step 0.1 momentum 0 →
+0.96 / 0.92 / 0.38, floor 0.25. D3: forgetting-trial A40/B40, 10 seeds,
+mastery precondition (null ≥ 0.45/seed, routing slower in every seed), gap
+≥ 0.05 (observed 0.107), routing ≥ null in ≥ 8/10 (observed 9/10). D4:
+depths 4/16, budget 0.015 MiB → gradient/RP never commissionable, thermo
+0 bytes, feasible walk probe ≥ 0.225 (observed 0.305 at 50 episodes). D5:
+meta 4 epochs, adapt 4, probe batches 4 → θ sha256 bitwise-equal, restored
+== stage A exactly, gate fully passed (floor 0.68).
+
+**Adding a demo row (e.g. D6, substrate):** (1) demo test
+`tests/integration/test_demo_<name>.py` importing only from the package
+root (+ its experiment module if benchmark-surface), emitting
+`emit_run_record("D6", "<name>", data)`; (2) figure factory in
+`computronium/visualization/gallery.py` + entry in `_FACTORIES`; (3) entry
+in `EXPECTED` of `tests/integration/test_gallery_lock.py`; (4) row in the
+Demonstration Table and `docs/RESULTS.md`; (5) optional locked README block
+via `scripts/readme_snippets.json` + `<!-- lock: -->` marker.
+
+**Deviation note (R10.2.7a).** The designated "factory one-liner block" was
+realized as the D2 swap block: no demo test exercises the `create_*_mlp`
+preset factories yet, so locking a preset one-liner had no source test.
+When a demo (or imp-26's params-moved locks) touches a preset factory, add
+the preset block to the sidecar map.
 
 ## Termination criterion
+
+
 
 R10 closes when a stranger can, in one sitting: copy the README's first code
 block, run it, and watch a system **they composed** train; then run the demo

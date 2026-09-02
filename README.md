@@ -65,12 +65,12 @@ This decomposition is the framework's organizing abstraction for comparing learn
 
 | Capability | Description |
 |------------|-------------|
-| **Composable systems** | Construct any 6-axis system coordinate via the `System` generic or factory functions (5-D systems are the `M = NullPlasticity` slice) |
-| **Common training API** | `SystemTrainer` / `JointSystemTrainer` — single interface for all learning rules |
-| **Multiple learning rules** | Backprop, EqProp, FA, DFA, Forward-Forward, PEPITA, Target Prop, Predictive Coding, Hebbian/STDP, SNN, TileNet, 6-D joint (Routing, FastWeight) |
+| **Composable systems** | Construct any 6-axis system coordinate via the `System` generic or factory functions (5-D systems are the `M = NullPlasticity` slice) — demonstrated live ([figure](docs/figures/d1_compose_6axis.png)) |
+| **Common training API** | `SystemTrainer` — single interface for all learning rules, including joint systems via duck-typed `train_step`/`forward` |
+| **Multiple learning rules** | Backprop, EqProp, FA, DFA, Forward-Forward, PEPITA, Target Prop, Predictive Coding, Hebbian/STDP, SNN, TileNet, 6-D joint (Routing, FastWeight) — credit swap demonstrated live ([figure](docs/figures/d2_swap_credit.png)) |
 | **Substrate models** | Digital, Memristive (IR-drop), Neuromorphic (spikes), Photonic (phase), Quantum (unitary) |
 | **Benchmarks & ablations** | 5-level hierarchy: adaptation, compute efficiency, structural robustness, algorithm migration, Z3 fixed-weight |
-| **Stability / energy analysis** | Spectral radius, Lyapunov exponents, settling time, basin stability, free-energy tracking |
+| **Stability / energy analysis** | Spectral radius, Lyapunov exponents, settling time, basin stability, free-energy tracking; frozen-θ lifecycle guarantee ([figure](docs/figures/d5_z3_frozen_theta.png)) |
 | **Experiment sweeps / campaigns** | `comp campaign`, `comp benchmark`, `comp scientist` — structured hypercube exploration |
 | **Distributed execution / deployment** | P2P (gRPC/Kademlia), multi-GPU (DDP/FSDP/DeepSpeed), ONNX/TorchScript/INT8/ternary export, FastAPI inference server |
 
@@ -88,59 +88,72 @@ flowchart LR
 
 ### Algebraic Composition (API)
 
-Construct systems by composing primitives across the six axes. The `System` generic enforces valid combinations at type-check time.
+Construct systems by composing primitives across the six axes. The `System` generic and the `compose_*` factories catch invalid combinations at type-check time.
 
+**One trainer, every credit rule** — the same coordinate trained through byte-identical wiring with a single swapped constructor argument. The block is locked verbatim against its source demo test ([`tests/integration/test_demo_swap_credit.py`](tests/integration/test_demo_swap_credit.py)); all three arms learn:
+
+<!-- lock: swap_credit -->
 ```python
-from computronium.core.ontology import (
-    System,
-    DigitalSubstrate,
-    FeedforwardGeometry,
-    InstantaneousDynamics,
+import torch
+
+from computronium import (
     BackpropCredit,
+    DigitalSubstrate,
+    EnergyMinimizationDynamics,
     EuclideanUpdate,
     GeometryConfig,
+    NullPlasticity,
+    ParameterUpdateConfig,
+    RandomProjectionsCredit,
     RecurrentGeometry,
-    EnergyMinimizationDynamics,
-    ThermodynamicContrastCredit,
-    MemristiveSubstrate,
-    TileGeometry,
-    TileAlgorithmConfig,
-    LazyStateDynamics,
-    HomeostaticCredit,
-)
-from computronium.core.joint import PlasticityConfig
-```
-
-**5-D slice (`M = NullPlasticity`)** — standard backprop MLP, Equilibrium Propagation, TileNet:
-```python
-system = System(
-    substrate=DigitalSubstrate(),
-    geometry=FeedforwardGeometry(
-        GeometryConfig(input_dim=784, output_dim=10, hidden_dims=(256, 128))
-    ),
-    dynamics=InstantaneousDynamics(),
-    credit=BackpropCredit(),
-    update=EuclideanUpdate(step_size=0.01),
-    plasticity=PlasticityConfig.null(),
-)
-```
-
-**6-D joint systems** — with non-null plasticity:
-```python
-# RoutingPlasticity: state-dependent gating, sparse pathways
-joint_routing = System(..., plasticity=PlasticityConfig.routing(gate_dim=64))
-
-# FastWeightPlasticity: episode-local associative memory
-joint_fast_weight = System(
-    ...,
-    plasticity=PlasticityConfig.fast_weights(
-        fast_weight_dim=512, decay=0.9, learning_rate=0.1
-    ),
+    StateDynamicsConfig,
+    SubstrateConfig,
+    SystemTrainer,
+    SystemTrainerConfig,
+    ThermodynamicContrast,
+    compose_joint_system,
+    create_task,
 )
 
-# SubstrateCoupledPlasticity: physical memristive drift
-memristive_plastic = System(..., plasticity=PlasticityConfig.substrate_coupled())
+CREDIT_ARMS = (
+    ("gradient", BackpropCredit()),
+    ("thermodynamic_contrast", ThermodynamicContrast()),
+    ("random_projections", RandomProjectionsCredit()),
+)
+
+
+def _flatten(loader):
+    for x, y in loader:
+        yield x.view(x.size(0), -1), y
+
+
+task = create_task("mnist", device="cpu", quick_mode=True)
+task.setup()
+train_loader = task.get_dataloader("train")
+config = SystemTrainerConfig(max_epochs=1, device="cpu", seed=42)
+for name, credit in CREDIT_ARMS:
+    torch.manual_seed(0)
+    system = compose_joint_system(
+        substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
+        geometry=RecurrentGeometry(
+            GeometryConfig.recurrent(
+                input_dim=784, output_dim=10, hidden_dims=(32,)
+            )
+        ),
+        dynamics=EnergyMinimizationDynamics(
+            StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
+        ),
+        plasticity=NullPlasticity(),
+        credit=credit,  # the one swapped argument
+        update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.1)),
+    )
+    metrics = SystemTrainer(
+        system=system, config=config, train_data=_flatten(train_loader)
+    ).fit()[-1]
+    print(f"{name}: {metrics['train_acc']:.1%}")
 ```
+
+The M-axis swaps the same way: pass `RoutingPlasticity(...)` / `FastWeightPlasticity(...)` / `SubstrateCoupledPlasticity(...)` (see [Plasticity](#-plasticity-metadynamics) in the axis table) as the `plasticity` argument of `compose_joint_system` — the null swap that retains what `NullPlasticity` forgets is demonstrated in `test_demo_swap_plasticity.py`.
 
 Formerly hardcoded model families (`optical_looped_mlp`, `quantized_looped_mlp`, `crossbar_looped_mlp`, `eqprop_transformer`, `neural_cube`, `sparse_equilibrium`, `momentum_equilibrium`, TileNet variants) are now **expressed as coordinates/compositions** in this 6-axis space. These 5-D systems are recovered as the `M = NullPlasticity` slice.
 
@@ -216,6 +229,7 @@ All subcommands of the `comp` dispatcher:
 | `comp campaign` | Run/compare/resume joint campaigns; render the static discovery report (HTML/JSON) | `comp campaign run --config <campaign.yaml>` |
 | `comp stability` | Stability-plasticity frontier reports | `comp stability --model eqprop_mlp --task mnist` |
 | `comp benchmark` | Joint benchmark suites (adaptation, Z3, etc.) | `comp benchmark run --suite adaptation_efficiency` |
+| `comp gallery` | Render the demo suite's figures + manifest from live run records | `comp gallery --run` |
 
 Module entry points (not installed as scripts):
 
@@ -240,28 +254,63 @@ uv run scripts/quickstart.py
 
 **Why Forward-Forward?** FF uses layer-local objectives and avoids conventional backward propagation through the network (no weight transport). The quickstart is a small reproducibility smoke test comparing FF with Backprop on MNIST—not a benchmark result. `scripts/quickstart.py` is the canonical entry point.
 
-### Quickstart: Composability Demo
+### Quickstart: Compose a Six-Axis System
+
+<!-- lock: composition_6axis -->
+The block below is the opening of [`tests/integration/test_demo_compose_6axis.py`](tests/integration/test_demo_compose_6axis.py) — the demo test that shows it working, locked verbatim against it. Compose a system from all six ontology axes and train it on MNIST:
 
 ```python
-from computronium import create_backprop_mlp, create_eqprop_mlp, create_fa_mlp
-from computronium import SystemTrainer, SystemTrainerConfig
-from computronium.domains.factory import create_task
 import torch
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-task = create_task("mnist", device=device, quick_mode=True)
-task.setup()
-train, val = task.get_dataloader("train"), task.get_dataloader("val")
-config = SystemTrainerConfig(max_epochs=3, batch_size=64, device=device, seed=42)
+from computronium import (
+    DigitalSubstrate,
+    EnergyMinimizationDynamics,
+    EuclideanUpdate,
+    GeometryConfig,
+    NullPlasticity,
+    RecurrentGeometry,
+    StateDynamicsConfig,
+    SubstrateConfig,
+    SystemTrainer,
+    SystemTrainerConfig,
+    ThermodynamicContrast,
+    compose_joint_system,
+    create_task,
+)
 
-# Same training interface, different learning mechanisms
-for create_fn in (create_backprop_mlp, create_eqprop_mlp, create_fa_mlp):
-    model = create_fn(784, (256, 128), 10, lr=0.001, device=device)
-    trainer = SystemTrainer(system=model, config=config, train_data=train, val_data=val)
-    with trainer:
-        h = trainer.fit()
-        print(f"{create_fn.__name__}: {h['val_acc'][-1]:.1%}")
+
+def _flatten(loader):
+    for x, y in loader:
+        yield x.view(x.size(0), -1), y
+
+
+task = create_task("mnist", device="cpu", quick_mode=True)
+task.setup()
+train_loader = task.get_dataloader("train")
+
+torch.manual_seed(0)
+six_axis = compose_joint_system(
+    substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
+    geometry=RecurrentGeometry(
+        GeometryConfig.recurrent(input_dim=784, output_dim=10, hidden_dims=(32,))
+    ),
+    dynamics=EnergyMinimizationDynamics(
+        StateDynamicsConfig.energy_minimization(max_steps=5, beta=0.5)
+    ),
+    plasticity=NullPlasticity(),
+    credit=ThermodynamicContrast(),
+    update=EuclideanUpdate(),
+)
+trainer = SystemTrainer(
+    system=six_axis,
+    config=SystemTrainerConfig(max_epochs=1, device="cpu", seed=42),
+    train_data=_flatten(train_loader),
+)
+history = trainer.fit()
+print(f"train accuracy: {history[-1]['train_acc']:.1%}")
 ```
+
+One epoch on CPU trains this coordinate to ≈ 0.9 (chance 0.1). The same test goes on to demonstrate J1 (a 5-D build trained identically produces bitwise-equal θ) and the L6 config round-trip. Run `pytest tests/integration/ -k demo` to watch every capability demonstrate itself.
 
 ### Config-Driven Training
 
@@ -294,7 +343,7 @@ All factories are available via `from computronium import ...` and compose 6-axi
 | `create_tile_mlp` | Digital × TileMesh × Instantaneous × Null × (varies) × Euclidean | `tile_mnist.yaml` | TileNet: modular tiled architecture, supports all credit assignments | Framework implementation |
 | `create_routing_mlp` | Digital × Recurrent × Instantaneous × RoutingPlasticity × Backprop × Euclidean | `routing_mnist.yaml` | **6-D Joint**: state-dependent gating, sparse pathway routing, dynamic compute | Framework implementation |
 | `create_fast_weight_mlp` | Digital × Recurrent × Instantaneous × FastWeightPlasticity × Backprop × Euclidean | `fast_weight_mnist.yaml` | **6-D Joint**: episode-local associative memory via fast-weight matrices | Ba et al. (2016); framework impl. |
-| `create_memristive_mlp` | Memristive × Feedforward × Instantaneous × Null × Backprop × Euclidean | `memristive_mnist.yaml` | **Substrate-aware**: IR-drop, conductance bounds, noise | Framework implementation |
+| `create_memristive_mlp` | Memristive × Feedforward × Instantaneous × Null × Backprop × Euclidean | `memristive_mnist.yaml` | **Substrate-aware**: IR-drop, conductance bounds, noise | **Planned** (Register B pull, TODO10) |
 
 ### 5-D Factory Usage Examples
 
@@ -344,7 +393,7 @@ system = create_tile_mlp(input_dim, (256,), output_dim,
                          lr=0.001, neurons_per_tile=16, tiles_per_layer=2, device=device)
 ```
 
-Training wiring is identical for every factory — wrap in `SystemTrainer` as shown in the Composability Demo above.
+Training wiring is identical for every factory — wrap in `SystemTrainer` as shown in the Compose a Six-Axis System quickstart above.
 
 ### 6-D Joint Factories (Non-Null Plasticity)
 
@@ -412,15 +461,15 @@ The joint dynamical system elevates the computational rule to a dynamical variab
 | Component | Purpose |
 |-----------|---------|
 | `System[TS, TG, TD, TM, TC, TU]` | Generic 6-layer composition; invalid combos caught at type-check |
-| `JointSystemTrainer` | **Single mathematical center**: executes `CoupledTransition.step` (joint transition `z_{t+1} = F_θ(z_t; G, S)`) → trajectory recording → CreditAssignment → ParameterUpdate.consolidate |
-| `SystemTrainer` | Compatibility wrapper: `JointSystemTrainer` instantiated with `plasticity=NullPlasticity`; executes the 5-D pipeline `Geometry.forward → StateDynamics.settle → …` |
+| `compose_joint_system` | Composes a 6-axis joint system from primitives or configs; with `NullPlasticity` it delegates to the 5-D pipeline (J1 Zero-Extension) |
+| `SystemTrainer` | **Single training loop**: duck-types the joint training surface — any system exposing `train_step`/`forward`; executes `Geometry.forward → StateDynamics.settle → …` for the 5-D pipeline |
 | `DistributedSystemTrainer` | In-process P2P coordination; shards along Geometry (TileMesh), federates at ParameterUpdate; CreditAssignment stays local |
 | `ModelAdapter` | Strangler Fig adapter: projects legacy Registry models → 5-D System via metadata inference with per-family tolerance calibration |
 | `Registry.to_system()` | One-call projection of any registered component |
 
 **Zero-Extension Invariant**: `M=Null, ψ=const, σ=σ₀ ⟹ F_θ(z)|_x = D_θ(x)`. The 5-D system is formally a slice of the 6-D coupled dynamical system, not a parallel architecture; slow consolidation touches persistent θ only at episode boundaries, $\theta_{e+1} = U(\theta_e, C(\tau_e))$. J1 test certifies this equivalence within numerical tolerance.
 
-### 4. Factories (`computronium/core/system_trainer.py`)
+### 4. Factories (`computronium/core/system_trainer/`)
 
 Factory functions for composing systems from primitives or configs:
 
@@ -434,23 +483,21 @@ from computronium.core.system_trainer import (
     create_eqprop_system,
     create_backprop_system,
     create_fa_system,
-    create_tile_system,
-    create_predictive_coding_system,
 )
 
-# Config round-trip (L0 schema lock)
+# Config round-trip (L6 lock)
 configs = extract_config(system)
-system2 = compose_system_from_configs(configs)
-assert system == system2  # identity verified
+system2 = compose_system_from_configs(**configs)
+assert extract_config(system2) == configs  # identity verified
 
 # Joint system composition
 joint = compose_joint_system(
-    substrate=DigitalSubstrate(),
+    substrate=DigitalSubstrate(SubstrateConfig.digital()),
     geometry=RecurrentGeometry(...),
     dynamics=EnergyMinimizationDynamics(...),
     plasticity=RoutingPlasticity(...),
     credit=ThermodynamicContrastCredit(),
-    update=EuclideanUpdate(step_size=0.01),
+    update=EuclideanUpdate(),
 )
 ```
 
@@ -563,6 +610,11 @@ uv run pytest tests/integration/test_kernel_accuracy_parity.py -q
 
 # gRPC seam test
 uv run pytest tests/integration/test_grpc_seam.py -q
+
+# Demonstration suite (the evidence layer: compose, swap credit, swap
+# plasticity, memory wall, frozen θ) + figure lock
+uv run pytest tests/integration/ -k demo
+uv run pytest tests/integration/test_gallery_lock.py -q
 
 # Joint integration tests
 uv run pytest tests/integration/joint/ -q

@@ -1,0 +1,4 @@
+{
+  "composition_6axis": "tests/integration/test_demo_compose_6axis.py",
+  "swap_credit": "tests/integration/test_demo_swap_credit.py"
+}
