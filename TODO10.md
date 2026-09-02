@@ -97,11 +97,37 @@ the artifact is ground truth; the figure is a lens on it.
 
 Demonstrative integration tests in `tests/integration/`. Named `test_demo_*`
 so pytest collects them in the default gate. Each ≤50 lines, fixed seeds,
-quick-mode task scale, CPU ≤60 s, GPU-if-available. Module docstrings carry the
-narrative (house style: Google-style, behavior-focused); assertions explain
-themselves. **They assert library properties, not "it ran"** — the test is the
-evidence, and it fails if the API breaks or the property regresses.
+quick-mode task scale, ≤60 s on CPU with `device="cpu"` pinned explicitly
+(imp-70: GPU-first defaults silently moved CI locks onto CUDA and blew their
+timeouts). Module docstrings carry the narrative (house style: Google-style,
+behavior-focused); assertions explain themselves. **They assert library
+properties, not "it ran"** — the test is the evidence, and it fails if the API
+breaks or the property regresses. Scoping and calibration are governed by
+R10.2.0; the two hard-tier tests get extra budget by design.
 
+- [ ] **R10.2.0** **Scoping & calibration protocol.** The ≤50-line / ≤60 s /
+  meaningful-assertion triple is tight; treat it as a budget, not a hope.
+  - **Two tiers.** `compose_6axis`, `swap_credit`, `swap_plasticity` are the
+    simple tier (≤50 lines, straightforward). `memory_budget` and
+    `z3_frozen_theta` are the **hard tier** — multi-arm, multi-phase — and get
+    extra time and line budget: target ≤80 lines via `_`-prefixed in-file
+    helpers, which stay inside the test file so it remains self-contained as
+    documentation.
+  - **Guard bands are measured, never guessed.** Before pinning a directional
+    assertion, run the demo config across ≥10 fixed seeds and record the
+    contrast distribution (e.g., routing retention − null retention). Pin the
+    band at a robust quantile — assert direction AND a floor near the measured
+    5th-percentile contrast with margin — and record the calibration (seeds,
+    run count, observed distribution, chosen band) in the test's docstring.
+  - **Downgrade over flake.** If a calibrated band is not robust — the
+    distribution overlaps zero, or the test flakes in 3 consecutive gate runs —
+    demote the assertion to the strongest **deterministic** property available
+    (feasibility verdicts, bitwise hashes) and let the registered artifact
+    carry the stochastic claim in RESULTS.md. An intermittently failing demo
+    test is worse than a weaker demo test.
+  - **Determinism first.** Seeds fixed; `device="cpu"` explicit; the L5
+    determinism lock semantics apply; no wall-clock-dependent assertions
+    (imp-37 discipline at test scale).
 - [ ] **R10.2.1** **API surface audit.** `computronium/__init__.py` exposes the
   compositional API via `__all__` (per AGENTS.md): `System`/`compose_joint_system`,
   ontology primitives, `SystemTrainer`/`JointSystemTrainer`, `SystemTrainerConfig`,
@@ -124,19 +150,30 @@ evidence, and it fails if the API breaks or the property regresses.
 - [ ] **R10.2.4** `test_demo_swap_plasticity.py` — the M-axis matters. Null vs
   RoutingPlasticity on the segmented switching stream (R8.3 machinery, toy
   scale, fixed seeds). Asserts **directionally**: routing's A-retention exceeds
-  null's A-retention with a calibrated guard band (the registered d = −1.90 is
-  the registered-scale evidence; the demo test pins the direction and the
-  one-call API). *The test is F1's toy-scale embodiment.*
-- [ ] **R10.2.5** `test_demo_memory_budget.py` — honest feasibility. Memory
-  profiler's feasibility grid at demo scale: BPTT-profiled arm walled under a
-  tight budget (OOM verdict), O(1)-memory arm feasible, frozen-thermo control
-  at-chance verdict available in every regime. Asserts the grid semantics, plus
-  the learner directional check where cheap. *The profiler tells the truth
+  null's A-retention with a guard band calibrated per R10.2.0 (measured across
+  ≥10 seeds before pinning; calibration recorded in the docstring) — the
+  registered d = −1.90 is the registered-scale evidence; the demo test pins the
+  direction and the one-call API. *The test is F1's toy-scale embodiment.*
+- [ ] **R10.2.5** `test_demo_memory_budget.py` — honest feasibility.
+  **Hard tier — budget extra time** (multi-arm). Memory profiler's feasibility
+  grid at demo scale: BPTT-profiled arm walled under a tight budget (OOM
+  verdict), O(1)-memory arm feasible, frozen-thermo control at-chance verdict
+  available in every regime. The **primary assertion is deterministic** —
+  memory profiles are deterministic, so the feasibility verdicts assert exactly,
+  no band needed. The stochastic learner directional check is optional and
+  ships only if it survives R10.2.0 calibration; otherwise it stays in
+  RESULTS.md pointing at the registered artifact. *The profiler tells the truth
   before you train.*
-- [ ] **R10.2.6** `test_demo_z3_frozen_theta.py` — the lifecycle guarantee. θ
-  frozen, ψ adapts across a task switch A→B→A. Asserts **bitwise** θ hash
-  equality across the whole run, ψ-system snapshot/restore, and above-chance
-  probe accuracy post-switch. *J2, demonstrated, not just locked.*
+- [ ] **R10.2.6** `test_demo_z3_frozen_theta.py` — the lifecycle guarantee.
+  **Hard tier — budget extra time** (multi-phase: freeze → adapt → switch →
+  restore → probe). The bitwise θ-hash assertion is deterministic and cheap;
+  the cost is orchestration — ψ-system + RNG snapshot/restore and fixed probe
+  sets (imp-56 machinery). Reuse the retention-arm machinery in
+  `z3_fixed_weights.py` (`_run_retention_arm`) rather than re-orchestrating.
+  Asserts **bitwise** θ hash equality across the whole run, ψ-system
+  snapshot/restore fidelity, and above-chance probe accuracy post-switch
+  (chance + margin calibrated per R10.2.0). *J2, demonstrated, not just
+  locked.*
 - [ ] **R10.2.7** **README restructure.** Opens with the ≤10-line composition →
   train → report block **derived from `test_demo_compose_6axis.py`**, then
   factory one-liners, then the gallery figures as *evidence the abstractions
@@ -159,7 +196,10 @@ evidence, and it fails if the API breaks or the property regresses.
   means — not pixels).
 - [ ] **Acceptance:** a stranger copies the README's first block and runs it;
   reads `test_demo_swap_credit.py` top-to-bottom and knows how to swap any axis;
-  `pytest tests/integration/ -k demo` is green in the fast gate on CPU.
+  `pytest tests/integration/ -k demo` is green in the fast gate on CPU; every
+  directional assertion's calibration is recorded in its docstring; **three
+  consecutive green gate runs with zero demo-test flakes** before the round
+  closes.
 
 ## 🔒 R10.3 — The Standing Rules
 
