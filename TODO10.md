@@ -36,12 +36,42 @@
 > 75.8 s / 77.2 s / 79.4 s — five capabilities in under two minutes, as
 > checkpoint 1 requires). All five registered artifacts exist under
 > `benchmark_results/` and are demoted to historical corroboration — now
-> written up as such in `docs/RESULTS.md` (R10.2.9). What remains open:
-> R10.1.5 (corroboration figures into RESULTS appendix — the depth-50 cliff
-> has no figure file yet), committing `docs/figures/manifest.json` +
-> `run_records/` as the evidence layer, and R10.3's standing rules as
-> enforced CI (the locks exist as tests; wiring them into the CI gate order
-> is a one-line workflow edit). Next capability in line: D6 (substrate axis).
+> written up as such in `docs/RESULTS.md` (R10.2.9).
+>
+> **D6 (substrate axis) pulled 2026-09-02.** The memristive factory landed
+> (`create_memristive_mlp` in `core/presets.py`, deduped through
+> `_instant_backprop_system`, exported from the root in `_LAZY`+`__all__`)
+> with demo `test_demo_substrate_swap.py` (D6, one swapped substrate, three
+> arms: digital 0.91 / mild IR-drop 0.84 / severe IR-drop 0.14 at noise 3.0
+> — walled), gallery figure `_fig_substrate_swap` + lock EXPECTED entry, and
+> `configs/presets/memristive_mnist.yaml`. D6 passed its first run (24.3 s);
+> the demo suite needs one full re-run to regenerate all six records before
+> the figure lock is re-pinned. Pinned regime (live sweep 2026-09-02):
+> MNIST quick capped at 1000 batches, hidden (32,), step 0.05, noise
+> staircase 0.05→0.5→1.5→3.0 gives 0.84→0.82→0.57→0.14 — monotone, so the
+> severe arm is categorical by regime choice, not guard band. Key design
+> fact: the memristive *default* config (bounds [0,1], noise 0.05) learns
+> fine at toy scale (0.86); the conductance clamp only collapses arms in
+> the constraint trial's severity sweep, not here.
+>
+> What remains open: R10.1.5 (corroboration figures into RESULTS appendix —
+> the depth-50 cliff has no figure file yet; data extraction pattern is in
+> `benchmark_results/deep_credit_registered.json` arms→probe_by_env),
+> committing `docs/figures/manifest.json` + `run_records/` as the evidence
+> layer, R10.3's standing rules as enforced CI (locks exist as tests), and
+> the surgical README updates for D6 (factory row Provenance →
+> implemented, evidence link beside the S-axis row, optional locked D6
+> snippet in `scripts/readme_snippets.json`). **CI wiring detail:** the
+> pyright config carried a pyright-unsupported per-env `typeCheckingMode`
+> (basedpyright-only) that made `uv run pyright .` fail with
+> `Config executionEnvironments index 0: unrecognized setting` — fixed by
+> removing it from `pyrightconfig.json` (re-verify the full strict bar in
+> the next gate). CI's preset-validation step also imports a
+> non-existent `computronium.cli.run._build_system_from_flat_config`
+> (real path: `cli/commands/train.py` flat-config build in `run_from_yaml`)
+> and the from-config CLI path itself is broken (`VisionTask.train_loader`
+> → `train_dataloader`); `comp repro` reports 7/8 (native_tile_ep) —
+> pre-existing, worth a Register-C entry.
 
 ---
 
@@ -85,12 +115,11 @@ design decision from R10.2.0. R10.1 consumes the run records R10.2.2–.6 emit
 lock with the README, gallery CLI with the gallery module). R10.3 rules bind
 from the first commit.
 
-**Next capability in line (D6): the substrate axis.** No live demonstration
-exists for the S-axis today — the memristive factory is unimplemented
-(Register B) and the quantum/neuromorphic substrates are covered only by
-property locks. The substrate story is the library's most distinctive pitch;
-the memristive-factory pull with a visible IR-drop/noise demo is the
-highest-value next row of this table.
+**Next capability in line (D7).** D6 (substrate) is now demonstrated —
+the Demonstration Table's most distinctive axis has its live row. The
+next pull candidate is either the substrate-fidelity register item (real
+conductance-range semantics, pairs with D6) or a D-axis demo
+(SpikeIntegration at demo scale).
 
 ---
 
@@ -418,7 +447,7 @@ blocks on a later one.
 
 | Item | Contents | Pull condition |
 |------|----------|----------------|
-| **Memristive factory** | README advertises `create_memristive_mlp` (Memristive × Feedforward, IR-drop/conductance preset) with no implementation in the tree; implement via `core/presets.py` over the existing `MemristiveSubstrate`, or the R10.2.7 restructure downgrades the row to Planned | R10.2.1 audit resolution, or next substrate-axis pull |
+| **Memristive factory** | ~~README advertises `create_memristive_mlp`~~ **Pulled 2026-09-02**: implemented via `core/presets.py` over `MemristiveSubstrate`, root-exported, demo `test_demo_substrate_swap.py` (D6), preset `memristive_mnist.yaml` | ✅ Done |
 | **Geometries** | `ConvGeometry` / `GraphGeometry` / `AttentionGeometry` / 3D `SpatialLattice3D` — geometry-DEFERRED skips stay skips | Science runs on Feedforward/Recurrent/Tile at MLP scale today. Pull when a demo test or campaign manifest needs the geometry (e.g., a vision demo test wants Conv; a graph domain task wants GraphGeometry). |
 | **Substrate fidelity (R3.7)** | Neuromorphic: real spike dropout or drop the cosmetic `sparsity` field; Memristive: conductance-range semantics | Pairs with RESEARCH3 substrate work; pull when a substrate-axis claim or demo test needs the fidelity to be real. |
 | **Tile × dynamics matrix (R3.4)** | tile_ep/pc/gnn/snn device-dynamics incompatibilities; tile_fa/tp/hebbian — fix or document as permanent xfail with precise reasons | Pull on next touch of the tile family, or when a demo wants the full tile matrix. |
@@ -503,6 +532,18 @@ blocks on a later one.
   (fresh-ψ floor ≈ 0.68, restored beats floor+0.1 at 1.0). If `MetaRecipe`
   defaults or the task generators change, the gate items will move —
   re-run the calibration sweep (3/4/5 epochs) before re-pinning.
+- **D6 wall watch:** D6 adds ~24 s to the demo suite (~104 s total). If the
+  2-minute checkpoint slips on slow CI, `BATCH_CAP` in
+  `test_demo_substrate_swap.py` is the dial (floors were calibrated at 1000
+  batches). The severe-IR-drop ceiling (0.4) sits between observed 0.57
+  (noise 1.5) and 0.14 (noise 3.0) — do not move the noise to 1.5-class
+  values without re-sweeping.
+- **CI preset validation is doubly broken**: the workflow imports
+  `_build_system_from_flat_config` from `cli.run` (doesn't exist there) and
+  `run_from_yaml` itself dies on `VisionTask.train_loader` (property is
+  `train_dataloader`). Fix both before trusting the CI preset gate.
+- `comp repro` is 7/8 (`native_tile_ep` fails) — pre-existing; check
+  whether it predates this round before treating as new.
 
 ## 🗺️ Implementation Map (what landed 2026-09-02; how to extend)
 
@@ -513,6 +554,10 @@ blocks on a later one.
 | Root export mechanism fixes + `create_task`/`create_tile_mlp`/`create_spiking_snn_mlp` exports, `NullPlasticity` re-point to `computronium.core.plasticity` | `computronium/__init__.py` |
 | `_LAZY`↔`__all__` consistency lock | `tests/unit/core/test_root_exports.py` |
 | Demo tests D1–D5 (regimes pinned in module docstrings; each emits its run record **before** asserting) | `tests/integration/test_demo_compose_6axis.py`, `test_demo_swap_credit.py`, `test_demo_swap_plasticity.py`, `test_demo_memory_budget.py`, `test_demo_z3_frozen_theta.py` |
+| Demo test D6 (substrate swap; factory-level S-axis swap, regime + staircase sweep pinned in docstring) | `tests/integration/test_demo_substrate_swap.py` |
+| Memristive factory (`create_memristive_mlp`; `_instant_backprop_system` dedupes the Digital/Memristive backprop-MLP body) | `computronium/core/presets.py` |
+| Memristive preset YAML | `configs/presets/memristive_mnist.yaml` |
+| D6 figure factory (`_fig_substrate_swap`, entry in `_FACTORIES`) | `computronium/visualization/gallery.py` |
 | Run-record emitter fixture (deterministic payload; git commit + config sha256 provenance; no timestamps) | `tests/integration/conftest.py` → `emit_run_record(capability_id, capability_name, data)` |
 | Figure factories + `FigureMeta` + `render_gallery` (one pure function per figure; `_FACTORIES` map keyed by capability name) | `computronium/visualization/gallery.py`, `_style.py`, `__init__.py` |
 | Figure lock | `tests/integration/test_gallery_lock.py` |

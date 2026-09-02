@@ -198,11 +198,32 @@ def _fig_frozen_theta(record: dict) -> Figure:
     return fig
 
 
+def _fig_substrate_swap(record: dict) -> Figure:
+    import matplotlib.pyplot as plt
+
+    arms = record["data"]["arms"]
+    names = list(arms)
+    accs = [arms[name]["train_acc"] for name in names]
+    labels = [name.replace("memristive_", "memristive\nIR-drop ") for name in names]
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.bar(labels, accs, color=[COLOR_FEASIBLE, COLOR_ARM, COLOR_WALLED])
+    ax.set_ylim(0, 1)
+    chance = 1 / 10
+    chance_line(ax, chance, "chance (0.1)")
+    ax.set_ylabel("train accuracy")
+    ax.set_title("D6 — one wiring, one swapped substrate (mild IR-drop learns, severe walls)")
+    for i, acc in enumerate(accs):
+        ax.text(i, acc, f"{acc:.2f}", ha="center", va="bottom", fontsize=9)
+    apply_style(fig)
+    return fig
+
+
 _FACTORIES: dict[str, Callable[[dict], Figure]] = {
     "compose_6axis": _fig_compose_train,
     "swap_credit": _fig_credit_swap,
     "swap_plasticity": _fig_plasticity_swap,
     "memory_budget": _fig_memory_wall,
+    "substrate_swap": _fig_substrate_swap,
     "z3_frozen_theta": _fig_frozen_theta,
 }
 

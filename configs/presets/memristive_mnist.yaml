@@ -1,0 +1,42 @@
+# Memristive-substrate Backprop MLP on MNIST - 5-D coordinate
+# Memristive x Feedforward x Instantaneous x Null x Backprop x Euclidean
+# Weights are non-negative bounded conductances; activations carry IR-drop noise.
+substrate:
+  type: memristive
+  precision: int8
+  noise_level: 0.05
+  weight_bounds: [0.0, 1.0]
+  sparsity: 0.1
+  device: auto
+
+geometry:
+  type: feedforward
+  input_dim: 784
+  output_dim: 10
+  hidden_dims: [256, 128]
+  num_layers: 3
+  topology_type: feedforward
+  connectivity: null
+  recurrent_weight: null
+  init_scale: 0.1
+
+dynamics:
+  type: instantaneous
+
+plasticity:
+  type: null
+
+credit:
+  type: backprop
+
+update:
+  type: euclidean
+  step_size: 0.001
+  momentum: 0.9
+  ortho_steps: 5
+  spectral_norm: 1.0
+  fisher_damping: 1.0e-3
+  ewc_lambda: 1000.0
+
+training:
+  max_epochs: 10

@@ -26,6 +26,7 @@ EXPECTED = {
     "swap_credit": "D2",
     "swap_plasticity": "D3",
     "memory_budget": "D4",
+    "substrate_swap": "D6",
     "z3_frozen_theta": "D5",
 }
 

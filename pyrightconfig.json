@@ -12,7 +12,6 @@
   "executionEnvironments": [
     {
       "root": "computronium/ontology",
-      "typeCheckingMode": "standard",
       "reportIncompatibleMethodOverride": "error",
       "reportIncompatibleVariableOverride": "error",
       "reportPossiblyUnboundVariable": "error",

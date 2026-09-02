@@ -22,6 +22,7 @@ One-Line System Construction:
         create_eqprop_mlp,
         create_fa_mlp,
         create_ff_mlp,
+        create_memristive_mlp,
         create_pepita_mlp,
         create_tp_mlp,
         create_pc_mlp,
@@ -188,6 +189,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     ),
     # Preset Factories (5-D)
     "create_backprop_mlp": ("computronium.core.presets", "create_backprop_mlp"),
+    "create_memristive_mlp": ("computronium.core.presets", "create_memristive_mlp"),
     "create_eqprop_mlp": ("computronium.core.presets", "create_eqprop_mlp"),
     "create_fa_mlp": ("computronium.core.presets", "create_fa_mlp"),
     "create_ff_mlp": ("computronium.core.presets", "create_ff_mlp"),
@@ -393,6 +395,7 @@ __all__ = [
     "create_fast_weight_mlp",
     "create_ff_mlp",
     "create_hebbian_mlp",
+    "create_memristive_mlp",
     "create_pc_mlp",
     "create_pepita_mlp",
     "create_routing_mlp",

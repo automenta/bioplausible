@@ -31,6 +31,7 @@ from computronium.ontology import (
     GeometryConfig,
     InstantaneousDynamics,
     LocalGoodnessCredit,
+    MemristiveSubstrate,
     ParameterUpdateConfig,
     PredictiveSettlingDynamics,
     RandomProjectionsCredit,
@@ -115,6 +116,20 @@ def _default_update(lr: float = 0.001) -> EuclideanUpdate:
     return EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=lr))
 
 
+def _instant_backprop_system(
+    substrate: DigitalSubstrate | MemristiveSubstrate,
+    input_dim: int,
+    hidden_dims: tuple[int, ...],
+    output_dim: int,
+    lr: float,
+    init_scale: float,
+) -> System:
+    """Compose a Digital/Memristive × Feedforward backprop MLP (5-D)."""
+    geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
+    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+    return compose_system(substrate, geometry, dynamics, _default_credit(), _default_update(lr))
+
+
 # ============================================================
 # 5-D System Factories (Standard Ontology)
 # ============================================================
@@ -141,13 +156,45 @@ def create_backprop_mlp(
     Returns:
         A composed 5-D System with Backprop credit assignment.
     """
-    substrate = _default_substrate(device)
-    geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
-    dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
-    credit = _default_credit()
-    update = _default_update(lr)
+    return _instant_backprop_system(
+        _default_substrate(device), input_dim, hidden_dims, output_dim, lr, init_scale
+    )
 
-    return compose_system(substrate, geometry, dynamics, credit, update)
+
+def create_memristive_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...],
+    output_dim: int,
+    lr: float = 0.001,
+    noise_level: float = 0.05,
+    init_scale: float = 0.1,
+    device: str = "cpu",
+) -> System:
+    """Create a memristive-substrate Backprop MLP system (5-D coordinate).
+
+    Same coordinate as :func:`create_backprop_mlp` with the S-axis swapped:
+    weights are non-negative bounded conductances (clamped at every forward
+    pass) and activations carry IR-drop noise of ``noise_level`` standard
+    deviations.
+
+    Args:
+        input_dim: Input dimension (e.g., 784 for MNIST)
+        hidden_dims: Tuple of hidden layer dimensions (e.g., (256, 128))
+        output_dim: Output dimension (e.g., 10 for MNIST)
+        lr: Learning rate
+        noise_level: IR-drop noise standard deviation on activations
+        init_scale: Weight initialization scale
+        device: Target device ("cpu" or "cuda")
+
+    Returns:
+        A composed 5-D System on the memristive substrate.
+    """
+    substrate = MemristiveSubstrate(
+        SubstrateConfig.memristive(noise_level=noise_level, device=device)
+    )
+    return _instant_backprop_system(
+        substrate, input_dim, hidden_dims, output_dim, lr, init_scale
+    )
 
 
 def create_eqprop_mlp(
