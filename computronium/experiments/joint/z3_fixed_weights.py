@@ -58,6 +58,19 @@ meta-training scales that acquire the decoder (quick mode's 10-epoch budget
 does not — registered scale does). Per-task ψ trajectories (norm + step
 delta) and final ψ vectors are recorded so the gate is auditable from
 artifacts alone.
+
+R9.1 retention pivot (2026-09-01): every run also executes the retention arm
+— task A → task B → task A with θ frozen and the ψ-system (controller + rule
+state) snapshot/restored between stages — upgrading Z3 from capability (ψ can
+switch) to utility (switching prevents forgetting). Instrument items: exact θ
+invariance across the arm, lossless ψ restore (the restored ψ-system must
+reproduce stage-A accuracy exactly on the fixed probe), and ψ-state task
+conditioning (ψ_A ≠ ψ_B — fails by construction on a ψ-disabled run, the
+probe-the-probe property). Capability items: stage-A acquisition,
+restored-ψ accuracy above chance and above the meta-trained fresh-ψ floor —
+expected to fail below decoder-acquiring scales, like the engagement gate's
+above-chance item. The arm snapshots/restores the RNG streams so baselines
+see an identical stream with or without it (imp-56).
 """
 
 from __future__ import annotations
@@ -1469,6 +1482,175 @@ def _run_psi_gate_arm(  # ruff: ignore[too-many-arguments] - flat protocol tuple
     return psi_control, gate
 
 
+_RETENTION_STAGES = 2  # A→B: exactly two adaptation stages before the restore
+
+
+def _psi_system_state(model: Z3Model) -> dict[str, Tensor]:
+    """Snapshot the trainable ψ-system: controller weights + rule state.
+
+    θ (``operator_embeddings``) is excluded — the ψ-system is everything the
+    adaptation protocol may move (the freeze selects θ only, and the
+    controller is part of ψ: its weights carry the per-task routing learned
+    during adaptation). A restore without the controller would leave the
+    routing behind and silently break the lossless-restore invariant.
+    """
+    return {
+        k: v.detach().clone()
+        for k, v in model.state_dict().items()
+        if k != "operator_embeddings"
+    }
+
+
+def _restore_psi_system(model: Z3Model, snapshot: dict[str, Tensor]) -> None:
+    """Restore a ψ-system snapshot (controller + ψ) over the current state."""
+    model.load_state_dict({**model.state_dict(), **snapshot})
+
+
+def _run_retention_arm(  # ruff: ignore[too-many-arguments, too-many-locals] - flat protocol tuple, staged protocol mirrors the adaptation-phase convention
+    model: Z3Model,
+    meta_state: dict[str, Tensor],
+    tasks: list,
+    shape: TaskShape,
+    *,
+    epochs: int,
+    probe_batches: int,
+    recipe: MetaRecipe,
+    entry_temperature: float,
+) -> dict[str, dict]:
+    """R9.1 retention pivot: A→B→A with θ frozen and ψ carrying the task.
+
+    Upgrades Z3 from capability (ψ can switch) to utility (switching
+    prevents forgetting). Stage A adapts the ψ-system to the first task and
+    snapshots it; stage B adapts a fresh ψ-system to the second; the restore
+    stage switches ψ back with NO re-adaptation. The fixed probe sets make
+    every retention readout score identical batches, so a restored ψ-system
+    must reproduce stage-A accuracy exactly — a lossless snapshot/restore
+    instrument item that holds at any scale. The meta-trained ψ-system with
+    a fresh ψ is the floor, and the B-adapted ψ-system is the forgetting
+    contrast; θ must remain bitwise frozen across the whole arm. RNG streams
+    are snapshotted/restored around the arm so downstream baselines see the
+    same stream with or without it (imp-56 hygiene). Returns
+    ``{"retention": ..., "retention_gate": ...}`` for direct
+    ``results.update()`` merging.
+    """
+    if len(tasks) < _RETENTION_STAGES:
+        msg = "retention arm needs at least two tasks"
+        raise Z3InstrumentError(msg)
+    (name_a, fn_a), (name_b, fn_b) = tasks[0], tasks[1]
+    criterion = torch.nn.CrossEntropyLoss()
+    rng = _snapshot_rng(shape.device)
+    try:
+        model.load_state_dict(meta_state)
+        model.freeze_theta()
+        model.temperature = entry_temperature
+        meta_psi_system = _psi_system_state(model)
+        probe_a = _fixed_probe(shape, fn_a, batches=probe_batches)
+        probe_b = _fixed_probe(shape, fn_b, batches=probe_batches)
+
+        with ThetaInvarianceAudit(model, selector=_is_theta_param) as audit:
+            # Stage A: acquire the probed task; snapshot the carrying ψ.
+            model.reset_psi()
+            optimizer_a = torch.optim.Adam(
+                [p for p in model.parameters() if p.requires_grad], lr=0.001
+            )
+            record_a = _run_adaptation(
+                model,
+                optimizer_a,
+                criterion,
+                shape,
+                fn_a,
+                epochs=epochs,
+                probe=probe_a,
+                feedback=recipe.feedback,
+                adapt_entropy_beta=recipe.adapt_entropy_beta,
+                adapt_temp_end=recipe.adapt_temp_end,
+            )
+            a_post = _probe_accuracy(model, probe_a)
+            psi_a = model.psi_state.detach().clone()
+            psi_a_system = _psi_system_state(model)
+
+            # Stage B: learn the interfering task on a fresh ψ.
+            model.reset_psi()
+            optimizer_b = torch.optim.Adam(
+                [p for p in model.parameters() if p.requires_grad], lr=0.001
+            )
+            record_b = _run_adaptation(
+                model,
+                optimizer_b,
+                criterion,
+                shape,
+                fn_b,
+                epochs=epochs,
+                probe=probe_b,
+                feedback=recipe.feedback,
+                adapt_entropy_beta=recipe.adapt_entropy_beta,
+                adapt_temp_end=recipe.adapt_temp_end,
+            )
+            b_post = _probe_accuracy(model, probe_b)
+            a_under_psi_b = _probe_accuracy(model, probe_a)
+            psi_b = model.psi_state.detach().clone()
+
+            # Restored stage: switch ψ back — no re-adaptation, no θ movement.
+            _restore_psi_system(model, psi_a_system)
+            a_retained = _probe_accuracy(model, probe_a)
+            # Fresh-ψ floor: the meta-trained ψ-system before any task adaptation.
+            _restore_psi_system(model, meta_psi_system)
+            model.reset_psi()
+            a_floor = _probe_accuracy(model, probe_a)
+        report = audit.report
+        if report is None:
+            msg = "retention θ audit produced no report"
+            raise Z3InstrumentError(msg)
+    finally:
+        _restore_rng(rng, shape.device)
+
+    chance = TASK_CHANCE[name_a]
+    margin = _GATE_ACCURACY_MARGIN
+    items: dict[str, object] = {
+        "theta_exact_invariant": bool(report.invariant),
+        "psi_restore_reproduces_stage_a": a_retained == a_post,
+        "psi_state_task_conditioned": float((psi_a - psi_b).abs().max()) > 0.0,
+        "stage_a_acquired": a_post > chance + margin,
+        "restored_psi_above_chance": a_retained > chance + margin,
+        "restored_psi_beats_floor": a_retained > a_floor + margin,
+    }
+    failed = [k for k, v in items.items() if not v]
+    retention = {
+        "task_a": name_a,
+        "task_b": name_b,
+        "stage_a": {
+            "accuracy": a_post,
+            "steps_to_criterion": record_a.steps_to_criterion,
+            "final_psi": [float(v) for v in psi_a.squeeze(0)],
+        },
+        "stage_b": {
+            "accuracy": b_post,
+            "steps_to_criterion": record_b.steps_to_criterion,
+            "final_psi": [float(v) for v in psi_b.squeeze(0)],
+            "task_a_accuracy_under_psi_b": a_under_psi_b,
+        },
+        "restored": {
+            "task_a_accuracy": a_retained,
+            "fresh_psi_floor": a_floor,
+            "theta_change": report.max_abs_change,
+        },
+        "retention_gain_vs_floor": a_retained - a_floor,
+        "forgetting_via_psi_switch": a_post - a_under_psi_b,
+    }
+    gate = {
+        "chance": chance,
+        "margin": margin,
+        "items": items,
+        "passed": not failed,
+        "failed": failed,
+    }
+    if gate["passed"]:
+        print("  retention gate: PASS")
+    else:
+        print(f"  retention gate: FAIL — {', '.join(failed)}")
+    return {"retention": retention, "retention_gate": gate}
+
+
 def evaluate_z3(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
     coordinate: str,
     meta_train_epochs: int = 50,
@@ -1648,6 +1830,20 @@ def evaluate_z3(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
         else CLAIMS_SCOPE_PLUMBING_ONLY
     )
 
+    # ===== R9.1 RETENTION PIVOT (A→B→A; θ frozen, ψ carries the task) =====
+    results.update(
+        _run_retention_arm(
+            model,
+            meta_state,
+            tasks,
+            shape,
+            epochs=eval_epochs_per_task,
+            probe_batches=probe_batches,
+            recipe=recipe,
+            entry_temperature=entry_temperature,
+        )
+    )
+
     # ===== BASELINES (E-10 control set) =====
     if not with_baselines:
         return results
@@ -1751,6 +1947,13 @@ def run_z3_suite(
             coord_results["gate_passed"] = all(
                 s["psi_gate"]["passed"] for s in coord_results["seeds"]
             )
+            coord_results["retention_gate_passed"] = all(
+                s["retention_gate"]["passed"] for s in coord_results["seeds"]
+            )
+            coord_results["mean_retained_task_a_accuracy"] = sum(
+                s["retention"]["restored"]["task_a_accuracy"]
+                for s in coord_results["seeds"]
+            ) / len(coord_results["seeds"])
 
         all_results.append(coord_results)
 

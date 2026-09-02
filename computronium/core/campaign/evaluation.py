@@ -217,11 +217,25 @@ def episode_batch(  # ruff: ignore[too-many-arguments] - stationarity key comple
 def activity_transition(
     joint: JointSystem,
 ) -> Callable[[CompositeState, SystemContext], CompositeState]:
-    """Whole-system activity transition F_θ(z) for stability probes."""
+    """Whole-system activity transition F_θ(z) for stability probes.
+
+    Returns an endomorphic map (input_dim -> input_dim) by padding/truncating
+    the output logits to the input dimension. This enables the windowed-growth
+    guard probe on nonsquare geometries (imp-60). Square systems are unchanged.
+    """
 
     def transition(z: CompositeState, _context: SystemContext) -> CompositeState:
         out = joint.geometry.forward(z.activity["x"], joint.substrate)
         logits = out[-1] if isinstance(out, list) else out
+        x = z.activity["x"]
+        in_dim = x.shape[-1]
+        if logits.shape[-1] != in_dim:
+            # imp-60: dimension-preserving feedback via deterministic zero-pad.
+            # No RNG side effects; the pad map is a fixed linear projection.
+            padded = torch.zeros_like(x)
+            n = min(logits.shape[-1], in_dim)
+            padded[..., :n] = logits[..., :n]
+            logits = padded
         return CompositeState(
             activity={"x": logits}, plastic=z.plastic, substrate=z.substrate
         )
@@ -452,6 +466,29 @@ def _episode_resources(
     )
 
 
+def _teacher_key(
+    campaign_id: str,
+    coordinate: str,
+    seed: int,
+    *,
+    stationary: bool,
+    segment: str | None,
+) -> tuple[object, ...] | None:
+    """Stationarity key for one stream: per (campaign, coordinate, seed) or
+    per (campaign, coordinate, seed, segment) when a task-sequence segment
+    is declared (R9.1). ``None`` keeps the legacy per-episode teacher redraw
+    (imp-54 stream). A segment without a stationary stream raises — a
+    segmented legacy stream would silently re-open the imp-54
+    non-stationarity inside each segment."""
+    if segment is not None and not stationary:
+        raise ValueError(  # ruff: ignore[raise-vanilla-args] - one-off validation message
+            "segment-keyed teachers require stationary_teacher=True"
+        )
+    if not stationary:
+        return None
+    return (campaign_id, coordinate, seed) + ((segment,) if segment else ())
+
+
 def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always defaults
     joint: JointSystem,
     *,
@@ -466,6 +503,7 @@ def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always 
     seed: int = 0,
     stationary_teacher: bool = False,
     teacher_noise: float = 0.0,
+    segment: str | None = None,
 ) -> tuple[FrontierRecord, dict[str, float]]:
     """Run one real training episode and record its frontier metrics.
 
@@ -481,8 +519,16 @@ def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always 
     can accumulate learning (claim scope: accumulated learning). The default
     ``False`` keeps the legacy per-episode teacher redraw (imp-54 stream;
     claim scope: per-episode adaptation only). ``teacher_noise`` calibrates
-    task difficulty (see ``CALIBRATED_TEACHER_NOISE``). Both design choices
-    are stamped into the record metadata for artifact-level provenance.
+    task difficulty (see ``CALIBRATED_TEACHER_NOISE``).
+
+    ``segment`` (R9.1): names one segment of a structured task-sequence
+    stream (A→B); the teacher is stationary within a segment and re-keyed
+    across segments, so forgetting/retention is measurable (claim scope:
+    retention). Requires ``stationary_teacher`` — a segmented legacy stream
+    would silently re-open the imp-54 non-stationarity inside each segment.
+
+    Both design choices are stamped into the record metadata for
+    artifact-level provenance.
 
     Batches are placed on the joint system's parameter device — the episode
     always executes where the system lives (no silent CPU fallback).
@@ -493,7 +539,13 @@ def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always 
         batch_size=batch_size,
         input_dim=input_dim,
         num_classes=num_classes,
-        teacher_key=(campaign_id, coordinate, seed) if stationary_teacher else None,
+        teacher_key=_teacher_key(
+            campaign_id,
+            coordinate,
+            seed,
+            stationary=stationary_teacher,
+            segment=segment,
+        ),
         teacher_noise=teacher_noise,
     )
     device = joint.device
@@ -542,6 +594,7 @@ def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always 
             "nudged_fit_accuracy": nudged_fit_accuracy,
             "teacher_stationary": float(stationary_teacher),
             "teacher_noise": teacher_noise,
+            **({"segment": segment} if segment else {}),
         },
         seed=seed,
         campaign_id=campaign_id,
@@ -560,3 +613,51 @@ def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always 
     if decision.kill:
         raise GuardKillError(coordinate, growth, decision.threshold)
     return record, metrics
+
+
+def probe_episode(  # ruff: ignore[too-many-arguments] - shape triple always defaults
+    joint: JointSystem,
+    *,
+    coordinate: str,
+    task_name: str = "synthetic",
+    campaign_id: str,
+    episode: int,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    input_dim: int = DEFAULT_INPUT_DIM,
+    num_classes: int = DEFAULT_NUM_CLASSES,
+    seed: int = 0,
+    stationary_teacher: bool = False,
+    teacher_noise: float = 0.0,
+    segment: str | None = None,
+) -> float:
+    """Target-free, no-train accuracy of the system's *current* state.
+
+    The retention-side instrument (R9.1): scores the composed system on one
+    episode batch without a train step — θ and ψ are untouched, so probing
+    segment A mid-walk measures what the walk has retained. The accuracy
+    definition is identical to the pipeline's post-update ``free_accuracy``
+    (argmax of the settled output vs labels; labels score, never train).
+    Teacher-key semantics match :func:`evaluate_episode` exactly, so a probe
+    with the same (segment, key, episode-index space) sees the same stream
+    the training episodes saw — use a disjoint episode-index space for
+    held-out probe batches.
+    """
+    x, y = episode_batch(
+        episode,
+        task_name=task_name,
+        batch_size=batch_size,
+        input_dim=input_dim,
+        num_classes=num_classes,
+        teacher_key=_teacher_key(
+            campaign_id,
+            coordinate,
+            seed,
+            stationary=stationary_teacher,
+            segment=segment,
+        ),
+        teacher_noise=teacher_noise,
+    )
+    device = joint.device
+    with torch.no_grad():
+        logits = joint.forward(x.to(device))
+    return float((logits.argmax(dim=-1) == y.to(device)).float().mean())

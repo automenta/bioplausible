@@ -50,10 +50,10 @@ class FrontierRecord:
         default_factory=list
     )  # List of {episode, promoted_vars, scale}
 
-    # Metadata
+    # Metadata (provenance: floats for numeric knobs, str for stream labels)
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     seed: int = 42
-    metadata: dict[str, float] = field(default_factory=dict)
+    metadata: dict[str, float | str] = field(default_factory=dict)
 
     # Campaign tracking
     campaign_id: str | None = None

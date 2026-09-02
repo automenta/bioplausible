@@ -13,12 +13,16 @@ run, and a failed or missing control quarantines the campaign.
 Construct validity is part of the gate (imp-54): an
 ``accumulated_learning`` claim scope requires the stationary task stream —
 honest metrics on the legacy per-episode stream still cannot support
-accumulation claims.
+accumulation claims. A ``retention`` claim scope (R9.1) requires the
+segmented task stream — a structured task-sequence A→B whose within-segment
+teachers are stationary and whose across-segment shift makes forgetting
+measurable; neither the per-episode nor the single-teacher stream can.
 """
 
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Literal
@@ -42,6 +46,7 @@ __all__ = [
     "ControlVerdict",
     "EmbeddedControl",
     "PowerPreregistration",
+    "at_chance_band",
     "min_detectable_effect",
     "n_for_target_power",
     "verify_embedded_control",
@@ -51,6 +56,26 @@ DEFAULT_ALPHA = 0.05
 DEFAULT_TARGET_POWER = 0.80
 _MIN_OBS_PER_GROUP = 2  # the two-sample t-test's floor
 
+# imp-59: the at-chance control band is a statistical instrument — width must
+# scale with sqrt(N) of the control arm's scored samples or small pilots
+# self-quarantine on sampling noise. 6 binomial sigmas at chance plus a
+# floor for init-to-init variation (the registered stationary pilot's
+# ±0.05 at 1920 samples sits at ~6.6 sigma).
+_CONTROL_BAND_SIGMAS = 6.0
+_CONTROL_BAND_FLOOR = 0.05
+
+
+def at_chance_band(chance: float, n_scored_samples: int) -> float:
+    """Half-width of the at-chance control band for ``n`` scored samples.
+
+    The band is a statistical instrument (imp-59): 6 binomial sigmas at
+    chance, floored at 0.05 for init-to-init variation, so a frozen arm
+    cannot be quarantined by sampling noise alone.
+    """
+    sigma = math.sqrt(chance * (1.0 - chance) / max(1, n_scored_samples))
+    return max(_CONTROL_BAND_FLOOR, _CONTROL_BAND_SIGMAS * sigma)
+
+
 ClaimLabel = Literal["claim_grade", "pilot", "plumbing", "instrument_check"]
 ClaimScope = Literal[
     "per_episode_adaptation",
@@ -58,6 +83,8 @@ ClaimScope = Literal[
     "resource_efficiency",
     "stability",
     "m_axis_plasticity",
+    "retention",
+    "credit_at_depth",
 ]
 
 _NON_CLAIM_RUNGS: frozenset[str] = frozenset({
@@ -176,8 +203,9 @@ class PowerPreregistration:
         metric: Metric the effect size refers to (claim-grade per the
             imp-46 provenance census — e.g. ``task_accuracy``).
         claim_scope: Which effect type the design can support (claim-scope
-            rule, TODO9 R8).
-        task_stream: ``stationary`` (accumulation-capable, R8.3 Option A) or
+            rule, TODO9 R8; ``retention`` joins in R9.1).
+        task_stream: ``stationary`` (accumulation-capable, R8.3 Option A),
+            ``segmented`` (structured task-sequence stream, R9.1), or
             ``per_episode`` (legacy imp-54 stream).
         expected_effect: Minimum effect size (Cohen's d) the claim needs.
         variance_estimate: Pooled SD of ``metric`` (pilot-derived for R8.4).
@@ -197,7 +225,7 @@ class PowerPreregistration:
     claim: str
     metric: str
     claim_scope: ClaimScope
-    task_stream: Literal["stationary", "per_episode"]
+    task_stream: Literal["stationary", "per_episode", "segmented"]
     expected_effect: float
     variance_estimate: float
     n_per_group: int
@@ -242,6 +270,18 @@ class PowerPreregistration:
         ):
             unmet.append(
                 "accumulated_learning scope requires the stationary stream (imp-54)"
+            )
+        if self.claim_scope == "retention" and self.task_stream != "segmented":
+            unmet.append(
+                "retention scope requires the segmented task stream (structured "
+                "A→B sequence; per-episode and single-teacher streams cannot "
+                "measure forgetting)"
+            )
+        if self.claim_scope == "credit_at_depth" and self.task_stream != "stationary":
+            unmet.append(
+                "credit_at_depth scope requires the stationary stream (a fixed "
+                "ground-truth function; the per-episode stream redraws targets "
+                "every episode, confounding depth with non-stationarity)"
             )
         return tuple(unmet)
 

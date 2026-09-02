@@ -96,6 +96,21 @@ class TestLabelGate:
         legacy = _prereg(task_stream="per_episode")
         assert any("imp-54" in r for r in legacy.unmet_requirements())
 
+    def test_retention_requires_segmented_stream(self) -> None:
+        for stream in ("per_episode", "stationary"):
+            prereg = _prereg(claim_scope="retention", task_stream=stream)
+            assert any("segmented" in r for r in prereg.unmet_requirements()), stream
+
+    def test_retention_on_segmented_stream_gates_normally(self) -> None:
+        prereg = _prereg(claim_scope="retention", task_stream="segmented")
+        assert prereg.unmet_requirements() == ()
+        assert prereg.label() == "claim_grade"
+
+    def test_accumulated_learning_rejects_segmented_stream(self) -> None:
+        assert any(
+            "imp-54" in r for r in _prereg(task_stream="segmented").unmet_requirements()
+        )
+
     def test_declared_rung_caps_even_when_gates_pass(self) -> None:
         pilot = _prereg(declared_rung="pilot")
         assert pilot.unmet_requirements() == ()

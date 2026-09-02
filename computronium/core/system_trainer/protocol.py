@@ -17,7 +17,8 @@ from computronium.ontology import (
 from computronium.state import SystemContext
 
 if TYPE_CHECKING:
-    pass
+    import torch
+    from torch import Tensor
 
 
 class JointSystem[
@@ -39,6 +40,9 @@ class JointSystem[
 
     def train_step(self, x: Tensor, y: Tensor) -> dict[str, float]: ...
     def forward(self, x: Tensor) -> Tensor: ...
+
+    @property
+    def device(self) -> torch.device: ...
     @property
     def context(self) -> SystemContext: ...
     def to_spec(self) -> dict[str, object]: ...

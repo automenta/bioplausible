@@ -127,3 +127,51 @@ class TestZ3PositiveControl:
 
     def test_arms_share_theta(self, engaged: dict, psi_disabled: dict) -> None:
         assert engaged["theta_sha256"] == psi_disabled["theta_sha256"]
+
+
+class TestZ3RetentionPivot:
+    """R9.1: A→B→A with θ frozen and ψ snapshot/restored — switching
+    prevents forgetting. Instrument items (exact θ invariance, lossless ψ
+    restore) must hold at any scale, including on the ψ-disabled variant;
+    capability items (acquisition, above-chance retention, floor contrast)
+    hold at registered scale and are the ψ-carrier evidence."""
+
+    def test_retention_theta_exact_invariance(self, engaged: dict) -> None:
+        items = engaged["retention_gate"]["items"]
+        assert items["theta_exact_invariant"] is True
+        assert not engaged["retention"]["restored"]["theta_change"]
+
+    def test_psi_restore_is_lossless_on_both_arms(
+        self, engaged: dict, psi_disabled: dict
+    ) -> None:
+        for run in (engaged, psi_disabled):
+            assert run["retention_gate"]["items"]["psi_restore_reproduces_stage_a"]
+
+    def test_retention_gate_passes(self, engaged: dict) -> None:
+        assert engaged["retention_gate"]["passed"] is True, engaged["retention_gate"][
+            "failed"
+        ]
+
+    def test_restored_psi_beats_floor_and_b_psi(self, engaged: dict) -> None:
+        retention = engaged["retention"]
+        assert (
+            retention["restored"]["task_a_accuracy"]
+            > retention["stage_b"]["task_a_accuracy_under_psi_b"]
+        )
+        assert retention["forgetting_via_psi_switch"] > 0.0
+
+    def test_disabled_arm_flags_the_carrier_item(self, psi_disabled: dict) -> None:
+        gate = psi_disabled["retention_gate"]
+        # ψ never moves on the disabled arm, so ψ_A == ψ_B: the ψ-state
+        # task-conditioning item must fail (probe-the-probe), while the
+        # lossless-restore instrument item still holds.
+        assert gate["items"]["psi_state_task_conditioned"] is False
+        assert gate["passed"] is False
+
+    def test_enabled_arm_carries_tasks_in_psi(self, engaged: dict) -> None:
+        assert engaged["retention_gate"]["items"]["psi_state_task_conditioned"]
+
+    def test_stage_b_interferes_with_task_a(self, engaged: dict) -> None:
+        retention = engaged["retention"]
+        under_b = retention["stage_b"]["task_a_accuracy_under_psi_b"]
+        assert under_b < retention["stage_a"]["accuracy"]

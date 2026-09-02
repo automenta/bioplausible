@@ -15,9 +15,11 @@ __all__ = [
     "EnergyProfile",
     "EnergyTracker",
     "ResourceUsage",
+    "SavedActivationBytes",
     "analyze_joint_system",
     "count_flops",
     "get_gpu_memory_mb",
+    "measure_saved_activation_bytes",
     "profile_run",
 ]
 
@@ -727,4 +729,60 @@ def _create_joint_system_from_parts(
 
     return compose_joint_system(
         substrate, geometry, dynamics, plasticity, credit, update
+    )
+
+
+# ============================================================
+# Saved-Activation-Bytes Instrument (R9.3 Deep Credit Trial)
+# ============================================================
+
+
+@dataclass(frozen=True, slots=True)
+class SavedActivationBytes:
+    """Saved-for-backward bytes measured during a train step.
+
+    Uses torch.autograd.graph.saved_tensors_hooks to count bytes of tensors
+    saved for backward (the activation memory that scales O(depth) for BPTT).
+    Deterministic on CPU/GPU; works under no_grad (returns 0) and autograd
+    contexts. The measurement isolates the autograd graph from the callable.
+    """
+
+    total_bytes: int
+    num_saved_tensors: int
+
+
+def measure_saved_activation_bytes(
+    fn: Callable[..., object], *args: object, **kwargs: object
+) -> tuple[object, SavedActivationBytes]:
+    """Execute ``fn(*args, **kwargs)`` under autograd and count saved bytes.
+
+    Args:
+        fn: Callable that runs a train step (may use autograd).
+        *args, **kwargs: Arguments passed to ``fn``.
+
+    Returns:
+        (result, SavedActivationBytes) where ``total_bytes`` is the sum of
+        ``tensor.untyped_storage().nbytes()`` over all tensors saved for
+        backward, and ``num_saved_tensors`` is the count.
+
+    Note:
+        Uses ``torch.autograd.graph.saved_tensors_hooks`` which does not nest.
+        The caller must ensure no outer saved_tensors_hooks context is active.
+    """
+    counter = {"bytes": 0, "count": 0}
+
+    def pack_hook(tensor: torch.Tensor) -> torch.Tensor:
+        if tensor.requires_grad:
+            counter["bytes"] += tensor.untyped_storage().nbytes()
+            counter["count"] += 1
+        return tensor
+
+    def unpack_hook(tensor: torch.Tensor) -> torch.Tensor:
+        return tensor
+
+    with torch.autograd.graph.saved_tensors_hooks(pack_hook, unpack_hook):
+        result = fn(*args, **kwargs)
+
+    return result, SavedActivationBytes(
+        total_bytes=counter["bytes"], num_saved_tensors=counter["count"]
     )

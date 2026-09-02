@@ -1,0 +1,19 @@
+{
+  "claim": "Registered retention claim (R9.1 flagship): RoutingPlasticity's ψ-gated pathways retain segment-A accuracy through the segment-B shift on the persistent-θ chain (structured A→B segmented stream) where NullPlasticity collapses toward chance. Pilot (3 seeds, benchmark_results/forgetting_pilot.json) measured d_retained=-1.05 and d_delta=-1.75 for routing vs null, pooled sd 0.084 on retained probe accuracy; the effect is registered conservatively on the retained-accuracy contrast. The retention readout is the held-out probe accuracy (probe_episode), definitionally identical to the pipeline's post-update free_accuracy (claim-grade per the imp-46 census) — pinned by test_probe_matches_the_pipeline_free_readout.",
+  "metric": "task_accuracy",
+  "claim_scope": "retention",
+  "task_stream": "segmented",
+  "expected_effect": 1.05,
+  "variance_estimate": 0.084,
+  "n_per_group": 16,
+  "alpha": 0.05,
+  "target_power": 0.8,
+  "stratification": ["coordinate", "seed"],
+  "embedded_control": {
+    "arm": "null_frozen_lr0",
+    "coordinate": "digital/feedforward/instantaneous/null/gradient/frozen",
+    "chance": 0.125,
+    "tolerance": 0.05
+  },
+  "created": "2026-09-01"
+}
