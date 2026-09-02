@@ -234,6 +234,29 @@
 > 0 failed** (+24 locks in `test_memory_budget_trial.py`), ruff/pyright clean on
 > touched files.
 
+> **R9 boundary map + device threading landed 2026-09-02 — the walled-regime
+> competence tier is shallow-only.** The remaining-surface question "where
+> does the walled-regime competence tier end in depth/budget" has a measured
+> pilot answer: `run_boundary_map` in `memory_budget_trial.py`
+> (`--boundary-map`) sweeps depths 4..50 walking only the arms the
+> fully-walled budget (0.015 MiB) admits — thermodynamic_contrast + its
+> frozen control (imp-64 identity) — and verifies the walled premise against
+> in-trial measured bytes before walking (imp-68 discipline: gradient/FA
+> profiles measured at every swept depth). Pilot (GPU, registered calibration
+> lr=0.05 @ 100 ep, 3 seeds, `benchmark_results/boundary_map_pilot.json`):
+> thermo probe 0.396 at depth 4 (d=+4.80 vs control — replicates the
+> registered 0.406 / d=+2.89 on independent seeds) and ≤0.203 at every deeper
+> tier (6/8/12/16/24/32/50, all below chance+margin); boundary depth = **4**
+> — the transition is sharp (between 4 and 6), not gradual. All 8 per-depth
+> controls PASSED, quarantined=False, prereg self-labels `pilot`. Also
+> landed: the pull-based device-threading backlog — `resolve_device`
+> (GPU-first, imp-69) moved to `core/campaign/evaluation.py` beside the other
+> trial-facing runtime helpers and threads `--device` through
+> deep_credit/forgetting/constraint/stationary_pilot (config + compose +
+> record + CLI); lock configs pin `device="cpu"` because CUDA launch overhead
+> dominates tiny-scale walks (imp-70). Locks: `TestBoundaryMap` (6).
+> Touched-file gate: 81 passed / 0 failed, ruff/pyright net-zero.
+
 ## Policy (carried from TODO8; extended by R7/R8)
 
 - Zero backwards compatibility · GPU-first for all training paths · serial pytest only (xdist hangs in this env)
@@ -396,7 +419,7 @@ the commissioning gate R9 rides on.
 - Do not interpret the old registered null — it is explained (underpowered + non-stationary),
   not confirmed, and not refuted.
 
-## 🎯 R9 — Surgical Stress Tests (discovery phase; successor to R8) — OPEN (R9.1 + R9.3 registered claim-grade; R9.2 memory-budget commission claim-grade 2026-09-02)
+## 🎯 R9 — Surgical Stress Tests (discovery phase; successor to R8) — OPEN (R9.1 + R9.3 registered claim-grade; R9.2 memory-budget commission claim-grade + walled-regime boundary mapped at pilot scale 2026-09-02)
 
 **Premise (2026-09-01 strategic review, adopted):** R8 built the most honest
 microscope in the business — but a microscope discovers nothing by looking at
@@ -697,11 +720,64 @@ R8.4 registered-commission gates; walled-regime shallow competence; imp-67
 provenance. Gate **1424 passed / 0 failed** (+24), ruff/pyright clean on
 touched files.
 
+### Boundary-map execution record (2026-09-02)
+
+**Design:** `run_boundary_map(config, *, depths=BOUNDARY_DEPTHS,
+walled_budget_mib=None)` in `memory_budget_trial.py` — the R9
+boundary-condition instrument for the named remaining surface ("where does
+the walled-regime competence tier end in depth/budget"). The depth sweep
+(4/6/8/12/16/24/32/50) walks only the arms the fully-walled budget admits;
+`_verify_walled_premise` fails loudly by name if any O(depth) arm fits the
+budget at any swept depth or the frozen control does not (a mixed-regime map
+would silently read infeasible walks as absent). Saved-activation profiles
+are measured for all three credits at every swept depth, so the artifact
+carries the budget threshold that would admit each walled arm (imp-68:
+measured, never quoted). Competence criterion = mean held-out probe >
+chance + 0.1 (the registered line); `boundary_depth` = deepest competent
+depth, `None` when no swept depth is competent.
+
+**Pilot outcome** (GPU, registered calibration lr=0.05 @ 100 ep, 3 seeds):
+
+| depth | thermo probe | competent | d vs control |
+|-------|--------------|-----------|--------------|
+| 4 | 0.396 | ✅ | +4.80 |
+| 6 | 0.203 | ✗ | +0.40 |
+| 8 | 0.180 | ✗ | +1.22 |
+| 12 | 0.112 | ✗ | −0.78 |
+| 16 | 0.169 | ✗ | +2.62 |
+| 24 | 0.151 | ✗ | +0.10 |
+| 32 | 0.094 | ✗ | −1.09 |
+| 50 | 0.177 | ✗ | +1.03 |
+
+Boundary depth **4**: the walled-regime competence tier is shallow-only —
+the transition sits between depth 4 and 6, sharper than the registered
+(4, 16, 50) grid could resolve. Deep tiers hover at chance (0.094–0.177),
+consistent with the registered "nobody learns within the wall" boundary.
+depth_4's 0.396 (d=+4.80) replicates the registered commission's 0.406
+(d=+2.89) on independent seeds — same calibration, same direction. All 8
+per-depth controls PASSED; quarantined=False; prereg self-labels `pilot`.
+The registered boundary claim (per R9 method rules) is pull-based: a new
+preregistration derives from this pilot's variance when the next manifest
+needs it.
+
+**Device threading (pull-based backlog item landed):** `resolve_device`
+(GPU-first, imp-69) extracted to `core/campaign/evaluation.py` beside the
+other trial-facing runtime helpers and threaded through
+deep_credit/forgetting/constraint/stationary_pilot (config field + compose +
+result record + `--device`; `evaluate_episode`/`probe_episode` already place
+batches on `joint.device`, and teacher streams stay on CPU generators, so
+placement never changes stream semantics — registered runs re-run bit-exact
+streams on GPU). **imp-70 en route:** the GPU-first default silently moved
+every tiny-scale CI lock onto CUDA — kernel-launch overhead (~2.6× at lock
+scale) blew the deep-credit contrast lock's 60 s timeout. Lock configs now
+pin `device="cpu"` explicitly; GPU-first is a commission-envelope policy,
+not a CI-scale default.
+
 ## 🔁 Pull-Based Backlog (non-blocking; pull when a campaign manifest or suite needs it)
 
 | Item | Trigger / pull condition |
 |------|--------------------------|
-| Device threading for sibling joint trials | `deep_credit_trial.py`/`forgetting_trial.py`/`constraint_trial.py`/`stationary_pilot.py` compose on CPU; `memory_budget_trial.py` threads `--device` (GPU-first, imp-69) — adopt on next touch of any sibling |
+| Registered boundary commission | The boundary-map pilot (`benchmark_results/boundary_map_pilot.json`) self-labels `pilot`; a claim-grade boundary preregistration derives from its variance when the next campaign manifest needs the boundary location as a claim |
 | R2.2 residual | Substrate facade-merge consideration (`ontology/_substrate.py` impl vs `ontology/substrate/` facade — facade is fine, consider merge) + grep for other parallel legacy/new pairs |
 | R3.4 | Tile × dynamics matrix (tile_ep/pc/gnn/snn device-dynamics incompatibility; tile_fa/tp/hebbian) — fix or document as permanent xfail with precise reasons |
 | R3.5 | `_AdaptedSystem._infer_geometry` hardcoded (784→256,128→10) — recover heuristics from deleted `adapter/` package |
@@ -747,7 +823,7 @@ touched files.
   the gate per seed at its own scale
 - Power gate (R8.4 / imp-55): commissions must state expected n vs MDE@80% in their preregistration; below-floor commissions are labeled `pilot`/`plumbing`/`instrument-check`, never claim-grade
 - Smoke-scale campaign deltas are capped at chance by the non-stationary synthetic stream (imp-54 / R8.3) — never read pooled smoke task_loss/accuracy deltas as accumulated-learning evidence; the stationary-teacher design (`stationary_teacher=True`) is the accumulation-capable path and its pilot variance is now measured (`benchmark_results/stationary_pilot_*.json`) — but note the CampaignStack path rebuilds θ per episode (per-episode-adaptation scope even with stationary teachers); accumulated-learning/retention claims run the persistent-θ chain
-- **R9 (open):** the discovery phase runs surgical stress tests (R9.1 forgetting / R9.2 constraint / R9.3 deep credit), every trial gated by R8.4/R8.5 machinery. R9.1's registered commission is claim-grade (routing retention, d −1.90); remaining: CL prior-art revival (pull-based). R9.2's memory-budget lever landed 2026-09-02 as the registered resource-efficiency claim (claim-grade, n=6, GPU): the O(1)-memory arm is the only feasible learner in the fully-walled regime and retains shallow-tier competence — the analog-noise family's refutation of the naive hypothesis stands. R9.3 registered commission landed 2026-09-02 (claim-grade): the vanishing-gradient family is refuted on the stationary synthetic-teacher task (gradient retains 0.203 at depth 50 where thermo collapses); the deterministic memory profile is the registered C-axis signal and its severity family (memory budget) is likewise claim-grade. Remaining R9 surface: boundary-condition mapping (AutoScientist — e.g., where does the walled-regime competence tier end in depth/budget), and the task-family generalization question the linear-teacher boundary raises
+- **R9 (open):** the discovery phase runs surgical stress tests (R9.1 forgetting / R9.2 constraint / R9.3 deep credit), every trial gated by R8.4/R8.5 machinery. R9.1's registered commission is claim-grade (routing retention, d −1.90); remaining: CL prior-art revival (pull-based). R9.2's memory-budget lever landed 2026-09-02 as the registered resource-efficiency claim (claim-grade, n=6, GPU): the O(1)-memory arm is the only feasible learner in the fully-walled regime and retains shallow-tier competence — the analog-noise family's refutation of the naive hypothesis stands. R9.3 registered commission landed 2026-09-02 (claim-grade): the vanishing-gradient family is refuted on the stationary synthetic-teacher task (gradient retains 0.203 at depth 50 where thermo collapses); the deterministic memory profile is the registered C-axis signal and its severity family (memory budget) is likewise claim-grade. **The walled-regime competence boundary is mapped at pilot scale (2026-09-02): shallow-only — thermo clears chance+margin at depth 4 and nowhere deeper (transition between 4 and 6); a registered boundary claim is pull-based.** Remaining R9 surface: the task-family generalization question the linear-teacher boundary raises
 - **R9.1 status (2026-09-01):** registered commission claim-grade — routing retains segment A through the B shift (d_retained −1.90, n=6 would suffice, registered n=16); the trial's lr=0.03 default is calibrated for within-segment competence at the 40-episode budget — re-calibrate on schedule/budget changes (mastery below ~0.5 makes retention unreadable and the pilot self-quarantines nothing — read mastery first); registered commissions run through `run_trial(preregistration=…)`/`--prereg`, never bare
 - **R9.3 status (2026-09-02):** registered commission claim-grade — gradient retains above-chance credit at depth 50 (0.203 vs chance 0.125) where thermo collapses (0.107) and FA sits at chance (0.128); deep-tier contrasts d=+1.79/+1.54 clear the registered MDE 1.02 at n=16; memory profile deterministic (451/501 KiB vs flat 0). **The naive vanishing-gradient hypothesis is refuted on this task family — do not read "gradient wins at depth" as a general result: the stationary synthetic-teacher task is linear-teacher.** imp-67 fixed (prereg-declared stream must equal the enacted stream — provenance locks in place); registered commissions run through `run_trial(preregistration=…)`/`--prereg`, never bare. The O(1)-memory dominance claim landed the same day in the memory-budget family (see the R9.2/R9.3 record and `R9.2 status` below).
 - **R9.2/R9.3 memory-budget status (2026-09-02):** registered commission claim-grade — in the fully-walled regime (0.015 MiB) thermodynamic_contrast is the only feasible arm and retains shallow-tier competence (0.406 vs control 0.131, d=+2.89 clearing MDE 1.796); 0.45 MiB separates the walled arms at depth 50 (FA never commissionable); **at the deep tier nobody learns within the wall (thermo 0.172 vs chance 0.125) — a registered boundary of the linear-teacher family, never a no-effect result**. The budget is a commissioning gate: a feasible arm's walk is identical under every budget that admits it — never read walled arms' absence as "lost", or feasible arms' repeated readout as new evidence
@@ -1060,6 +1136,18 @@ for the same verdict. *Lesson: precedent commissions fix the machinery, not the
 numbers — n comes from `n_for_target_power(pilot_d)` + a replication margin,
 and "expensive" always asks for GPU first.*
 
+70. **A default that resolves from the ambient environment makes every caller
+environment-dependent (2026-09-02, boundary-map session).** Threading the
+GPU-first `resolve_device` default (`None` → CUDA when available) through the
+sibling trials silently moved every tiny-scale CI lock onto CUDA: kernel-launch
+overhead (~2.6× slower at lock scale) blew the deep-credit contrast lock's
+60 s pytest-timeout — a timing-only failure with identical semantics. Fix: lock
+configs pin `device="cpu"` explicitly; registered commissions derive device
+from their own power math (imp-69). *Lesson: GPU-first is a commission-envelope
+policy, not a library default for arbitrary-scale callers — "None = auto" reads
+whatever machine it lands on, and an instrument whose timing budget assumes a
+machine class must pin that class.*
+
 ## 🔧 Quick Commands
 
 ```bash
@@ -1128,6 +1216,11 @@ uv run python -m computronium.experiments.joint.memory_budget_trial \
   --episodes 100 --seeds 0,1,2,3,4,5 \
   --prereg configs/preregistrations/r92_memory_budget_registered.json \
   --output benchmark_results/memory_budget_registered.json
+
+# R9 boundary map (walled-regime competence boundary; GPU-first; self-labels pilot):
+uv run python -m computronium.experiments.joint.memory_budget_trial \
+  --boundary-map --episodes 100 --seeds 0,1,2 --device cuda \
+  --output benchmark_results/boundary_map_pilot.json
 
 # R9.3 REGISTERED commission (R8.4-gated: claim-grade prereg + registered n + control):
 # NOTE: competence requires lr=0.05 @ 100 episodes on the stationary synthetic stream

@@ -43,6 +43,7 @@ from computronium.core.campaign.evaluation import (
     episode_seed,
     evaluate_episode,
     probe_episode,
+    resolve_device,
 )
 from computronium.core.joint.transition import PlasticityConfig
 from computronium.core.profiling import (
@@ -131,6 +132,10 @@ class DeepCreditConfig:
     # Control band floor for init-to-init variation (imp-59). With few seeds,
     # the frozen arm's mean accuracy has seed-level variance; widen the floor.
     control_band_floor: float = 0.15
+    # Device for the composed systems (GPU-first policy): ``None`` resolves
+    # to CUDA when available, else CPU. Teacher streams stay on CPU
+    # generators — placement never changes the stream semantics.
+    device: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -225,6 +230,7 @@ def _compose(
         PlasticityConfig.null(),
         getattr(CreditAssignmentConfig, credit)(),
         ParameterUpdateConfig.euclidean(step_size=0.0 if frozen else config.lr),
+        device=resolve_device(config.device),
     )
 
 
@@ -598,6 +604,7 @@ def run_trial(  # ruff: ignore[too-many-locals] - trial identity tuple travels t
             "margin_above_chance": _MARGIN_ABOVE_CHANCE,
             "memory_budget_mib": config.memory_budget_mib,
             "control_band_floor": config.control_band_floor,
+            "device": resolve_device(config.device),
         },
         envs=env_reports,
         arms=arms,
@@ -625,6 +632,11 @@ def main() -> None:
     parser.add_argument("--input-dim", type=int, default=64)
     parser.add_argument("--num-classes", type=int, default=2)
     parser.add_argument("--memory-budget-mib", type=float, default=None)
+    parser.add_argument(
+        "--device",
+        default=None,
+        help="Placement for composed systems (GPU-first; None = auto)",
+    )
     parser.add_argument(
         "--prereg",
         type=Path,
@@ -654,6 +666,7 @@ def main() -> None:
         input_dim=args.input_dim,
         num_classes=args.num_classes,
         memory_budget_mib=args.memory_budget_mib,
+        device=args.device,
     )
     prereg = PowerPreregistration.load(args.prereg) if args.prereg else None
     result = run_trial(config, preregistration=prereg)

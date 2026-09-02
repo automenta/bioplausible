@@ -162,6 +162,7 @@ class TestRetentionProbe:
         from computronium.experiments.joint.forgetting_trial import _compose
 
         config = TrialConfig(
+            device="cpu",
             segments=((PROBED_SEGMENT, 30), ("B", 1)),
             seeds=(0,),
             num_classes=CLASSES,
@@ -232,6 +233,7 @@ class TestRetentionPreregistration:
     def test_trial_labels_itself_pilot(self) -> None:
         result = run_trial(
             TrialConfig(
+                device="cpu",
                 segments=((PROBED_SEGMENT, 2), ("B", 2)),
                 probe_episodes=2,
                 seeds=(0,),
@@ -247,6 +249,7 @@ class TestRetentionPreregistration:
         from computronium.experiments.joint.forgetting_trial import _walk_arm
 
         config = TrialConfig(
+            device="cpu",
             segments=((PROBED_SEGMENT, 2), ("B", 2)),
             probe_episodes=2,
             seeds=(0,),
@@ -260,7 +263,7 @@ class TestRetentionPreregistration:
 
     def test_schedule_must_start_with_the_probed_segment(self) -> None:
         with pytest.raises(ValueError, match="must start with segment"):
-            TrialConfig(segments=(("B", 5),))
+            TrialConfig(device="cpu", segments=(("B", 5),))
 
 
 class TestTrialIsLearnablePerSegment:
@@ -274,6 +277,7 @@ class TestTrialIsLearnablePerSegment:
     def test_null_reaches_above_chance_mastery_on_a(self) -> None:
         result = run_trial(
             TrialConfig(
+                device="cpu",
                 segments=((PROBED_SEGMENT, 30), ("B", 5)),
                 probe_episodes=8,
                 seeds=(0, 1),
@@ -328,7 +332,9 @@ class TestRegisteredCommission:
         )
         with pytest.raises(ValueError, match="not claim-grade"):
             run_trial(
-                TrialConfig(segments=((PROBED_SEGMENT, 2), ("B", 2)), seeds=(0,)),
+                TrialConfig(
+                    device="cpu", segments=((PROBED_SEGMENT, 2), ("B", 2)), seeds=(0,)
+                ),
                 preregistration=prereg,
             )
 
@@ -351,7 +357,9 @@ class TestRegisteredCommission:
         )
         with pytest.raises(ValueError, match="caps the label below claim-grade"):
             run_trial(
-                TrialConfig(segments=((PROBED_SEGMENT, 2), ("B", 2)), seeds=(0,)),
+                TrialConfig(
+                    device="cpu", segments=((PROBED_SEGMENT, 2), ("B", 2)), seeds=(0,)
+                ),
                 preregistration=prereg,
             )
 
@@ -373,7 +381,9 @@ class TestRegisteredCommission:
         )
         with pytest.raises(ValueError, match="registered design requires"):
             run_trial(
-                TrialConfig(segments=((PROBED_SEGMENT, 2), ("B", 2)), seeds=(0,)),
+                TrialConfig(
+                    device="cpu", segments=((PROBED_SEGMENT, 2), ("B", 2)), seeds=(0,)
+                ),
                 preregistration=prereg,
             )
 
@@ -395,6 +405,7 @@ class TestRegisteredCommission:
         )
         result = run_trial(
             TrialConfig(
+                device="cpu",
                 segments=((PROBED_SEGMENT, 2), ("B", 2)),
                 probe_episodes=2,
                 seeds=(0, 1, 2, 3, 4),

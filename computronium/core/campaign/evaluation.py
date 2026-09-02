@@ -122,6 +122,17 @@ def episode_seed(
     return _stable_seed(base_seed, campaign_id, iteration, coordinate)
 
 
+def resolve_device(device: str | None) -> str:
+    """GPU-first placement (imp-69): explicit value wins, ``None`` rides CUDA.
+
+    Teacher streams live on CPU generators, so placement never changes the
+    stream semantics — only parameter/batch residency.
+    """
+    if device is not None:
+        return device
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
 def _episode_targets(  # ruff: ignore[too-many-arguments] - noise knob completes the calibration contract
     task_name: str,
     x: Tensor,

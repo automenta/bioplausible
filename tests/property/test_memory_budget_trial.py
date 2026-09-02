@@ -31,12 +31,14 @@ from computronium.experiments.joint.memory_budget_trial import (
     CONTROL_CREDIT,
     MEMORY_BUDGET_CAMPAIGN_ID,
     TRIAL_ARMS,
+    BoundaryMapResult,
     MemoryBudgetConfig,
     _arm_coordinate,
     _compose,
     _environments,
     _measure_saved_bytes,
     _walk_seed,
+    run_boundary_map,
     run_trial,
 )
 from computronium.validation.power_preregistration import (
@@ -47,6 +49,7 @@ from computronium.validation.power_preregistration import (
 
 CHANCE = 0.125  # registered shape (8 inputs / 8 classes)
 LOCK_CONFIG = MemoryBudgetConfig(
+    device="cpu",
     episodes=2,
     probe_episodes=1,
     seeds=(0, 1),
@@ -57,7 +60,7 @@ LOCK_CONFIG = MemoryBudgetConfig(
 
 def _walk_late(credit: str, depth: int, episodes: int, lr: float = 0.05) -> float:
     """Direct single-walk helper: mean late-window training accuracy."""
-    config = MemoryBudgetConfig(depths=(depth,), lr=lr, episodes=episodes)
+    config = MemoryBudgetConfig(device="cpu", depths=(depth,), lr=lr, episodes=episodes)
     env = _environments(config)[0]
     joint = _compose(credit, env, config)
     coord = _arm_coordinate(credit)
@@ -84,7 +87,7 @@ class TestMemoryProfile:
     """The deterministic instrument: O(depth) vs exactly 0 saved bytes."""
 
     def test_odepth_arms_saved_bytes_grow_with_depth(self) -> None:
-        config = MemoryBudgetConfig(depths=(4, 16, 50), width=16)
+        config = MemoryBudgetConfig(device="cpu", depths=(4, 16, 50), width=16)
         envs = _environments(config)
         for credit in ("gradient", "random_projections"):
             by_depth = [_measure_saved_bytes(credit, env, config) for env in envs]
@@ -92,7 +95,7 @@ class TestMemoryProfile:
             assert by_depth[2] > by_depth[1], credit
 
     def test_o1_arms_saved_bytes_exactly_zero(self) -> None:
-        config = MemoryBudgetConfig(depths=(4, 16, 50), width=16)
+        config = MemoryBudgetConfig(device="cpu", depths=(4, 16, 50), width=16)
         for env in _environments(config):
             assert not _measure_saved_bytes(CONTROL_CREDIT, env, config), (
                 "O(1) arm must save 0 bytes (no autograd graph)"
@@ -108,7 +111,9 @@ class TestFeasibilityGrid:
 
     def test_o1_arms_feasible_under_every_budget(self) -> None:
         result = run_trial(
-            MemoryBudgetConfig(episodes=1, seeds=(0,), depths=(4,), width=16)
+            MemoryBudgetConfig(
+                device="cpu", episodes=1, seeds=(0,), depths=(4,), width=16
+            )
         )
         for per_env in result.feasibility.values():
             for verdicts in per_env.values():
@@ -116,7 +121,7 @@ class TestFeasibilityGrid:
                 assert verdicts["control"], "control walled"
 
     def test_smallest_budget_walls_the_global_arms_everywhere(self) -> None:
-        config = MemoryBudgetConfig(width=16)
+        config = MemoryBudgetConfig(device="cpu", width=16)
         envs = _environments(config)
         for env in envs:
             for credit in ("gradient", "random_projections"):
@@ -124,7 +129,7 @@ class TestFeasibilityGrid:
                 assert saved > BUDGETS_MIB[0] * 1024 * 1024, f"{credit}@{env.name}"
 
     def test_mid_budget_walls_only_the_deep_tier(self) -> None:
-        config = MemoryBudgetConfig(width=16)
+        config = MemoryBudgetConfig(device="cpu", width=16)
         envs = {env.name: env for env in _environments(config)}
         for credit in ("gradient", "random_projections"):
             assert _measure_saved_bytes(credit, envs["depth_4"], config) <= (
@@ -140,7 +145,7 @@ class TestFeasibilityGrid:
     def test_registered_budgets_separate_the_walled_arms_at_depth(self) -> None:
         """0.45 MiB admits gradient (451,072 B) and walls FA (501,136 B) at
         the deep tier — the sweep discriminates the two O(depth) arms."""
-        config = MemoryBudgetConfig(width=16)
+        config = MemoryBudgetConfig(device="cpu", width=16)
         envs = {env.name: env for env in _environments(config)}
         gradient = _measure_saved_bytes("gradient", envs["depth_50"], config)
         fa = _measure_saved_bytes("random_projections", envs["depth_50"], config)
@@ -149,7 +154,9 @@ class TestFeasibilityGrid:
 
     def test_never_commissionable_names_only_the_fully_walled_cells(self) -> None:
         result = run_trial(
-            MemoryBudgetConfig(episodes=1, seeds=(0,), depths=(4, 16, 50), width=16)
+            MemoryBudgetConfig(
+                device="cpu", episodes=1, seeds=(0,), depths=(4, 16, 50), width=16
+            )
         )
         assert result.never_commissionable == ("random_projections@depth_50",)
 
@@ -160,6 +167,7 @@ class TestWalkPlan:
 
     def test_fully_walled_arms_produce_no_data(self) -> None:
         config = MemoryBudgetConfig(
+            device="cpu",
             episodes=1,
             probe_episodes=1,
             seeds=(0,),
@@ -204,7 +212,7 @@ class TestControl:
 
     def test_frozen_control_never_trains(self) -> None:
         """θ must not mutate in the frozen arm across a walk."""
-        config = MemoryBudgetConfig(depths=(4,), episodes=1, width=8)
+        config = MemoryBudgetConfig(device="cpu", depths=(4,), episodes=1, width=8)
         env = _environments(config)[0]
         joint = _compose(CONTROL_CREDIT, env, config, frozen=True)
         coord = _arm_coordinate(CONTROL_CREDIT, frozen=True)
@@ -356,7 +364,9 @@ class TestRegisteredCommission:
         )
         with pytest.raises(ValueError, match="registered design requires 5"):
             run_trial(
-                MemoryBudgetConfig(depths=(4,), episodes=1, seeds=(0, 1), width=8),
+                MemoryBudgetConfig(
+                    device="cpu", depths=(4,), episodes=1, seeds=(0, 1), width=8
+                ),
                 preregistration=prereg,
             )
 
@@ -374,11 +384,81 @@ class TestWalledRegimeCompetence:
         )
 
 
+class TestBoundaryMap:
+    """R9 boundary-condition mapping: the walled-regime depth sweep walks
+    only the arms the fully-walled budget admits, measures the walled
+    arms' profiles (never quotes them, imp-68), verifies its premise
+    against measured bytes before walking, and self-labels its pilot."""
+
+    MAP_CONFIG = MemoryBudgetConfig(
+        device="cpu",
+        episodes=1,
+        probe_episodes=1,
+        seeds=(0, 1),
+        depths=(4,),
+        width=8,
+    )
+    WALLED_BUDGET_MIB = 0.005  # walls gradient/FA at the width-8 shape
+
+    def _run(self) -> BoundaryMapResult:
+        return run_boundary_map(
+            self.MAP_CONFIG,
+            depths=(4,),  # the map sweeps its own depths, not config.depths
+            walled_budget_mib=self.WALLED_BUDGET_MIB,
+        )
+
+    def test_walks_only_the_walled_regime_arms(self) -> None:
+        result = self._run()
+        assert set(result.arms) == {CONTROL_CREDIT, "control"}
+        for arm in result.arms.values():
+            assert arm.walked_envs == ("depth_4",)
+
+    def test_profiles_are_measured_for_every_credit(self) -> None:
+        result = self._run()
+        for credit in TRIAL_ARMS:
+            saved = result.saved_bytes_by_cell[f"{credit}@depth_4"]
+            if credit == CONTROL_CREDIT:
+                assert not saved, "O(1) arm must save 0 bytes"
+            else:
+                assert saved > self.WALLED_BUDGET_MIB * 1024 * 1024, credit
+
+    def test_premise_fails_loudly_when_not_walled(self) -> None:
+        with pytest.raises(ValueError, match="not the fully-walled regime"):
+            run_boundary_map(self.MAP_CONFIG, walled_budget_mib=1.0)
+
+    def test_self_labels_pilot_with_frozen_control(self) -> None:
+        result = self._run()
+        prereg = result.preregistration
+        assert prereg.declared_rung == "pilot"
+        assert prereg.label() == "pilot"
+        assert prereg.claim_scope == "resource_efficiency"
+        assert prereg.task_stream == "stationary"
+        control = prereg.embedded_control
+        assert control is not None
+        assert control.coordinate == _arm_coordinate(CONTROL_CREDIT, frozen=True)
+
+    def test_boundary_depth_none_when_nothing_is_competent(self) -> None:
+        """At a 1-episode budget nothing learns: every depth sits below the
+        chance+margin line and the boundary is None — never a spurious
+        'competent' tier from noise."""
+        result = self._run()
+        assert result.competence_by_env == {"depth_4": False}
+        assert result.boundary_depth is None
+
+    def test_walk_records_carry_stationary_provenance(self) -> None:
+        result = self._run()
+        for env, verdict in result.control_verdicts.items():
+            assert verdict["verdict"] == "passed", f"{env}: {verdict['detail']}"
+        assert not result.quarantined
+
+
 class TestStationaryStreamConstructValidity:
     """imp-67 lock: the walk must enact the stream its prereg declares."""
 
     def test_walk_records_carry_stationary_teacher_provenance(self) -> None:
-        config = MemoryBudgetConfig(depths=(4,), episodes=2, seeds=(0,), width=8)
+        config = MemoryBudgetConfig(
+            device="cpu", depths=(4,), episodes=2, seeds=(0,), width=8
+        )
         env = _environments(config)[0]
         for credit in (*TRIAL_ARMS, CONTROL_CREDIT):
             coord = _arm_coordinate(credit, frozen=(credit == CONTROL_CREDIT))
@@ -400,7 +480,9 @@ class TestStationaryStreamConstructValidity:
 
     def test_probe_scores_the_same_stationary_teacher_stream(self) -> None:
         """imp-61 class: a probe keyed differently scores a different task."""
-        config = MemoryBudgetConfig(depths=(4,), episodes=1, seeds=(0,), width=8)
+        config = MemoryBudgetConfig(
+            device="cpu", depths=(4,), episodes=1, seeds=(0,), width=8
+        )
         env = _environments(config)[0]
         coord = _arm_coordinate("gradient")
         campaign_id = f"{MEMORY_BUDGET_CAMPAIGN_ID}::{env.name}"

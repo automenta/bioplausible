@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -49,6 +49,7 @@ from computronium.core.campaign.evaluation import (
     episode_seed,
     evaluate_episode,
     probe_episode,
+    resolve_device,
 )
 from computronium.core.joint.transition import PlasticityConfig
 from computronium.core.profiling import measure_saved_activation_bytes
@@ -77,15 +78,18 @@ if TYPE_CHECKING:
     from computronium.core.campaign.frontier_record import FrontierRecord
 
 __all__ = [
+    "BOUNDARY_DEPTHS",
     "BUDGETS_MIB",
     "CONTROL_CREDIT",
     "MEMORY_BUDGET_CAMPAIGN_ID",
     "PROBE_EPISODE_BASE",
     "TRIAL_ARMS",
     "ArmOutcome",
+    "BoundaryMapResult",
     "MemoryBudgetConfig",
     "TrialResult",
     "main",
+    "run_boundary_map",
     "run_trial",
 ]
 
@@ -104,6 +108,12 @@ _MIN_CONTRAST_SEEDS = 2  # Cohen's d needs >= 2 observations per group
 # 0.45 MiB separates the two walled arms at the deep tier (gradient 451,072 B
 # in, FA 501,136 B out).
 BUDGETS_MIB = (0.015, 0.25, 0.45)
+
+# Boundary-map depth sweep (R9 boundary-condition mapping): finer than the
+# registered (4, 16, 50) grid, which already placed the walled-regime
+# competence boundary between depth 4 (probe 0.406) and depth 16 (0.155);
+# the map locates the transition and confirms the deep tier.
+BOUNDARY_DEPTHS = (4, 6, 8, 12, 16, 24, 32, 50)
 
 # Dynamics per credit (respects D x C fence: thermodynamic_contrast requires
 # settling; max_steps is filled per depth at compose time so the nudge
@@ -166,13 +176,6 @@ def _arm_coordinate(credit: str, *, frozen: bool = False) -> str:
     return f"digital/feedforward/{dynamics}/null/{credit}/{update}"
 
 
-def _resolve_device(device: str | None) -> str:
-    """GPU-first placement: None rides CUDA when available, else CPU."""
-    if device is not None:
-        return device
-    return "cuda" if torch.cuda.is_available() else "cpu"
-
-
 def _compose(
     credit: str, env: DepthEnv, config: MemoryBudgetConfig, *, frozen: bool = False
 ) -> JointSystem:
@@ -200,7 +203,7 @@ def _compose(
         PlasticityConfig.null(),
         getattr(CreditAssignmentConfig, credit)(),
         ParameterUpdateConfig.euclidean(step_size=0.0 if frozen else config.lr),
-        device=_resolve_device(config.device),
+        device=resolve_device(config.device),
     )
 
 
@@ -577,7 +580,7 @@ def run_trial(  # ruff: ignore[too-many-locals] - trial identity tuple travels t
             "input_dim": config.input_dim,
             "num_classes": config.num_classes,
             "teacher_noise": config.teacher_noise,
-            "device": _resolve_device(config.device),
+            "device": resolve_device(config.device),
             "probe_episode_base": PROBE_EPISODE_BASE,
             "chance_accuracy": chance,
             "margin_above_chance": _MARGIN_ABOVE_CHANCE,
@@ -633,12 +636,14 @@ def _contrasts(
     return contrasts
 
 
-def _pilot_preregistration(
+def _pilot_preregistration(  # ruff: ignore[too-many-arguments] - prereg identity tuple travels together
     arms: dict[str, ArmOutcome],
     envs: tuple[DepthEnv, ...],
     config: MemoryBudgetConfig,
     chance: float,
     n_samples: int,
+    *,
+    claim: str | None = None,
 ) -> PowerPreregistration:
     """Self-built pilot commission (declared rung caps the label; imp-55).
 
@@ -647,11 +652,12 @@ def _pilot_preregistration(
     walled-regime contrast the registered resource-efficiency claim needs.
     """
     shallow = envs[0].name
-    thermo_probes = list(arms["thermodynamic_contrast"].probe_by_env[shallow])
+    thermo_probes = list(arms[CONTROL_CREDIT].probe_by_env[shallow])
     control_probes = list(arms["control"].probe_by_env[shallow])
     pooled_sd = float(np.std(thermo_probes + control_probes, ddof=1))
     return PowerPreregistration(
-        claim=(
+        claim=claim
+        or (
             "Pilot: under a per-step saved-activation memory ceiling, "
             "exact-global and random-projection credit are disqualified once "
             "their O(depth) saved-activation profile exceeds the budget while "
@@ -676,6 +682,256 @@ def _pilot_preregistration(
         ),
         declared_rung="pilot",
         created=datetime.now(UTC).date().isoformat(),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class BoundaryMapResult:
+    """Walled-regime competence boundary (R9 boundary-condition mapping).
+
+    ``arms`` contains only the arms the fully-walled budget admits
+    (``thermodynamic_contrast`` + its frozen control); the O(depth) arms'
+    measured saved-byte profiles ride ``saved_bytes_by_cell`` so the budget
+    that would admit them at each depth is a measured number, never a
+    quoted figure (imp-68). ``boundary_depth`` is the deepest swept depth
+    whose mean held-out probe clears chance + margin (``None`` when no
+    swept depth is competent).
+    """
+
+    config: dict[str, object]
+    envs: list[dict[str, object]]
+    walled_budget_mib: float
+    saved_bytes_by_cell: dict[str, float]
+    arms: dict[str, ArmOutcome]
+    competence_by_env: dict[str, bool]
+    boundary_depth: int | None
+    contrasts: dict[str, dict[str, float]]
+    control_verdicts: dict[str, dict[str, str]]
+    quarantined: bool
+    preregistration: PowerPreregistration
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "trial": f"{MEMORY_BUDGET_CAMPAIGN_ID}_boundary_map",
+            "config": self.config,
+            "envs": self.envs,
+            "walled_budget_mib": self.walled_budget_mib,
+            "saved_bytes_by_cell": self.saved_bytes_by_cell,
+            "arms": {k: a.to_dict() for k, a in self.arms.items()},
+            "competence_by_env": self.competence_by_env,
+            "boundary_depth": self.boundary_depth,
+            "contrasts": self.contrasts,
+            "embedded_control_verdicts": self.control_verdicts,
+            "quarantined": self.quarantined,
+            "preregistration": self.preregistration.to_dict(),
+        }
+
+
+def _verify_walled_premise(
+    saved_bytes_by_cell: dict[str, float],
+    envs: tuple[DepthEnv, ...],
+    budget_bytes: float,
+    walled_credits: tuple[str, ...],
+) -> None:
+    """Fail loudly by name if the fully-walled regime is not actually walled.
+
+    The map's premise: the O(1) control credit is commissionable at every
+    swept depth (the R8.5 verdict must exist in every regime) and every
+    O(depth) credit is walled at every swept depth — otherwise the sweep is
+    not a walled-regime map and its readout would silently mix regimes.
+    """
+    for env in envs:
+        thermo_bytes = saved_bytes_by_cell[f"{CONTROL_CREDIT}@{env.name}"]
+        if thermo_bytes > budget_bytes:
+            msg = (
+                f"walled premise broken: {CONTROL_CREDIT}@{env.name} needs "
+                f"{thermo_bytes:.0f} B > budget {budget_bytes:.0f} B — the "
+                "frozen control would be uncommissionable"
+            )
+            raise ValueError(msg)
+    leaked = [
+        f"{credit}@{env.name}"
+        for credit in walled_credits
+        for env in envs
+        if saved_bytes_by_cell[f"{credit}@{env.name}"] <= budget_bytes
+    ]
+    if leaked:
+        msg = (
+            f"budget {budget_bytes:.0f} B admits walled cells {leaked} — "
+            "raise the premise: this is not the fully-walled regime"
+        )
+        raise ValueError(msg)
+
+
+def run_boundary_map(  # ruff: ignore[too-many-locals] - map identity tuple travels together
+    config: MemoryBudgetConfig,
+    *,
+    depths: tuple[int, ...] = BOUNDARY_DEPTHS,
+    walled_budget_mib: float | None = None,
+) -> BoundaryMapResult:
+    """Map where the O(1) arm's walled-regime competence tier ends in depth.
+
+    Walks only the arms the fully-walled budget (``min`` of the registered
+    budgets unless overridden) admits — ``thermodynamic_contrast`` plus its
+    frozen control (imp-64 identity: the (credit, frozen) pair) — across a
+    finer depth sweep than the registered grid. Every swept depth's
+    saved-activation profile is measured for all three credits, so the
+    artifact carries the budget threshold that would admit each walled arm.
+    The walled premise is verified against the measured bytes *before* the
+    walk (fail loudly by name). Self-labels its commission ``pilot``
+    (imp-55): the registered boundary claim follows once this pilot fixes
+    variance and effect size.
+    """
+    budget_mib = (
+        min(config.budgets_mib) if walled_budget_mib is None else walled_budget_mib
+    )
+    budget_bytes = budget_mib * 1024 * 1024
+    map_config = replace(config, depths=depths)
+    envs = _environments(map_config)
+    chance = 1.0 / config.num_classes
+
+    saved_bytes_by_cell = {
+        f"{credit}@{env.name}": _measure_saved_bytes(credit, env, map_config)
+        for credit in TRIAL_ARMS
+        for env in envs
+    }
+    _verify_walled_premise(
+        saved_bytes_by_cell,
+        envs,
+        budget_bytes,
+        walled_credits=tuple(c for c in TRIAL_ARMS if c != CONTROL_CREDIT),
+    )
+
+    labels = (CONTROL_CREDIT, "control")
+    thermo_bytes_by_env = {
+        env.name: saved_bytes_by_cell[f"{CONTROL_CREDIT}@{env.name}"] for env in envs
+    }
+    walk_plan = {f"{label}@{env.name}": True for label in labels for env in envs}
+    control_records_by_env: dict[str, list[FrontierRecord]] = {}
+    arms: dict[str, ArmOutcome] = {}
+    for label, frozen in ((CONTROL_CREDIT, False), ("control", True)):
+        arms[label] = _walk_arm(
+            label,
+            CONTROL_CREDIT,
+            frozen,
+            envs,
+            config=map_config,
+            saved_bytes_by_cell={
+                f"{label}@{env.name}": thermo_bytes_by_env[env.name] for env in envs
+            },
+            walk_plan=walk_plan,
+            control_records_by_env=control_records_by_env,
+        )
+
+    competence_by_env = {
+        env.name: bool(
+            env.name in arms[CONTROL_CREDIT].probe_by_env
+            and np.mean(arms[CONTROL_CREDIT].probe_by_env[env.name])
+            > chance + _MARGIN_ABOVE_CHANCE
+        )
+        for env in envs
+    }
+    competent_depths = [env.depth for env in envs if competence_by_env[env.name]]
+    boundary_depth = max(competent_depths) if competent_depths else None
+
+    contrasts: dict[str, dict[str, float]] = {}
+    if len(config.seeds) >= _MIN_CONTRAST_SEEDS:
+        for env in envs:
+            thermo = arms[CONTROL_CREDIT].probe_by_env.get(env.name)
+            control = arms["control"].probe_by_env.get(env.name)
+            if thermo is not None and control is not None:
+                d = _contrast_d(list(thermo), list(control))
+                contrasts[f"thermo_vs_control@{env.name}"] = {"d_probe": round(d, 4)}
+
+    n_control_samples = config.episodes * config.batch_size * len(config.seeds)
+    control_verdicts = _verify_controls(
+        envs,
+        control_records_by_env,
+        chance,
+        n_control_samples,
+        config.control_band_floor,
+    )
+    prereg = _pilot_preregistration(
+        arms,
+        envs,
+        map_config,
+        chance,
+        n_control_samples,
+        claim=(
+            "Pilot boundary map: under the fully-walled budget only "
+            "thermodynamic_contrast is commissionable; the sweep locates the "
+            "deepest depth whose held-out probe clears chance + margin. "
+            "Registered boundary claim follows once this pilot fixes "
+            "variance and effect size."
+        ),
+    )
+    return BoundaryMapResult(
+        config={
+            "episodes": config.episodes,
+            "probe_episodes": config.probe_episodes,
+            "seeds": list(config.seeds),
+            "boundary_depths": list(depths),
+            "walled_budget_mib": budget_mib,
+            "width": config.width,
+            "lr": config.lr,
+            "batch_size": config.batch_size,
+            "input_dim": config.input_dim,
+            "num_classes": config.num_classes,
+            "teacher_noise": config.teacher_noise,
+            "device": resolve_device(config.device),
+            "probe_episode_base": PROBE_EPISODE_BASE,
+            "chance_accuracy": chance,
+            "margin_above_chance": _MARGIN_ABOVE_CHANCE,
+            "control_band_floor": config.control_band_floor,
+        },
+        envs=[
+            {
+                "name": env.name,
+                "depth": env.depth,
+                "unconstrained": env.unconstrained,
+                "hidden_dims": list(env.hidden_dims),
+            }
+            for env in envs
+        ],
+        walled_budget_mib=budget_mib,
+        saved_bytes_by_cell=saved_bytes_by_cell,
+        arms=arms,
+        competence_by_env=competence_by_env,
+        boundary_depth=boundary_depth,
+        contrasts=contrasts,
+        control_verdicts={
+            name: {"verdict": v.verdict, "detail": v.detail}
+            for name, v in control_verdicts.items()
+        },
+        quarantined=bool(control_verdicts)
+        and any(v.quarantines for v in control_verdicts.values()),
+        preregistration=prereg,
+    )
+
+
+def _report_boundary_map(result: BoundaryMapResult, output: Path) -> None:
+    """Write and print the boundary-map artifact."""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(result.to_dict(), indent=2) + "\n", encoding="utf-8")
+    print(f"memory budget boundary map -> {output}")
+    for env in result.envs:
+        name = str(env["name"])
+        probes = result.arms[CONTROL_CREDIT].probe_by_env.get(name, ())
+        verdict = (
+            f"competent={result.competence_by_env[name]}"
+            if probes
+            else "(never walked)"
+        )
+        mean = np.mean(probes) if probes else float("nan")
+        print(f"  {name:<10} thermo probe {mean:.3f} {verdict}")
+    print(f"  boundary depth: {result.boundary_depth}")
+    for name, contrast in result.contrasts.items():
+        print(f"  {name}: d={contrast['d_probe']:+.3f}")
+    for env, verdict in result.control_verdicts.items():
+        print(f"  control[{env}]: {verdict['verdict']} — {verdict['detail']}")
+    print(
+        f"  prereg label: {result.preregistration.to_dict()['label']} "
+        f"(quarantined={result.quarantined})"
     )
 
 
@@ -707,6 +963,27 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--boundary-map",
+        action="store_true",
+        help=(
+            "Map the walled-regime competence boundary: walk only the arms "
+            "the fully-walled budget admits across a finer depth sweep "
+            "(pilot-scoped; self-labels its commission)"
+        ),
+    )
+    parser.add_argument(
+        "--boundary-depths",
+        default=",".join(map(str, BOUNDARY_DEPTHS)),
+        help=f"Depth sweep for --boundary-map (default: {BOUNDARY_DEPTHS[0]}"
+        f"..{BOUNDARY_DEPTHS[-1]})",
+    )
+    parser.add_argument(
+        "--walled-budget-mib",
+        type=float,
+        default=None,
+        help="Fully-walled budget override (default: min of --budgets-mib)",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=Path("benchmark_results/memory_budget_pilot.json"),
@@ -727,6 +1004,21 @@ def main() -> None:
         num_classes=args.num_classes,
         device=args.device,
     )
+    if args.boundary_map:
+        if args.prereg:
+            msg = (
+                "the boundary map self-labels its commission pilot; a "
+                "registered boundary commission needs its own preregistration"
+            )
+            raise ValueError(msg)
+        result = run_boundary_map(
+            config,
+            depths=tuple(int(s) for s in args.boundary_depths.split(",") if s.strip()),
+            walled_budget_mib=args.walled_budget_mib,
+        )
+        _report_boundary_map(result, args.output)
+        return
+
     prereg = PowerPreregistration.load(args.prereg) if args.prereg else None
     result = run_trial(config, preregistration=prereg)
     args.output.parent.mkdir(parents=True, exist_ok=True)

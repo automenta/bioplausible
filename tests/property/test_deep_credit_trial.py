@@ -41,6 +41,7 @@ from computronium.validation.power_preregistration import (
 
 CHANCE = 0.125  # registered shape (8 inputs / 8 classes)
 LOCK_CONFIG = DeepCreditConfig(
+    device="cpu",
     episodes=2,
     probe_episodes=1,
     seeds=(0, 1),
@@ -51,7 +52,7 @@ LOCK_CONFIG = DeepCreditConfig(
 
 def _walk_late(credit: str, depth: int, episodes: int, lr: float = 0.03) -> float:
     """Direct single-walk helper: late-window training accuracy."""
-    config = DeepCreditConfig(depths=(depth,), lr=lr)
+    config = DeepCreditConfig(device="cpu", depths=(depth,), lr=lr)
     env = {e.name: e for e in _environments(config)}[f"depth_{depth}"]
     joint = _compose(credit, env, config)
     accs = []
@@ -73,13 +74,17 @@ def _walk_late(credit: str, depth: int, episodes: int, lr: float = 0.03) -> floa
 
 class TestDepthEnvironments:
     def test_depths_include_deep_tier(self) -> None:
-        envs = _environments(DeepCreditConfig())
+        envs = _environments(
+            DeepCreditConfig(
+                device="cpu",
+            )
+        )
         depths = [env.depth for env in envs]
         assert 50 in depths, "registered deep tier (50+) must be present"
         assert depths[0] < depths[-1], "shallow competence tier first"
 
     def test_hidden_dims_match_depth(self) -> None:
-        envs = _environments(DeepCreditConfig(width=16))
+        envs = _environments(DeepCreditConfig(device="cpu", width=16))
         for env in envs:
             assert len(env.hidden_dims) == env.depth - 1
             assert all(h == 16 for h in env.hidden_dims)
@@ -150,7 +155,7 @@ class TestMemoryProfile:
 
         saved_by_depth = {}
         for depth in [4, 16]:
-            config = DeepCreditConfig(depths=(depth,), width=8)
+            config = DeepCreditConfig(device="cpu", depths=(depth,), width=8)
             env = _environments(config)[0]
             joint = _compose("gradient", env, config)
             x_batch, y_batch = episode_batch(
@@ -178,7 +183,7 @@ class TestMemoryProfile:
         from computronium.core.profiling import measure_saved_activation_bytes
 
         for depth in [4, 16]:
-            config = DeepCreditConfig(depths=(depth,), width=8)
+            config = DeepCreditConfig(device="cpu", depths=(depth,), width=8)
             env = _environments(config)[0]
             joint = _compose("thermodynamic_contrast", env, config)
             x_batch, y_batch = episode_batch(
@@ -203,7 +208,7 @@ class TestImp60Regression:
     def test_nonsquare_geometry_no_crash_on_guard_probe(self) -> None:
         """imp-60: evaluate_episode with input_dim != num_classes must not crash."""
         config = DeepCreditConfig(
-            episodes=1, depths=(4,), width=16, input_dim=16, num_classes=2
+            device="cpu", episodes=1, depths=(4,), width=16, input_dim=16, num_classes=2
         )
         env = _environments(config)[0]
         joint = _compose("gradient", env, config)
@@ -225,7 +230,7 @@ class TestImp60Regression:
     def test_thermo_nonsquare_no_crash(self) -> None:
         """imp-60: thermo on nonsquare (energy_minimization dynamics) must not crash."""
         config = DeepCreditConfig(
-            episodes=1, depths=(4,), width=16, input_dim=16, num_classes=2
+            device="cpu", episodes=1, depths=(4,), width=16, input_dim=16, num_classes=2
         )
         env = _environments(config)[0]
         joint = _compose("thermodynamic_contrast", env, config)
@@ -364,14 +369,16 @@ class TestRegisteredCommission:
         )
         with pytest.raises(ValueError, match="registered design requires 5"):
             run_trial(
-                DeepCreditConfig(depths=(4,), episodes=1, seeds=(0, 1), width=8),
+                DeepCreditConfig(
+                    device="cpu", depths=(4,), episodes=1, seeds=(0, 1), width=8
+                ),
                 preregistration=prereg,
             )
 
 
 class TestContrasts:
     def test_contrasts_cover_deep_tier(self) -> None:
-        result = run_trial(DeepCreditConfig(depths=(4, 16), seeds=(0, 1)))
+        result = run_trial(DeepCreditConfig(device="cpu", depths=(4, 16), seeds=(0, 1)))
         contrast_keys = list(result.contrasts_vs_gradient.keys())
         assert any("depth_16" in k for k in contrast_keys), (
             "contrasts must include the deep tier"
@@ -396,7 +403,9 @@ class TestStationaryStreamConstructValidity:
     """
 
     def test_walk_records_carry_stationary_teacher_provenance(self) -> None:
-        config = DeepCreditConfig(depths=(4,), episodes=2, seeds=(0,), width=8)
+        config = DeepCreditConfig(
+            device="cpu", depths=(4,), episodes=2, seeds=(0,), width=8
+        )
         env = _environments(config)[0]
         for credit in (*TRIAL_ARMS, CONTROL_CREDIT):
             coord = _arm_coordinate(credit, env, frozen=(credit == CONTROL_CREDIT))
@@ -419,7 +428,9 @@ class TestStationaryStreamConstructValidity:
     def test_probe_scores_the_same_stationary_teacher_stream(self) -> None:
         """Probe and training readout must share the stream key (imp-61 class:
         a probe keyed differently scores a different task by construction)."""
-        config = DeepCreditConfig(depths=(4,), episodes=1, seeds=(0,), width=8)
+        config = DeepCreditConfig(
+            device="cpu", depths=(4,), episodes=1, seeds=(0,), width=8
+        )
         env = _environments(config)[0]
         coord = _arm_coordinate("gradient", env)
         campaign_id = f"{DEEP_CREDIT_CAMPAIGN_ID}::{env.name}"
@@ -438,7 +449,7 @@ class TestDepthDegradation:
 
         saved_by_depth = {}
         for depth in [4, 16, 50]:
-            config = DeepCreditConfig(depths=(depth,), width=8)
+            config = DeepCreditConfig(device="cpu", depths=(depth,), width=8)
             env = _environments(config)[0]
             joint = _compose("gradient", env, config)
             x_batch, y_batch = episode_batch(
@@ -464,7 +475,7 @@ class TestDepthDegradation:
         from computronium.core.profiling import measure_saved_activation_bytes
 
         for depth in [4, 16, 50]:
-            config = DeepCreditConfig(depths=(depth,), width=8)
+            config = DeepCreditConfig(device="cpu", depths=(depth,), width=8)
             env = _environments(config)[0]
             joint = _compose("thermodynamic_contrast", env, config)
             x_batch, y_batch = episode_batch(

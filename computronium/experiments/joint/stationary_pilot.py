@@ -31,6 +31,7 @@ from computronium.core.campaign.evaluation import (
     CALIBRATED_TEACHER_NOISE,
     episode_seed,
     evaluate_episode,
+    resolve_device,
 )
 from computronium.core.system_trainer import (
     JointSystem,
@@ -82,6 +83,10 @@ class PilotConfig:
     input_dim: int = 8
     num_classes: int = 8
     teacher_noise: float = 0.0
+    # Device for the composed systems (GPU-first policy): ``None`` resolves
+    # to CUDA when available, else CPU. Teacher streams stay on CPU
+    # generators — placement never changes the stream semantics.
+    device: str | None = None
 
 
 def _arm_coordinate(m_arm: str) -> str:
@@ -126,6 +131,7 @@ def _compose(coordinate: str, config: PilotConfig) -> JointSystem:
         ParameterUpdateConfig.euclidean(
             step_size=0.0 if update == "frozen" else config.lr
         ),
+        device=resolve_device(config.device),
     )
 
 
@@ -265,6 +271,7 @@ def run_pilot(config: PilotConfig) -> PilotResult:
             "num_classes": config.num_classes,
             "teacher_noise": config.teacher_noise,
             "chance_accuracy": 1.0 / config.num_classes,
+            "device": resolve_device(config.device),
         },
         arms=arms,
         contrasts_vs_null=contrasts,
@@ -294,6 +301,11 @@ def main() -> None:
         "0.0 = noiseless teacher (ceiling risk at long budgets)",
     )
     parser.add_argument(
+        "--device",
+        default=None,
+        help="Placement for composed systems (GPU-first; None = auto)",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=Path("benchmark_results/stationary_pilot.json"),
@@ -312,6 +324,7 @@ def main() -> None:
         input_dim=args.input_dim,
         num_classes=args.num_classes,
         teacher_noise=noise,
+        device=args.device,
     )
     result = run_pilot(config)
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -43,6 +43,7 @@ from computronium.core.campaign.evaluation import (
     episode_seed,
     evaluate_episode,
     probe_episode,
+    resolve_device,
 )
 from computronium.core.system_trainer import (
     JointSystem,
@@ -104,6 +105,10 @@ class TrialConfig:
     input_dim: int = 8
     num_classes: int = 8
     teacher_noise: float = CALIBRATED_TEACHER_NOISE
+    # Device for the composed systems (GPU-first policy): ``None`` resolves
+    # to CUDA when available, else CPU. Teacher streams stay on CPU
+    # generators — placement never changes the stream semantics.
+    device: str | None = None
 
     def __post_init__(self) -> None:
         if not self.segments or self.segments[0][0] != PROBED_SEGMENT:
@@ -159,6 +164,7 @@ def _compose(coordinate: str, config: TrialConfig) -> JointSystem:
         ParameterUpdateConfig.euclidean(
             step_size=0.0 if update == "frozen" else config.lr
         ),
+        device=resolve_device(config.device),
     )
 
 
@@ -408,6 +414,7 @@ def run_trial(
             "teacher_noise": config.teacher_noise,
             "probe_episode_base": PROBE_EPISODE_BASE,
             "chance_accuracy": chance,
+            "device": resolve_device(config.device),
         },
         arms=arms,
         contrasts_vs_null=contrasts,
@@ -438,6 +445,11 @@ def main() -> None:
         type=float,
         default=None,
         help=f"Teacher-logit noise (default: {CALIBRATED_TEACHER_NOISE})",
+    )
+    parser.add_argument(
+        "--device",
+        default=None,
+        help="Placement for composed systems (GPU-first; None = auto)",
     )
     parser.add_argument(
         "--prereg",
@@ -473,6 +485,7 @@ def main() -> None:
         input_dim=args.input_dim,
         num_classes=args.num_classes,
         teacher_noise=noise,
+        device=args.device,
     )
     prereg = PowerPreregistration.load(args.prereg) if args.prereg else None
     result = run_trial(config, preregistration=prereg)

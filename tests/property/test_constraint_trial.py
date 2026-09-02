@@ -31,14 +31,21 @@ from computronium.experiments.joint.constraint_trial import (
 
 CHANCE = 0.125  # registered shape (8 inputs / 8 classes)
 LOCK_CONFIG = ConstraintConfig(
-    episodes=2, probe_episodes=1, seeds=(0, 1), severities=(0.5,)
+    device="cpu", episodes=2, probe_episodes=1, seeds=(0, 1), severities=(0.5,)
 )
 
 
 def _walk_late(credit: str, env_name: str, episodes: int, lr: float = 0.03) -> float:
     """Direct single-walk helper: late-window training accuracy."""
-    env = {e.name: e for e in _environments(ConstraintConfig())}[env_name]
-    joint = _compose(credit, env, ConstraintConfig(lr=lr))
+    env = {
+        e.name: e
+        for e in _environments(
+            ConstraintConfig(
+                device="cpu",
+            )
+        )
+    }[env_name]
+    joint = _compose(credit, env, ConstraintConfig(device="cpu", lr=lr))
     accs = []
     for episode in range(episodes):
         record, _ = evaluate_episode(
@@ -58,7 +65,11 @@ def _walk_late(credit: str, env_name: str, episodes: int, lr: float = 0.03) -> f
 
 class TestConstraintEnvironments:
     def test_baseline_is_unconstrained_digital(self) -> None:
-        envs = _environments(ConstraintConfig())
+        envs = _environments(
+            ConstraintConfig(
+                device="cpu",
+            )
+        )
         assert envs[0].name == BASELINE_ENV
         assert envs[0].unconstrained
         assert envs[0].substrate_axis == "digital"
@@ -66,27 +77,47 @@ class TestConstraintEnvironments:
         assert [env.severity for env in envs[1:]] == [0.0, 0.5, 1.0]
 
     def test_coordinates_name_the_substrate_they_run_on(self) -> None:
-        for env in _environments(ConstraintConfig()):
+        for env in _environments(
+            ConstraintConfig(
+                device="cpu",
+            )
+        ):
             for credit in TRIAL_ARMS:
                 assert _arm_coordinate(credit, env).split("/")[0] == env.substrate_axis
 
     def test_coordinates_are_dispatchable_ontology_coordinates(self) -> None:
-        env = _environments(ConstraintConfig())[0]
+        env = _environments(
+            ConstraintConfig(
+                device="cpu",
+            )
+        )[0]
         for credit in TRIAL_ARMS:
             system = build_coordinate_system(_arm_coordinate(credit, env))
             assert system is not None
 
     def test_control_coordinate_declares_frozen_and_agrees(self) -> None:
-        env = _environments(ConstraintConfig())[0]
+        env = _environments(
+            ConstraintConfig(
+                device="cpu",
+            )
+        )[0]
         coordinate = _arm_coordinate("gradient", env, frozen=True)
         assert coordinate.endswith("/gradient/frozen")
-        joint = _compose("gradient", env, ConstraintConfig(lr=0.03), frozen=True)
+        joint = _compose(
+            "gradient", env, ConstraintConfig(device="cpu", lr=0.03), frozen=True
+        )
         update = joint.update.config
         assert float(getattr(update, "step_size", 1.0)) == pytest.approx(0.0)
 
     def test_frozen_control_never_trains(self) -> None:
-        env = _environments(ConstraintConfig())[0]
-        joint = _compose("gradient", env, ConstraintConfig(lr=0.03), frozen=True)
+        env = _environments(
+            ConstraintConfig(
+                device="cpu",
+            )
+        )[0]
+        joint = _compose(
+            "gradient", env, ConstraintConfig(device="cpu", lr=0.03), frozen=True
+        )
         before = {k: v.clone() for k, v in joint.geometry.params.items()}
         for episode in range(2):
             evaluate_episode(

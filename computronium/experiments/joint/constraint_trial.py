@@ -45,6 +45,7 @@ from computronium.core.campaign.evaluation import (
     episode_seed,
     evaluate_episode,
     probe_episode,
+    resolve_device,
 )
 from computronium.core.joint.transition import PlasticityConfig
 from computronium.core.system_trainer import (
@@ -118,6 +119,10 @@ class ConstraintConfig:
     input_dim: int = 8
     num_classes: int = 8
     teacher_noise: float = CALIBRATED_TEACHER_NOISE
+    # Device for the composed systems (GPU-first policy): ``None`` resolves
+    # to CUDA when available, else CPU. Teacher streams stay on CPU
+    # generators — placement never changes the stream semantics.
+    device: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,6 +227,7 @@ def _compose(
         PlasticityConfig.null(),
         getattr(CreditAssignmentConfig, credit)(),
         ParameterUpdateConfig.euclidean(step_size=0.0 if frozen else config.lr),
+        device=resolve_device(config.device),
     )
 
 
@@ -527,6 +533,7 @@ def run_trial(config: ConstraintConfig) -> TrialResult:
             "probe_episode_base": PROBE_EPISODE_BASE,
             "chance_accuracy": chance,
             "margin_above_chance": _MARGIN_ABOVE_CHANCE,
+            "device": resolve_device(config.device),
         },
         envs=env_reports,
         arms=arms,
@@ -551,6 +558,11 @@ def main() -> None:
     parser.add_argument("--lr", type=float, default=0.03)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument(
+        "--device",
+        default=None,
+        help="Placement for composed systems (GPU-first; None = auto)",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=Path("benchmark_results/constraint_pilot.json"),
@@ -565,6 +577,7 @@ def main() -> None:
         severities=tuple(float(s) for s in args.severities.split(",") if s.strip()),
         lr=args.lr,
         batch_size=args.batch_size,
+        device=args.device,
     )
     result = run_trial(config)
     args.output.parent.mkdir(parents=True, exist_ok=True)
