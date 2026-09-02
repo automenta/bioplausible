@@ -197,10 +197,42 @@
 > while thermo stays flat 0 — but on this task family O(1) memory buys no accuracy at depth,
 > so the naive hypothesis is refuted and the claim is registered on the gradient-retention
 > contrast + memory separation.** The severity family where O(1) arms are structurally immune
-> — the memory budget (disqualification at ceiling) — remains untested and is the registered
-> design lever pairing R9.3's continuation with R9.2. Gate **1400 passed / 0 failed** (+25:
-> committed-session additions + 6 new locks: 2 construct-validity, 4 registered-commission
-> in `test_deep_credit_trial.py`), ruff clean on touched files.
+> — the memory budget (disqualification at ceiling) — remained untested; landed same day (below).
+> Gate **1400 passed / 0 failed** (+25: committed-session additions + 6 new locks:
+> 2 construct-validity, 4 registered-commission in `test_deep_credit_trial.py`), ruff clean
+> on touched files.
+
+> **R9.2/R9.3 memory-budget severity family landed 2026-09-02 — the registered
+> resource-efficiency claim is claim-grade, and the constraint family where
+> O(1)-memory credit is structurally immune now has a registered instrument.**
+> `memory_budget_trial.py` sweeps a per-step saved-activation ceiling
+> (0.015/0.25/0.45 MiB) as the commissioning gate, not a dynamics perturbation:
+> a feasible arm's walk is identical under every budget that admits it, so each
+> (arm, depth) cell walks once and is read through the feasibility grid; a cell
+> walled under every budget never walks (OOM semantics — FA@depth_50 is never
+> commissionable at the registered budgets). The planted control is a frozen
+> thermodynamic_contrast arm — the only credit feasible at every budget — so the
+> at-chance verdict exists in every regime (imp-64: control identity is the
+> (credit, frozen) pair). Pilot (3 seeds, registered calibration lr=0.05 @ 100 ep,
+> CPU): thermo-vs-frozen-control @ depth_4 d=+4.80 (0.396 vs 0.076). Registered
+> commission (`configs/preregistrations/r92_memory_budget_registered.json`,
+> n=6/group — planner-derived n=3 doubled as the imp-63 replication margin,
+> MDE@80% d=1.796; GPU): the claim contrast replicates at d=+2.89 (0.406 vs
+> 0.131), all three per-depth controls PASSED, quarantined=False, label
+> claim_grade — the pilot's effect shrank 1.7×, inside the 2.7× margin the
+> design carried. Feasibility grid: 0.015 MiB walls gradient/FA at every depth
+> (27,136 B minimum profile); 0.25 MiB walls only the deep tier; 0.45 MiB
+> separates the two walled arms (gradient 451,072 B in, FA 501,136 B out). Deep
+> tier: nobody learns within the wall (thermo 0.172 vs chance 0.125) — the
+> honest boundary of the linear-teacher family, registered as a boundary, not
+> interpreted as a null. Two commissioning lessons registered (imp-68: budget
+> sized from the record's decimal-kB figures with binary-MiB arithmetic admitted
+> the arm it meant to wall; imp-69: registered n and device derive from the
+> commission's own power math + the GPU-first policy, not the sibling precedent
+> — the first 16-seed CPU run was aborted and re-commissioned). Device threading
+> landed in the trial; sibling trials still CPU (backlog). Gate **1424 passed /
+> 0 failed** (+24 locks in `test_memory_budget_trial.py`), ruff/pyright clean on
+> touched files.
 
 ## Policy (carried from TODO8; extended by R7/R8)
 
@@ -364,7 +396,7 @@ the commissioning gate R9 rides on.
 - Do not interpret the old registered null — it is explained (underpowered + non-stationary),
   not confirmed, and not refuted.
 
-## 🎯 R9 — Surgical Stress Tests (discovery phase; successor to R8) — OPEN (R9.1 registered claim-grade 2026-09-01; R9.2 machinery + pilot; R9.3 pending)
+## 🎯 R9 — Surgical Stress Tests (discovery phase; successor to R8) — OPEN (R9.1 + R9.3 registered claim-grade; R9.2 memory-budget commission claim-grade 2026-09-02)
 
 **Premise (2026-09-01 strategic review, adopted):** R8 built the most honest
 microscope in the business — but a microscope discovers nothing by looking at
@@ -390,8 +422,8 @@ uninterpretable drama.
 |---|------|-----------|--------|---------|-------------|
 | R9.1 | **Catastrophic Forgetting Trial** (M-axis) | Routing/FastWeight plasticity retains Task A while learning Task B because ψ isolates/stores episode-local pathways; Null collapses to chance on A | **Structured task-sequence stream A→B(→C)** — e.g. digits 0–4 → 5–9 → Fashion-MNIST. Within-segment stationarity (accumulation representable per segment, R8.3 machinery per segment) + across-segment shift (retention measurable). *This is NOT the imp-54 stream — that stream is degenerate per-episode noise (unlearnable), not structured non-stationarity; a task sequence is the environment continual learning is defined on.* Prior art to revive under the R8 gates: `computronium/experiments/joint/continual_learning.py` + `configs/preregistrations/cl_backward_transfer_matched_memory.json` + `cl_retest_discriminating_probe.json` (Split-MNIST, memory-matched, verified arms). **Z3 pivot:** extend the Z3 gate with a retention arm (Task A → B → A, θ frozen, ψ switches back; retention metric) — upgrades Z3 from capability (ψ can switch) to utility (switching prevents forgetting) | Backward transfer (retention of A after B), forward transfer, per-segment adaptation time; embedded lr=0 control must sit at chance throughout | retention under structured non-stationarity (new scope alongside the claim-scope rule — `retention` joins per-episode adaptation / accumulated learning / resource-efficiency / stability / M-axis plasticity) |
 | R9.1 ✅ | **Status 2026-09-01 — REGISTERED COMMISSION LANDED: the retention claim is claim-grade.** Stream: `evaluate_episode(segment=…)` keys the stationary teacher per (campaign, coordinate, seed, **segment**); `probe_episode` = no-train target-free boundary probe (readout ≡ pipeline post-update `free_accuracy`); `retention` scope + `segmented` stream in the prereg gate. Trial: `experiments/joint/forgetting_trial.py` (persistent-θ M-arms + frozen control, imp-59-sized band; `run_trial(preregistration=…)` commissions through the R8.4 gate — claim-grade gates, registered-n check, declared-rung refusal all fail loudly by name). Z3 pivot: `_run_retention_arm` in `z3_fixed_weights.py` — ψ-**system** (controller + rule state; not ψ-vector-only — the controller carries the routing) snapshot/restored between stages, fixed probe sets, RNG snapshotted (imp-56), `retention_gate` embedded per run. **Registered result** (`configs/preregistrations/r91_retention_registered.json` + `benchmark_results/forgetting_registered.json`, 16 seeds): routing retained 0.315 vs null 0.197, d_retained **−1.90** / d_delta −3.09, control PASSED — the routing retention effect is large, replicable, stratified-stable, and was registered before it was seen. fast_weights' pilot signal did not replicate (imp-63). **Z3 retention** (3 seeds, registered scale): restored ψ == stage-A mastery bit-exact, floor ≈0.5, forgetting-via-switch ≈ +0.5, gates PASS. Remaining: CL prior-art revival (Split-MNIST through these gates) — pull-based | | |
-| R9.2 🟡 | **Physical Constraint Trial** (S/D axes) | Under severe substrate constraints (memristive IR-drop, analog precision caps, noise, memory ceilings), exact-global Backprop degrades or collapses while local rules (EqProp, FA, local goodness) degrade gracefully and dominate the 𝒞-Pareto frontier | The **same powered design run twice**: (a) unconstrained Digital — Backprop expected to win (the honest baseline); (b) constrained — Memristive/noisy substrate, precision-capped, memory-budgeted (no activation storage for BPTT). Resource axes are trustworthy post-imp-45 (work-derived compute/energy, state split) — the frontier shift is measurable, not fictional. Map the "Goldilocks zone" where locality beats global optimality | 𝒞-Pareto frontier shift (compute/energy/memory/latency vs accuracy), collapse boundary of the Backprop arm, graceful-degradation curves | resource-efficiency under physical constraints. **Status 2026-09-01 — machinery + pilot landed; naive hypothesis refuted in the first constraint family** (`experiments/joint/constraint_trial.py`, `benchmark_results/constraint_pilot.json`): analog-noise sweep collapses the *settling* arm hardest (EqProp 0.65→0.16) while Backprop degrades most gracefully (0.79→0.33) — noise is not the constraint family that makes locality win. Registered-design lever: the memory budget (O(depth) BPTT activation ceilings), pairing with R9.3 |
-| R9.3 ✅ | **Deep Credit Trial** (C-axis) | ThermodynamicContrast (EqProp) / PredictiveSettling (PC) learn a 50+ step temporal dependency with O(1) activation memory where BPTT OOMs or vanishes | Long-horizon recurrent task (deep parity over 50+ steps; state-space realization). Memory-profiled arms: BPTT's memory grows O(depth) and its gradients vanish; energy-based arms settle to a fixed point and credit locally | Learned temporal dependency at fixed memory; BPTT failure boundary (OOM/vanishing); settling-time cost of the local alternative | credit assignment at depth (validates the C-axis mathematics where shallow tasks cannot) | **Status 2026-09-02 — REGISTERED COMMISSION LANDED: claim-grade, not quarantined** (`configs/preregistrations/r93_deep_credit_registered.json` + `benchmark_results/deep_credit_registered.json`, 16 seeds). Machinery + pilot landed 2026-09-01 (`experiments/joint/deep_credit_trial.py`); imp-67 instrument repair: the pilot had run the parity family with `teacher_key=None` while its prereg declared `stationary` — the all-chance pilot was a construct-validity artifact, fixed + locked, then the prereg was rebuilt from the repaired pilot. Registered result: gradient retains above-chance at depth 50 (0.203) where thermo collapses (0.107) and FA sits at chance (0.128); deep-tier contrasts d=+1.79/+1.54 clear the registered MDE 1.02. **The naive vanishing-gradient family is refuted on this task; the deterministic memory profile (O(depth) vs flat-0) is the registered C-axis signal.** Remaining: the memory-budget severity family (disqualification at ceiling — O(1) arms structurally immune), pairing with R9.2's registered design |
+| R9.2 🟡 | **Physical Constraint Trial** (S/D axes) | Under severe substrate constraints (memristive IR-drop, analog precision caps, noise, memory ceilings), exact-global Backprop degrades or collapses while local rules (EqProp, FA, local goodness) degrade gracefully and dominate the 𝒞-Pareto frontier | The **same powered design run twice**: (a) unconstrained Digital — Backprop expected to win (the honest baseline); (b) constrained — Memristive/noisy substrate, precision-capped, memory-budgeted (no activation storage for BPTT). Resource axes are trustworthy post-imp-45 (work-derived compute/energy, state split) — the frontier shift is measurable, not fictional. Map the "Goldilocks zone" where locality beats global optimality | 𝒞-Pareto frontier shift (compute/energy/memory/latency vs accuracy), collapse boundary of the Backprop arm, graceful-degradation curves | resource-efficiency under physical constraints. **Status 2026-09-01 — machinery + pilot landed; naive hypothesis refuted in the first constraint family** (`experiments/joint/constraint_trial.py`, `benchmark_results/constraint_pilot.json`): analog-noise sweep collapses the *settling* arm hardest (EqProp 0.65→0.16) while Backprop degrades most gracefully (0.79→0.33) — noise is not the constraint family that makes locality win. Registered-design lever: the memory budget (O(depth) BPTT activation ceilings), pairing with R9.3. **Status 2026-09-02 — REGISTERED COMMISSION LANDED (memory-budget severity family, paired with R9.3): the resource-efficiency claim is claim-grade, not quarantined** (`experiments/joint/memory_budget_trial.py` + `configs/preregistrations/r92_memory_budget_registered.json` + `benchmark_results/memory_budget_registered.json`, n=6/group, GPU). The budget is a commissioning gate, not a dynamics perturbation: the feasibility grid turns the deterministic memory profile into per-regime verdicts, a cell walled under every budget never walks (OOM semantics), and the frozen-thermo control is the only arm whose at-chance verdict exists in every regime. Registered result: in the fully-walled regime (0.015 MiB) the O(1) arm is the only feasible learner and retains shallow-tier competence (thermo 0.406 vs frozen control 0.131, d=+2.89, clearing the registered MDE 1.796); 0.45 MiB separates the two walled arms at depth 50 (gradient in, FA never commissionable); at the deep tier nobody learns within the wall (thermo 0.172 vs chance 0.125) — a registered boundary of the linear-teacher family, not a null to interpret |
+| R9.3 ✅ | **Deep Credit Trial** (C-axis) | ThermodynamicContrast (EqProp) / PredictiveSettling (PC) learn a 50+ step temporal dependency with O(1) activation memory where BPTT OOMs or vanishes | Long-horizon recurrent task (deep parity over 50+ steps; state-space realization). Memory-profiled arms: BPTT's memory grows O(depth) and its gradients vanish; energy-based arms settle to a fixed point and credit locally | Learned temporal dependency at fixed memory; BPTT failure boundary (OOM/vanishing); settling-time cost of the local alternative | credit assignment at depth (validates the C-axis mathematics where shallow tasks cannot) | **Status 2026-09-02 — REGISTERED COMMISSION LANDED: claim-grade, not quarantined** (`configs/preregistrations/r93_deep_credit_registered.json` + `benchmark_results/deep_credit_registered.json`, 16 seeds). Machinery + pilot landed 2026-09-01 (`experiments/joint/deep_credit_trial.py`); imp-67 instrument repair: the pilot had run the parity family with `teacher_key=None` while its prereg declared `stationary` — the all-chance pilot was a construct-validity artifact, fixed + locked, then the prereg was rebuilt from the repaired pilot. Registered result: gradient retains above-chance at depth 50 (0.203) where thermo collapses (0.107) and FA sits at chance (0.128); deep-tier contrasts d=+1.79/+1.54 clear the registered MDE 1.02. **The naive vanishing-gradient family is refuted on this task; the deterministic memory profile (O(depth) vs flat-0) is the registered C-axis signal.** Remaining: ~~the memory-budget severity family~~ — **LANDED 2026-09-02** (see R9.2 row + the memory-budget record above; the registered resource-efficiency claim rides the R9.2 pairing) |
 
 **R9 method rules:**
 - One hypothesis per trial; preregister through the R8.4 gate with the
@@ -589,12 +621,87 @@ instrument the R9.2 pairing expects. The untested severity family is the
 one constraint O(1) arms are structurally immune to: `memory_budget_mib`
 machinery exists in `DeepCreditConfig`; the registered memory-budget
 commission (pairing R9.2's resource-efficiency claim) is the next design
-cycle — new pilot → new prereg per the R9 method rules.
+cycle — new pilot → new prereg per the R9 method rules. **→ LANDED same day:
+see the memory-budget trial record below.**
+
+### Memory-budget trial execution record (2026-09-02)
+
+**Design (R9 method rules: one hypothesis, preregistered, embedded control):**
+- `experiments/joint/memory_budget_trial.py`: per-step saved-activation
+  ceiling swept at 0.015/0.25/0.45 MiB. The budget gates *commissioning*,
+  not dynamics — the measured memory profile
+  (`torch.autograd.graph.saved_tensors_hooks`, imp-65's deterministic
+  instrument) is architectural and constant per (credit, depth), so each
+  (arm, depth) cell walks once and is read under every budget through the
+  feasibility grid. A cell walled under every budget never walks (OOM
+  semantics): `never_commissionable` names it, and `probe_by_env` has no
+  entry there — a missing env means "cannot be commissioned", never "walked
+  and failed".
+- Budgets sized by in-trial measurement at the registered shape
+  (width 16, input 8, batch 16): gradient 27,136/137,728/451,072 B, FA
+  29,728/152,704/501,136 B, thermo 0 B at depths 4/16/50. 0.015 MiB walls
+  gradient/FA at every depth; 0.25 MiB walls only the deep tier; 0.45 MiB
+  (471,859 B) separates the two walled arms at depth 50 (gradient in, FA
+  out). imp-68: the first draft sized the top budget at 0.48 MiB from the
+  R9.3 record's "501 KiB" figure — a decimal-kB number read as binary-MiB —
+  and admitted FA; the feasibility locks failed against the record, the
+  instrument was fine.
+- Control: frozen `thermodynamic_contrast` (lr=0) — the only credit feasible
+  at every budget, so the R8.5 at-chance verdict exists in every regime
+  (identity = the (credit, frozen) pair, imp-64). Control band per imp-59/66.
+- Claim scope `resource_efficiency`, stream `stationary` (registered
+  calibration carried from R9.3: synthetic stationary teachers, lr=0.05 @
+  100 ep — imp-67 provenance rules apply). Preregistration self-labels the
+  pilot; the registered commission gates through `run_trial(preregistration=…)`.
+- Device threading (`--device`, GPU-first default) landed in the trial; the
+  first 16-seed CPU commission attempt was aborted mid-walk (imp-69) and
+  re-commissioned at planner-derived n on GPU.
+
+**Pilot outcome** (3 seeds, CPU, 100 ep):
+| arm | depth_4 probe | depth_16 probe | depth_50 probe |
+|-----|--------------|----------------|----------------|
+| gradient | 0.510 | 0.206 | 0.219 |
+| random_projections | 0.203 | 0.089 | (never walked) |
+| thermodynamic_contrast | 0.396 | 0.143 | 0.141 |
+| control (lr=0) | 0.076 | 0.112 | 0.094 |
+
+Claim contrast: thermo-vs-control @ depth_4 **d=+4.80** (pooled sd 0.185).
+Baseline honesty where both arms are feasible: gradient_vs_thermo
+d=+1.20/+3.31/+1.48 — gradient wins wherever commissionable. All controls
+PASSED; pilot not quarantined.
+
+**Registered commission** (`r92_memory_budget_registered.json`, n=6/group —
+`n_for_target_power(4.80)` = 3, doubled as the imp-63 margin; MDE@80% d=1.796;
+GPU):
+| arm | depth_4 probe | depth_16 probe | depth_50 probe |
+|-----|--------------|----------------|----------------|
+| gradient | 0.521 | 0.197 | 0.221 |
+| random_projections | 0.182 | 0.116 | (never walked) |
+| thermodynamic_contrast | 0.406 | 0.155 | 0.172 |
+| control (lr=0) | 0.131 | 0.122 | 0.100 |
+
+All three per-depth controls PASSED; quarantined=False; label **claim_grade**.
+Claim contrast d=+2.89 — clears the registered MDE 1.796 (the pilot's 4.80
+shrank 1.7×, inside the 2.7× margin; imp-58's order-of-magnitude caveat
+vindicated a third time). Deep-tier thermo 0.172 vs chance 0.125: below the
+chance+margin competence line — registered as the walled-regime boundary,
+never read as a no-effect result (the O(1)-immunity claim is about
+commissionability + shallow competence, both registered).
+
+**Locks added:** `tests/property/test_memory_budget_trial.py` (24): memory
+profile O(depth) vs exactly-0; feasibility regimes incl. the 0.45 MiB
+separation; never-commissionable = exactly FA@depth_50; walk-plan OOM
+semantics (fully-walled arms produce no data); control identity + frozen-θ
+invariance + per-env pass; pilot prereg label/scope/variance derivation;
+R8.4 registered-commission gates; walled-regime shallow competence; imp-67
+provenance. Gate **1424 passed / 0 failed** (+24), ruff/pyright clean on
+touched files.
 
 ## 🔁 Pull-Based Backlog (non-blocking; pull when a campaign manifest or suite needs it)
 
 | Item | Trigger / pull condition |
 |------|--------------------------|
+| Device threading for sibling joint trials | `deep_credit_trial.py`/`forgetting_trial.py`/`constraint_trial.py`/`stationary_pilot.py` compose on CPU; `memory_budget_trial.py` threads `--device` (GPU-first, imp-69) — adopt on next touch of any sibling |
 | R2.2 residual | Substrate facade-merge consideration (`ontology/_substrate.py` impl vs `ontology/substrate/` facade — facade is fine, consider merge) + grep for other parallel legacy/new pairs |
 | R3.4 | Tile × dynamics matrix (tile_ep/pc/gnn/snn device-dynamics incompatibility; tile_fa/tp/hebbian) — fix or document as permanent xfail with precise reasons |
 | R3.5 | `_AdaptedSystem._infer_geometry` hardcoded (784→256,128→10) — recover heuristics from deleted `adapter/` package |
@@ -640,12 +747,13 @@ cycle — new pilot → new prereg per the R9 method rules.
   the gate per seed at its own scale
 - Power gate (R8.4 / imp-55): commissions must state expected n vs MDE@80% in their preregistration; below-floor commissions are labeled `pilot`/`plumbing`/`instrument-check`, never claim-grade
 - Smoke-scale campaign deltas are capped at chance by the non-stationary synthetic stream (imp-54 / R8.3) — never read pooled smoke task_loss/accuracy deltas as accumulated-learning evidence; the stationary-teacher design (`stationary_teacher=True`) is the accumulation-capable path and its pilot variance is now measured (`benchmark_results/stationary_pilot_*.json`) — but note the CampaignStack path rebuilds θ per episode (per-episode-adaptation scope even with stationary teachers); accumulated-learning/retention claims run the persistent-θ chain
-- **R9 (open):** the discovery phase runs surgical stress tests (R9.1 forgetting / R9.2 constraint / R9.3 deep credit), every trial gated by R8.4/R8.5 machinery. R9.1's registered commission is claim-grade (routing retention, d −1.90); remaining: CL prior-art revival (pull-based). R9.2 machinery + pilot landed — the analog-noise family refuted the naive hypothesis; the memory-budget lever is the registered-design path. R9.3 registered commission landed 2026-09-02 (claim-grade): the vanishing-gradient family is refuted on the stationary synthetic-teacher task (gradient retains 0.203 at depth 50 where thermo collapses); the deterministic memory profile is the registered C-axis signal; the memory-budget severity family is the next design cycle, pairing with R9.2.
+- **R9 (open):** the discovery phase runs surgical stress tests (R9.1 forgetting / R9.2 constraint / R9.3 deep credit), every trial gated by R8.4/R8.5 machinery. R9.1's registered commission is claim-grade (routing retention, d −1.90); remaining: CL prior-art revival (pull-based). R9.2's memory-budget lever landed 2026-09-02 as the registered resource-efficiency claim (claim-grade, n=6, GPU): the O(1)-memory arm is the only feasible learner in the fully-walled regime and retains shallow-tier competence — the analog-noise family's refutation of the naive hypothesis stands. R9.3 registered commission landed 2026-09-02 (claim-grade): the vanishing-gradient family is refuted on the stationary synthetic-teacher task (gradient retains 0.203 at depth 50 where thermo collapses); the deterministic memory profile is the registered C-axis signal and its severity family (memory budget) is likewise claim-grade. Remaining R9 surface: boundary-condition mapping (AutoScientist — e.g., where does the walled-regime competence tier end in depth/budget), and the task-family generalization question the linear-teacher boundary raises
 - **R9.1 status (2026-09-01):** registered commission claim-grade — routing retains segment A through the B shift (d_retained −1.90, n=6 would suffice, registered n=16); the trial's lr=0.03 default is calibrated for within-segment competence at the 40-episode budget — re-calibrate on schedule/budget changes (mastery below ~0.5 makes retention unreadable and the pilot self-quarantines nothing — read mastery first); registered commissions run through `run_trial(preregistration=…)`/`--prereg`, never bare
-- **R9.3 status (2026-09-02):** registered commission claim-grade — gradient retains above-chance credit at depth 50 (0.203 vs chance 0.125) where thermo collapses (0.107) and FA sits at chance (0.128); deep-tier contrasts d=+1.79/+1.54 clear the registered MDE 1.02 at n=16; memory profile deterministic (451/501 KiB vs flat 0). **The naive vanishing-gradient hypothesis is refuted on this task family — do not read "gradient wins at depth" as a general result: the stationary synthetic-teacher task is linear-teacher, and the O(1)-memory dominance claim lives in the untested memory-budget family** (`memory_budget_mib` machinery exists; new pilot → new prereg required). imp-67 fixed (prereg-declared stream must equal the enacted stream — provenance locks in place); registered commissions run through `run_trial(preregistration=…)`/`--prereg`, never bare.
+- **R9.3 status (2026-09-02):** registered commission claim-grade — gradient retains above-chance credit at depth 50 (0.203 vs chance 0.125) where thermo collapses (0.107) and FA sits at chance (0.128); deep-tier contrasts d=+1.79/+1.54 clear the registered MDE 1.02 at n=16; memory profile deterministic (451/501 KiB vs flat 0). **The naive vanishing-gradient hypothesis is refuted on this task family — do not read "gradient wins at depth" as a general result: the stationary synthetic-teacher task is linear-teacher.** imp-67 fixed (prereg-declared stream must equal the enacted stream — provenance locks in place); registered commissions run through `run_trial(preregistration=…)`/`--prereg`, never bare. The O(1)-memory dominance claim landed the same day in the memory-budget family (see the R9.2/R9.3 record and `R9.2 status` below).
+- **R9.2/R9.3 memory-budget status (2026-09-02):** registered commission claim-grade — in the fully-walled regime (0.015 MiB) thermodynamic_contrast is the only feasible arm and retains shallow-tier competence (0.406 vs control 0.131, d=+2.89 clearing MDE 1.796); 0.45 MiB separates the walled arms at depth 50 (FA never commissionable); **at the deep tier nobody learns within the wall (thermo 0.172 vs chance 0.125) — a registered boundary of the linear-teacher family, never a no-effect result**. The budget is a commissioning gate: a feasible arm's walk is identical under every budget that admits it — never read walled arms' absence as "lost", or feasible arms' repeated readout as new evidence
 - imp-60: **FIXED 2026-09-01** — `activity_transition` now dimension-preserving (deterministic zero-pad/truncate); nonsquare geometries no longer crash the windowed-growth guard probe.
 - Pre-existing xpass observed 2026-09-01, **recurred same day in the full gate**: `test_scaling_invariants.py::…deep_network_accuracy[100]` — investigate on next touch of that file
-- **R9.2 pilot verdict is pilot-scoped** — the analog-noise family refuting "local rules degrade gracefully" is one constraint family at one difficulty (teacher_noise 0.5); the registered design must add the memory-budget lever before any resource-efficiency claim. Do not read "Backprop survives noise best" as a general result: settling dynamics pay per settle step, so settle-count × noise is the actual severity product
+- **R9.2 pilot verdict is pilot-scoped** — the analog-noise family refuting "local rules degrade gracefully" is one constraint family at one difficulty (teacher_noise 0.5); the registered design must add the memory-budget lever before any resource-efficiency claim — **DONE 2026-09-02: the memory-budget commission is claim-grade (R9.2/R9.3 record), and it registers the resource-efficiency claim on commissionability + shallow-tier competence in the walled regime, not on noise-family accuracy**. Do not read "Backprop survives noise best" as a general result: settling dynamics pay per settle step, so settle-count × noise is the actual severity product
 - Control-band sizing (imp-59): at-chance embedded controls quarantine on sampling noise if the band is not sized to the control arm's scored-sample count — preregistrate the band from the registered N
 
 ## 💡 Improvement Ledger (continues TODO8's imp-N from imp-42)
@@ -923,6 +1031,35 @@ class) lives one level below metric honesty, and a prereg can be perfectly hones
 about a stream the code never walked. The check is cheap: assert the enacted-stream
 provenance wherever a declared stream gates a claim.*
 
+68. **Recorded figures are not units — sizing an instrument from a table's numbers
+reproduces the table's arithmetic, not the underlying quantity (2026-09-02,
+memory-budget trial).** The R9.3 record's memory profile says "451 KiB / 501 KiB"
+at depth 50; the actual byte counts are 451,072 and 501,136 — i.e. 440.5/489.4
+KiB binary or 451/501 kB decimal. The first severity budget was sized at
+0.48 MiB (= 503,316 B) from those figures, which *admitted* FA (501,136 B) at
+the deep tier — the arm the design meant to wall — and the first feasibility
+locks failed against the record. Fix: size budgets by in-trial measurement
+(`_measure_saved_bytes` at the registered shape), never from quoted table
+figures; the separating budget is 0.45 MiB (471,859 B), between gradient's
+451,072 and FA's 501,136. *Lesson: the locks failing was the instrument working
+— the defect was in the design constant, and it was found because the locks
+asserted measured bytes, not the record's numbers. A design constant derived
+from prose is a prose constant.*
+
+69. **A commission's resource envelope — n and device — is derived from its own
+power math and the GPU-first policy, not inherited from the sibling precedent
+(2026-09-02, memory-budget trial).** The first preregistration copied n=16 from
+R9.3's registered design, and the first commission attempt ran it on CPU — but
+the pilot's own effect (d=4.80) meant `n_for_target_power` returned 3, and the
+AGENTS.md policy is GPU-first. The 16-seed CPU run was aborted mid-walk;
+re-registered at n=6 (planner n=3 doubled as the imp-63 replication margin,
+MDE@80% d=1.796) on GPU (`--device` threading landed in the trial). The
+registered contrast replicated at d=+2.89 — inside the 2.7× margin the derived
+design carried, which the inherited n=16 would have bought at ~4× the compute
+for the same verdict. *Lesson: precedent commissions fix the machinery, not the
+numbers — n comes from `n_for_target_power(pilot_d)` + a replication margin,
+and "expensive" always asks for GPU first.*
+
 ## 🔧 Quick Commands
 
 ```bash
@@ -980,6 +1117,17 @@ uv run python -m computronium.experiments.joint.deep_credit_trial \
   --input-dim 8 --num-classes 8 --seeds 0,1,2 \
   --output benchmark_results/deep_credit_pilot.json
 uv run pytest tests/property/test_deep_credit_trial.py -q
+
+# R9.2/R9.3 memory-budget trial (budget severity sweep; O(1) immunity; GPU-first):
+uv run python -m computronium.experiments.joint.memory_budget_trial \
+  --episodes 100 --seeds 0,1,2 --output benchmark_results/memory_budget_pilot.json
+uv run pytest tests/property/test_memory_budget_trial.py -q
+
+# R9.2/R9.3 REGISTERED commission (R8.4-gated; n=6 planner-derived + imp-63 margin):
+uv run python -m computronium.experiments.joint.memory_budget_trial \
+  --episodes 100 --seeds 0,1,2,3,4,5 \
+  --prereg configs/preregistrations/r92_memory_budget_registered.json \
+  --output benchmark_results/memory_budget_registered.json
 
 # R9.3 REGISTERED commission (R8.4-gated: claim-grade prereg + registered n + control):
 # NOTE: competence requires lr=0.05 @ 100 episodes on the stationary synthetic stream

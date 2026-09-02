@@ -1,0 +1,22 @@
+{
+  "claim": "Registered memory-budget claim (R9.2/R9.3 pairing): under a per-step saved-activation memory ceiling, exact-global credit (gradient) and random-projection credit (FA) are disqualified once their O(depth) saved-activation profile exceeds the budget — they cannot be commissioned at the walled tier at all — while thermodynamic_contrast (0 saved bytes at every depth) is structurally immune. In the fully-walled regime (0.015 MiB) it is the only feasible arm and retains above-chance competence at the shallow tier (pilot probe mean 0.396 vs frozen control 0.076, pooled sd 0.185, Cohen's d = 4.80); the budget is a commissioning gate, not a dynamics perturbation, so a feasible arm's walk is identical under every budget that admits it. At the deep tier (depth 50) no arm learns within the wall on this task family (thermo probe 0.141 vs chance 0.125) — the honest boundary of the linear-teacher family, not a null to interpret. Registered n=6/group: the power planner needs n=3 at the pilot effect; n=6 doubles it as the replication margin (imp-63 — pilot d is order-of-magnitude only), giving MDE@80% d=1.796, i.e. the contrast must survive a ~2.7x shrink to stay claimable. Controls: planted lr=0 frozen thermodynamic_contrast arm at chance in every depth environment (R8.5).",
+  "metric": "probe_accuracy",
+  "claim_scope": "resource_efficiency",
+  "task_stream": "stationary",
+  "expected_effect": 4.8042,
+  "variance_estimate": 0.185301,
+  "n_per_group": 6,
+  "alpha": 0.05,
+  "target_power": 0.8,
+  "stratification": [
+    "coordinate",
+    "seed"
+  ],
+  "embedded_control": {
+    "arm": "frozen_lr0",
+    "coordinate": "digital/feedforward/energy_minimization/null/thermodynamic_contrast/frozen",
+    "chance": 0.125,
+    "tolerance": 0.15
+  },
+  "created": "2026-09-02"
+}
