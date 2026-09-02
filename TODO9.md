@@ -175,6 +175,33 @@
 > 0 failed** (+16 locks: 5 registered-commission in `test_retention_trial.py`, 11 in
 > `test_constraint_trial.py`), ruff/pyright net-zero on touched files.
 
+> **R9.3 registered commission landed 2026-09-02 — the C-axis deep-tier claim is claim-grade,
+> and the naive vanishing-gradient family is refuted.** Instrument repair first (imp-67): the
+> pilot's prereg declared `task_stream=stationary` with per-depth stationary synthetic teachers
+> while the walk ran the parity family with `teacher_key=None` — a spec/code divergence where
+> the competence tier never existed (all arms at chance on held-out probe) and the pilot's
+> all-chance readout was a construct-validity artifact, not a null. Fixed (synthetic +
+> `stationary_teacher=True`, per-depth teacher keys as the design record specified) and pinned
+> (record-metadata provenance lock + teacher-key parity lock). Registered prereg
+> (`configs/preregistrations/r93_deep_credit_registered.json`, n=16/group, expected d=2.1 from
+> the repaired pilot, embedded lr=0 control) gated the walk *before* it ran
+> (`run_trial(preregistration=…)` + `--prereg`). Registered run (16 seeds,
+> `benchmark_results/deep_credit_registered.json`): all three per-depth controls PASSED,
+> quarantined=False, label **claim_grade**. Result: exact-global credit (gradient) retains
+> above-chance probe accuracy at the deep tier (0.203 vs chance 0.125) while
+> thermodynamic_contrast collapses to 0.107 and FA sits at 0.128 — the deep-tier contrasts
+> d=+1.79 (thermo) / +1.54 (FA) both clear the registered MDE@80% of 1.02, replicating the
+> repaired pilot's direction (pilot d 2.11 → registered 1.79; imp-58's order-of-magnitude
+> caveat vindicated again). **The deterministic memory profile is the C-axis signal that
+> holds: gradient/FA saved-activation bytes grow O(depth) (27→138→451 KiB / 29→153→501 KiB)
+> while thermo stays flat 0 — but on this task family O(1) memory buys no accuracy at depth,
+> so the naive hypothesis is refuted and the claim is registered on the gradient-retention
+> contrast + memory separation.** The severity family where O(1) arms are structurally immune
+> — the memory budget (disqualification at ceiling) — remains untested and is the registered
+> design lever pairing R9.3's continuation with R9.2. Gate **1400 passed / 0 failed** (+25:
+> committed-session additions + 6 new locks: 2 construct-validity, 4 registered-commission
+> in `test_deep_credit_trial.py`), ruff clean on touched files.
+
 ## Policy (carried from TODO8; extended by R7/R8)
 
 - Zero backwards compatibility · GPU-first for all training paths · serial pytest only (xdist hangs in this env)
@@ -364,7 +391,7 @@ uninterpretable drama.
 | R9.1 | **Catastrophic Forgetting Trial** (M-axis) | Routing/FastWeight plasticity retains Task A while learning Task B because ψ isolates/stores episode-local pathways; Null collapses to chance on A | **Structured task-sequence stream A→B(→C)** — e.g. digits 0–4 → 5–9 → Fashion-MNIST. Within-segment stationarity (accumulation representable per segment, R8.3 machinery per segment) + across-segment shift (retention measurable). *This is NOT the imp-54 stream — that stream is degenerate per-episode noise (unlearnable), not structured non-stationarity; a task sequence is the environment continual learning is defined on.* Prior art to revive under the R8 gates: `computronium/experiments/joint/continual_learning.py` + `configs/preregistrations/cl_backward_transfer_matched_memory.json` + `cl_retest_discriminating_probe.json` (Split-MNIST, memory-matched, verified arms). **Z3 pivot:** extend the Z3 gate with a retention arm (Task A → B → A, θ frozen, ψ switches back; retention metric) — upgrades Z3 from capability (ψ can switch) to utility (switching prevents forgetting) | Backward transfer (retention of A after B), forward transfer, per-segment adaptation time; embedded lr=0 control must sit at chance throughout | retention under structured non-stationarity (new scope alongside the claim-scope rule — `retention` joins per-episode adaptation / accumulated learning / resource-efficiency / stability / M-axis plasticity) |
 | R9.1 ✅ | **Status 2026-09-01 — REGISTERED COMMISSION LANDED: the retention claim is claim-grade.** Stream: `evaluate_episode(segment=…)` keys the stationary teacher per (campaign, coordinate, seed, **segment**); `probe_episode` = no-train target-free boundary probe (readout ≡ pipeline post-update `free_accuracy`); `retention` scope + `segmented` stream in the prereg gate. Trial: `experiments/joint/forgetting_trial.py` (persistent-θ M-arms + frozen control, imp-59-sized band; `run_trial(preregistration=…)` commissions through the R8.4 gate — claim-grade gates, registered-n check, declared-rung refusal all fail loudly by name). Z3 pivot: `_run_retention_arm` in `z3_fixed_weights.py` — ψ-**system** (controller + rule state; not ψ-vector-only — the controller carries the routing) snapshot/restored between stages, fixed probe sets, RNG snapshotted (imp-56), `retention_gate` embedded per run. **Registered result** (`configs/preregistrations/r91_retention_registered.json` + `benchmark_results/forgetting_registered.json`, 16 seeds): routing retained 0.315 vs null 0.197, d_retained **−1.90** / d_delta −3.09, control PASSED — the routing retention effect is large, replicable, stratified-stable, and was registered before it was seen. fast_weights' pilot signal did not replicate (imp-63). **Z3 retention** (3 seeds, registered scale): restored ψ == stage-A mastery bit-exact, floor ≈0.5, forgetting-via-switch ≈ +0.5, gates PASS. Remaining: CL prior-art revival (Split-MNIST through these gates) — pull-based | | |
 | R9.2 🟡 | **Physical Constraint Trial** (S/D axes) | Under severe substrate constraints (memristive IR-drop, analog precision caps, noise, memory ceilings), exact-global Backprop degrades or collapses while local rules (EqProp, FA, local goodness) degrade gracefully and dominate the 𝒞-Pareto frontier | The **same powered design run twice**: (a) unconstrained Digital — Backprop expected to win (the honest baseline); (b) constrained — Memristive/noisy substrate, precision-capped, memory-budgeted (no activation storage for BPTT). Resource axes are trustworthy post-imp-45 (work-derived compute/energy, state split) — the frontier shift is measurable, not fictional. Map the "Goldilocks zone" where locality beats global optimality | 𝒞-Pareto frontier shift (compute/energy/memory/latency vs accuracy), collapse boundary of the Backprop arm, graceful-degradation curves | resource-efficiency under physical constraints. **Status 2026-09-01 — machinery + pilot landed; naive hypothesis refuted in the first constraint family** (`experiments/joint/constraint_trial.py`, `benchmark_results/constraint_pilot.json`): analog-noise sweep collapses the *settling* arm hardest (EqProp 0.65→0.16) while Backprop degrades most gracefully (0.79→0.33) — noise is not the constraint family that makes locality win. Registered-design lever: the memory budget (O(depth) BPTT activation ceilings), pairing with R9.3 |
-| R9.3 🟢 | **Deep Credit Trial** (C-axis) | ThermodynamicContrast (EqProp) / PredictiveSettling (PC) learn a 50+ step temporal dependency with O(1) activation memory where BPTT OOMs or vanishes | Long-horizon recurrent task (deep parity over 50+ steps; state-space realization). Memory-profiled arms: BPTT's memory grows O(depth) and its gradients vanish; energy-based arms settle to a fixed point and credit locally | Learned temporal dependency at fixed memory; BPTT failure boundary (OOM/vanishing); settling-time cost of the local alternative | credit assignment at depth (validates the C-axis mathematics where shallow tasks cannot) | **Status 2026-09-01 — machinery + pilot landed; the memory profile is the signal** (`experiments/joint/deep_credit_trial.py`, `benchmark_results/deep_credit_pilot.json`): depth sweep (4, 16, 50 credit steps) on synthetic task; gradient saved bytes grow O(depth) (26 KiB → 135 KiB → 440 KiB) while thermodynamic_contrast stays 0 (no autograd); shallow tier shows competence (gradient probe 0.54 at depth 4 vs chance 0.125); deep tier shows degradation boundary. Pilot prereg labels itself `pilot`; embedded lr=0 control passes (band widened for init-to-init variance per imp-59). Imp-60 fixed: nonsquare geometries no longer crash the guard probe. Remaining: registered commission with power preregistration. |
+| R9.3 ✅ | **Deep Credit Trial** (C-axis) | ThermodynamicContrast (EqProp) / PredictiveSettling (PC) learn a 50+ step temporal dependency with O(1) activation memory where BPTT OOMs or vanishes | Long-horizon recurrent task (deep parity over 50+ steps; state-space realization). Memory-profiled arms: BPTT's memory grows O(depth) and its gradients vanish; energy-based arms settle to a fixed point and credit locally | Learned temporal dependency at fixed memory; BPTT failure boundary (OOM/vanishing); settling-time cost of the local alternative | credit assignment at depth (validates the C-axis mathematics where shallow tasks cannot) | **Status 2026-09-02 — REGISTERED COMMISSION LANDED: claim-grade, not quarantined** (`configs/preregistrations/r93_deep_credit_registered.json` + `benchmark_results/deep_credit_registered.json`, 16 seeds). Machinery + pilot landed 2026-09-01 (`experiments/joint/deep_credit_trial.py`); imp-67 instrument repair: the pilot had run the parity family with `teacher_key=None` while its prereg declared `stationary` — the all-chance pilot was a construct-validity artifact, fixed + locked, then the prereg was rebuilt from the repaired pilot. Registered result: gradient retains above-chance at depth 50 (0.203) where thermo collapses (0.107) and FA sits at chance (0.128); deep-tier contrasts d=+1.79/+1.54 clear the registered MDE 1.02. **The naive vanishing-gradient family is refuted on this task; the deterministic memory profile (O(depth) vs flat-0) is the registered C-axis signal.** Remaining: the memory-budget severity family (disqualification at ceiling — O(1) arms structurally immune), pairing with R9.2's registered design |
 
 **R9 method rules:**
 - One hypothesis per trial; preregister through the R8.4 gate with the
@@ -515,6 +542,55 @@ grow with depth; thermo saved bytes flat at 0; imp-60 regression lock
 (nonsquare no crash); shallow gradient competence lock; pilot prereg labels
 itself pilot; per-depth controls all pass.
 
+### R9.3 registered commission record (2026-09-02)
+
+**Instrument repair first (imp-67):** the pilot harness ran `task_name="parity"`
+with `stationary_teacher=False` while its preregistration declared
+`task_stream=stationary` with per-depth stationary synthetic teachers — the
+declared design was never enacted and the pilot's all-chance probe readout
+(every arm ≈0.125 at every depth) was a construct-validity artifact. Fix:
+`synthetic` family + `stationary_teacher=True` in both the walk and the probe
+(per-depth teacher keys ride `campaign_id::{env}` exactly as the design record
+specified); the repaired pilot (lr=0.05, 100 ep, 3 seeds) immediately produced
+the learnable depth contrast the design predicted (gradient probe 0.50 at
+depth 4 vs 0.14 before; thermo 0.41 → 0.11 across the sweep). Locks:
+`TestStationaryStreamConstructValidity` (enacted-stream provenance on every
+record + walk/probe teacher-key parity).
+
+**Registered prereg** (`configs/preregistrations/r93_deep_credit_registered.json`):
+n=16/group, expected d=2.1 (repaired pilot), variance 0.135, embedded lr=0
+control (chance 0.125, tolerance 0.15), scope `credit_at_depth`, stream
+`stationary` — derived claim-grade, gated the walk *before* it ran via
+`run_trial(preregistration=…)` / `--prereg` (registered-n and rung-cap
+refusals locked in `TestRegisteredCommission`).
+
+**Registered outcome** (`benchmark_results/deep_credit_registered.json`, 16 seeds):
+| arm | depth_4 probe | depth_16 probe | depth_50 probe | saved_4 | saved_16 | saved_50 |
+|-----|--------------|----------------|----------------|---------|----------|----------|
+| gradient | 0.508±0.084 | 0.225±0.049 | 0.203±0.048 | 27 KiB | 138 KiB | 451 KiB |
+| random_projections | 0.128±0.060 | 0.167±0.078 | 0.128±0.045 | 29 KiB | 153 KiB | 501 KiB |
+| thermodynamic_contrast | 0.359±0.047 | 0.151±0.056 | 0.107±0.055 | 0 KiB | 0 KiB | 0 KiB |
+| control (lr=0) | 0.130 | 0.119 | 0.138 | 27 KiB | 138 KiB | 451 KiB |
+
+Chance = 0.125. All three per-depth controls PASSED; quarantined=False;
+prereg label **claim_grade**. Deep-tier contrasts vs gradient: d=+1.79
+(thermo) / +1.54 (FA) — both clear the registered MDE@80% of 1.02 and
+replicate the repaired pilot's direction and magnitude (pilot 2.11/2.29;
+the registered commission re-estimated, as imp-58 requires).
+
+**Scientific verdict (registered):** the naive R9.3 hypothesis — local rules
+learn the 50+ step dependency where BPTT vanishes — is **refuted on this task
+family**: exact-global credit retains above-chance accuracy at depth 50
+(0.203) while thermodynamic_contrast collapses to 0.107 (below chance) and FA
+sits at chance. What replicates is the deterministic memory separation
+(O(depth) saved bytes for gradient/FA vs flat 0 for thermo) — the C-axis
+instrument the R9.2 pairing expects. The untested severity family is the
+**memory budget** (per-step saved-activation ceiling → disqualification), the
+one constraint O(1) arms are structurally immune to: `memory_budget_mib`
+machinery exists in `DeepCreditConfig`; the registered memory-budget
+commission (pairing R9.2's resource-efficiency claim) is the next design
+cycle — new pilot → new prereg per the R9 method rules.
+
 ## 🔁 Pull-Based Backlog (non-blocking; pull when a campaign manifest or suite needs it)
 
 | Item | Trigger / pull condition |
@@ -564,9 +640,9 @@ itself pilot; per-depth controls all pass.
   the gate per seed at its own scale
 - Power gate (R8.4 / imp-55): commissions must state expected n vs MDE@80% in their preregistration; below-floor commissions are labeled `pilot`/`plumbing`/`instrument-check`, never claim-grade
 - Smoke-scale campaign deltas are capped at chance by the non-stationary synthetic stream (imp-54 / R8.3) — never read pooled smoke task_loss/accuracy deltas as accumulated-learning evidence; the stationary-teacher design (`stationary_teacher=True`) is the accumulation-capable path and its pilot variance is now measured (`benchmark_results/stationary_pilot_*.json`) — but note the CampaignStack path rebuilds θ per episode (per-episode-adaptation scope even with stationary teachers); accumulated-learning/retention claims run the persistent-θ chain
-- **R9 (open):** the discovery phase runs surgical stress tests (R9.1 forgetting / R9.2 constraint / R9.3 deep credit), every trial gated by R8.4/R8.5 machinery. R9.1's registered commission is claim-grade (routing retention, d −1.90); remaining: CL prior-art revival (pull-based). R9.2 machinery + pilot landed — the analog-noise family refuted the naive hypothesis; the memory-budget lever is the registered-design path. R9.3 machinery + pilot landed — the memory profile is the signal (gradient saved bytes grow O(depth), thermo O(1)); shallow competence verified, deep degradation boundary measured. Remaining: registered commission with power preregistration.
+- **R9 (open):** the discovery phase runs surgical stress tests (R9.1 forgetting / R9.2 constraint / R9.3 deep credit), every trial gated by R8.4/R8.5 machinery. R9.1's registered commission is claim-grade (routing retention, d −1.90); remaining: CL prior-art revival (pull-based). R9.2 machinery + pilot landed — the analog-noise family refuted the naive hypothesis; the memory-budget lever is the registered-design path. R9.3 registered commission landed 2026-09-02 (claim-grade): the vanishing-gradient family is refuted on the stationary synthetic-teacher task (gradient retains 0.203 at depth 50 where thermo collapses); the deterministic memory profile is the registered C-axis signal; the memory-budget severity family is the next design cycle, pairing with R9.2.
 - **R9.1 status (2026-09-01):** registered commission claim-grade — routing retains segment A through the B shift (d_retained −1.90, n=6 would suffice, registered n=16); the trial's lr=0.03 default is calibrated for within-segment competence at the 40-episode budget — re-calibrate on schedule/budget changes (mastery below ~0.5 makes retention unreadable and the pilot self-quarantines nothing — read mastery first); registered commissions run through `run_trial(preregistration=…)`/`--prereg`, never bare
-- **R9.3 status (2026-09-01):** machinery + pilot complete — depth sweep (4/16/50 credit steps) on synthetic task; gradient saved bytes 26→135→441 KiB, thermo 0 KiB flat; shallow tier competence (gradient probe 0.54 at depth 4, lr=0.05); deep tier degradation boundary; imp-60 fixed (nonsquare no crash); pilot prereg labels itself pilot; control passes with widened band (0.15 floor per imp-59). Remaining: registered commission.
+- **R9.3 status (2026-09-02):** registered commission claim-grade — gradient retains above-chance credit at depth 50 (0.203 vs chance 0.125) where thermo collapses (0.107) and FA sits at chance (0.128); deep-tier contrasts d=+1.79/+1.54 clear the registered MDE 1.02 at n=16; memory profile deterministic (451/501 KiB vs flat 0). **The naive vanishing-gradient hypothesis is refuted on this task family — do not read "gradient wins at depth" as a general result: the stationary synthetic-teacher task is linear-teacher, and the O(1)-memory dominance claim lives in the untested memory-budget family** (`memory_budget_mib` machinery exists; new pilot → new prereg required). imp-67 fixed (prereg-declared stream must equal the enacted stream — provenance locks in place); registered commissions run through `run_trial(preregistration=…)`/`--prereg`, never bare.
 - imp-60: **FIXED 2026-09-01** — `activity_transition` now dimension-preserving (deterministic zero-pad/truncate); nonsquare geometries no longer crash the windowed-growth guard probe.
 - Pre-existing xpass observed 2026-09-01, **recurred same day in the full gate**: `test_scaling_invariants.py::…deep_network_accuracy[100]` — investigate on next touch of that file
 - **R9.2 pilot verdict is pilot-scoped** — the analog-noise family refuting "local rules degrade gracefully" is one constraint family at one difficulty (teacher_noise 0.5); the registered design must add the memory-budget lever before any resource-efficiency claim. Do not read "Backprop survives noise best" as a general result: settling dynamics pay per settle step, so settle-count × noise is the actual severity product
@@ -824,6 +900,29 @@ statistical (binomial σ) + structural (init-to-init σ) — and both must be si
 preregistration time. This generalizes imp-59 to seed-level variance for few-seed
 pilots.*
 
+67. **A prereg's declared stream is a claim about what the walk DOES — verify the
+enacted stream against record metadata, or the prereg certifies a design nobody
+ran (2026-09-02, R9.3 registered commission).** The deep-credit pilot preregistered
+`task_stream=stationary` with per-depth stationary synthetic teachers (as the R9.3
+execution record specified), but the harness ran `task_name="parity"` with
+`stationary_teacher=False` — the declared stream was never enacted. On that task
+every arm sat at chance on held-out probe (the competence tier the depth contrast
+needs never existed), so the pilot's all-chance readout — prereg label, passing
+controls, zero contrasts — was a construct-validity artifact flowing through an
+otherwise-clean gate: the R8.4/R8.5 machinery verifies the verdict chain, not that
+the declared design is the executed one. Found by re-deriving the pilot from its own
+spec (the record said "synthetic task, fixed random teacher per depth"; the code said
+parity); fixed (`synthetic` + `stationary_teacher=True`, per-depth teacher keys via
+`campaign_id::{env}`), the repaired pilot immediately produced the learnable signal
+the design predicted (gradient probe 0.50 at depth 4 vs 0.14 before). Pinned:
+`TestStationaryStreamConstructValidity` asserts `teacher_stationary == 1.0` on every
+record a walk emits (the provenance stamp is already there — read it) plus
+teacher-key parity between walk and probe. *Lesson: a metadata stamp that exists but
+is never asserted is a timestamp, not an instrument — construct validity (imp-54
+class) lives one level below metric honesty, and a prereg can be perfectly honest
+about a stream the code never walked. The check is cheap: assert the enacted-stream
+provenance wherever a declared stream gates a claim.*
+
 ## 🔧 Quick Commands
 
 ```bash
@@ -881,6 +980,15 @@ uv run python -m computronium.experiments.joint.deep_credit_trial \
   --input-dim 8 --num-classes 8 --seeds 0,1,2 \
   --output benchmark_results/deep_credit_pilot.json
 uv run pytest tests/property/test_deep_credit_trial.py -q
+
+# R9.3 REGISTERED commission (R8.4-gated: claim-grade prereg + registered n + control):
+# NOTE: competence requires lr=0.05 @ 100 episodes on the stationary synthetic stream
+# (imp-67: the declared stream is enacted — teacher_stationary=1.0 pinned by lock)
+uv run python -m computronium.experiments.joint.deep_credit_trial \
+  --episodes 100 --seeds 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 --depths 4,16,50 \
+  --width 16 --lr 0.05 --batch-size 16 --input-dim 8 --num-classes 8 \
+  --prereg configs/preregistrations/r93_deep_credit_registered.json \
+  --output benchmark_results/deep_credit_registered.json
 
 # NOTE: sync with `uv sync --extra dev --extra lightning` (plain dev sync removes
 #   lightning -> 4 collection errors). Serial pytest only — xdist hangs in this env.

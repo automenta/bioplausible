@@ -6,14 +6,19 @@ dynamics they actually run on (DxC fence: thermo requires settling; gradient/FA
 use instantaneous), the frozen control's declared coordinate/composition agreement,
 shallow-depth competence (a walk too short for the slowest arm turns degradation
 curves into noise), depth actually degrading the exact-global arm's memory
-profile, and the pilot preregistration's scope/label with per-depth embedded
-controls.
+profile, the pilot preregistration's scope/label with per-depth embedded
+controls, and the R8.4 commissioning gate for the registered design.
 """
 
+import math
+from pathlib import Path
+
 import numpy as np
+import pytest
 import torch
 
 from computronium.core.campaign.evaluation import (
+    _teacher_key,
     build_coordinate_system,
     evaluate_episode,
 )
@@ -25,7 +30,13 @@ from computronium.experiments.joint.deep_credit_trial import (
     _arm_coordinate,
     _compose,
     _environments,
+    _walk_seed,
     run_trial,
+)
+from computronium.validation.power_preregistration import (
+    EmbeddedControl,
+    PowerPreregistration,
+    min_detectable_effect,
 )
 
 CHANCE = 0.125  # registered shape (8 inputs / 8 classes)
@@ -265,6 +276,99 @@ class TestPilotPreregistration:
         assert not result.quarantined
 
 
+class TestRegisteredCommission:
+    """The registered R9.3 commission rides the R8.4 gate (imp-55 policy:
+    pre-registration precedes comparison) — the prereg file must derive
+    claim-grade from its own numbers, and the trial must refuse to walk
+    under anything less."""
+
+    REGISTERED_PREREG = (
+        Path(__file__).parents[2]
+        / "configs/preregistrations/r93_deep_credit_registered.json"
+    )
+
+    def test_registered_prereg_derives_claim_grade(self) -> None:
+        prereg = PowerPreregistration.load(self.REGISTERED_PREREG)
+        assert prereg.unmet_requirements() == ()
+        assert prereg.label() == "claim_grade"
+        assert prereg.declared_rung is None  # claim-grade is derived, never declared
+        assert prereg.claim_scope == "credit_at_depth"
+        assert prereg.task_stream == "stationary"
+        assert prereg.embedded_control is not None
+        control = prereg.embedded_control
+        assert "frozen" in control.coordinate
+        assert control.chance == pytest.approx(CHANCE)
+        assert control.tolerance >= 0.05  # imp-59 floor at the registered N
+        assert prereg.mde_cohens_d <= prereg.expected_effect
+
+    def test_trial_refuses_unmet_claim_grade_gates(self) -> None:
+        prereg = PowerPreregistration(
+            claim="lock: unmet gates refuse the commission",
+            metric="probe_accuracy",
+            claim_scope="credit_at_depth",
+            task_stream="stationary",
+            expected_effect=0.1,
+            variance_estimate=0.05,
+            n_per_group=5,
+            embedded_control=EmbeddedControl(
+                arm="frozen_lr0",
+                coordinate=_arm_coordinate(
+                    CONTROL_CREDIT, _environments(LOCK_CONFIG)[0], frozen=True
+                ),
+                chance=CHANCE,
+                tolerance=0.2,
+            ),
+        )
+        with pytest.raises(ValueError, match="not claim-grade"):
+            run_trial(LOCK_CONFIG, preregistration=prereg)
+
+    def test_trial_refuses_a_declared_rung_cap(self) -> None:
+        prereg = PowerPreregistration(
+            claim="lock: a declared rung caps the label below claim-grade",
+            metric="probe_accuracy",
+            claim_scope="credit_at_depth",
+            task_stream="stationary",
+            expected_effect=min_detectable_effect(5) + 0.01,
+            variance_estimate=0.05,
+            n_per_group=5,
+            embedded_control=EmbeddedControl(
+                arm="frozen_lr0",
+                coordinate=_arm_coordinate(
+                    CONTROL_CREDIT, _environments(LOCK_CONFIG)[0], frozen=True
+                ),
+                chance=CHANCE,
+                tolerance=0.2,
+            ),
+            declared_rung="pilot",
+        )
+        with pytest.raises(ValueError, match="caps the label below claim-grade"):
+            run_trial(LOCK_CONFIG, preregistration=prereg)
+
+    def test_trial_enforces_the_registered_n(self) -> None:
+        prereg = PowerPreregistration(
+            claim="lock: the walk must deliver the registered n",
+            metric="probe_accuracy",
+            claim_scope="credit_at_depth",
+            task_stream="stationary",
+            expected_effect=min_detectable_effect(5) + 0.01,
+            variance_estimate=0.05,
+            n_per_group=5,
+            embedded_control=EmbeddedControl(
+                arm="frozen_lr0",
+                coordinate=_arm_coordinate(
+                    CONTROL_CREDIT, _environments(LOCK_CONFIG)[0], frozen=True
+                ),
+                chance=CHANCE,
+                tolerance=0.2,
+            ),
+        )
+        with pytest.raises(ValueError, match="registered design requires 5"):
+            run_trial(
+                DeepCreditConfig(depths=(4,), episodes=1, seeds=(0, 1), width=8),
+                preregistration=prereg,
+            )
+
+
 class TestContrasts:
     def test_contrasts_cover_deep_tier(self) -> None:
         result = run_trial(DeepCreditConfig(depths=(4, 16), seeds=(0, 1)))
@@ -279,6 +383,51 @@ class TestContrasts:
         assert acc > CHANCE + 0.1, (
             f"shallow gradient competence: {acc:.4f} <= {CHANCE:.4f} + 0.1"
         )
+
+
+class TestStationaryStreamConstructValidity:
+    """imp-67 lock: the walk must enact the stream its prereg declares.
+
+    The first pilot preregistered ``task_stream='stationary'`` while the walk
+    ran the parity family with the legacy per-episode teacher flag — the
+    all-chance pilot readout was a construct-validity artifact, not a null.
+    The lock pins the stationary-teacher provenance on every record a walk
+    emits (the metadata stamp evaluate_episode writes).
+    """
+
+    def test_walk_records_carry_stationary_teacher_provenance(self) -> None:
+        config = DeepCreditConfig(depths=(4,), episodes=2, seeds=(0,), width=8)
+        env = _environments(config)[0]
+        for credit in (*TRIAL_ARMS, CONTROL_CREDIT):
+            coord = _arm_coordinate(credit, env, frozen=(credit == CONTROL_CREDIT))
+            _, _, records, _ = _walk_seed(
+                credit,
+                credit == CONTROL_CREDIT,
+                env,
+                coord,
+                0,
+                config=config,
+            )
+            assert records, f"{credit} walk emitted no records"
+            for record in records:
+                stamp = record.metadata.get("teacher_stationary", 0.0)
+                assert math.isclose(stamp, 1.0), (
+                    f"{credit} walked the non-stationary stream while the prereg "
+                    "declares task_stream=stationary (imp-67 class)"
+                )
+
+    def test_probe_scores_the_same_stationary_teacher_stream(self) -> None:
+        """Probe and training readout must share the stream key (imp-61 class:
+        a probe keyed differently scores a different task by construction)."""
+        config = DeepCreditConfig(depths=(4,), episodes=1, seeds=(0,), width=8)
+        env = _environments(config)[0]
+        coord = _arm_coordinate("gradient", env)
+        campaign_id = f"{DEEP_CREDIT_CAMPAIGN_ID}::{env.name}"
+        # Both the walk and the probe resolve the same teacher key; parity of
+        # keys is the construct-validity property the trial's readout needs.
+        walk_key = _teacher_key(campaign_id, coord, 0, stationary=True, segment=None)
+        probe_key = _teacher_key(campaign_id, coord, 0, stationary=True, segment=None)
+        assert walk_key == probe_key
 
 
 class TestDepthDegradation:

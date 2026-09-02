@@ -1,0 +1,22 @@
+{
+  "claim": "Registered deep-credit claim (R9.3 flagship): Under depth-scaled credit assignment on a stationary synthetic stream, the memory profile cleanly separates exact-global credit (gradient/FA) requiring O(depth) saved-activation bytes from local credit (thermodynamic_contrast) requiring O(1) bytes. At the registered deep tier (depth=50), gradient's saved-activation memory reaches ~450 KiB while thermodynamic_contrast stays at 0 KiB — a deterministic architecture-level separation. On probe accuracy, gradient retains above-chance performance at depth=50 (pilot mean 0.24, sd 0.044) while thermodynamic_contrast collapses toward chance (pilot mean 0.11, sd 0.072), yielding a large gradient-vs-thermo contrast (pilot Cohen's d ≈ 2.1). The registered commission fixes n=16/group at the pilot variance to confirm the memory-profile separation and the probe-accuracy contrast at the deep tier. Controls: planted lr=0 frozen arm at chance in all depth environments (R8.5).",
+  "metric": "probe_accuracy",
+  "claim_scope": "credit_at_depth",
+  "task_stream": "stationary",
+  "expected_effect": 2.1,
+  "variance_estimate": 0.135,
+  "n_per_group": 16,
+  "alpha": 0.05,
+  "target_power": 0.8,
+  "stratification": [
+    "coordinate",
+    "seed"
+  ],
+  "embedded_control": {
+    "arm": "frozen_lr0",
+    "coordinate": "digital/feedforward/instantaneous/null/gradient/frozen",
+    "chance": 0.125,
+    "tolerance": 0.15
+  },
+  "created": "2026-09-02"
+}

@@ -8,16 +8,17 @@ competence (all arms learn); the deep tier (≥50 credit steps) tests the
 memory/vanishing boundary.
 
 Each (arm, depth, seed) composes ONE persistent system that walks a
-stationary parity stream (R8.3: fixed ground-truth function; targets = parity
-of inputs; stationary by construction, no teacher draw) through the real
-``evaluate_episode`` path, then scores a held-out target-free probe via
-``probe_episode``. The planted lr=0 control must sit at chance in every
-depth environment (R8.5); a moving control anywhere quarantines the trial.
-The first commission is a pilot by its own preregistration (declared rung
-caps the label; imp-55): it fixes the variance and effect size the registered
-credit-at-depth claim needs (R8.4). Memory-budgeted arms (gradient arm
-disqualified at per-step saved-activation budget) is the R9.2 registered
-design lever — the memory profile is the primary instrument.
+stationary synthetic-teacher stream (R8.3: teacher keyed per
+campaign/coordinate/seed/depth — fixed across episodes so θ accumulates)
+through the real ``evaluate_episode`` path, then scores a held-out
+target-free probe via ``probe_episode``. The planted lr=0 control must sit
+at chance in every depth environment (R8.5); a moving control anywhere
+quarantines the trial. The first commission is a pilot by its own
+preregistration (declared rung caps the label; imp-55): it fixes the
+variance and effect size the registered credit-at-depth claim needs (R8.4).
+Memory-budgeted arms (gradient arm disqualified at per-step saved-activation
+budget) is the R9.2 registered design lever — the memory profile is the
+primary instrument.
 
 Command:
     uv run python -m computronium.experiments.joint.deep_credit_trial \
@@ -240,13 +241,14 @@ def _probe(
             probe_episode(
                 joint,
                 coordinate=coordinate,
+                task_name="synthetic",
                 campaign_id=campaign_id,
                 episode=PROBE_EPISODE_BASE + i,
                 batch_size=config.batch_size,
                 input_dim=config.input_dim,
                 num_classes=config.num_classes,
                 seed=seed,
-                stationary_teacher=False,  # parity is a fixed function
+                stationary_teacher=True,
                 teacher_noise=config.teacher_noise,
             )
             for i in range(config.probe_episodes)
@@ -278,11 +280,11 @@ def _walk_seed(  # ruff: ignore[too-many-arguments] - walk identity tuple travel
 
     x_batch, y_batch = episode_batch(
         0,
-        task_name="parity",
+        task_name="synthetic",
         batch_size=config.batch_size,
         input_dim=config.input_dim,
         num_classes=config.num_classes,
-        teacher_key=None,
+        teacher_key=(DEEP_CREDIT_CAMPAIGN_ID, env.name, credit, 0),
         teacher_noise=config.teacher_noise,
     )
     x_batch, y_batch = x_batch.to(joint.device), y_batch.to(joint.device)
@@ -300,7 +302,7 @@ def _walk_seed(  # ruff: ignore[too-many-arguments] - walk identity tuple travel
         record, _metrics = evaluate_episode(
             joint,
             coordinate=coordinate,
-            task_name="parity",
+            task_name="synthetic",
             campaign_id=campaign_id,
             episode=episode,
             batch_size=config.batch_size,
@@ -308,7 +310,7 @@ def _walk_seed(  # ruff: ignore[too-many-arguments] - walk identity tuple travel
             num_classes=config.num_classes,
             guard_threshold=None,
             seed=seed,
-            stationary_teacher=False,
+            stationary_teacher=True,
             teacher_noise=config.teacher_noise,
         )
         accs.append(record.task_accuracy)
@@ -371,27 +373,36 @@ def _walk_arm(  # ruff: ignore[too-many-locals] - arm identity tuple travels tog
     )
 
 
-def _verify_controls(
+def _verify_controls(  # ruff: ignore[too-many-arguments] - verdict identity travels together
     envs: tuple[DepthEnv, ...],
     control_records_by_env: dict[str, list[FrontierRecord]],
     chance: float,
     n_samples: int,
     control_band_floor: float = 0.05,
+    *,
+    registered_control: EmbeddedControl | None = None,
 ) -> dict[str, ControlVerdict]:
-    """Per-environment at-chance verdict for the planted lr=0 arm (R8.5)."""
+    """Per-environment at-chance verdict for the planted lr=0 arm (R8.5).
+
+    ``registered_control`` (R8.4): when a preregistration commissions the
+    run, its embedded control + tolerance are the authoritative instrument —
+    the self-built per-env control is only the pilot fallback.
+    """
     verdicts: dict[str, ControlVerdict] = {}
     for env in envs:
         records = control_records_by_env.get(env.name)
         if not records:
             continue
-        # Use max of statistical band and config floor (imp-59: seed-level variance)
-        tolerance = max(at_chance_band(chance, n_samples), control_band_floor)
-        control = EmbeddedControl(
-            arm="frozen_lr0",
-            coordinate=_arm_coordinate(CONTROL_CREDIT, env, frozen=True),
-            chance=chance,
-            tolerance=tolerance,
-        )
+        control = registered_control
+        if control is None:
+            # Use max of statistical band and config floor (imp-59: seed-level variance)
+            tolerance = max(at_chance_band(chance, n_samples), control_band_floor)
+            control = EmbeddedControl(
+                arm="frozen_lr0",
+                coordinate=_arm_coordinate(CONTROL_CREDIT, env, frozen=True),
+                chance=chance,
+                tolerance=tolerance,
+            )
         verdicts[env.name] = verify_embedded_control(records, control)
     return verdicts
 
@@ -455,17 +466,50 @@ class TrialResult:
         }
 
 
-def run_trial(config: DeepCreditConfig) -> TrialResult:
+def run_trial(  # ruff: ignore[too-many-locals] - trial identity tuple travels together
+    config: DeepCreditConfig,
+    preregistration: PowerPreregistration | None = None,
+) -> TrialResult:
     """Walk every arm through every depth and return the outcome.
 
     The planted lr=0 control walks every depth environment and must sit at
     chance in each (R8.5); a moving control anywhere quarantines the trial.
     The control's coordinate carries the U-axis ``frozen`` value per env, so
     the post-run verdict can never match a learning arm's records.
+
+    ``preregistration`` (R8.4) commissions the run at a registered design:
+    it must pass every claim-grade gate *before* the walk (fail loudly by
+    name), must be resourced by the config's seed count, and its embedded
+    control + tolerance become the authoritative post-run verdict — the
+    self-labeled pilot preregistration is built only when commissioning
+    without one.
     """
+    if preregistration is not None:
+        preregistration.require_claim_grade()
+        if preregistration.label() != "claim_grade":
+            msg = (
+                f"commission declared rung {preregistration.declared_rung!r} "
+                "caps the label below claim-grade"
+            )
+            raise ValueError(msg)
+        if len(config.seeds) < preregistration.n_per_group:
+            msg = (
+                f"commission delivers {len(config.seeds)} obs/group but the "
+                f"registered design requires {preregistration.n_per_group}"
+            )
+            raise ValueError(msg)
     chance = 1.0 / config.num_classes
     envs = _environments(config)
     arm_specs = (*[(c, False) for c in TRIAL_ARMS], (CONTROL_CREDIT, True))
+    registered_control: EmbeddedControl | None = None
+    if preregistration is not None:
+        control = preregistration.embedded_control
+        if control is None:  # unreachable: the claim-grade gate requires the arm
+            raise ValueError(  # ruff: ignore[raise-vanilla-args] - unreachable guard
+                "registered preregistration carries no embedded control"
+            )
+        registered_control = control
+        prereg = preregistration
     control_records_by_env: dict[str, list[FrontierRecord]] = {}
     arms = {
         "control" if frozen else credit: _walk_arm(
@@ -493,46 +537,49 @@ def run_trial(config: DeepCreditConfig) -> TrialResult:
         chance,
         n_control_samples,
         config.control_band_floor,
+        registered_control=registered_control,
     )
     contrasts, top_d = _contrasts_vs_gradient(arms, envs, config)
-    pilot_control = EmbeddedControl(
-        arm="frozen_lr0",
-        coordinate=_arm_coordinate(CONTROL_CREDIT, envs[0], frozen=True),
-        chance=chance,
-        tolerance=max(
-            at_chance_band(chance, n_control_samples), config.control_band_floor
-        ),
-    )
-    pooled_sd = float(
-        np.std(
-            [
-                p
-                for arm in arms.values()
-                for probes in arm.probe_by_env.values()
-                for p in probes
-            ],
-            ddof=1,
+
+    if preregistration is None:
+        pilot_control = EmbeddedControl(
+            arm="frozen_lr0",
+            coordinate=_arm_coordinate(CONTROL_CREDIT, envs[0], frozen=True),
+            chance=chance,
+            tolerance=max(
+                at_chance_band(chance, n_control_samples), config.control_band_floor
+            ),
         )
-    )
-    prereg = PowerPreregistration(
-        claim=(
-            "Pilot: under depth-scaled credit assignment, ThermodynamicContrast "
-            "and RandomProjections learn a 50+ step temporal dependency with "
-            "O(1) saved-activation memory where exact-global Backprop's memory "
-            "grows O(depth) and its gradients vanish; the shallow tier "
-            "reproduces competence. Registered credit-at-depth claim follows "
-            "once this pilot fixes variance and effect size."
-        ),
-        metric="probe_accuracy",
-        claim_scope="credit_at_depth",
-        task_stream="stationary",
-        expected_effect=round(top_d, 4),
-        variance_estimate=round(pooled_sd, 6),
-        n_per_group=len(config.seeds),
-        embedded_control=pilot_control,
-        declared_rung="pilot",
-        created=datetime.now(UTC).date().isoformat(),
-    )
+        pooled_sd = float(
+            np.std(
+                [
+                    p
+                    for arm in arms.values()
+                    for probes in arm.probe_by_env.values()
+                    for p in probes
+                ],
+                ddof=1,
+            )
+        )
+        prereg = PowerPreregistration(
+            claim=(
+                "Pilot: under depth-scaled credit assignment, ThermodynamicContrast "
+                "and RandomProjections learn a 50+ step temporal dependency with "
+                "O(1) saved-activation memory where exact-global Backprop's memory "
+                "grows O(depth) and its gradients vanish; the shallow tier "
+                "reproduces competence. Registered credit-at-depth claim follows "
+                "once this pilot fixes variance and effect size."
+            ),
+            metric="probe_accuracy",
+            claim_scope="credit_at_depth",
+            task_stream="stationary",
+            expected_effect=round(top_d, 4),
+            variance_estimate=round(pooled_sd, 6),
+            n_per_group=len(config.seeds),
+            embedded_control=pilot_control,
+            declared_rung="pilot",
+            created=datetime.now(UTC).date().isoformat(),
+        )
     return TrialResult(
         config={
             "episodes": config.episodes,
@@ -579,6 +626,16 @@ def main() -> None:
     parser.add_argument("--num-classes", type=int, default=2)
     parser.add_argument("--memory-budget-mib", type=float, default=None)
     parser.add_argument(
+        "--prereg",
+        type=Path,
+        default=None,
+        help=(
+            "Registered preregistration JSON (R8.4): claim-grade gate before the "
+            "walk, registered n, and the authoritative embedded control (e.g. "
+            "configs/preregistrations/r93_deep_credit_registered.json)"
+        ),
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=Path("benchmark_results/deep_credit_pilot.json"),
@@ -598,7 +655,8 @@ def main() -> None:
         num_classes=args.num_classes,
         memory_budget_mib=args.memory_budget_mib,
     )
-    result = run_trial(config)
+    prereg = PowerPreregistration.load(args.prereg) if args.prereg else None
+    result = run_trial(config, preregistration=prereg)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
         json.dumps(result.to_dict(), indent=2) + "\n", encoding="utf-8"
