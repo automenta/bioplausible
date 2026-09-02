@@ -33,9 +33,15 @@
 > **State:** OPEN — R10.2 in design. All five registered artifacts exist under
 > `benchmark_results/` (schemas verified 2026-09-02); they are demoted to
 > historical corroboration — context in RESULTS.md, never load-bearing. The
-> compositional API has no test that *demonstrates* it. No new experiments are
-> commissioned this round. Termination criterion unchanged in spirit: **if it
-> works it will be obvious.**
+> compositional API has no test that *demonstrates* it. R10.2.1/R10.2.2 were
+> pre-flighted 2026-09-02 (one throwaway probe, then reverted — no
+> implementation has landed): the audit findings are recorded in R10.2.1,
+> R10.2.2, and Register C. D3 and D4 were pre-flighted the same day
+> (run_trial/memory-wall probes — throwaway scripts, also reverted): D3 has
+> a visible regime (R10.2.4), D4's verdict semantics and depth requirement
+> are pinned (R10.2.5). No new experiments are
+> commissioned this round. Termination criterion unchanged in spirit: **if
+> it works it will be obvious.**
 
 ---
 
@@ -70,12 +76,14 @@ demonstrate itself.
   honest. (The registered artifacts' provenance gap is recorded, not fixed —
   fixing the past is nobody's job when the present regenerates itself.)
 
-**Sequencing.** R10.2.0 (design protocol) and R10.2.1 (API audit) come first;
-R10.2.2 (flagship) next — R10.2.7's README block derives from it; R10.2.3–.6
-follow, each consuming a design decision from R10.2.0. R10.1 consumes the run
-records R10.2.2–.6 emit (R10.1.2), so figures land after their demos;
-R10.2.8–.10 land last (drift lock with the README, gallery CLI with the
-gallery module). R10.3 rules bind from the first commit.
+**Sequencing.** **R10.2.1 (API audit) is the first move** — nothing imports
+cleanly from the package root until `create_task` and `JointSystemTrainer`
+are fixed; R10.2.0's protocol governs throughout. R10.2.2 (flagship) next —
+R10.2.7's README block derives from it; R10.2.3–.6 follow, each consuming a
+design decision from R10.2.0. R10.1 consumes the run records R10.2.2–.6 emit
+(R10.1.2), so figures land after their demos; R10.2.8–.10 land last (drift
+lock with the README, gallery CLI with the gallery module). R10.3 rules bind
+from the first commit.
 
 **Next capability in line (D6): the substrate axis.** No live demonstration
 exists for the S-axis today — the memristive factory is unimplemented
@@ -141,9 +149,12 @@ regresses, *or the demonstration stops being visible*.
 - [ ] **R10.2.0** **Demonstration design protocol.**
   - **Two tiers.** `compose_6axis`, `swap_credit`, `swap_plasticity` are the
     simple tier (≤50 lines, straightforward). `memory_budget` and
-    `z3_frozen_theta` are the **hard tier** — multi-arm, multi-phase — with a
-    target of ≤80 lines via `_`-prefixed in-file helpers, which stay inside
-    the test file so it remains self-contained as documentation.
+    `z3_frozen_theta` are the **hard tier** — multi-arm, multi-phase — with
+    in-file `_`-prefixed helpers that stay inside the test file so it remains
+    self-contained as documentation. **The line budget is a sprawl guard, not
+    a cap:** target ≤80 lines, but if a hard-tier test needs ~120 lines to
+    stay readable, let it be 120 lines. Readability beats the budget; clever-
+    but-comprehensible-never is a defect in a file whose job is to be read.
   - **Design for visibility before calibrating for noise.** First choose the
     demo regime (task, budget, switch structure) that makes the effect large —
     sweep it live during development, pick the regime where the contrast is
@@ -167,19 +178,26 @@ regresses, *or the demonstration stops being visible*.
   compositional API via `__all__` plus the `_LAZY` map (both must be edited in
   lockstep — that is the file's export mechanism, per AGENTS.md): `System`/
   `compose_system`/`compose_joint_system`, ontology primitives,
-  `SystemTrainer`/`JointSystemTrainer`, `SystemTrainerConfig`, the factory
-  set, `create_task`. The demo tests import **only from the package root** —
-  the tests are the audit. (The z3 demo additionally imports its experiment
-  module — the benchmark surface is public; the root-only rule scopes to the
-  compositional API.) Known concrete gaps (verified 2026-09-02):
-  `create_task` (README's quickstart reaches into
-  `computronium.domains.factory`), and `JointSystemTrainer` (the
-  *mathematical center* per README, absent from root). One discrepancy to
-  resolve, not paper over: README's factory table advertises
-  `create_memristive_mlp`, which has no implementation in the tree — either
-  it lands as a Register-B pull with a demo test, or the R10.2.7 README
-  restructure marks the row Planned. Root exports are the contract; backwards
-  compatibility is explicitly none.
+  `SystemTrainer`, `SystemTrainerConfig`, the factory set, `create_task`. The
+  demo tests import **only from the package root** — the tests are the audit.
+  (The z3 demo additionally imports its experiment module — the benchmark
+  surface is public; the root-only rule scopes to the compositional API.)
+  Findings from the 2026-09-02 pre-flight, to fix at pull time:
+  (a) `create_task` is missing from root (README's quickstart reaches into
+  `computronium.domains.factory`) — add to `_LAZY` + `__all__`;
+  (b) `JointSystemTrainer` — the README's "single mathematical center" —
+  **does not exist anywhere in the tree**; do NOT export it. The real joint
+  training surface is the `JointSystem` protocol (`train_step`/`forward`,
+  duck-typed by `SystemTrainer`); R10.2.7 corrects the README table;
+  (c) root `NullPlasticity` points at `computronium.state`'s twin class,
+  which `compose_joint_system` does **not** special-case (its isinstance
+  tuple accepts only `core.plasticity.NullPlasticity` ≡
+  `core.joint.transition.NullPlasticity`) — re-point the export so the
+  composition hits the delegating `_NullJointSystem` path;
+  (d) README's factory table advertises `create_memristive_mlp`, which has
+  no implementation in the tree — either it lands as a Register-B pull with
+  a demo test, or the R10.2.7 README restructure marks the row Planned.
+  Root exports are the contract; backwards compatibility is explicitly none.
 - [ ] **R10.2.2** `test_demo_compose_6axis.py` — the flagship. Full six-axis
   composition via `compose_joint_system` (Digital × Recurrent ×
   EnergyMinimization × Null × ThermodynamicContrast × Euclidean; canonical
@@ -187,11 +205,23 @@ regresses, *or the demonstration stops being visible*.
   `factory.py`/`spec.py` for the round-trip pair — always imported via the
   package root), quick-mode task, short `SystemTrainer.fit`. Shows: valid
   metrics (loss ≥ 0, accuracy ∈ [0,1] above chance), config round-trip
-  identity (`extract_config` → `compose_system_from_configs`), J1
-  zero-extension (null-plasticity forward ≡ 5-D dynamics — the property lock
-  already lives at `tests/property/joint/test_null_equivalence.py`; the demo
-  runs it at *train* scale, end-to-end). Emits the D1 run record. *A stranger
-  reads this and knows how to build anything.*
+  identity, J1 zero-extension (null-plasticity behavior ≡ 5-D dynamics —
+  the property lock already lives at
+  `tests/property/joint/test_null_equivalence.py`; the demo runs it at
+  *train* scale, end-to-end). Emits the D1 run record. *A stranger reads
+  this and knows how to build anything.* Pre-flight (2026-09-02) verified
+  the regime and call shapes, so implementation starts from facts:
+  MNIST quick-mode, 1 epoch, batch 64, hidden `(32,)`,
+  `EnergyMinimization(max_steps=5, β=0.5)`, Euclidean step 0.05 → **~19 s
+  wall, train_acc ≈ 0.91** — the above-chance assertion is safe with huge
+  margin, and MNIST images need a flatten wrapper (mirroring
+  `test_quickstart.py`). Round-trip call shape:
+  `compose_system_from_configs(**extract_config(system))` — the dict keys
+  are exactly the parameter names. J1 demo form: two independent builds
+  seeded identically, one 5-D, one 6-axis with Null → identical metric
+  dicts (abs_tol 1e-7) and `torch.equal` θ afterwards. The joint
+  `to_spec`/`from_spec` round-trip is broken (Register C) — the demo uses
+  the 5-D L6 pair, not the joint spec.
 - [ ] **R10.2.3** `test_demo_swap_credit.py` — one trainer, three credit rules.
   Same coordinate trained three times with the C-axis swapped (gradient /
   ThermodynamicContrast / RandomProjections) through identical `SystemTrainer`
@@ -205,9 +235,25 @@ regresses, *or the demonstration stops being visible*.
   `core/campaign/evaluation.py`; arm structure patterned on
   `forgetting_trial.py`, compressed). Per R10.2.0: sweep regimes live first,
   pick the one where routing's retention advantage is unmistakable at toy
-  scale; calibrate a guard band only if needed. Emits the D3 run record
+  scale; calibrate a guard band only if needed. **Budget the sweep as real
+  design work** — hours of live iteration, not minutes: the registered study
+  needed 16 seeds and d = −1.90 to see this effect; finding a toy-scale
+  regime where it is visible by eye is the hard part of this test. If no
+  visible regime exists AND no robust band survives calibration, **demote
+  for real**: D3's row becomes the one-call-swap capability, the retention
+  claim moves to the corroboration appendix, and the test asserts only what
+  it can show. Emits the D3 run record
   (per-seed retention curves — the figure's data). *You watch routing
-  remember what null forgets.*
+  remember what null forgets.* **Pre-flighted 2026-09-02** (toy `run_trial`,
+  3 seeds, dims 8/8, lr 0.03, ~3 s wall): **a visible regime exists** — the
+  trial's own default A40/B40 separates per-seed (routing retained ≥ null at
+  3/3 seeds: mean 0.278 vs 0.191, d = −1.49, registered direction). At
+  A20/B20 the effect **reverses** (null retains more): below mastery the
+  comparison is unreadable — the Watch item's ≈0.5 mastery floor, confirmed
+  live. The demo must pin A40/B40, **assert the mastery precondition before
+  reading retention** (routing masters A slower: 0.28–0.50 vs null
+  0.58–0.67), and run the ≥10-seed calibration — the trial costs ~1 s/seed
+  at toy dims, so calibration is cheap.
 - [ ] **R10.2.5** `test_demo_memory_budget.py` — honest feasibility.
   **Hard tier — budget extra time** (multi-arm). Memory profiler's feasibility
   grid at demo scale — machinery to reuse, not rebuild:
@@ -218,7 +264,14 @@ regresses, *or the demonstration stops being visible*.
   **categorical by construction** — `check_envelope` verdicts are
   memory-profile arithmetic; the walled arm does not run. No bands, no
   calibration. Emits the D4 run record (verdict grid). *The profiler tells
-  the truth before you train — visibly.*
+  the truth before you train — visibly.* **Pre-flighted 2026-09-02:** the
+  verdict tuple is `(violated, reason)` — `(True, reason)` = walled,
+  `(False, None)` = feasible — and it is deterministic across repeated
+  calls (verified). The wall is a **depth phenomenon** (the registered grid
+  is depth 4/16/50): a single-layer toy model fits every budget, so the
+  demo composes through `memory_budget_trial`'s depth environments (its
+  `_compose`/`_feasibility_grid` path) to make the walled cell actually
+  wall.
 - [ ] **R10.2.6** `test_demo_z3_frozen_theta.py` — the lifecycle guarantee,
   bitwise. **Hard tier — budget extra time** (multi-phase: freeze → adapt →
   switch → restore → probe). Reuse the retention-arm machinery in
@@ -330,6 +383,7 @@ regresses, *or the demonstration stops being visible*.
 
 | Item | Pull condition |
 |------|----------------|
+| Joint `to_spec`→`from_spec` round-trip broken — `from_spec` calls `GeometryConfig(**spec["geometry"])` but `to_spec` embeds `params`/`recurrent_weight` keys → TypeError; found in the 2026-09-02 pre-flight | Next touch of `core/system_trainer/joint.py` (or when a demo/figure needs joint-spec round-trips) |
 | imp-4 — Pyright full `strict` on ontology (131 findings; torch `Unknown` tracking; annotation work in `_dynamics`/`geometry`/`update`) | Next annotation pass on those modules |
 | imp-8 — `compute_energy` duplication across Energy/Spike/Instantaneous/Diffusion → extract `_energy_from_state(state, geometry)` | Next touch of any dynamics module |
 | imp-19 — `FrontierRecord.seed` legacy default 42 → required at next schema break | Schema break |
@@ -373,6 +427,8 @@ regresses, *or the demonstration stops being visible*.
   construction seeding in place.
 - R9.1 lr=0.03 is calibrated for the 40-episode budget — re-calibrate on
   schedule/budget changes; read A-mastery (~0.5 floor) before reading retention.
+  Confirmed live at demo scale (2026-09-02 pre-flight): at A20/B20 the
+  retention effect *reverses* — mastery precondition is load-bearing for D3.
 - Control-band sizing (imp-59): preregistrate the at-chance band from the
   registered N of the control arm's scored samples.
 - Smoke-scale campaign deltas are capped at chance by the non-stationary stream
