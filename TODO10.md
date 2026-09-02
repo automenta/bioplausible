@@ -283,19 +283,31 @@ regresses, *or the demonstration stops being visible*.
   *exactly*, above-chance probe accuracy post-switch at the visible regime
   chosen per R10.2.0. Emits the D5 run record. *J2, demonstrated, not just
   locked.*
-- [ ] **R10.2.7** **README restructure.** Opens with the ≤10-line composition →
-  train → report block **derived from `test_demo_compose_6axis.py`**, then
-  factory one-liners (only factories the root actually exports), then the
-  gallery figures as *what the suite currently shows*. Ontology/capability/
-  architecture tables move below the fold. The "Three Perspectives" table
-  inverts: ML Library first and load-bearing; research framed as the program
-  that validates the library at scale. The stale `core/system_trainer.py`
-  module path is corrected to the `core/system_trainer/` package. No README
-  line cites a stored number; claims link tests and figures.
-- [ ] **R10.2.8** **Drift lock.** README python blocks are checked verbatim
-  against their source test files (small extraction script under `scripts/` +
-  lock test under `tests/`). A README block that no longer matches its test
-  fails CI — no doc/test drift, by construction.
+- [ ] **R10.2.7** **README refresh — the index stays complete.** README.md
+  remains the cheat-sheet: a complete index to the entire scope of
+  functionality and capability — the ontology-axis table, the 13-factory
+  table, the CLI reference, the capability matrix, the substrate table, the
+  verification-status markers all stay as first-class content. **Do not
+  restructure it into a narrative funnel; do not move tables below any
+  fold.** Changes are surgical: (a) only a few designated code snippets
+  (the opening composition block, one factory one-liner block) — minimal
+  precisely because snippets are volatility-prone — and each is derived from
+  a demo test and locked by R10.2.8; (b) the identity inversion happens in
+  *labeling, not layout*: research framed as the program validating the
+  library's abstractions; (c) factual corrections only: the stale
+  `core/system_trainer.py` module path, the `JointSystemTrainer` fiction
+  (the class does not exist — describe the real joint training surface:
+  `compose_joint_system` + `SystemTrainer` duck-typing), and the
+  `create_memristive_mlp` row (implement-as-pull or mark Planned);
+  (d) where a gallery figure exists for a capability, link it as evidence
+  beside that capability's table row.
+- [ ] **R10.2.8** **Drift lock (designated snippets only).** The few
+  designated README code blocks are checked verbatim against their source
+  demo tests (small extraction script under `scripts/` + lock test under
+  `tests/`; each locked block declares its source test in a sidecar map).
+  Tables and prose are the hand-maintained index — deliberately **not**
+  locked. A locked snippet that no longer matches its test fails CI — no
+  snippet/doc drift, by construction, with minimal lock surface.
 - [ ] **R10.2.9** **`docs/RESULTS.md` — capabilities first, history second.**
   Front section: per axis (S/G/D/M/C/U), what the abstraction is, the one-line
   swap, the live demonstration, the figure. Back section — clearly labeled
@@ -348,6 +360,43 @@ regresses, *or the demonstration stops being visible*.
   (`visualization/`, `cli/gallery.py`) meet the same strict-typing bar as
   everything else. **No new verification rounds are commissioned this round**
   — R10 spends the trust R6–R9 built; it does not compound it.
+
+## 🎯 Tangible-Result Checkpoints (what the investment returns)
+
+R10 is an investment; these are the returns, each with a materialization
+condition. A sprint that ships none of these is a sprint to question.
+
+1. **Working proofs (R10, sprints 1–2):** `pytest -k demo` green — five
+   capabilities demonstrated in under two minutes, calibration recorded in
+   docstrings. This is also the *feedstock* for checkpoint 3: the demo
+   configs and their outcomes are PR-5's known-good/known-bad calibration
+   harvest.
+2. **Truthful front door (R10, sprint 3):** README index corrected (real
+   joint-training surface, memristive row resolved), few locked snippets,
+   `comp gallery` rendering live evidence. A stranger can verify every claim
+   in one sitting.
+3. **Commissioned campaign stack (PR-9, first research-track pull):** one
+   full iterate → interrupt → checkpoint → resume cycle on
+   `autoscientist_campaigns/` — built today but with **zero completed
+   runs**; nothing consumes the campaign stack until this passes. This is
+   the gateway to every unattended result.
+4. **Calibrated stability guard (PR-5):** ROC-calibrated kill thresholds
+   from checkpoint 1's harvest (<5% false-kill on known-good, >95% kill
+   rate, <10% overhead) — unattended campaigns become safe to launch, and
+   the failure manifesto starts accumulating as a dataset.
+5. **The first research-shaped result (AutoScientist M-axis frontier):** a
+   Pareto frontier over the resource vector 𝒞, one axis swept at a time,
+   annotated with which M primitive owns each knee — the first figure that
+   is a *finding*, not a demonstration.
+6. **The discovery bet (Z3 flagship registered commission):** ≥95% on all
+   three tasks at exact Δθ=0 within ≤20% of fine-tuning steps — accuracy-
+   vs-steps curves, forgetting matrix, per-seed Δθ audit. If it falsifies:
+   the L1 adaptation figure substitutes as the campaign seed and the
+   boundary condition becomes the publication. Either way, tangible.
+
+Sequencing rule: 1–2 are R10; 3–4 pull immediately after (the demo harvest
+is their calibration input); 5–6 are RESEARCH3 CP-A's spine. No checkpoint
+blocks on a later one.
 
 ## 📦 Registers (pull only under R10.3.6)
 
