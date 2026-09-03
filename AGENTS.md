@@ -17,9 +17,9 @@
 ## Toolchain
 *   Language: **Python 3.14+**
 *   **uv**: For dependency management, virtualenvs, and task running (`uv run`, `uv add`). Single lockfile (`uv.lock`); no `requirements.txt`.
-*   **Ruff**: For formatting, linting, and import sorting. All config in `pyproject.toml`.
-*   **Pyright** (or mypy): In **strict mode**. Type errors fail the build.
-*   **pre-commit**: Runs ruff + type checker + tests before every commit.
+*   **Ruff**: For formatting, linting, and import sorting. All config in `pyproject.toml`. Format always (cheap). Lint **changed files only** during development — findings in legacy modules are queued work (Register C / hygiene pass), never commit blockers.
+*   **Pyright** (or mypy): **Strict on new/rewritten modules.** Repo-wide checking stays basic until the dedicated hygiene pass closes; type fixes in legacy modules ride that pass, not feature work.
+*   **pre-commit**: Runs ruff format + lint on changed files only. No test suite in the hook.
 *   **Line Length**: Ruff default (88). Relax per-line with `# noqa: <code>` and a reason, never globally.
 *   Rules are enforced by tooling — if a rule can be a config or pre-commit hook, it is one.
 
@@ -59,7 +59,11 @@
 *   **Resources**: Use context managers (`with` / `async with`) for all resource lifecycles.
 
 ## Testing
-*   **pytest + pytest-cov**: Enforce a coverage floor in CI (e.g., ≥85%).
+*   **pytest + pytest-cov**: Coverage is opt-in (`--cov`); no floor until the API stabilizes.
+*   **Test execution tiers** — run the cheapest tier that can catch your change; always show output + walltime (never truncate failures):
+    1. **Targeted** (default): only tests touching changed modules (`uv run pytest tests/<path> -k <signature> -q`).
+    2. **Fast gate** (demo/gallery/lock-adjacent changes): demo gate (`pytest tests/integration/ -k "demo or gallery_lock" -q`) + drift locks + property suite.
+    3. **Full suite**: round close or explicit request — never a per-commit habit.
 *   **hypothesis**: Use for property-based tests on pure logic.
 *   **Mocking**: Prefer Dependency Injection over `unittest.mock`. Use `pytest-mock` when strictly required.
 *   **Fixtures**: Use fixtures over setup/teardown; `@pytest.mark.parametrize` over duplicated tests.
@@ -68,10 +72,14 @@
 *   **Dependency Scanning**: Run `pip-audit` in CI.
 *   **Static Analysis**: Enable Ruff's `S` (bandit) rule set. Never hardcode secrets.
 *   **Project Structure**: `pyproject.toml` is the single source of truth. `__init__.py` exposes only the public API via `__all__`; internal modules are `_`-prefixed.
-*   **CI Gate Order**: `ruff format --check` → `ruff check` → `pyright` → `pytest --cov` → `pip-audit`.
+*   **CI Gate Order** (what CI runs when adopted — agent per-commit duties are the scoped checklist below, not this list): `ruff format --check` → `ruff check` → `pyright` → `pytest --cov` → `pip-audit`.
 
 ## Agent Commit Checklist
-**Automated (pre-commit / CI — do not bypass):**
-- [ ] `ruff format .` && `ruff check --fix .`
-- [ ] `pyright .` — zero errors in strict mode
-- [ ] `pytest --cov` — all tests pass, coverage floor met
+**Per commit — scoped and fast:**
+- [ ] `ruff format` && `ruff check --fix` on changed files
+- [ ] `pyright` on changed files (strict for new modules)
+- [ ] Targeted tests for touched modules — output + walltime visible
+
+**Deferred — hygiene pass / round close (never per-commit):**
+- [ ] Repo-wide `ruff check` / `pyright` (Register C scope)
+- [ ] Full `pytest` run; `--cov`; `pip-audit`

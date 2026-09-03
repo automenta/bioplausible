@@ -370,13 +370,15 @@ consumer exists.
   live demonstration, a gallery figure, or a RESULTS.md capability
   paragraph. Infrastructure is justified by the capability it lets the
   suite show, never by itself.
-- [ ] **R11.5.7 Gates (local invocations; CI is bookkeeping until used).**
-  `ruff format --check` → `ruff check` → `pyright` → `pytest` fast gates:
-  property suite + demo gate (`pytest tests/integration/ -k "demo or
-  gallery_lock"`, ≤90 s) + drift locks (README snippets, root exports) +
-  positive control. After R11.2, the ruff/pyright steps are expected to
-  *hold*, not merely exist. No new verification rounds are commissioned in
-  R11; R11 spends R6–R10's trust.
+- [ ] **R11.5.7 Gates (tiered, per AGENTS.md test-execution tiers).**
+  Per-commit duties are **scoped to changed files** (format + lint + pyright
+  + targeted tests). The standing fast gates — property suite, demo gate
+  (`pytest tests/integration/ -k "demo or gallery_lock"`, ≤90 s), drift
+  locks, positive control — run on their triggers (demo/gallery/lock-
+  adjacent changes), never per-edit. The full CI order and repo-wide
+  ruff/pyright are R11.2's deliverable and a round-close event, not a
+  habit. No new verification rounds are commissioned in R11; R11 spends
+  R6–R10's trust.
 
 ---
 
