@@ -14,6 +14,8 @@ geometry:
   hidden_dims: [256, 256]
   num_layers: 3
   topology_type: tile_mesh
+  neurons_per_tile: 16
+  tiles_per_layer: 2
   connectivity: null
   recurrent_weight: null
   init_scale: 0.1

@@ -343,7 +343,7 @@ All factories are available via `from computronium import ...` and compose 6-axi
 | `create_tile_mlp` | Digital × TileMesh × Instantaneous × Null × (varies) × Euclidean | `tile_mnist.yaml` | TileNet: modular tiled architecture, supports all credit assignments | Framework implementation |
 | `create_routing_mlp` | Digital × Recurrent × Instantaneous × RoutingPlasticity × Backprop × Euclidean | `routing_mnist.yaml` | **6-D Joint**: state-dependent gating, sparse pathway routing, dynamic compute | Framework implementation |
 | `create_fast_weight_mlp` | Digital × Recurrent × Instantaneous × FastWeightPlasticity × Backprop × Euclidean | `fast_weight_mnist.yaml` | **6-D Joint**: episode-local associative memory via fast-weight matrices | Ba et al. (2016); framework impl. |
-| `create_memristive_mlp` | Memristive × Feedforward × Instantaneous × Null × Backprop × Euclidean | `memristive_mnist.yaml` | **Substrate-aware**: IR-drop, conductance bounds, noise | **Planned** (Register B pull, TODO10) |
+| `create_memristive_mlp` | Memristive × Feedforward × Instantaneous × Null × Backprop × Euclidean | `memristive_mnist.yaml` | **Substrate-aware**: IR-drop, conductance bounds, noise | Framework implementation |
 
 ### 5-D Factory Usage Examples
 

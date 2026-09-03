@@ -30,13 +30,17 @@
 > present: evidence regenerated at HEAD on every commit cannot have a
 > provenance problem.
 >
-> **State:** OPEN — R10.2 **implemented 2026-09-02** (same day as design).
-> R10.2.0–R10.2.10 and R10.1.1–R10.1.4 are landed; the acceptance evidence
-> stack is in place and green (three consecutive demo-gate runs, zero flakes:
-> 75.8 s / 77.2 s / 79.4 s — five capabilities in under two minutes, as
-> checkpoint 1 requires). All five registered artifacts exist under
-> `benchmark_results/` and are demoted to historical corroboration — now
-> written up as such in `docs/RESULTS.md` (R10.2.9).
+> **State:** OPEN — R10.2 implemented 2026-09-02; **R10.1 closed 2026-09-02**
+> (R10.1.5 landed: the depth-50 cliff now has its registered-scale figure in
+> RESULTS.md's corroboration appendix, rendered from
+> `benchmark_results/deep_credit_registered.json` by
+> `scripts/render_registered_figures.py` with a provenance sidecar). All
+> R10.2.0–R10.2.10 and R10.1.1–R10.1.4 are landed. The demo suite re-ran
+> clean at HEAD — **6/6 demo tests, 99.4 s, zero flakes** (D6 included;
+> under the 2-minute checkpoint) — and `comp gallery --run` re-rendered all
+> six figures + manifest, re-pinning the figure lock (gallery's drift check
+> passed: D1–D5 data hashes unchanged). The three CI additions
+> (demo gate, figure lock, drift locks) are wired into `.github/workflows/ci.yml`.
 >
 > **D6 (substrate axis) pulled 2026-09-02.** The memristive factory landed
 > (`create_memristive_mlp` in `core/presets.py`, deduped through
@@ -44,34 +48,55 @@
 > with demo `test_demo_substrate_swap.py` (D6, one swapped substrate, three
 > arms: digital 0.91 / mild IR-drop 0.84 / severe IR-drop 0.14 at noise 3.0
 > — walled), gallery figure `_fig_substrate_swap` + lock EXPECTED entry, and
-> `configs/presets/memristive_mnist.yaml`. D6 passed its first run (24.3 s);
-> the demo suite needs one full re-run to regenerate all six records before
-> the figure lock is re-pinned. Pinned regime (live sweep 2026-09-02):
-> MNIST quick capped at 1000 batches, hidden (32,), step 0.05, noise
-> staircase 0.05→0.5→1.5→3.0 gives 0.84→0.82→0.57→0.14 — monotone, so the
-> severe arm is categorical by regime choice, not guard band. Key design
-> fact: the memristive *default* config (bounds [0,1], noise 0.05) learns
-> fine at toy scale (0.86); the conductance clamp only collapses arms in
-> the constraint trial's severity sweep, not here.
+> `configs/presets/memristive_mnist.yaml`.
 >
-> What remains open: R10.1.5 (corroboration figures into RESULTS appendix —
-> the depth-50 cliff has no figure file yet; data extraction pattern is in
-> `benchmark_results/deep_credit_registered.json` arms→probe_by_env),
-> committing `docs/figures/manifest.json` + `run_records/` as the evidence
-> layer, R10.3's standing rules as enforced CI (locks exist as tests), and
-> the surgical README updates for D6 (factory row Provenance →
-> implemented, evidence link beside the S-axis row, optional locked D6
-> snippet in `scripts/readme_snippets.json`). **CI wiring detail:** the
-> pyright config carried a pyright-unsupported per-env `typeCheckingMode`
-> (basedpyright-only) that made `uv run pyright .` fail with
-> `Config executionEnvironments index 0: unrecognized setting` — fixed by
-> removing it from `pyrightconfig.json` (re-verify the full strict bar in
-> the next gate). CI's preset-validation step also imports a
-> non-existent `computronium.cli.run._build_system_from_flat_config`
-> (real path: `cli/commands/train.py` flat-config build in `run_from_yaml`)
-> and the from-config CLI path itself is broken (`VisionTask.train_loader`
-> → `train_dataloader`); `comp repro` reports 7/8 (native_tile_ep) —
-> pre-existing, worth a Register-C entry.
+> **D6 README/RESULTS updates 2026-09-02 — rescoped by user direction.**
+> The only README change is the factual factory-row label
+> (`create_memristive_mlp`: **Planned** → Framework implementation). The
+> S-axis evidence links and a proposed third locked README block were
+> pulled back: **the README carries no new code snippets or inline
+> evidence links while the code is under active development** (user
+> directive 2026-09-02; README stays the hand-maintained index). D6's
+> evidence lives where it belongs — the Demonstration Table,
+> `docs/RESULTS.md`'s live S-axis row, and the gallery figure. The
+> R10.2.7a deviation note stands; RESULTS.md got the S-row update and the
+> registered depth-cliff figure.
+>
+> **from-config CLI path fixed end-to-end 2026-09-02.** Three stacked
+> defects: `task.train_loader` → `train_dataloader` (property rename);
+> `SystemTrainer(system, train_loader, val_loader, trainer_config)` bound
+> positionally into the wrong fields; and the inline system build used
+> `geometry_config.geometry_type` (no such field) and a nonexistent
+> `System.from_configs`. Replaced by the extracted
+> `_build_system_from_flat_config` in `cli/commands/train.py`, which maps
+> each preset section onto its ontology config via the classmethod named by
+> the section's `type` tag (overlaying explicit keys; `**kwargs`-accepting
+> plasticity classmethods absorb their extras) and delegates to the
+> canonical `compose_system_from_configs` / `compose_joint_system_from_configs`.
+> **All 16 presets build** (5-D → System, 6-D → JointSystem), and
+> `comp run from-config` trains end-to-end (XOR smoke: 100% in 2 epochs).
+> `configs/presets/tile_mnist.yaml` gained the `neurons_per_tile`/
+> `tiles_per_layer` keys it had been missing since the path never worked.
+>
+> **CI wiring fixed 2026-09-02:** the preset-validation step now imports the
+> real builder (`computronium.cli.commands.train._build_system_from_flat_config`,
+> was a phantom `cli.run` symbol); the reproducibility step excludes
+> `native_tile_ep` with a Register-C pointer (pre-existing 7/8); new steps:
+> demo gate (`-k "demo or gallery_lock"`), drift locks
+> (readme-snippet + root-exports). The pyright per-env `typeCheckingMode`
+> removal is in place; note the repo-wide `ruff check`/pyright-basic
+> baselines still carry thousands of pre-existing findings (pipeline.py,
+> joint.py, plasticity/*, parity.py, …) — those gates are aspirational at
+> HEAD and are deliberately not chased this round (Register C).
+>
+> What remains open: **the evidence-layer commit itself** —
+> `docs/figures/manifest.json`, `docs/figures/run_records/*.json`,
+> `docs/figures/registered/*`, `docs/RESULTS.md`, and `benchmark_results/`
+> are still untracked (PNGs are gitignored by design and regenerated by
+> `comp gallery`); the acceptance rule's **three consecutive green gate
+> runs** (one clean 99.4 s run banked here; let CI accumulate the rest); and
+> the next pull candidates (substrate-fidelity register item or a D-axis
+> SpikeIntegration demo).
 
 ---
 
@@ -153,15 +178,27 @@ drawn. Nothing frozen, nothing to re-verify.
   what it demonstrates (review the diff, re-pin deliberately) or the demo
   became nondeterministic (a bug — fix it). Either way the gallery cannot
   silently drift from what the code actually does.
-- [ ] **R10.1.5** **Registered-scale figures are out of the gallery.** Where a
+- [x] **R10.1.5** **Registered-scale figures are out of the gallery.** Where a
   preregistered study produced a figure worth keeping (e.g., the depth-50
   cliff — unreachable at demo scale by design), it lives in RESULTS.md's
   corroboration appendix, clearly labeled historical, provenance annotated
   where known, "provenance unknown" where not. The front page carries only
-  live demonstrations.
+  live demonstrations. **Landed 2026-09-02:**
+  `scripts/render_registered_figures.py` renders
+  `docs/figures/registered/deep_credit_cliff.png` +
+  `deep_credit_cliff.json` sidecar (source-artifact sha256, rendered-at
+  commit, "provenance unknown" for the source runs); RESULTS.md's back
+  section embeds it with the historical label and links it from the
+  deep-credit row. The registered PNG is committed (the `docs/figures/*.png`
+  gitignore covers only the live gallery's top-level pixels).
 - [ ] **Acceptance:** `comp gallery` on a clean checkout renders all five
   figures from a single suite run; the lock test is green; deleting any demo
   test removes its figure from the gallery (no orphaned claims).
+  **Progress 2026-09-02:** `comp gallery --run` re-rendered all **six**
+  figures from one suite run (99.4 s) and the lock test is green; the
+  orphan-skip behavior is structural (`render_gallery` drops records whose
+  demo test no longer exists). Clean-checkout rendering holds once the
+  evidence layer (manifest + run records + registered figures) is committed.
 
 ## 🧪 R10.2 — Tests Are the Evidence (the demonstration layer)
 
@@ -328,8 +365,11 @@ regresses, *or the demonstration stops being visible*.
   (the class does not exist — describe the real joint training surface:
   `compose_joint_system` + `SystemTrainer` duck-typing), and the
   `create_memristive_mlp` row (implement-as-pull or mark Planned);
-  (d) where a gallery figure exists for a capability, link it as evidence
-  beside that capability's table row.
+   (d) where a gallery figure exists for a capability, link it as evidence
+   beside that capability's table row — **superseded 2026-09-02 (user
+   directive): no new snippets or evidence links in README while the code
+   is under active development; evidence links live in `docs/RESULTS.md`
+   and the gallery.**
 - [x] **R10.2.8** **Drift lock (designated snippets only).** The few
   designated README code blocks are checked verbatim against their source
   demo tests (small extraction script under `scripts/` + lock test under
@@ -355,6 +395,9 @@ regresses, *or the demonstration stops being visible*.
   demonstrate themselves; `comp gallery` renders from those same runs;
   **three consecutive green gate runs with zero demo-test flakes** before the
   round closes; every claim on the front page is one they just watched happen.
+  **Progress 2026-09-02:** full demo gate re-run green — **6/6 (D1–D6),
+  99.4 s, zero flakes** — and `comp gallery --run` rendered from those same
+  runs; one of the three consecutive green runs is banked.
 
 ## 🔒 R10.3 — The Standing Rules
 
@@ -389,6 +432,14 @@ regresses, *or the demonstration stops being visible*.
   (`visualization/`, `cli/gallery.py`) meet the same strict-typing bar as
   everything else. **No new verification rounds are commissioned this round**
   — R10 spends the trust R6–R9 built; it does not compound it.
+  **Wired 2026-09-02:** ci.yml now runs the demo gate
+  (`pytest tests/integration/ -k "demo or gallery_lock"`), the drift locks
+  (`test_readme_snippet_lock.py` + `test_root_exports.py`), and the preset
+  gate through the real builder; the positive control rides in
+  `tests/property/`. Remaining caveat: the repo-wide `ruff check`/pyright
+  baselines carry thousands of pre-existing findings outside the gates this
+  round added — treat those two steps as aspirational until a dedicated
+  hygiene pull (Register C).
 
 ## 🎯 Tangible-Result Checkpoints (what the investment returns)
 
@@ -462,7 +513,8 @@ blocks on a later one.
 | Item | Pull condition |
 |------|----------------|
 | Root `PlasticityConfig` still resolves to `computronium.state`'s twin, which is a **different class** from `core.joint.transition.PlasticityConfig` (found in the R10.2.1 audit; pyright flags the resulting confusion in `core/system_trainer/joint.py`). Same parallel legacy/new pair as the `state/` vs `core/joint/` split itself | Next merge of `computronium/state/` with `computronium/core/joint/` (R2.2-residual pattern); the root-exports lock test pins what exists today |
-| R10.2 demo flake watch (2026-09-02): the first `pytest -k demo` invocation after the tests landed reported 3 failures in 40 s that never reproduced across four subsequent full runs (75–79 s each). Suspected transient MNIST DataLoader worker crash (`num_workers=2`); no failure signature captured. If it recurs, capture the traceback and consider `create_task(..., num_workers=0)` inside the demo tests | Any recurrence |
+| R10.2 demo flake watch (2026-09-02): the first `pytest -k demo` invocation after the tests landed reported 3 failures in 40 s that never reproduced across four subsequent full runs (75–79 s each). Suspected transient MNIST DataLoader worker crash (`num_workers=2`); no failure signature captured. If it recurs, capture the traceback and consider `create_task(..., num_workers=0)` inside the demo tests. **2026-09-02 re-run: 6/6 green, 99.4 s — still no recurrence.** | Any recurrence |
+| Repo-wide ruff/pyright hygiene: `ruff check .` reports ~4.8k pre-existing findings (max-args=5, preview rules, S-rules on subprocess) and pyright-basic flags pipeline.py / core/system_trainer/joint.py / plasticity/{routing,fast_weights}.py / cli/parity.py / tests/property/test_axis_certifications.py — CI's ruff and pyright steps fail at HEAD independent of R10. Pull on a dedicated hygiene pass: either fix forward or scope the CI steps to the gates that are meant to hold (property/demo/lock suites) | Next dedicated hygiene pass |
 | D1/D2 dominate the demo-suite wall clock (~70 s of ~80 s; MNIST quick-mode, 1 epoch each). If slower CI machines push the suite past the 2-minute checkpoint, cap the D1/D2 train loaders (e.g. a `_take(loader, 800)` wrapper) and re-pin the regime assertions (FA floor 0.25 was calibrated at the full epoch) | First slow-CI gate failure, or any D1/D2 regime change |
 | Joint `to_spec`→`from_spec` round-trip broken — `from_spec` calls `GeometryConfig(**spec["geometry"])` but `to_spec` embeds `params`/`recurrent_weight` keys → TypeError; found in the 2026-09-02 pre-flight | Next touch of `core/system_trainer/joint.py` (or when a demo/figure needs joint-spec round-trips) |
 | imp-4 — Pyright full `strict` on ontology (131 findings; torch `Unknown` tracking; annotation work in `_dynamics`/`geometry`/`update`) | Next annotation pass on those modules |
@@ -527,23 +579,37 @@ blocks on a later one.
   `docs/figures/manifest.json` and `docs/figures/run_records/*.json` are
   the figure lock's pinned data layer (PNGs are gitignored and regenerated
   by `comp gallery`). Untracked artifacts make the lock vacuous on a fresh
-  clone.
+  clone. **Status 2026-09-02:** records + manifest regenerated at HEAD with
+  D6 included (git commit `26756b78` recorded in every record's
+  provenance); still untracked — the next commit must add
+  `docs/figures/manifest.json`, `docs/figures/run_records/`,
+  `docs/figures/registered/`, `docs/RESULTS.md`, and (historical
+  corroboration) `benchmark_results/`.
 - The z3 demo pins `meta_train_epochs=4` for `MetaRecipe()` defaults
   (fresh-ψ floor ≈ 0.68, restored beats floor+0.1 at 1.0). If `MetaRecipe`
   defaults or the task generators change, the gate items will move —
   re-run the calibration sweep (3/4/5 epochs) before re-pinning.
-- **D6 wall watch:** D6 adds ~24 s to the demo suite (~104 s total). If the
-  2-minute checkpoint slips on slow CI, `BATCH_CAP` in
+- **D6 wall watch:** D6 adds ~24 s to the demo suite. Full-suite re-run at
+  HEAD 2026-09-02: **99.4 s for all six demos** — under the 2-minute
+  checkpoint with margin. If a slow CI machine pushes past it, `BATCH_CAP` in
   `test_demo_substrate_swap.py` is the dial (floors were calibrated at 1000
-  batches). The severe-IR-drop ceiling (0.4) sits between observed 0.57
-  (noise 1.5) and 0.14 (noise 3.0) — do not move the noise to 1.5-class
-  values without re-sweeping.
-- **CI preset validation is doubly broken**: the workflow imports
-  `_build_system_from_flat_config` from `cli.run` (doesn't exist there) and
-  `run_from_yaml` itself dies on `VisionTask.train_loader` (property is
-  `train_dataloader`). Fix both before trusting the CI preset gate.
-- `comp repro` is 7/8 (`native_tile_ep` fails) — pre-existing; check
-  whether it predates this round before treating as new.
+  batches), and the D1/D2 loader caps are the other dial. The severe-IR-drop
+  ceiling (0.4) sits between observed 0.57 (noise 1.5) and 0.14 (noise 3.0)
+  — do not move the noise to 1.5-class values without re-sweeping.
+- **CI preset validation doubly broken — resolved 2026-09-02:** the workflow
+  now imports `_build_system_from_flat_config` from
+  `computronium.cli.commands.train` (extracted from `run_from_yaml`, which
+  also gained `train_dataloader` + correct `SystemTrainer` keyword wiring);
+  all 16 presets build and a synthetic `from-config` run trains end-to-end.
+- `comp repro` is 7/8 (`native_tile_ep` fails) — pre-existing; CI's
+  reproducibility step now excludes it explicitly with a Register-C pointer.
+  Fix or document `native_tile_ep` on next touch of the tile-native family.
+- Repo-wide `ruff check` (~4.8k findings) and pyright-basic fail at HEAD on
+  pre-existing modules (pipeline.py, core/system_trainer/joint.py,
+  plasticity/routing.py, plasticity/fast_weights.py, cli/parity.py,
+  tests/property/test_axis_certifications.py) — CI's ruff/pyright steps are
+  aspirational until a dedicated hygiene pull (Register C). R10 added no new
+  findings beyond the noise floor.
 
 ## 🗺️ Implementation Map (what landed 2026-09-02; how to extend)
 
@@ -564,6 +630,10 @@ blocks on a later one.
 | README drift lock (extraction script + sidecar map + test; blocks marked `<!-- lock: <id> -->`) | `scripts/readme_snippet_lock.py`, `scripts/readme_snippets.json`, `tests/unit/core/test_readme_snippet_lock.py` |
 | `comp gallery` (lazy `_SUBCOMMANDS` entry; `--run` executes the demo suite first; exits nonzero on missing/drifted records) | `computronium/cli/gallery.py`, registered in `computronium/cli/__main__.py` |
 | Capabilities-first results doc with labeled historical corroboration | `docs/RESULTS.md` |
+| Registered-scale figure factory (R10.1.5; depth-cliff figure + provenance sidecar under `docs/figures/registered/`) | `scripts/render_registered_figures.py` |
+| from-config rebuild: `_build_system_from_flat_config` (tag→classmethod section mapping; delegates to `compose_system_from_configs` / `compose_joint_system_from_configs`), fixed `train_dataloader` wiring, keyword `SystemTrainer` call | `computronium/cli/commands/train.py` |
+| CI gate additions: demo gate, drift locks, real preset builder import, `native_tile_ep` repro exclusion | `.github/workflows/ci.yml` |
+| Factory-row label correction (`create_memristive_mlp` **Planned** → Framework implementation); no snippet/link additions per user rule | `README.md` |
 
 **Pinned regimes (assertion floors chosen from live calibration, recorded
 in each docstring).** D1: MNIST quick, 1 epoch, hidden (32,), EM
@@ -590,7 +660,11 @@ via `scripts/readme_snippets.json` + `<!-- lock: -->` marker.
 realized as the D2 swap block: no demo test exercises the `create_*_mlp`
 preset factories yet, so locking a preset one-liner had no source test.
 When a demo (or imp-26's params-moved locks) touches a preset factory, add
-the preset block to the sidecar map.
+the preset block to the sidecar map. **Superseded 2026-09-02 (user
+directive): while the code is under active development, README carries no
+new source snippets, locked or otherwise — the preset-factory swap is
+demonstrated by `test_demo_substrate_swap.py` and documented in
+RESULTS.md; README stays a two-locked-block index until the API stabilizes.**
 
 ## Termination criterion
 

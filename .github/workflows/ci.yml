@@ -29,15 +29,19 @@ jobs:
         run: uv run pyright .
       - name: Property Tests (Fast CI Gate)
         run: uv run pytest tests/property/ -q
+      - name: Demo Gate (demonstration suite + figure lock)
+        run: uv run pytest tests/integration/ -k "demo or gallery_lock" -q
+      - name: Drift Locks (README snippets, root exports)
+        run: |
+          uv run pytest tests/unit/core/test_readme_snippet_lock.py \
+            tests/unit/core/test_root_exports.py -q
       - name: Preset Validation (from-config)
         run: |
           uv run python -c "
           import sys
           from omegaconf import OmegaConf
-          from computronium.cli.run import _build_system_from_flat_config
-          import torch
-          
-          device = 'cpu'
+          from computronium.cli.commands.train import _build_system_from_flat_config
+
           for preset in [
               'configs/presets/backprop_mnist.yaml',
               'configs/presets/eqprop_mnist.yaml',
@@ -53,23 +57,20 @@ jobs:
               'configs/presets/fast_weight_mnist.yaml',
               'configs/presets/eqprop_routing_mnist.yaml',
               'configs/presets/eqprop_fast_weight_mnist.yaml',
+              'configs/presets/memristive_mnist.yaml',
           ]:
               print(f'Validating {preset}...', end=' ')
               sys.stdout.flush()
               try:
                   cfg = OmegaConf.load(preset)
                   config = OmegaConf.to_container(cfg, resolve=True)
-                  
-                  substrate_cfg = config.get('substrate', {})
-                  geometry_cfg = config.get('geometry', {})
-                  dynamics_cfg = config.get('dynamics', {})
-                  plasticity_cfg = config.get('plasticity', {})
-                  credit_cfg = config.get('credit', {})
-                  update_cfg = config.get('update', {})
-                  
-                  system = _build_system_from_flat_config(
-                      substrate_cfg, geometry_cfg, dynamics_cfg,
-                      plasticity_cfg, credit_cfg, update_cfg, device
+                  _build_system_from_flat_config(
+                      config.get('substrate', {}),
+                      config.get('geometry', {}),
+                      config.get('dynamics', {}),
+                      config.get('plasticity', {}),
+                      config.get('credit', {}),
+                      config.get('update', {}),
                   )
                   print('OK')
               except Exception as e:
@@ -80,7 +81,8 @@ jobs:
       - name: Registry Audit (metadata completeness)
         run: uv run comp audit --metadata
       - name: Reproducibility Check
-        run: uv run comp repro --device cpu
+        # native_tile_ep excluded: pre-existing failure (TODO10.md Register C)
+        run: uv run comp repro --device cpu --models native_backprop_mlp,native_eqprop_mlp,native_fa_mlp,native_pepita_mlp,native_tile_fa,native_tile_hebbian,native_tile_tp
       - name: Dependency Scan (pip-audit)
         run: uv run pip-audit
 

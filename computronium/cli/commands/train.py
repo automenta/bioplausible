@@ -1,10 +1,126 @@
 """Training commands for the CLI."""
 
+from __future__ import annotations
+
 import argparse
+from collections.abc import Iterator, Mapping
+from dataclasses import replace
+from inspect import Parameter, signature
+from typing import TYPE_CHECKING, Any, cast
 
 from computronium.cli.shared import logger
 
-__all__ = ["add_train_subparsers", "run_training", "run_core_train", "run_from_yaml"]
+if TYPE_CHECKING:
+    from dataclasses import DataclassInstance
+
+    from torch import Tensor
+    from torch.utils.data import DataLoader
+
+    from computronium.core.system_trainer.protocol import JointSystem
+    from computronium.ontology import System
+
+__all__ = ["add_train_subparsers", "run_core_train", "run_from_yaml", "run_training"]
+
+_CREDIT_TYPE_ALIASES = {"backprop": "gradient"}
+
+
+class _FlattenLoader:
+    """Wrapper that flattens input tensors from a DataLoader."""
+
+    def __init__(self, loader: DataLoader) -> None:
+        self.loader = loader
+
+    def __iter__(self) -> Iterator[tuple[Tensor, Tensor]]:
+        for x, y in self.loader:
+            if x.dim() > 2:
+                x = x.view(x.size(0), -1)
+            yield x, y
+
+    def __len__(self) -> int:
+        return len(self.loader)
+
+
+def _section_config[T: DataclassInstance](
+    section: Mapping[str, object], cls: type[T]
+) -> T:
+    """Flat-preset YAML I/O boundary (the isolated ``Any`` seam).
+
+    A preset section names its axis primitive ``type``; the classmethod of
+    that name on the config class carries the primitive's defaults. Section
+    keys the classmethod accepts are passed through; the rest overlay the
+    constructed config via :func:`dataclasses.replace`.
+    """
+    tag = section.get("type")
+    if not isinstance(tag, str):
+        msg = f"preset section missing string 'type' tag: {dict(section)!r}"
+        raise ValueError(msg)
+    factory = getattr(cls, tag)
+    params = signature(factory).parameters
+    var_kw = any(p.kind is Parameter.VAR_KEYWORD for p in params.values())
+    passed = {
+        k: v for k, v in section.items() if k != "type" and (var_kw or k in params)
+    }
+    base: T = cast("T", factory(**passed))
+    rest = {k: v for k, v in section.items() if k != "type" and k not in passed}
+    return replace(base, **rest) if rest else base
+
+
+def _build_system_from_flat_config(
+    substrate_cfg: Mapping[str, object],
+    geometry_cfg: Mapping[str, object],
+    dynamics_cfg: Mapping[str, object],
+    plasticity_cfg: Mapping[str, object],
+    credit_cfg: Mapping[str, object],
+    update_cfg: Mapping[str, object],
+) -> System | JointSystem:
+    """Build a System from a preset YAML's flat config sections.
+
+    Null or missing plasticity composes the 5-D path; any other M-tag
+    composes the joint system.
+    """
+    from computronium.core.joint.transition import PlasticityConfig
+    from computronium.core.system_trainer import (
+        compose_joint_system_from_configs,
+        compose_system_from_configs,
+    )
+    from computronium.ontology import (
+        CreditAssignmentConfig,
+        GeometryConfig,
+        ParameterUpdateConfig,
+        StateDynamicsConfig,
+        SubstrateConfig,
+    )
+
+    credit_section = {
+        **credit_cfg,
+        "type": _CREDIT_TYPE_ALIASES.get(
+            str(credit_cfg.get("type")), credit_cfg.get("type")
+        ),
+    }
+
+    substrate_config = _section_config(substrate_cfg, SubstrateConfig)
+    geometry_config = _section_config(geometry_cfg, GeometryConfig)
+    dynamics_config = _section_config(dynamics_cfg, StateDynamicsConfig)
+    credit_config = _section_config(credit_section, CreditAssignmentConfig)
+    update_config = _section_config(update_cfg, ParameterUpdateConfig)
+
+    if plasticity_cfg.get("type") is None:
+        return compose_system_from_configs(
+            substrate=substrate_config,
+            geometry=geometry_config,
+            dynamics=dynamics_config,
+            credit=credit_config,
+            update=update_config,
+        )
+
+    return compose_joint_system_from_configs(
+        substrate=substrate_config,
+        geometry=geometry_config,
+        dynamics=dynamics_config,
+        plasticity=_section_config(plasticity_cfg, PlasticityConfig),
+        credit=credit_config,
+        update=update_config,
+    )
 
 
 def add_train_subparsers(subparsers: argparse._SubParsersAction) -> None:
@@ -90,20 +206,14 @@ def run_from_yaml(args: argparse.Namespace) -> None:
     from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
     from computronium.domains.factory import create_task
 
-    # Load YAML config
     cfg = OmegaConf.load(args.config)
-    config = OmegaConf.to_container(cfg, resolve=True)
+    config = cast(
+        "dict[str, Any]", OmegaConf.to_container(cfg, resolve=True)
+    )  # isolated YAML I/O boundary
 
-    # Extract components from flat YAML
-    substrate_cfg = config.get("substrate", {})
-    geometry_cfg = config.get("geometry", {})
-    dynamics_cfg = config.get("dynamics", {})
-    plasticity_cfg = config.get("plasticity", {})
-    credit_cfg = config.get("credit", {})
-    update_cfg = config.get("update", {})
     training_cfg = config.get("training", {})
 
-    # Get training params - CLI --device overrides config
+    # CLI --device overrides config
     device = getattr(args, "device", "auto")
     if device == "auto":
         device = training_cfg.get("device", "auto")
@@ -113,33 +223,14 @@ def run_from_yaml(args: argparse.Namespace) -> None:
     batch_size = training_cfg.get("batch_size", 64)
     task_name = training_cfg.get("task", "mnist")
 
-    # Create task and data loaders
-    task = create_task(task_name, device=device, quick_mode=False)
-    task.batch_size = batch_size
+    task = create_task(
+        task_name, device=device, quick_mode=False, batch_size=batch_size
+    )
     task.setup()
 
-    # Wrap data loaders to flatten input
-    from torch.utils.data import DataLoader
+    train_loader = _FlattenLoader(task.get_dataloader("train"))
+    val_loader = _FlattenLoader(task.get_dataloader("val"))
 
-    class _FlattenLoader:
-        """Wrapper that flattens input tensors from a DataLoader."""
-
-        def __init__(self, loader: DataLoader):
-            self.loader = loader
-
-        def __iter__(self):
-            for x, y in self.loader:
-                if x.dim() > 2:
-                    x = x.view(x.size(0), -1)
-                yield x, y
-
-        def __len__(self):
-            return len(self.loader)
-
-    train_loader = _FlattenLoader(task.train_loader)
-    val_loader = _FlattenLoader(task.val_loader)
-
-    # Create SystemTrainer config
     trainer_config = SystemTrainerConfig(
         max_epochs=epochs,
         batch_size=batch_size,
@@ -147,66 +238,18 @@ def run_from_yaml(args: argparse.Namespace) -> None:
         device=device,
     )
 
-    # Build system from config (import substrate modules to register them)
-    import computronium.ontology.credit  # noqa: F401
-    import computronium.ontology.dynamics  # noqa: F401
-    import computronium.ontology.geometry  # noqa: F401
-    import computronium.ontology.substrate  # noqa: F401
-    import computronium.ontology.update  # noqa: F401
-    from computronium.ontology import (
-        CreditAssignmentConfig,
-        GeometryConfig,
-        ParameterUpdateConfig,
-        PlasticityConfig,
-        StateDynamicsConfig,
-        SubstrateConfig,
-        substrate_from_config,
+    system = _build_system_from_flat_config(
+        config.get("substrate", {}),
+        config.get("geometry", {}),
+        config.get("dynamics", {}),
+        config.get("plasticity", {}),
+        config.get("credit", {}),
+        config.get("update", {}),
     )
 
-    # Build configs from YAML
-    substrate_config = SubstrateConfig(**substrate_cfg)
-    geometry_config = GeometryConfig(**geometry_cfg)
-    dynamics_config = StateDynamicsConfig(**dynamics_cfg)
-    plasticity_config = PlasticityConfig(**plasticity_cfg) if plasticity_cfg else None
-    credit_config = CreditAssignmentConfig(**credit_cfg)
-    update_config = ParameterUpdateConfig(**update_cfg)
-
-    # Instantiate components
-    substrate = substrate_from_config(substrate_config)
-
-    # Import geometry classes dynamically
-    from importlib import import_module
-
-    geometry_module = import_module("computronium.ontology.geometry")
-    geometry_class = getattr(
-        geometry_module, geometry_config.geometry_type.capitalize() + "Geometry"
-    )
-    geometry = geometry_class(geometry_config)
-
-    # Import dynamics classes dynamically
-    dynamics_module = import_module("computronium.ontology.dynamics")
-    dynamics_class = getattr(
-        dynamics_module, dynamics_config.dynamics_type + "Dynamics"
-    )
-    dynamics = dynamics_class(dynamics_config)
-
-    # Create the system
-    from computronium.ontology import System, SystemConfig
-
-    system_config = SystemConfig(
-        substrate=substrate_config,
-        geometry=geometry_config,
-        dynamics=dynamics_config,
-        credit=credit_config,
-        update=update_config,
-    )
-
-    system = System.from_configs(
-        substrate=substrate,
-        geometry=geometry,
-        dynamics=dynamics,
-        config=system_config,
-    )
-
-    trainer = SystemTrainer(system, train_loader, val_loader, trainer_config)
-    trainer.fit()
+    SystemTrainer(
+        system=cast("System", system),  # JointSystem duck-types the trainer surface
+        config=trainer_config,
+        train_data=train_loader,
+        val_data=val_loader,
+    ).fit()
