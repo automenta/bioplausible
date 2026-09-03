@@ -28,6 +28,7 @@ from computronium.ontology import (
     ThermodynamicContrast,
     TileGeometry,
 )
+from tests.property._support import seeded
 
 
 class DummyDataProvider:
@@ -184,7 +185,47 @@ class TestGeometry:
         params = geometry.params
         assert len(params) > 0
         # Should have weight and bias for each Linear layer
-        assert any("weight" in k for k in params.keys())
+        assert any("weight" in k for k in params.keys())  # ruff: ignore[in-dict-keys]
+
+    def test_init_scale_scales_feedforward_weights(self):
+        """GeometryConfig.init_scale rescales Linear weights multiplicatively."""
+
+        def build(init_scale: float | None = None):
+            with seeded(7):
+                config_args = {} if init_scale is None else {"init_scale": init_scale}
+                return FeedforwardGeometry(
+                    GeometryConfig.feedforward(
+                        input_dim=10, output_dim=3, hidden_dims=(20,), **config_args
+                    )
+                )
+
+        default, explicit_default, doubled = build(), build(0.1), build(0.2)
+        for name, param in default.params.items():
+            if "weight" not in name:
+                continue
+            assert torch.equal(param, explicit_default.params[name]), name
+            assert torch.allclose(param * 2, doubled.params[name], rtol=0, atol=1e-6), (
+                name
+            )
+
+    def test_init_scale_scales_recurrent_weights(self):
+        """init_scale scales the recurrent matrix in the recurrent topology."""
+        with seeded(7):
+            default = RecurrentGeometry(
+                GeometryConfig.recurrent(input_dim=10, output_dim=3, hidden_dims=(20,))
+            )
+        with seeded(7):
+            halved = RecurrentGeometry(
+                GeometryConfig.recurrent(
+                    input_dim=10, output_dim=3, hidden_dims=(20,), init_scale=0.05
+                )
+            )
+        assert torch.allclose(
+            default._recurrent_weight * 0.5,
+            halved._recurrent_weight,
+            rtol=0,
+            atol=1e-6,
+        )
 
     def test_feedforward_geometry_transition_modules(self):
         geometry = FeedforwardGeometry(
@@ -334,10 +375,10 @@ class TestGeometry:
         params = geometry.params
         assert len(params) > 0
         # Should have input/output projections and tile weights/biases
-        assert any("input_proj" in k for k in params.keys())
-        assert any("output_proj" in k for k in params.keys())
-        assert any("tile_weight" in k for k in params.keys())
-        assert any("tile_bias" in k for k in params.keys())
+        assert any("input_proj" in k for k in params.keys())  # ruff: ignore[in-dict-keys]
+        assert any("output_proj" in k for k in params.keys())  # ruff: ignore[in-dict-keys]
+        assert any("tile_weight" in k for k in params.keys())  # ruff: ignore[in-dict-keys]
+        assert any("tile_bias" in k for k in params.keys())  # ruff: ignore[in-dict-keys]
 
     def test_tile_geometry_transition_modules(self):
         geometry = TileGeometry(

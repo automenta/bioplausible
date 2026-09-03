@@ -8,14 +8,15 @@ those presets as learning-rule optimizers, unifying the calling convention with
 L1 core layering rule.
 """
 
-from typing import Protocol, cast
-
-import torch  # ruff: ignore[typing-only-third-party-import]  # runtime import: inspect.signature() evaluates the step() annotations
-from torch import (
-    nn,  # ruff: ignore[typing-only-third-party-import]  # (test_registry_audit inspects prop.step's signature)
-)
+from typing import TYPE_CHECKING, Protocol, cast
 
 from .base import LearningRuleOptimizer
+
+if TYPE_CHECKING:
+    import torch
+    from torch import (
+        nn,  # (test_registry_audit inspects prop.step's signature)
+    )
 
 __all__ = ["CompositeOptimizerAdapter"]
 

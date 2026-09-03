@@ -16,12 +16,12 @@ from torch import nn
 
 from computronium.core.logging import get_logger
 from computronium.core.losses import compute_accuracy
+from computronium.core.model_spec import get_model_spec
 from computronium.core.registry import ComponentCategory, Registry
 from computronium.core.utils.device import get_device
 from computronium.domains import create_task
 from computronium.domains.base import DomainType
 from computronium.execution.interpretability import FeatureAttribution
-from computronium.core.model_spec import get_model_spec
 
 __all__ = [
     "RobustnessEvaluator",
@@ -119,7 +119,7 @@ class RobustnessEvaluator:
         """
         metrics = {}
         scores = []
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             # 1. Setup Task & Model
             task = create_task(self.task_name, device=self.device, quick_mode=True)
             task.setup()
@@ -202,7 +202,7 @@ class RobustnessEvaluator:
                     self._generate_saliency_maps(model, task)
 
             metrics["robustness_score"] = float(np.mean(scores)) if scores else 0.0
-            return metrics
+            return metrics  # ruff: ignore[try-consider-else]
 
         except Exception as e:  # broad: best-effort
             logger.error("Robustness evaluation failed: %s", e, exc_info=True)
@@ -266,7 +266,7 @@ class RobustnessEvaluator:
             float: Consistency score (0.0 to 1.0).
         """
         model.eval()
-        x, y = task.get_batch("val", batch_size=32)
+        x, _y = task.get_batch("val", batch_size=32)
 
         # Prepare
         h = x.clone()
@@ -304,7 +304,7 @@ class RobustnessEvaluator:
             float: OOD detection score.
         """
         model.eval()
-        x, y = task.get_batch("val", batch_size=64)
+        x, _y = task.get_batch("val", batch_size=64)
 
         # Prepare inputs
         h = x.clone()
@@ -325,7 +325,7 @@ class RobustnessEvaluator:
 
         # Score: 1.0 if OOD confidence is 0.0 (ideal 1/N, but close enough)
         # We want MSP_ood to be low.
-        # Score = max(0, MSP_in - MSP_ood)
+        # Score = max(0, MSP_in - MSP_ood)  # ruff: ignore[commented-out-code]
         return max(0.0, msp_in - msp_ood)
 
     def _test_adversarial_attack(
@@ -400,7 +400,7 @@ class RobustnessEvaluator:
         if acc_clean == 0:
             return 0.0
 
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             h_adv = h_clean.clone().detach()
 
             if attack_type == "fgsm":
@@ -414,12 +414,12 @@ class RobustnessEvaluator:
                     return 0.5
 
                 with torch.no_grad():
-                    h_adv = h_adv + epsilon * h_adv.grad.sign()
+                    h_adv = h_adv + epsilon * h_adv.grad.sign()  # ruff: ignore[non-augmented-assignment]
                     h_adv = torch.clamp(h_adv, -1.0, 1.0)
 
             elif attack_type == "pgd":
                 # Random start
-                h_adv = h_adv + torch.empty_like(h_adv).uniform_(-epsilon, epsilon)
+                h_adv = h_adv + torch.empty_like(h_adv).uniform_(-epsilon, epsilon)  # ruff: ignore[non-augmented-assignment]
                 h_adv = torch.clamp(h_adv, -1.0, 1.0)
 
                 for _ in range(steps):
@@ -435,7 +435,7 @@ class RobustnessEvaluator:
                         break
 
                     with torch.no_grad():
-                        h_adv = h_adv + alpha * h_adv.grad.sign()
+                        h_adv = h_adv + alpha * h_adv.grad.sign()  # ruff: ignore[non-augmented-assignment]
                         # Project
                         delta = torch.clamp(h_adv - h_clean, -epsilon, epsilon)
                         h_adv = torch.clamp(h_clean + delta, -1.0, 1.0)
@@ -457,7 +457,7 @@ class RobustnessEvaluator:
         """
         Generate and save saliency maps for interpretation.
         """
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             if not self.output_dir:
                 return
 

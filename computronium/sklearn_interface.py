@@ -5,11 +5,8 @@ Allows using EqProp models in Scikit-Learn pipelines with .fit() and .predict().
 Supports incremental learning via .partial_fit().
 """
 
-# ruff: file-ignore[invalid-argument-name, non-lowercase-variable-in-function, too-many-arguments, too-many-positional-arguments] — sklearn convention uses uppercase X
+from typing import TYPE_CHECKING, cast
 
-from typing import cast
-
-import numpy as np
 import torch
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.utils.multiclass import unique_labels
@@ -23,6 +20,9 @@ from computronium.core.trainer import dispatch_train_step
 from computronium.core.utils.device import get_device
 from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
 from computronium.utils import seed_everything
+
+if TYPE_CHECKING:
+    import numpy as np
 
 __all__ = [
     "EqPropClassifier",

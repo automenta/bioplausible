@@ -82,7 +82,7 @@ from computronium.stability.spectral_radius import (
 
 __version__ = "0.1.0"
 
-__all__ = [
+__all__ = [  # ruff: ignore[unsorted-dunder-all]
     # Guard API (primary)
     "attach",
     "StabilityGuard",

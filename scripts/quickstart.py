@@ -15,11 +15,9 @@ import os
 import signal
 import sys
 import time
+from typing import TYPE_CHECKING
 
 import torch
-
-# Use spawn to avoid semaphore leaks from forked processes
-multiprocessing.set_start_method("spawn", force=True)
 
 from computronium import create_backprop_mlp, create_ff_mlp
 from computronium.core.system_trainer import (
@@ -27,6 +25,13 @@ from computronium.core.system_trainer import (
     SystemTrainerConfig,
 )
 from computronium.domains.factory import create_task
+
+# Use spawn to avoid semaphore leaks from forked processes
+multiprocessing.set_start_method("spawn", force=True)
+
+
+if TYPE_CHECKING:
+    from torch.utils.data import DataLoader
 
 # Global trainer reference for signal handler cleanup
 _current_trainer: SystemTrainer | None = None
@@ -45,7 +50,6 @@ def _signal_handler(signum, frame):
 
 def make_dataloaders(task_name: str, batch_size: int = 64, device: str = "cpu"):
     """Create train and validation DataLoaders for a task with flattening."""
-    from torch.utils.data import DataLoader
 
     class _FlattenLoader:
         """Wrapper that flattens input tensors from a DataLoader."""
@@ -56,7 +60,7 @@ def make_dataloaders(task_name: str, batch_size: int = 64, device: str = "cpu"):
         def __iter__(self):
             for x, y in self.loader:
                 if x.dim() > 2:
-                    x = x.view(x.size(0), -1)
+                    x = x.view(x.size(0), -1)  # ruff: ignore[redefined-loop-name]
                 yield x, y
 
         def __len__(self) -> int:
@@ -69,12 +73,12 @@ def make_dataloaders(task_name: str, batch_size: int = 64, device: str = "cpu"):
     return train_loader, val_loader, task
 
 
-def main():
+def main():  # ruff: ignore[too-many-locals, too-many-statements]
     # Register signal handlers for graceful shutdown
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
 
-    global _current_trainer
+    global _current_trainer  # ruff: ignore[global-statement]
 
     print("=" * 60)
     print("Bioplausible Quickstart: Forward-Forward vs Backprop on MNIST")
@@ -190,7 +194,10 @@ def main():
     print("\n" + "=" * 60)
     print("SUMMARY")
     print("=" * 60)
-    print(f"Backprop:        {backprop_acc:.1f}% accuracy ({EPOCHS} epochs, {bp_time:.1f}s)")
+    print(
+        f"Backprop:        {backprop_acc:.1f}% accuracy"
+        f" ({EPOCHS} epochs, {bp_time:.1f}s)"
+    )
     print(f"Forward-Forward: {ff_acc:.1f}% accuracy ({EPOCHS} epochs, {ff_time:.1f}s)")
     print()
     print("Both achieve competitive accuracy on MNIST!")

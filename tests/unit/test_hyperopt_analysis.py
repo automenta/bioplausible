@@ -19,7 +19,7 @@ class TestAnalysis(unittest.TestCase):
         # 3 configs
         # Num features: lr, layers, new_param = 3
         # Cat features: opt (sgd, adam) = 2 columns (one-hot)
-        # Total = 5
+        # Total = 5  # ruff: ignore[commented-out-code]
         self.assertEqual(matrix.shape[0], 3)
         self.assertGreaterEqual(matrix.shape[1], 4)
 

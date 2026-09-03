@@ -290,7 +290,7 @@ class SpectralConstrainedUpdate:
             # Normalize gradient to target spectral norm
             grad_norm = torch.linalg.matrix_norm(grad, ord=2)
             if grad_norm > self.config.spectral_norm:
-                grad = grad * (self.config.spectral_norm / (grad_norm + 1e-8))
+                grad = grad * (self.config.spectral_norm / (grad_norm + 1e-8))  # ruff: ignore[non-augmented-assignment]
             return param - self.config.step_size * grad
 
         return apply_pseudo_gradients(params, list(pseudo_grads), apply)

@@ -38,7 +38,7 @@ def flatten_config(config: dict[str, object], prefix="") -> dict[str, object]:
     return dict(items)
 
 
-def encode_configs(configs: list[dict[str, object]]) -> np.ndarray:
+def encode_configs(configs: list[dict[str, object]]) -> np.ndarray:  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     """
     Convert a list of configuration dictionaries into a numerical matrix.
     Handles numerical and categorical data.

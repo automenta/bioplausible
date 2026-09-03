@@ -35,14 +35,14 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = [
+    "DEFAULT_KB",  # ruff: ignore[undefined-export]
+    "KNOWLEDGE_BASE_SEED",
     "CausalAnalyzer",
     "CausalConfig",
     "ConditionalQuery",
     "ConditionalResult",
-    "DEFAULT_KB",  # ruff: ignore[undefined-export] -- provided by __getattr__
     "FlagshipCandidate",
     "FlagshipDecision",
-    "KNOWLEDGE_BASE_SEED",
     "KnowledgeBase",
     "KnowledgeBaseConfig",
     "KnowledgeEntry",

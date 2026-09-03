@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 import torch
 from torch import nn
 
-from computronium.config.unified import ModelConfig
 from computronium.core.logging import get_logger
 from computronium.core.losses import compute_accuracy
 from computronium.core.pipeline import apply_autograd_update
@@ -34,7 +33,7 @@ __all__ = [
 logger = get_logger()
 
 
-def track_20_transfer_learning(verifier) -> TrackResult:
+def track_20_transfer_learning(verifier) -> TrackResult:  # ruff: ignore[too-many-locals]
     """Track 20: Transfer Learning Efficacy."""
     start = track_header(20, "Transfer Learning Efficacy")
     input_dim, hidden_dim = 64, 128
@@ -153,7 +152,7 @@ Compare against training from scratch on Task B.
     )
 
 
-def track_21_continual_learning(verifier) -> TrackResult:
+def track_21_continual_learning(verifier) -> TrackResult:  # ruff: ignore[too-many-locals, too-many-statements]
     """Track 21: Continual Learning Robustness with EWC."""
     start = track_header(21, "Continual Learning Robustness (EWC)")
     input_dim, hidden_dim = 64, 128

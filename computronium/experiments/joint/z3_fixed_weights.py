@@ -212,7 +212,7 @@ class Z3Operators:
         # x: [batch, dim] -> keep only top-k
         if x.dim() == 3:
             x = x.mean(dim=1)  # [batch, dim]
-        topk_vals, topk_indices = torch.topk(x.abs(), k=min(k, x.shape[-1]), dim=-1)
+        _topk_vals, topk_indices = torch.topk(x.abs(), k=min(k, x.shape[-1]), dim=-1)
         mask = torch.zeros_like(x)
         mask.scatter_(-1, topk_indices, 1.0)
         return x * mask
@@ -557,9 +557,7 @@ def _apply_task_order(tasks: list, task_order: Sequence[str] | None) -> None:
         return
     known = [name for name, _ in tasks]
     if sorted(task_order) != sorted(known):
-        raise ValueError(  # ruff: ignore[raise-vanilla-args] - coordinate-level guard
-            f"task_order must be a permutation of {known}"
-        )
+        raise ValueError(f"task_order must be a permutation of {known}")
     rank = {name: i for i, name in enumerate(task_order)}
     tasks.sort(key=lambda pair: rank[pair[0]])
 
@@ -728,7 +726,7 @@ def _adaptation_objective(
     return loss - adapt_entropy_beta * entropy
 
 
-def _run_adaptation(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
+def _run_adaptation(  # ruff: ignore[too-many-arguments]
     model: Z3Model,
     optimizer: torch.optim.Optimizer,
     criterion,
@@ -820,7 +818,7 @@ def _replay_pass(
         optimizer.step()
 
 
-def _forced_episode(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
+def _forced_episode(
     model: Z3Model,
     optimizer: torch.optim.Optimizer,
     criterion,
@@ -842,7 +840,7 @@ def _forced_episode(  # ruff: ignore[too-many-arguments] - protocol tuple stays 
     return episode_loss / recipe.episode_len
 
 
-def _controller_episode(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
+def _controller_episode(
     model: Z3Model,
     optimizer: torch.optim.Optimizer,
     criterion,
@@ -899,7 +897,7 @@ def _episode_best_op(
     return min(per_op, key=lambda op: sum(per_op[op]) / len(per_op[op]))
 
 
-def _meta_train(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
+def _meta_train(
     model: Z3Model,
     optimizer: torch.optim.Optimizer,
     tasks,
@@ -986,7 +984,7 @@ def _reinit_psi(model: Z3Model) -> None:
     model.reset_psi()
 
 
-def _adapt_all_tasks(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
+def _adapt_all_tasks(
     model: Z3Model,
     tasks,
     criterion,
@@ -1045,7 +1043,7 @@ def _adapt_all_tasks(  # ruff: ignore[too-many-arguments] - protocol tuple stays
     return rows, time.perf_counter() - started
 
 
-def _finetune_forgetting_baseline(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
+def _finetune_forgetting_baseline(
     model: Z3Model,
     tasks,
     criterion,
@@ -1113,7 +1111,7 @@ def _finetune_forgetting_baseline(  # ruff: ignore[too-many-arguments] - protoco
     }
 
 
-def _run_baselines(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
+def _run_baselines(  # ruff: ignore[too-many-arguments]
     model: Z3Model,
     meta_state: dict[str, Tensor],
     tasks,
@@ -1316,7 +1314,7 @@ def _gates_respond_to_psi(model: Z3Model, shape: TaskShape, *, seed: int) -> flo
     return float((gates_psi - gates_zero).abs().max())
 
 
-def _adapt_under_audit(  # ruff: ignore[too-many-arguments] - flat protocol tuple, file convention
+def _adapt_under_audit(
     model: Z3Model,
     tasks: list,
     criterion,
@@ -1416,7 +1414,7 @@ def _psi_gate(
     }
 
 
-def _run_psi_gate_arm(  # ruff: ignore[too-many-arguments] - flat protocol tuple, file convention
+def _run_psi_gate_arm(  # ruff: ignore[too-many-arguments]
     model: Z3Model,
     meta_state: dict[str, Tensor],
     tasks: list,
@@ -1506,7 +1504,7 @@ def _restore_psi_system(model: Z3Model, snapshot: dict[str, Tensor]) -> None:
     model.load_state_dict({**model.state_dict(), **snapshot})
 
 
-def _run_retention_arm(  # ruff: ignore[too-many-arguments, too-many-locals] - flat protocol tuple, staged protocol mirrors the adaptation-phase convention
+def _run_retention_arm(  # ruff: ignore[too-many-locals]
     model: Z3Model,
     meta_state: dict[str, Tensor],
     tasks: list,
@@ -1651,7 +1649,7 @@ def _run_retention_arm(  # ruff: ignore[too-many-arguments, too-many-locals] - f
     return {"retention": retention, "retention_gate": gate}
 
 
-def evaluate_z3(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
+def evaluate_z3(  # ruff: ignore[too-many-arguments]
     coordinate: str,
     meta_train_epochs: int = 50,
     eval_epochs_per_task: int = 20,
@@ -1753,7 +1751,7 @@ def evaluate_z3(  # ruff: ignore[too-many-arguments] - protocol tuple stays flat
         # operators — flat-at-chance curves are exploration failures, not
         # optimization ones (2026-08-26 pilot rerun autopsy).
         model.temperature = recipe.adapt_temp
-    assert model.verify_theta_frozen(), "θ not frozen!"
+    assert model.verify_theta_frozen(), "θ not frozen!"  # ruff: ignore[assert]
     # Protocol state the frozen-ψ control arm must replicate exactly.
     entry_temperature = model.temperature
 
@@ -1870,7 +1868,7 @@ def _git_commit() -> str:
     return capture_environment()["git_commit"]
 
 
-def run_z3_suite(
+def run_z3_suite(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     coordinates: list[str],
     output_dir: Path,
     meta_train_epochs: int = 50,

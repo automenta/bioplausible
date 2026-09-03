@@ -72,7 +72,7 @@ class TestRobustnessIntegration(unittest.TestCase):
 
             # Verify
             self.assertTrue(mock_run_robustness.called)
-            args, kwargs = mock_run_robustness.call_args
+            _args, kwargs = mock_run_robustness.call_args
             weights_path = kwargs.get("weights_path")
             output_dir = kwargs.get("output_dir")
 
@@ -128,7 +128,7 @@ class TestRobustnessIntegration(unittest.TestCase):
 
             # Verify
             self.assertTrue(mock_run_robustness.called)
-            args, kwargs = mock_run_robustness.call_args
+            _args, kwargs = mock_run_robustness.call_args
             weights_path = kwargs.get("weights_path")
             output_dir = kwargs.get("output_dir")
 

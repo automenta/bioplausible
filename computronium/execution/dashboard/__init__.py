@@ -1,15 +1,14 @@
 """Execution dashboard package with pluggable backends."""
 
-# ruff: noqa: RUF067
 from __future__ import annotations
 
 import logging
 import os
 from typing import TYPE_CHECKING, Final
 
-PURE: Final = os.environ.get("COMPUTRONIUM_PURE_DASHBOARD", "true").lower() == "true"
+PURE: Final = os.environ.get("COMPUTRONIUM_PURE_DASHBOARD", "true").lower() == "true"  # ruff: ignore[non-empty-init-module]
 
-if TYPE_CHECKING or PURE:
+if TYPE_CHECKING or PURE:  # ruff: ignore[non-empty-init-module]
     from computronium.execution.dashboard._pure import BRAILLE_FRAMES, Dashboard
 else:
     from computronium.execution.dashboard._rich import Dashboard
@@ -24,5 +23,5 @@ __all__ = [
     "logger",
 ]
 
-logger = logging.getLogger(__name__)
-DASHBOARD = Dashboard()
+logger = logging.getLogger(__name__)  # ruff: ignore[non-empty-init-module]
+DASHBOARD = Dashboard()  # ruff: ignore[non-empty-init-module]

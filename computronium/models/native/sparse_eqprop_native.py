@@ -7,7 +7,7 @@ efficient sparse matrix multiplication.
 
 from __future__ import annotations
 
-import torch
+from typing import TYPE_CHECKING
 
 from computronium.core.substrates.sparse_substrate import SparseSubstrate
 from computronium.core.system_trainer import compose_system
@@ -23,8 +23,11 @@ from computronium.ontology import (
     ThermodynamicContrast,
 )
 
+if TYPE_CHECKING:
+    import torch
 
-def create_native_sparse_eqprop(
+
+def create_native_sparse_eqprop(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     input_dim: int,
     hidden_dim: int,
     output_dim: int,
@@ -108,9 +111,7 @@ def create_native_sparse_eqprop(
         )
     )
 
-    return compose_system(
-        substrate, geometry, dynamics, credit, update, device=device
-    )
+    return compose_system(substrate, geometry, dynamics, credit, update, device=device)
 
 
 # Alias for registry registration

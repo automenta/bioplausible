@@ -14,12 +14,14 @@ The `step` signature split is intentional:
   It CANNOT be driven by the `loss.backward(); optimizer.step()` idiom.
 """
 
-from collections.abc import Callable, Iterable
-from typing import TypeIs
+from typing import TYPE_CHECKING, TypeIs
 
 import torch
 from torch import nn
 from torch.optim import Optimizer
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
 
 __all__ = [
     "BioOptimizer",

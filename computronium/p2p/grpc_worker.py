@@ -110,7 +110,7 @@ async def run_worker(node_id: str, port: int, device_str: str) -> int:
                 if hasattr(sock, "getsockname"):
                     actual_port = sock.getsockname()[1]
                     break
-        except Exception:
+        except Exception:  # ruff: ignore[try-except-pass]
             pass
 
     # Print the port for the parent process to parse

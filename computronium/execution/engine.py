@@ -17,8 +17,8 @@ import random
 import signal
 import time
 import traceback
-from collections.abc import Sequence
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 import optuna
 import torch
@@ -42,6 +42,9 @@ from computronium.hyperopt import (
 from computronium.hyperopt.experiment import run_single_trial_task
 from computronium.hyperopt.parallel_runner import ParallelTrialRunner
 from computronium.lightning_.experiment import run_pl_trial
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 __all__ = [
     "ExecutionCallback",
@@ -79,7 +82,7 @@ class ExecutionEngine:
     CIRCUIT_BREAKER_THRESHOLD = 10
     CIRCUIT_BREAKER_RESET_INTERVAL = 300  # 5 minutes
 
-    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # injected EventSink for headless decoupling
+    def __init__(  # injected EventSink for headless decoupling
         self,
         db_path: str = DB_PATH,
         task_filter: str | None = None,
@@ -265,7 +268,7 @@ class ExecutionEngine:
             self.num_workers,
         )
 
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             # Resolve configs first. This duplicates logic in _process_task a
             # bit, but is necessary to pass resolved configs to the runner.
             configs = []
@@ -380,7 +383,7 @@ class ExecutionEngine:
         try:
             self._events.log("Running Diagnostic Task (Digits/MLP)...", style="yellow")
             metrics = self._process_task(task)
-            return metrics is not None
+            return metrics is not None  # ruff: ignore[try-consider-else]
         except Exception:  # broad: best-effort
             logger.exception("Diagnostic failed")
             return False
@@ -564,7 +567,7 @@ class ExecutionEngine:
 
                 # Save extended metrics (like robustness scores)
                 for k, v in metrics.items():
-                    if k not in ["accuracy", "loss"] and isinstance(
+                    if k not in ["accuracy", "loss"] and isinstance(  # ruff: ignore[literal-membership]
                         v, (int, float, str)
                     ):
                         trial.set_user_attr(k, v)
@@ -647,7 +650,7 @@ class ExecutionEngine:
 
     def _attempt_warm_start(self, study: optuna.Study, task: ExperimentTask) -> None:
         """Attempt to warm-start the study from best previous trials."""
-        if random.random() < 0.2:  # 20% chance to warm start
+        if random.random() < 0.2:  # 20% chance to warm start  # ruff: ignore[suspicious-non-cryptographic-random-usage]
             try:
                 if study.trials:
                     best_trial = study.best_trial

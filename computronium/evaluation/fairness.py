@@ -6,14 +6,16 @@ across learning rules, substrates, and credit assignment methods.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from torch import nn
 
 from computronium.resources import ResourceUsage
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +41,7 @@ class FairnessContract:
             raise ValueError("gpu_hours_per_rule must be positive")
         if self.seeds < 1:
             raise ValueError("seeds must be >= 1")
-        if self.early_stopping not in ("best_val", "last"):
+        if self.early_stopping not in ("best_val", "last"):  # ruff: ignore[literal-membership]
             raise ValueError("early_stopping must be 'best_val' or 'last'")
         splits = self.data_splits
         if abs(sum(splits.values()) - 1.0) > 1e-6:
@@ -76,9 +78,8 @@ def validate_fairness(
             return False
         if "metrics" not in r:
             return False
-        if contract.early_stopping == "best_val":
-            if "best_val_metric" not in r:
-                return False
+        if contract.early_stopping == "best_val" and "best_val_metric" not in r:
+            return False
 
     return True
 

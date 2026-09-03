@@ -19,13 +19,13 @@ Example
 ...     batch_size=32,
 ... )
 >>> print(f"EquiTile advantage: {results['equitile_speedup']:.2f}x")
-"""
+"""  # ruff: ignore[invalid-module-name]
 
 import time
 from dataclasses import dataclass
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
 
 from computronium.core.logging import get_logger
@@ -149,7 +149,7 @@ class NanoGPTModel(nn.Module):
         tuple
             (logits, loss) if targets provided, else (logits, None)
         """
-        batch_size, seq_len = input_ids.shape
+        _batch_size, seq_len = input_ids.shape
         device = input_ids.device
 
         # Position embeddings
@@ -238,8 +238,8 @@ class Block(nn.Module):
         mask: torch.Tensor,
     ) -> torch.Tensor:
         """Forward pass."""
-        x = x + self.attn(self.ln_1(x), mask)
-        x = x + self.mlp(self.ln_2(x))
+        x = x + self.attn(self.ln_1(x), mask)  # ruff: ignore[non-augmented-assignment]
+        x = x + self.mlp(self.ln_2(x))  # ruff: ignore[non-augmented-assignment]
         return x
 
 
@@ -248,7 +248,7 @@ class CausalSelfAttention(nn.Module):
 
     def __init__(self, config: NanoGPTConfig) -> None:
         super().__init__()
-        assert config.n_embd % config.n_head == 0
+        assert config.n_embd % config.n_head == 0  # ruff: ignore[assert]
 
         # QKV projections
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
@@ -335,7 +335,7 @@ class BenchmarkResult:
     training_time_sec: float
 
 
-def benchmark_model(
+def benchmark_model(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     model: nn.Module,
     train_loader: torch.utils.data.DataLoader,
     val_loader: torch.utils.data.DataLoader,
@@ -405,13 +405,13 @@ def benchmark_model(
 
     scaler = GradScaler() if device == "cuda" else None
 
-    for epoch in range(epochs):
+    for epoch in range(epochs):  # ruff: ignore[too-many-nested-blocks]
         epoch_loss = 0.0
         n_batches = 0
 
         for batch_idx, (input_ids, targets) in enumerate(train_loader):
-            input_ids = input_ids.to(device)
-            targets = targets.to(device)
+            input_ids = input_ids.to(device)  # ruff: ignore[redefined-loop-name]
+            targets = targets.to(device)  # ruff: ignore[redefined-loop-name]
 
             # Forward pass
             if scaler:
@@ -474,8 +474,8 @@ def benchmark_model(
 
     with torch.no_grad():
         for input_ids, targets in val_loader:
-            input_ids = input_ids.to(device)
-            targets = targets.to(device)
+            input_ids = input_ids.to(device)  # ruff: ignore[redefined-loop-name]
+            targets = targets.to(device)  # ruff: ignore[redefined-loop-name]
 
             if hasattr(model, "forward") and model.__class__.__name__ == "NanoGPTModel":
                 logits, loss = model(input_ids, targets)
@@ -521,7 +521,7 @@ def benchmark_model(
     )
 
 
-def compare_nanoGPT(
+def compare_nanoGPT(  # ruff: ignore[invalid-function-name]
     task: str = "shakespeare",
     epochs: int = 5,
     batch_size: int = 32,

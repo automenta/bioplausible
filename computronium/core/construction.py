@@ -38,12 +38,14 @@ import inspect
 import math
 import types as _types
 import typing
-from collections.abc import Callable
 from dataclasses import dataclass
 from dataclasses import fields as _dataclass_fields
 
 from computronium.config.experiment import ModelConfig as ExperimentModelConfig
 from computronium.config.unified import compute_hidden_dims
+
+if typing.TYPE_CHECKING:
+    from collections.abc import Callable
 
 __all__ = [
     "KNOBS",
@@ -315,7 +317,7 @@ def build_model_config(
     )
 
 
-def model_kwargs(
+def model_kwargs(  # ruff: ignore[complex-structure, too-many-branches]
     model_cls: object,
     config: dict[str, object],
     *,
@@ -451,7 +453,7 @@ def construct_model(
     return model_cls(**kwargs)  # type: ignore[operator]
 
 
-def build_from_standard_args(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # canonical zoo build contract
+def build_from_standard_args(  # canonical zoo build contract
     model_cls: type,
     spec,
     input_dim: int,
@@ -532,7 +534,7 @@ def phantom_knobs(
     # Depth supervision runs for every model: a sampled ``num_layers`` must
     # grow the constructed architecture, whether the model consumes ``config``
     # (knob → ``ModelConfig.hidden_dims``) or not (knob → structural args).
-    knobs = set(
+    knobs = set(  # ruff: ignore[unnecessary-generator-set]
         key
         for key in KNOBS
         if key != "learning_rate"

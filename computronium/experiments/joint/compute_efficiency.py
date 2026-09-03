@@ -18,12 +18,11 @@ import time
 from pathlib import Path
 
 import torch
-
-from computronium.core.utils.device import get_device
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import Tensor, nn
 
 from computronium.core.profiling import measure_suite_resources
+from computronium.core.utils.device import get_device
 from computronium.experiments.joint import CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED
 
 
@@ -150,7 +149,7 @@ class ComputeEfficiencyModel(nn.Module):
                     gate_logits, is_training
                 )
             else:
-                # Default: softmax
+                # Default: softmax  # ruff: ignore[commented-out-code]
                 active_routes = (
                     F.softmax(gate_logits, dim=-1)
                     if is_training
@@ -170,7 +169,7 @@ class ComputeEfficiencyModel(nn.Module):
             return self.net(x)
 
 
-def evaluate_compute_efficiency(
+def evaluate_compute_efficiency(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     coordinate: str,
     epochs: int = 20,
     batch_size: int = 64,
@@ -197,7 +196,7 @@ def evaluate_compute_efficiency(
     if len(parts) != 6:
         raise ValueError(f"Invalid coordinate: {coordinate}")
 
-    global plasticity_type
+    global plasticity_type  # ruff: ignore[global-statement]
     plasticity_type = parts[3]
 
     # Build plasticity primitive

@@ -5,13 +5,16 @@ This module handles the iterative settling of network activations
 to minimize the energy function during free and nudged phases.
 """
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
 
 from computronium.core.local_learning.settling import energy_gradient_descent
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 __all__ = [
     "Settler",
@@ -226,7 +229,7 @@ class Settler:
             step_size_decay=self.step_size_decay,
         )
 
-    def settle_with_graph(
+    def settle_with_graph(  # ruff: ignore[complex-structure, too-many-branches]
         self,
         model: nn.Module,
         x: torch.Tensor,
@@ -312,7 +315,7 @@ class Settler:
                     continue
                 buf = momentum_buffers[i]
                 buf.mul_(self.MOMENTUM).add_(g)
-                state = state - buf * current_lr
+                state = state - buf * current_lr  # ruff: ignore[non-augmented-assignment, redefined-loop-name]
                 working_states[i] = state
 
             # Copy back to states
@@ -338,7 +341,7 @@ class Settler:
             states.append(s)
 
         for item in structure:
-            if item["type"] in ("layer", "attention"):
+            if item["type"] in ("layer", "attention"):  # ruff: ignore[literal-membership]
                 handles.append(item["module"].register_forward_hook(capture_hook))
 
         try:
@@ -442,7 +445,7 @@ class Settler:
 
         return [s.detach() for s in states]
 
-    def _settle_loop_fixed(
+    def _settle_loop_fixed(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         self,
         model: nn.Module,
         x: torch.Tensor,
@@ -482,7 +485,7 @@ class Settler:
 
 # Compiled helper function (can be used standalone)
 @torch.compile(mode="reduce-overhead")
-def _compiled_settle_step(
+def _compiled_settle_step(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     states: list[torch.Tensor],
     momentum_buffers: list[torch.Tensor],
     model: nn.Module,

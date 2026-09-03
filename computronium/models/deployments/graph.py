@@ -128,7 +128,7 @@ class GraphTileNet(BioModel):
     algorithm_name = "GraphTileNet"
 
     @classmethod
-    def build(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def build(
         cls,
         spec,
         input_dim,

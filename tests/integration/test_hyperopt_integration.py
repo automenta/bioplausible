@@ -26,7 +26,7 @@ class TestHyperoptIntegration(unittest.TestCase):
         lm_models = []
         for name in names:
             meta = Registry.get_metadata(ComponentCategory.MODEL, name)
-            if meta.domain in ("lm", "general"):
+            if meta.domain in ("lm", "general"):  # ruff: ignore[literal-membership]
                 lm_models.append(name)
 
         tested_count = 0
@@ -61,7 +61,7 @@ class TestHyperoptIntegration(unittest.TestCase):
         vision_models = []
         for name in names:
             meta = Registry.get_metadata(ComponentCategory.MODEL, name)
-            if meta.domain in ("vision", "general"):
+            if meta.domain in ("vision", "general"):  # ruff: ignore[literal-membership]
                 vision_models.append(name)
 
         tested_count = 0

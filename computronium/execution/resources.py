@@ -83,7 +83,7 @@ class ResourceMonitor:
             return True
 
         # Disk Check (cwd)
-        if self._check_disk_overload():
+        if self._check_disk_overload():  # ruff: ignore[needless-bool]
             return True
 
         return False
@@ -91,7 +91,7 @@ class ResourceMonitor:
     def _check_gpu_overload(self) -> bool:
         """Check if GPU memory usage is too high on ALL available devices."""
         if torch and torch.cuda.is_available():
-            try:
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 device_count = torch.cuda.device_count()
                 overloaded_devices = 0
                 for i in range(device_count):
@@ -113,7 +113,7 @@ class ResourceMonitor:
 
     def _check_disk_overload(self) -> bool:
         """Check if disk usage is too high."""
-        total, used, free = shutil.disk_usage(".")
+        total, used, _free = shutil.disk_usage(".")
         disk_percent = (used / total) * 100.0
         if disk_percent > self.disk_limit:
             logger.warning("Disk Space Low: Used=%s%%. Pausing...", disk_percent)

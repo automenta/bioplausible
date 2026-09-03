@@ -37,8 +37,8 @@ import torch
 
 from computronium.benchmarks.compare_nanoGPT import NanoGPTConfig, NanoGPTModel
 from computronium.data.lm import create_shakespeare_dataset
-from computronium.utils import count_parameters
 from computronium.models.tile_lm import TileLM
+from computronium.utils import count_parameters
 
 logger = get_logger()
 
@@ -181,7 +181,7 @@ def compute_speedup_with_uncertainty(
         # but t-distribution is better for small N.
         # Here we stick to 1.96 (z-score) or t for n_runs
         n = baseline_metrics.n_runs
-        if n > 1:
+        if n > 1:  # ruff: ignore[if-else-block-instead-of-if-exp]
             crit_val = stats.t.ppf((1 + confidence) / 2, df=n - 1)
         else:
             crit_val = 0.0  # No uncertainty interval for single run
@@ -290,7 +290,7 @@ class RigorousBenchmark:
         self.results_dir = Path("benchmark_results")
         self.results_dir.mkdir(exist_ok=True)
 
-    def run_single_model(
+    def run_single_model(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
         self,
         model: torch.nn.Module,
         model_name: str,
@@ -564,7 +564,7 @@ class RigorousBenchmark:
             },
         }
 
-        with Path(filepath).open("w") as f:
+        with Path(filepath).open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
         logger.info(t"Results saved to {filepath}")
@@ -682,7 +682,7 @@ class RigorousBenchmark:
         report_path = (
             self.results_dir / f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
         )
-        with Path(report_path).open("w") as f:
+        with Path(report_path).open("w", encoding="utf-8") as f:
             f.write(report)
 
         return report

@@ -82,7 +82,7 @@ class MockTransition:
 
     def __call__(self, z, context):
         x = z.activity["x"]
-        batch_size = x.shape[0]
+        batch_size = x.shape[0]  # ruff: ignore[unused-variable]
         new_x = self.rho * x
         # Create a simple CompositeState-like object with clone method
         return make_state(
@@ -110,7 +110,7 @@ class MockContractingTransition:
 @pytest.fixture
 def mock_context():
     """Create a minimal SystemContext-like object for testing."""
-    registry = type("StateRegistry", (), {"register": lambda self, var: None})()
+    registry = type("StateRegistry", (), {"register": lambda self, var: None})()  # ruff: ignore[unused-lambda-argument]
     registry.register(type("StateVariable", (), {"name": "x", "persistent": True})())
 
     return type(
@@ -453,7 +453,7 @@ class TestSettlingTime:
 
             def __call__(self, z, context):
                 x = z.activity["x"]
-                if self.step_count % 2 == 0:
+                if self.step_count % 2 == 0:  # ruff: ignore[if-else-block-instead-of-if-exp]
                     new_x = x * 1.1
                 else:
                     new_x = x * 0.9
@@ -810,7 +810,7 @@ class TestDeviceManagement:
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
     def test_cuda_consistency(self):
         """All estimators should work on CUDA if available."""
-        registry = type("StateRegistry", (), {"register": lambda self, var: None})()
+        registry = type("StateRegistry", (), {"register": lambda self, var: None})()  # ruff: ignore[unused-lambda-argument]
         registry.register(
             type("StateVariable", (), {"name": "x", "persistent": True})()
         )

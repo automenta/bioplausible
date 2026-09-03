@@ -11,8 +11,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from computronium.core.exceptions import SpaceSignatureMismatchError
-from computronium.core.registry import ComponentCategory, Registry
 from computronium.core.model_spec import get_model_spec
+from computronium.core.registry import ComponentCategory, Registry
 
 # Type aliases
 

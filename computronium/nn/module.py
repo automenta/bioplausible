@@ -4,7 +4,7 @@ Replaces `nn.Linear` + optimizer with a single layer that internally handles
 free/nudged phases, settling loops, and plastic state (ψ) bookkeeping.
 
 NullPlasticity + Backprop rule falls back to native behavior bit-for-bit.
-"""  # noqa: E501
+"""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ class _ComputroniumLinearFn(torch.autograd.Function):
     """
 
     @staticmethod
-    def forward(  # noqa: PLR0913, PLR0917
+    def forward(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         ctx,
         x: Tensor,
         weight: Tensor,
@@ -152,7 +152,7 @@ class ComputroniumLinear(nn.Linear):
         >>> y = layer(x)  # Updates internal ψ, modulates output
     """
 
-    def __init__(  # noqa: PLR0913, PLR0917
+    def __init__(
         self,
         in_features: int,
         out_features: int,

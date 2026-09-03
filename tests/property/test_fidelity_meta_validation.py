@@ -32,7 +32,7 @@ from computronium.core.plasticity.theta_audit import ThetaInvarianceAudit
 from computronium.ontology import EnergyMinimizationDynamics
 from computronium.ontology.update import EuclideanUpdate, ParameterUpdateConfig
 
-PASS: str = "pass"  # ruff: ignore[hardcoded-password-string] - verdict literal
+PASS: str = "pass"  # ruff: ignore[hardcoded-password-string]
 FAIL: str = "fail"
 
 
@@ -47,7 +47,7 @@ def _batch():
 class _IdentitySettle(EnergyMinimizationDynamics):
     """Broken variant: settle ignores target and returns the input state."""
 
-    def settle(self, state, geometry, substrate, target=None):  # ruff: ignore[unused-method-argument] - broken contract keeps the protocol shape
+    def settle(self, state, geometry, substrate, target=None):
         return state
 
     def get_free_energy_history(self):
@@ -57,7 +57,7 @@ class _IdentitySettle(EnergyMinimizationDynamics):
 class _NoisySettle(EnergyMinimizationDynamics):
     """Broken variant: settle corrupts activations (not a faithful pass)."""
 
-    def settle(self, state, geometry, substrate, target=None):  # ruff: ignore[unused-method-argument] - broken contract keeps the protocol shape
+    def settle(self, state, geometry, substrate, target=None):
         acts = state.activations
         if isinstance(acts, list):
             state.activations = [a + torch.randn_like(a) * 0.5 for a in acts]
@@ -75,7 +75,7 @@ class _ZeroCredit:
     def __init__(self, inner: object) -> None:
         self._inner = inner
 
-    def compute_pseudo_gradient(self, states, loss, geometry) -> list[Tensor]:  # ruff: ignore[unused-method-argument] - broken contract keeps the protocol shape
+    def compute_pseudo_gradient(self, states, loss, geometry) -> list[Tensor]:
         return [torch.zeros_like(p) for p in geometry.params.values()]
 
 
@@ -88,7 +88,7 @@ class _InertPsi:
     def initial_psi(self, context: object, batch_size: int = 1) -> dict[str, Tensor]:
         return self._inner.initial_psi(context, batch_size)  # type: ignore[attr-defined]
 
-    def step(self, psi, z, context):  # ruff: ignore[unused-method-argument] - inert step ignores the joint state
+    def step(self, psi, z, context):
         return psi
 
     def modulate(self, activations, psi):
@@ -107,7 +107,7 @@ class _InsensitiveModulate:
     def step(self, psi, z, context):
         return self._inner.step(psi, z, context)  # type: ignore[attr-defined]
 
-    def modulate(self, activations, psi):  # ruff: ignore[unused-method-argument] - broken modulate ignores ψ
+    def modulate(self, activations, psi):
         return activations
 
 

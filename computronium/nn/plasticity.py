@@ -46,20 +46,20 @@ class NullPlasticity:
     def psi(self) -> None:
         return None
 
-    def initial_psi(  # noqa: PLR6301
+    def initial_psi(
         self, _batch_size: int = 1, _device: torch.device | None = None
     ) -> dict[str, Tensor]:
         return {}
 
-    def step(  # noqa: PLR6301
+    def step(
         self, _psi: dict[str, Tensor] | None, _x: Tensor, _output: Tensor
     ) -> dict[str, Tensor]:
         return {}
 
-    def modulate_output(self, output: Tensor, _psi: dict[str, Tensor]) -> Tensor:  # noqa: PLR6301
+    def modulate_output(self, output: Tensor, _psi: dict[str, Tensor]) -> Tensor:
         return output
 
-    def get_gradient_contribution(self) -> Tensor | None:  # noqa: PLR6301
+    def get_gradient_contribution(self) -> Tensor | None:
         return None
 
     def to(self, _device: torch.device) -> NullPlasticity:
@@ -241,4 +241,4 @@ def create_plasticity(
         case PlasticityType.FAST_WEIGHTS:
             return FastWeightPlasticity(in_features, out_features, config, device)
         case _:
-            raise ValueError("Unknown plasticity type")  # noqa: TRY003
+            raise ValueError("Unknown plasticity type")

@@ -8,8 +8,7 @@ registry with equilibrium-propagation strategies (no core dependency).
 from __future__ import annotations
 
 from collections.abc import Callable
-
-from torch import nn
+from typing import TYPE_CHECKING
 
 from .config import StrategyConfig, StrategyOptimizerConfig
 from .optimizer import StrategyOptimizer
@@ -29,6 +28,9 @@ from .strategies import (
     TargetPropGradient,
     UpdateStrategy,
 )
+
+if TYPE_CHECKING:
+    from torch import nn
 
 __all__ = ["StrategyRegistry", "create_strategy_optimizer"]
 
@@ -55,7 +57,7 @@ StrategyRegistry: dict[str, StrategyFactory] = {
 }
 
 
-def make_strategy_optimizer(
+def make_strategy_optimizer(  # ruff: ignore[too-many-arguments]
     *,
     model: nn.Module,
     gradient: str,

@@ -17,7 +17,7 @@ import json
 import os
 import shutil
 import signal
-import subprocess  # ruff: ignore[suspicious-subprocess-import] - fixed argv, no shell
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import sys
 import time
 from collections import Counter
@@ -30,12 +30,9 @@ RECORDS_DIRNAME = "records"
 
 def _load_fidelity_48(fidelity_manifest_path: Path) -> list[str]:
     """Load the 48 fidelity-passing coordinates from the manifest."""
-    with fidelity_manifest_path.open() as f:
+    with fidelity_manifest_path.open(encoding="utf-8") as f:
         manifest = json.load(f)
-    passing = [
-        coord for coord, data in manifest.items()
-        if data.get("passed") is True
-    ]
+    passing = [coord for coord, data in manifest.items() if data.get("passed") is True]
     if len(passing) != 48:
         raise ValueError(f"Expected 48 passing coordinates, got {len(passing)}")
     return sorted(passing)
@@ -82,7 +79,9 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Delete the output directory before commissioning",
     )
-    parser.add_argument("--no-kill", action="store_true", help="Skip kill/resume lifecycle")
+    parser.add_argument(
+        "--no-kill", action="store_true", help="Skip kill/resume lifecycle"
+    )
     parser.add_argument("--min-seeds", type=int, default=5)
     parser.add_argument("--min-families", type=int, default=2)
     parser.add_argument(
@@ -164,27 +163,45 @@ def _kill_tree(proc: subprocess.Popen[bytes]) -> None:
     proc.wait()
 
 
-def _stage_kill(args: argparse.Namespace, seed: int, log_path: Path, coordinates_json: str) -> dict:
+def _stage_kill(
+    args: argparse.Namespace, seed: int, log_path: Path, coordinates_json: str
+) -> dict:
     """Run the first seed via CampaignStack, SIGKILL mid-flight once episodes are durable."""
     started = time.monotonic()
     killed = False
     cid = _campaign_id(args, seed)
     with log_path.open("w", encoding="utf-8") as log:
-        proc = subprocess.Popen(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
-            [
-                "uv", "run", "comp", "campaign", "run",
-                "--space", "joint_fidelity_48",
-                "--objective", "adaptation_efficiency",
-                "--branch", args.branch,
-                "--campaign-id", cid,
-                "--iterations", str(args.iterations),
-                "--experiments-per-iter", str(args.experiments_per_iter),
-                "--checkpoint-interval", str(args.checkpoint_interval),
-                "--output-dir", str(_seed_dir(args, seed)),
-                "--device", args.device,
-                "--seed", str(seed),
-                "--tasks", args.tasks,
-                "--layout", "grid",
+        proc = subprocess.Popen(  # ruff: ignore[subprocess-without-shell-equals-true]
+            [  # ruff: ignore[start-process-with-partial-path]
+                "uv",
+                "run",
+                "comp",
+                "campaign",
+                "run",
+                "--space",
+                "joint_fidelity_48",
+                "--objective",
+                "adaptation_efficiency",
+                "--branch",
+                args.branch,
+                "--campaign-id",
+                cid,
+                "--iterations",
+                str(args.iterations),
+                "--experiments-per-iter",
+                str(args.experiments_per_iter),
+                "--checkpoint-interval",
+                str(args.checkpoint_interval),
+                "--output-dir",
+                str(_seed_dir(args, seed)),
+                "--device",
+                args.device,
+                "--seed",
+                str(seed),
+                "--tasks",
+                args.tasks,
+                "--layout",
+                "grid",
             ],
             cwd=REPO_ROOT,
             stdout=log,
@@ -225,24 +242,40 @@ def _stage_run(
 ) -> float:
     started = time.monotonic()
     cmd = [
-        "uv", "run", "comp", "campaign", "run",
-        "--space", "joint_fidelity_48",
-        "--objective", "adaptation_efficiency",
-        "--branch", args.branch,
-        "--campaign-id", _campaign_id(args, seed),
-        "--iterations", str(iterations),
-        "--experiments-per-iter", str(args.experiments_per_iter),
-        "--checkpoint-interval", str(args.checkpoint_interval),
-        "--output-dir", str(_seed_dir(args, seed)),
-        "--device", args.device,
-        "--seed", str(seed),
-        "--tasks", args.tasks,
-        "--layout", "grid",
+        "uv",
+        "run",
+        "comp",
+        "campaign",
+        "run",
+        "--space",
+        "joint_fidelity_48",
+        "--objective",
+        "adaptation_efficiency",
+        "--branch",
+        args.branch,
+        "--campaign-id",
+        _campaign_id(args, seed),
+        "--iterations",
+        str(iterations),
+        "--experiments-per-iter",
+        str(args.experiments_per_iter),
+        "--checkpoint-interval",
+        str(args.checkpoint_interval),
+        "--output-dir",
+        str(_seed_dir(args, seed)),
+        "--device",
+        args.device,
+        "--seed",
+        str(seed),
+        "--tasks",
+        args.tasks,
+        "--layout",
+        "grid",
     ]
     if resume:
         cmd.append("--resume")
     with log_path.open("w", encoding="utf-8") as log:
-        proc = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
+        proc = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
             cmd,
             cwd=REPO_ROOT,
             stdout=log,
@@ -256,7 +289,7 @@ def _stage_run(
 
 def _git_commit() -> str:
     git = shutil.which("git") or sys.exit("git not found")
-    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv, no shell
+    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true]
         [git, "rev-parse", "HEAD"],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -513,7 +546,7 @@ def _replication_summary(args: argparse.Namespace, records: list) -> dict:
     }
 
 
-def main() -> None:
+def main() -> None:  # ruff: ignore[too-many-locals]
     args = _parse_args()
 
     # Load fidelity-passing coordinates
@@ -547,10 +580,10 @@ def main() -> None:
         seed_records.mkdir(parents=True, exist_ok=True)
         detail: dict[str, object] = {"campaign_id": _campaign_id(args, seed)}
         if i == 0 and not args.no_kill:
-            print(
-                f"seed {seed} stage 1: run + mid-flight kill (at 1 episode)"
+            print(f"seed {seed} stage 1: run + mid-flight kill (at 1 episode)")
+            kill = _stage_kill(
+                args, seed, seed_records / "run_first.txt", json.dumps(passing_coords)
             )
-            kill = _stage_kill(args, seed, seed_records / "run_first.txt", json.dumps(passing_coords))
             print(f"  kill: {json.dumps(kill)}")
             print(f"seed {seed} stage 2: resume via CLI")
             detail["resume_elapsed_s"] = _stage_run(

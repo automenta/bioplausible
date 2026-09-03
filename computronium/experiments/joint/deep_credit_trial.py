@@ -262,7 +262,7 @@ def _probe(
     )
 
 
-def _walk_seed(  # ruff: ignore[too-many-arguments] - walk identity tuple travels together
+def _walk_seed(
     credit: str,
     frozen: bool,
     env: DepthEnv,
@@ -327,7 +327,7 @@ def _walk_seed(  # ruff: ignore[too-many-arguments] - walk identity tuple travel
     return probe, late, records, mean_saved
 
 
-def _walk_arm(  # ruff: ignore[too-many-locals] - arm identity tuple travels together
+def _walk_arm(  # ruff: ignore[too-many-locals]
     credit: str,
     frozen: bool,
     envs: tuple[DepthEnv, ...],
@@ -379,7 +379,7 @@ def _walk_arm(  # ruff: ignore[too-many-locals] - arm identity tuple travels tog
     )
 
 
-def _verify_controls(  # ruff: ignore[too-many-arguments] - verdict identity travels together
+def _verify_controls(
     envs: tuple[DepthEnv, ...],
     control_records_by_env: dict[str, list[FrontierRecord]],
     chance: float,
@@ -472,7 +472,7 @@ class TrialResult:
         }
 
 
-def run_trial(  # ruff: ignore[too-many-locals] - trial identity tuple travels together
+def run_trial(  # ruff: ignore[too-many-locals]
     config: DeepCreditConfig,
     preregistration: PowerPreregistration | None = None,
 ) -> TrialResult:
@@ -511,9 +511,7 @@ def run_trial(  # ruff: ignore[too-many-locals] - trial identity tuple travels t
     if preregistration is not None:
         control = preregistration.embedded_control
         if control is None:  # unreachable: the claim-grade gate requires the arm
-            raise ValueError(  # ruff: ignore[raise-vanilla-args] - unreachable guard
-                "registered preregistration carries no embedded control"
-            )
+            raise ValueError("registered preregistration carries no embedded control")
         registered_control = control
         prereg = preregistration
     control_records_by_env: dict[str, list[FrontierRecord]] = {}

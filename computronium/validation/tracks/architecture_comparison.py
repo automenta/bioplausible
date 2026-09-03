@@ -106,7 +106,7 @@ class ReluChain(nn.Module):
         return h, norms
 
 
-def track_56_depth_architecture_comparison(verifier) -> TrackResult:
+def track_56_depth_architecture_comparison(verifier) -> TrackResult:  # ruff: ignore[too-many-locals, too-many-statements]
     """
     Track 56: Comprehensive Depth Architecture Comparison
 

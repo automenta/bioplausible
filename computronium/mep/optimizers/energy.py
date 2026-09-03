@@ -10,7 +10,7 @@ where:
 """
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
 
 __all__ = [
@@ -35,7 +35,7 @@ class EnergyFunction:
         self.loss_type = loss_type
         self.softmax_temperature = softmax_temperature
 
-    def __call__(
+    def __call__(  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
         self,
         model: nn.Module,
         x: torch.Tensor,
@@ -71,7 +71,9 @@ class EnergyFunction:
 
         # Find all modules that produce a state (layer or attention)
         state_producing_modules = [
-            item for item in structure if item["type"] in ("layer", "attention")
+            item
+            for item in structure
+            if item["type"] in ("layer", "attention")  # ruff: ignore[literal-membership]
         ]
         num_states = len(state_producing_modules)
 
@@ -98,14 +100,14 @@ class EnergyFunction:
                 if use_classification and is_last_state:
                     # KL divergence for classification output
                     # Cast h to float32 for stable energy calculation
-                    E = E + self._kl_energy(state.float(), h.float(), batch_size)
+                    E = E + self._kl_energy(state.float(), h.float(), batch_size)  # ruff: ignore[non-augmented-assignment]
                 else:
                     # MSE for hidden layers and regression
                     self._validate_shapes(
                         h, state, f"Layer {state_idx} ({type(module).__name__})"
                     )
                     # Compute MSE in float32
-                    E = E + 0.5 * self._safe_mse(h.float(), state.float()) / batch_size
+                    E = E + 0.5 * self._safe_mse(h.float(), state.float()) / batch_size  # ruff: ignore[non-augmented-assignment]
 
                 # The input to the next layer is the current state (relaxed variable)
                 # Ensure dtype matches input x to prevent type mismatch with weights
@@ -113,7 +115,7 @@ class EnergyFunction:
                 prev = state.to(x.dtype)
                 state_idx += 1
 
-            elif item_type == "norm" or item_type == "pool" or item_type == "flatten":
+            elif item_type == "norm" or item_type == "pool" or item_type == "flatten":  # ruff: ignore[repeated-equality-comparison]
                 prev = module(prev)
 
             elif item_type == "dropout":
@@ -149,7 +151,7 @@ class EnergyFunction:
 
                 self._validate_shapes(h, state, f"Attention Layer {state_idx}")
                 # Compute MSE in float32
-                E = E + 0.5 * self._safe_mse(h.float(), state.float()) / batch_size
+                E = E + 0.5 * self._safe_mse(h.float(), state.float()) / batch_size  # ruff: ignore[non-augmented-assignment]
                 prev = state.to(x.dtype)
                 state_idx += 1
 
@@ -159,7 +161,7 @@ class EnergyFunction:
         # Nudge term
         if target_vec is not None and beta > 0:
             # Nudge term in float32
-            E = E + self._nudge_term(prev.float(), target_vec, beta, batch_size)
+            E = E + self._nudge_term(prev.float(), target_vec, beta, batch_size)  # ruff: ignore[non-augmented-assignment]
 
         # Stability check
         if torch.isnan(E) or torch.isinf(E):

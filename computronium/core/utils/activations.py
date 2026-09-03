@@ -15,7 +15,7 @@ from typing import Literal
 
 import numpy as np
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
 
 from computronium.core.logging import get_logger
@@ -87,7 +87,7 @@ def approx_spectral_norm(weight: torch.Tensor, n_iter: int = 10) -> float:
     Returns:
         Estimated spectral norm (largest singular value) as a Python float.
     """
-    if weight.dim() < 2:  # ruff: ignore[magic-value-comparison] - dim is structurally 0/1 here
+    if weight.dim() < 2:
         return 0.0
 
     w_mat = weight.view(weight.size(0), -1)
@@ -188,13 +188,13 @@ def spectral_normalize(
 
     if u is None:
         u = xp.random.randn(out_dim).astype(w_matrix.dtype)
-    u = u / xp.linalg.norm(u)
+    u = u / xp.linalg.norm(u)  # ruff: ignore[non-augmented-assignment]
 
     for _ in range(num_iters):
         v = w_matrix.T @ u
-        v = v / (xp.linalg.norm(v) + 1e-12)
+        v = v / (xp.linalg.norm(v) + 1e-12)  # ruff: ignore[non-augmented-assignment]
         u = w_matrix @ v
-        u = u / (xp.linalg.norm(u) + 1e-12)
+        u = u / (xp.linalg.norm(u) + 1e-12)  # ruff: ignore[non-augmented-assignment]
 
     sigma = float(u @ w_matrix @ v)
     w_normalized = w_matrix / (sigma + 1e-12)

@@ -88,7 +88,7 @@ _FORWARD_ONLY_LOCALITY: frozenset[LocalityLevel] = frozenset({
 })
 
 
-def _objective_rank(
+def _objective_rank(  # ruff: ignore[too-many-return-statements]
     objective: ProposalObjective, meta: ComponentMetadata
 ) -> tuple[float, ...]:
     """Return a sort key ranking a candidate on a non-accuracy objective.
@@ -460,7 +460,7 @@ class ExperimentProposer:
             # Build hypothesis from the ablation
             fixed_str = ", ".join(f"{k}={v}" for k, v in fixed.items())
             sweep_str = (
-                f"{sweep}={sweep_values}"
+                f"{sweep}={sweep_values}"  # ruff: ignore[useless-if-else]
                 if isinstance(sweep_values, list)
                 else f"{sweep}={sweep_values}"
             )

@@ -41,7 +41,7 @@ from computronium.ontology import (
     GeometryConfig,
     ParameterUpdateConfig,
     RecurrentGeometry,
-    StateDynamicsConfig,
+    StateDynamicsConfig,  # ruff: ignore[redefined-while-unused]
     SubstrateConfig,
     SystemConfig,
     SystemState,
@@ -91,7 +91,7 @@ def _create_dummy_state_for_registry(
 # ============================================================
 
 
-def test_j1_null_plasticity_zero_extension():
+def test_j1_null_plasticity_zero_extension():  # ruff: ignore[too-many-locals]
     """J1: Joint system with M=Null ≡ 5-D system (Zero-Extension Theorem)."""
     substrate, geometry, dynamics, credit, update = _create_test_system()
 
@@ -157,7 +157,7 @@ def test_j1_null_plasticity_zero_extension():
 
 def test_j2_theta_immutable_intra_episode():
     """J2: Persistent θ parameters are never mutated during intra-episode steps."""
-    substrate, geometry, dynamics, credit, update = _create_test_system()
+    substrate, geometry, _dynamics, _credit, _update = _create_test_system()
 
     # Snapshot initial theta
     theta_initial = {
@@ -233,7 +233,7 @@ class TestPlasticity:
     ) -> dict[str, Tensor]:
         # Only plasticity projection should modify psi
         new_psi = {k: v.clone() for k, v in psi.items()}
-        new_psi["test_psi"] = new_psi["test_psi"] + 0.1 * torch.randn_like(
+        new_psi["test_psi"] = new_psi["test_psi"] + 0.1 * torch.randn_like(  # ruff: ignore[non-augmented-assignment]
             new_psi["test_psi"]
         )
         return new_psi
@@ -241,7 +241,7 @@ class TestPlasticity:
 
 def test_j3_fast_plastic_only_via_plasticity():
     """J3: fast_plastic (ψ) variables only mutate through plasticity projection."""
-    substrate, geometry, dynamics, credit, update = _create_test_system()
+    substrate, geometry, _dynamics, _credit, _update = _create_test_system()
 
     registry = _create_registry_with_geometry(geometry)
     registry.register(StateVariable(name="test_psi", fast_plastic=True))
@@ -315,7 +315,7 @@ def test_j4_substrate_owned_respects_physics():
     # Substrate-owned state for ternary
     registry.register(StateVariable(name="conductance", substrate_owned=True))
 
-    context = SystemContext(
+    context = SystemContext(  # ruff: ignore[unused-variable]
         theta=geometry.params,
         geometry=geometry,
         substrate=substrate,
@@ -368,7 +368,7 @@ def test_j4_substrate_adapter_preserves_constraints():
         CompositeState(activity=dummy_activity, plastic={}, substrate=dummy_substrate)
     )
 
-    context = SystemContext(
+    context = SystemContext(  # ruff: ignore[unused-variable]
         theta=geometry.params,
         geometry=geometry,
         substrate=substrate,
@@ -406,7 +406,7 @@ def test_j4_substrate_adapter_preserves_constraints():
 
 def test_j5_consolidation_only_at_episode_boundary():
     """J5: Consolidatable ψ promoted to θ only at episode boundaries via consolidate()."""
-    substrate, geometry, dynamics, credit, update = _create_test_system()
+    substrate, geometry, _dynamics, _credit, _update = _create_test_system()
 
     registry = _create_registry_with_geometry(geometry)
     # Consolidatable fast weight
@@ -478,7 +478,7 @@ def test_j5_consolidation_only_at_episode_boundary():
 
 def test_j5_consolidation_resets_plastic():
     """J5: Consolidation optionally resets promoted plastic state."""
-    substrate, geometry, dynamics, credit, update = _create_test_system()
+    substrate, geometry, _dynamics, _credit, _update = _create_test_system()
 
     registry = _create_registry_with_geometry(geometry)
     registry.register(
@@ -558,7 +558,7 @@ def test_j6_substrate_adapter_preserves_registry_semantics():
         CompositeState(activity=dummy_activity, plastic={}, substrate=dummy_substrate)
     )
 
-    context = SystemContext(
+    context = SystemContext(  # ruff: ignore[unused-variable]
         theta=geometry.params,
         geometry=geometry,
         substrate=substrate,
@@ -591,7 +591,8 @@ def test_j6_substrate_adapter_preserves_registry_semantics():
 
 
 @pytest.mark.xfail(
-    reason="EnergyToInstantaneousAdapter modifies frozen config - bug in adapter", strict=True
+    reason="EnergyToInstantaneousAdapter modifies frozen config - bug in adapter",
+    strict=True,
 )
 def test_j6_dynamics_adapter_preserves_shape():
     """J6: Dynamics adapter preserves CompositeState structure."""
@@ -607,7 +608,7 @@ def test_j6_dynamics_adapter_preserves_shape():
 
     registry = _create_registry_with_geometry(geometry)
 
-    context = SystemContext(
+    context = SystemContext(  # ruff: ignore[unused-variable]
         theta=geometry.params,
         geometry=geometry,
         substrate=substrate,

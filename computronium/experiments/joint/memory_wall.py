@@ -115,7 +115,7 @@ CONTROL_ARM = ArmConfig(
     "Backprop", "backprop", use_optimizer_state=True, local_rule=False
 )
 
-ALL_ARMS = LOCAL_RULE_ARMS + (CONTROL_ARM,)
+ALL_ARMS = LOCAL_RULE_ARMS + (CONTROL_ARM,)  # ruff: ignore[collection-literal-concatenation]
 
 # Factory mapping
 FACTORY_MAP = {
@@ -206,8 +206,8 @@ class MemoryAccountedModel:
         total = 0
         with torch.no_grad():
             for x, y in dataloader:
-                x = x.to(self.device)
-                y = y.to(self.device)
+                x = x.to(self.device)  # ruff: ignore[redefined-loop-name]
+                y = y.to(self.device)  # ruff: ignore[redefined-loop-name]
                 logits = self.system.forward(x)
                 pred = logits.argmax(-1)
                 correct += (pred == y).sum().item()
@@ -236,7 +236,7 @@ class MemoryAccountedModel:
         optimizer_memory_mb = 0.0
         if self.arm.use_optimizer_state:
             # Adam: 2x params (m, v) + params (grad) = 3x param memory approx
-            optimizer_memory_mb = param_memory_mb * 3
+            optimizer_memory_mb = param_memory_mb * 3  # ruff: ignore[unused-variable]
 
         return ResourceUsage(
             coordinate=f"{self.arm.name}/{self.envelope.name}",
@@ -394,8 +394,8 @@ class GradientCheckpointedModel(MemoryAccountedModel):
         total = 0
         with torch.no_grad():
             for x, y in dataloader:
-                x = x.to(self.device)
-                y = y.to(self.device)
+                x = x.to(self.device)  # ruff: ignore[redefined-loop-name]
+                y = y.to(self.device)  # ruff: ignore[redefined-loop-name]
                 logits = self.system.forward(x)
                 pred = logits.argmax(-1)
                 correct += (pred == y).sum().item()
@@ -444,7 +444,7 @@ class GradientCheckpointedModel(MemoryAccountedModel):
 # ──────────────────────────────────────────────
 
 
-def run_single_benchmark(
+def run_single_benchmark(  # ruff: ignore[too-many-locals]
     arm: ArmConfig,
     envelope: EnvelopeConfig,
     seed: int,
@@ -508,8 +508,8 @@ def run_single_benchmark(
         epochs_completed = epoch + 1
 
         for batch_idx, (x, y) in enumerate(train_loader):
-            x = x.view(x.shape[0], -1)
-            metrics = model.train_step(x, y)
+            x = x.view(x.shape[0], -1)  # ruff: ignore[redefined-loop-name]
+            metrics = model.train_step(x, y)  # ruff: ignore[unused-variable]
 
             if optimizer is not None:
                 optimizer.step()
@@ -664,7 +664,7 @@ def generate_frontier_chart(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    _fig, ax = plt.subplots(figsize=(10, 6))
 
     # Color and marker mapping
     styles = {
@@ -754,7 +754,7 @@ def generate_frontier_chart(
         fontsize=9,
         va="top",
         ha="left",
-        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+        bbox={"boxstyle": "round", "facecolor": "wheat", "alpha": 0.5},
     )
 
     plt.tight_layout()

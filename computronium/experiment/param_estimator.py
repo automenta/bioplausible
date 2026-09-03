@@ -15,7 +15,6 @@ knobs.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Protocol, cast
 
 from computronium.core.construction import (
@@ -34,6 +33,8 @@ from computronium.core.registry import ComponentCategory, Registry
 from computronium.utils import count_parameters
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import torch
 
 __all__ = [

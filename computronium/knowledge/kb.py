@@ -44,7 +44,7 @@ class KnowledgeBaseConfig:
     min_records: int = 10
 
 
-class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surface + conditional + flagship queries are all distinct public KB reads
+class KnowledgeBase:  # integrity-surface + conditional + flagship queries are all distinct public KB reads  # ruff: ignore[too-many-public-methods]
     """
     Upgraded KnowledgeBase with SQLite + Vector Store.
 
@@ -609,7 +609,7 @@ class KnowledgeBase:  # ruff: ignore[too-many-public-methods]  # integrity-surfa
     def export_json(self, path: str) -> None:
         """Export knowledge base to JSON."""
         entries = self.query(limit=10000)
-        with pathlib.Path(path).open("w") as f:
+        with pathlib.Path(path).open("w", encoding="utf-8") as f:
             json.dump([e.to_dict() for e in entries], f, indent=2)
 
     def close(self) -> None:
@@ -759,7 +759,7 @@ _DEFAULT_KB: KnowledgeBase | None = None
 
 
 def _get_default_kb() -> KnowledgeBase:
-    global _DEFAULT_KB
+    global _DEFAULT_KB  # ruff: ignore[global-statement]
     if _DEFAULT_KB is None:
         _DEFAULT_KB = KnowledgeBase()
     return _DEFAULT_KB

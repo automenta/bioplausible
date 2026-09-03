@@ -6,10 +6,13 @@ A small library of energy functions reusable across all EBM families
 for use in settling loops or contrastive updates.
 """
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 __all__ = [
     "contrastive_energy",
@@ -51,8 +54,8 @@ def prediction_error_energy(
         err = activities[i + 1] - predictions[i]
         sq = (err * err).sum()
         if weights is not None and i < len(weights):
-            sq = sq * weights[i]
-        total = total + sq
+            sq = sq * weights[i]  # ruff: ignore[non-augmented-assignment]
+        total = total + sq  # ruff: ignore[non-augmented-assignment]
     return total
 
 
@@ -185,5 +188,5 @@ def node_energy(
     """
     e = reg_weight * (activity * activity).sum()
     if bias is not None:
-        e = e + (bias * activity).sum()
+        e = e + (bias * activity).sum()  # ruff: ignore[non-augmented-assignment]
     return e

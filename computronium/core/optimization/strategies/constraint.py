@@ -36,7 +36,7 @@ class SpectralConstraint(ConstraintStrategy):
     ):
         if not (0 < gamma <= 1):
             raise ValueError(f"gamma must be in (0, 1], got {gamma}")
-        if timing not in ("post_update", "during_settling", "both"):
+        if timing not in ("post_update", "during_settling", "both"):  # ruff: ignore[literal-membership]
             raise ValueError(
                 "Spectral timing must be 'post_update', 'during_settling', or "
                 f"'both', got '{timing}'"
@@ -75,16 +75,16 @@ class SpectralConstraint(ConstraintStrategy):
         h, w = W.shape
         if u is None:
             u = torch.randn(h, device=W.device, dtype=W.dtype)
-            u = u / (u.norm() + self.EPSILON)
+            u = u / (u.norm() + self.EPSILON)  # ruff: ignore[non-augmented-assignment]
         if v is None:
             v = torch.randn(w, device=W.device, dtype=W.dtype)
-            v = v / (v.norm() + self.EPSILON)
+            v = v / (v.norm() + self.EPSILON)  # ruff: ignore[non-augmented-assignment]
 
         for _ in range(self.power_iter):
             v = W.T @ u
-            v = v / (v.norm() + self.EPSILON)
+            v = v / (v.norm() + self.EPSILON)  # ruff: ignore[non-augmented-assignment]
             u = W @ v
-            u = u / (u.norm() + self.EPSILON)
+            u = u / (u.norm() + self.EPSILON)  # ruff: ignore[non-augmented-assignment]
 
         sigma = (u @ W @ v).abs()
         return sigma, u, v

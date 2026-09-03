@@ -119,7 +119,7 @@ def _build_export_module(
     layers: list[nn.Module] = []
     for i, layer in enumerate(stack):
         # Strip spectral norm for ONNX export compatibility
-        layer = _strip_spectral_norm(layer)
+        layer = _strip_spectral_norm(layer)  # ruff: ignore[redefined-loop-name]
         layers.append(layer)
         if i < len(stack) - 1 and not isinstance(activation, nn.Identity):
             layers.append(activation)

@@ -5,13 +5,15 @@ handled opaquely: the GPU fast-path is injected by the MEP package, so the
 core stays dependency-free.
 """
 
-from collections.abc import Callable
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import torch
 from torch import nn
 
 from .base import UpdateStrategy
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 __all__ = ["MuonUpdate", "PlainUpdate"]
 
@@ -78,7 +80,7 @@ class MuonUpdate(UpdateStrategy):
 
         X = G.clone()
         norm = X.norm().clamp(min=1e-4, max=1e4)
-        X = X / norm
+        X = X / norm  # ruff: ignore[non-augmented-assignment]
 
         identity = torch.eye(c, device=G.device, dtype=G.dtype)
         for _ in range(steps):

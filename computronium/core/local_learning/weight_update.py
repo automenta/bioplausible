@@ -15,7 +15,7 @@ from computronium.core.tile.kernels import (
 )
 
 
-def contrastive_weight_update(  # ruff: ignore[too-many-arguments]  # dynamics contract signature
+def contrastive_weight_update(  # dynamics contract signature  # ruff: ignore[too-many-arguments]
     *,
     src_neurons: int,
     dst_neurons: int,
@@ -44,7 +44,7 @@ def contrastive_weight_update(  # ruff: ignore[too-many-arguments]  # dynamics c
     return importance * w_up.T, importance * b_up
 
 
-def hebbian_weight_update(  # ruff: ignore[too-many-arguments]  # dynamics contract signature
+def hebbian_weight_update(  # dynamics contract signature  # ruff: ignore[too-many-arguments]
     *,
     src_neurons: int,
     dst_neurons: int,

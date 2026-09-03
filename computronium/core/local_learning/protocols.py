@@ -8,11 +8,12 @@ These protocols define the three algorithm-specific injection points:
 """
 
 from collections.abc import Callable
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from torch import Tensor
 
-from computronium.core.tile import TileGraph, TileState
+if TYPE_CHECKING:
+    from computronium.core.tile import TileGraph, TileState
 
 # Type alias for weight lookup function
 type WeightLookup = Callable[[int, int], Tensor]
@@ -46,7 +47,7 @@ class ActivityUpdateFn(Protocol):
 class WeightUpdateFn(Protocol):
     """Per-edge weight/bias deltas from free and nudged activity statistics."""
 
-    def __call__(
+    def __call__(  # ruff: ignore[too-many-arguments]
         self,
         *,
         src_neurons: int,

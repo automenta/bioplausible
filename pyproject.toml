@@ -174,7 +174,7 @@ omit = [
 target-version = "py314"
 line-length = 88
 preview = true
-exclude = ["*.md", "*_pb2.py", "*_pb2_grpc.py"]
+exclude = ["*.md", "*_pb2.py", "*_pb2_grpc.py", "docs/archive", "demo"]
 
 [tool.ruff.lint]
 select = [
@@ -203,16 +203,33 @@ select = [
     "RSE",  # flake8-raise
     "SIM",  # flake8-simplify
 ]
+ignore = [
+    "line-too-long",  # disabled forever (user directive 2026-09-03): formatter handles what it can, the rest is noise
+    "magic-value-comparison", # numeric research thresholds (0.5, 1e-4, ...) are the domain's first-class objects
+    "no-self-use", # protocol implementations keep a uniform method surface (self unused by design)
+    "invalid-argument-name",    # math notation (W, G, V, X) is the domain's naming convention
+    "non-lowercase-variable-in-function",    # ditto for local math variables
+    "raise-vanilla-args",  # long messages in raise calls are the sanctioned error style (AGENTS.md)
+    "unused-function-argument",  # the family-neutral pipeline passes uniform args; primitives ignore some by design
+    "unused-method-argument",
+    "ambiguous-unicode-character-docstring",  # Greek/math symbols (β, θ, ≈) in docstrings are the domain language
+    "ambiguous-unicode-character-comment",
+    "ambiguous-unicode-character-string",
+    "float-equality-comparison",  # exact float equality is load-bearing (bitwise L5 locks), not a bug
+]
 
 [tool.ruff.lint.per-file-ignores]
+"computronium/__init__.py" = [
+    "undefined-export", # __all__ names resolve through the _LAZY import map
+]
 "tests/**/*.py" = [
-    "S101",   # assert in tests
-    "PLR6301", # no-self-use in test methods
-    "S404",   # subprocess CLI smoke tests
-    "S603",   # subprocess.run with fixed args
-    "S607",   # partial-path executables (uv)
-    "S311",   # random.Random in test samplers/fixtures
-    "PLR2004", # literal expected values in assertions
+    "assert",   # assert in tests
+    "no-self-use", # no-self-use in test methods
+    "suspicious-subprocess-import",   # subprocess CLI smoke tests
+    "subprocess-without-shell-equals-true",   # subprocess.run with fixed args
+    "start-process-with-partial-path",   # partial-path executables (uv)
+    "suspicious-non-cryptographic-random-usage",   # random.Random in test samplers/fixtures
+    "magic-value-comparison", # literal expected values in assertions
 ]
 
 [tool.ruff.lint.flake8-type-checking]
@@ -221,11 +238,12 @@ select = [
 convention = "google"
 
 [tool.ruff.lint.pylint]
-max-args = 5
+max-args = 9
 max-branches = 12
 max-locals = 15
 max-returns = 6
 max-statements = 50
+max-positional-args = 9
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10

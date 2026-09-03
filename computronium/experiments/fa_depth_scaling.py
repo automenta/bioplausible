@@ -381,7 +381,7 @@ def _save_results(results: list[dict], output_dir: str) -> None:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    with Path(output_path / "raw_results.jsonl").open("w") as f:
+    with Path(output_path / "raw_results.jsonl").open("w", encoding="utf-8") as f:
         for r in results:
             f.write(json.dumps(r, default=str) + "\n")
 
@@ -393,7 +393,7 @@ def _save_results(results: list[dict], output_dir: str) -> None:
     logger.info("Saved results to %s", output_path)
 
 
-def _generate_plots(results: list[dict], output_dir: str) -> None:
+def _generate_plots(results: list[dict], output_dir: str) -> None:  # ruff: ignore[complex-structure, too-many-statements]
     """Generate depth scaling plots."""
     import pandas as pd
 
@@ -560,12 +560,16 @@ def main():
 
     # Analyze depth scaling
     scaling_analysis = _analyze_depth_scaling(results)
-    with Path(Path(config.output_dir) / "scaling_analysis.json").open("w") as f:
+    with Path(Path(config.output_dir) / "scaling_analysis.json").open(
+        "w", encoding="utf-8"
+    ) as f:
         json.dump(scaling_analysis, f, indent=2, default=str)
 
     # Compute parity gaps
     parity_gaps = _compute_parity_gaps(results)
-    with Path(Path(config.output_dir) / "parity_gaps.json").open("w") as f:
+    with Path(Path(config.output_dir) / "parity_gaps.json").open(
+        "w", encoding="utf-8"
+    ) as f:
         json.dump(parity_gaps, f, indent=2, default=str)
 
     # Generate plots

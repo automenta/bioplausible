@@ -50,7 +50,7 @@ def _depth_scale(summaries: list[dict]) -> dict:
     return {
         "fit_all": _slope_vs_depth(points_all),
         "fit_2plus": _slope_vs_depth(points_24),
-        "per_depth": {d: v for d, v in sorted(per_depth.items())},
+        "per_depth": {d: v for d, v in sorted(per_depth.items())},  # ruff: ignore[unnecessary-comprehension]
         "n": len(summaries),
     }
 

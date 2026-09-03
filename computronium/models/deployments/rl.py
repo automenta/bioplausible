@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
 from torch.distributions import Categorical, Normal
 
@@ -118,7 +118,7 @@ class RLTileNet(BioModel):
     algorithm_name = "RLTileNet"
 
     @classmethod
-    def build(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def build(
         cls,
         spec,
         input_dim,
@@ -621,7 +621,7 @@ def compute_gae(
     gae = 0.0
 
     for t in reversed(range(len(rewards))):
-        if t == len(rewards) - 1:
+        if t == len(rewards) - 1:  # ruff: ignore[if-else-block-instead-of-if-exp]
             next_value = last_value
         else:
             next_value = values[t + 1]

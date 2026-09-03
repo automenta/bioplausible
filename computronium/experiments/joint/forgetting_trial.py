@@ -367,9 +367,7 @@ def run_trial(
     if preregistration is not None:
         control = preregistration.embedded_control
         if control is None:  # unreachable: the claim-grade gate requires the arm
-            raise ValueError(  # ruff: ignore[raise-vanilla-args] - unreachable guard
-                "registered preregistration carries no embedded control"
-            )
+            raise ValueError("registered preregistration carries no embedded control")
         verdict = verify_embedded_control(control_records, control)
         prereg = preregistration
     else:

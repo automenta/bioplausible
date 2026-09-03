@@ -11,7 +11,7 @@ Node forward methods are pure functions: no in-place mutation, no side effects.
 from typing import Protocol
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 
 __all__ = [
     "Linear",

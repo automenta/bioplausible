@@ -25,7 +25,7 @@ from computronium.state import (
     SystemContext,
 )
 
-__all__ = [
+__all__ = [  # ruff: ignore[unsorted-dunder-all]
     # State
     "StateVariable",
     "StateRegistry",

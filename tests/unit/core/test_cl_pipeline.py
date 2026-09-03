@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 
 from computronium.core.continual.arms import create_fast_weight_arm
 from computronium.core.continual.training import run_continual_train_step
@@ -66,7 +66,7 @@ class TestTaskMasking:
     def test_different_tasks_different_slices(self, fast_weight_model, device):
         """Different tasks use different logit slices."""
         x = torch.randn(4, 784, device=device)
-        y = torch.tensor([0, 1, 0, 1], device=device)
+        y = torch.tensor([0, 1, 0, 1], device=device)  # ruff: ignore[unused-variable]
 
         fast_weight_model.set_task(0)
         logits0 = fast_weight_model(x, task_id=0)
@@ -90,7 +90,7 @@ class TestPlasticStateManagement:
         x = torch.randn(4, 784, device=device)
         y = torch.randint(0, 2, (4,), device=device)
 
-        metrics, psi = run_continual_train_step(
+        _metrics, psi = run_continual_train_step(
             fast_weight_model.joint_system, x, y, task_id=0, psi=None
         )
 

@@ -6,7 +6,7 @@
 # `is_learning_rule_optimizer`. Expose symbols on demand so light consumers stay
 # fast; heavy symbols (CoreTrainer) import the zoo on first access.
 
-_LAZY: dict[str, tuple[str, str | None]] = {
+_LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-module]
     "BioModel": ("computronium.core.model", "BioModel"),
     "LayerRole": ("computronium.config.unified", "LayerRole"),
     "ModelConfig": ("computronium.config.unified", "ModelConfig"),
@@ -128,7 +128,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     "consolidate": ("computronium.core.joint", "consolidate"),
 }
 
-__all__ = sorted(_LAZY)
+__all__ = sorted(_LAZY)  # ruff: ignore[invalid-all-format]
 
 
 def __getattr__(name: str) -> object:

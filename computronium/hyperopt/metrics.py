@@ -62,7 +62,7 @@ class TrialMetrics:
         strictly_better = np.any(self.objectives > other.objectives)
         return better_or_equal and strictly_better
 
-    def composite_score(self, weights: dict[str, float] = None) -> float:
+    def composite_score(self, weights: dict[str, float] | None = None) -> float:
         """Calculate weighted composite score for ranking.
 
         Default weights balance all objectives equally.
@@ -234,7 +234,7 @@ def get_pareto_frontier(trials: list[TrialMetrics]) -> list[int]:
 
 
 def rank_trials(
-    trials: list[TrialMetrics], top_k: int = None
+    trials: list[TrialMetrics], top_k: int | None = None
 ) -> list[tuple[int, float]]:
     """Rank trials by composite score.
 

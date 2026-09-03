@@ -92,7 +92,7 @@ class ComparisonStudy:
             return float("inf")
 
         # For metrics where lower is better (perplexity, loss)
-        if self.primary_metric in [ComparisonMetric.PERPLEXITY, ComparisonMetric.LOSS]:
+        if self.primary_metric in [ComparisonMetric.PERPLEXITY, ComparisonMetric.LOSS]:  # ruff: ignore[literal-membership]
             return (
                 (family_ranking.best_value - baseline_ranking.best_value)
                 / baseline_ranking.best_value
@@ -204,7 +204,7 @@ def is_bio_plausible(model_name: str) -> bool:
 
     try:
         spec = get_model_spec(model_name)
-        return spec.family != "baseline"
+        return spec.family != "baseline"  # ruff: ignore[try-consider-else]
     except ValueError, KeyError:
         return (
             "backprop" not in model_name.lower()

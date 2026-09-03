@@ -17,9 +17,11 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
+from computronium.ontology import SystemConfig
+
 if TYPE_CHECKING:
     from computronium.ontology import (
-        SystemConfig,
+        SystemConfig,  # ruff: ignore[redefined-while-unused, runtime-import-in-type-checking-block]
     )
 
 __all__ = [
@@ -237,7 +239,6 @@ class DataConfig:
 
 
 # Re-export SystemConfig from ontology as the unified 5-D config
-from computronium.ontology import SystemConfig
 
 # ──────────────────────────────────────────────
 # Top-Level Experiment Configuration (ALL FIELDS REQUIRED)
@@ -929,7 +930,7 @@ def make_rl_preset(
     )
 
 
-def make_timeseries_preset(
+def make_timeseries_preset(  # ruff: ignore[too-many-arguments]
     *,
     name: str = "ts_forecast",
     seed: int = 42,

@@ -350,7 +350,7 @@ class CampaignStore:
             )
             conn.commit()
             row_id = cursor.lastrowid
-            assert row_id is not None
+            assert row_id is not None  # ruff: ignore[assert]
             return row_id
 
     def add_registry_snapshot(
@@ -385,7 +385,7 @@ class CampaignStore:
             )
             conn.commit()
             row_id = cursor.lastrowid
-            assert row_id is not None
+            assert row_id is not None  # ruff: ignore[assert]
             return row_id
 
     def get_episodes(self, campaign_id: str) -> list[EpisodeRecord]:
@@ -550,7 +550,7 @@ class CampaignStore:
         self, filepath: str | Path
     ) -> tuple[CampaignState, list[EpisodeRecord]]:
         """Load campaign state from YAML checkpoint."""
-        with Path(filepath).open() as f:
+        with Path(filepath).open(encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         campaign = CampaignState(**data["campaign"])

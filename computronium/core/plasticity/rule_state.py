@@ -190,7 +190,7 @@ class RuleStatePlasticity:
         """
         operator_logits = psi["operator_logits"]
         controller_state = psi["controller_state"]
-        batch_size = operator_logits.shape[0]
+        batch_size = operator_logits.shape[0]  # ruff: ignore[unused-variable]
 
         # Decay operator logits
         new_operator_logits = self._config.decay * operator_logits
@@ -224,7 +224,7 @@ class RuleStatePlasticity:
 
             # Controller produces operator logits update
             logits_update = self._controller(controller_input)
-            new_operator_logits = (
+            new_operator_logits = (  # ruff: ignore[non-augmented-assignment]
                 new_operator_logits + self._config.learning_rate * logits_update
             )
 
@@ -260,7 +260,7 @@ class RuleStatePlasticity:
             Operator weights [batch, num_operators] (soft or one-hot).
         """
         if is_training:
-            # Differentiable: Gumbel-Softmax
+            # Differentiable: Gumbel-Softmax  # ruff: ignore[commented-out-code]
             gumbels = -torch.empty_like(operator_logits).exponential_().log()
             gumbels = (operator_logits + gumbels) / self._config.temperature
             return torch.softmax(gumbels, dim=-1)

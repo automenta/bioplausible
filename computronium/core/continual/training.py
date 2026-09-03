@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from contextlib import nullcontext
+from typing import TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import Tensor
 
 from computronium.core.continual.constants import CL_CLASSES_PER_TASK
 from computronium.core.pipeline import forward_pass
 from computronium.ontology import Phase, SystemState
 from computronium.state import CompositeState
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def _masked_task_loss(state, local_y: Tensor, task_start: int, task_end: int) -> Tensor:
@@ -29,7 +32,7 @@ def _masked_task_loss(state, local_y: Tensor, task_start: int, task_end: int) ->
     return loss
 
 
-def run_continual_train_step(
+def run_continual_train_step(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     joint_system,
     x: Tensor,
     y: Tensor,
@@ -150,7 +153,7 @@ def run_continual_train_step(
         return metrics, psi
 
 
-def _continual_step(
+def _continual_step(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     model,
     x: Tensor,
     y: Tensor,

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
-from collections.abc import Iterator, Mapping
 from dataclasses import replace
 from inspect import Parameter, signature
 from typing import TYPE_CHECKING, Any, cast
@@ -11,6 +9,8 @@ from typing import TYPE_CHECKING, Any, cast
 from computronium.cli.shared import logger
 
 if TYPE_CHECKING:
+    import argparse
+    from collections.abc import Iterator, Mapping
     from dataclasses import DataclassInstance
 
     from torch import Tensor
@@ -33,7 +33,7 @@ class _FlattenLoader:
     def __iter__(self) -> Iterator[tuple[Tensor, Tensor]]:
         for x, y in self.loader:
             if x.dim() > 2:
-                x = x.view(x.size(0), -1)
+                x = x.view(x.size(0), -1)  # ruff: ignore[redefined-loop-name]
             yield x, y
 
     def __len__(self) -> int:
@@ -53,7 +53,7 @@ def _section_config[T: DataclassInstance](
     tag = section.get("type")
     if not isinstance(tag, str):
         msg = f"preset section missing string 'type' tag: {dict(section)!r}"
-        raise ValueError(msg)
+        raise ValueError(msg)  # ruff: ignore[type-check-without-type-error]
     factory = getattr(cls, tag)
     params = signature(factory).parameters
     var_kw = any(p.kind is Parameter.VAR_KEYWORD for p in params.values())

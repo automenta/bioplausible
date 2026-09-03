@@ -4,16 +4,20 @@ Equilibrium Propagation family.
 Classes: EqProp, AdamEqProp, HolomorphicEqProp, FiniteNudgeEqProp, LazyEqProp
 """
 
+from typing import TYPE_CHECKING
+
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
 
 from computronium.core.local_learning.settling import energy_gradient_descent
-from computronium.core.optimization.strategies import UpdateStrategy
 from computronium.core.registry import register_credit_assignment
 from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 from .base import LearningRuleOptimizer
+
+if TYPE_CHECKING:
+    from computronium.core.optimization.strategies import UpdateStrategy
 
 __all__ = [
     "AdamEqProp",
@@ -35,7 +39,7 @@ class EqProp(LearningRuleOptimizer):
     Reference: Scellier & Bengio, 2017
     """
 
-    def __init__(
+    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         self,
         params,
         model: nn.Module,
@@ -196,7 +200,7 @@ class EqProp(LearningRuleOptimizer):
         prev = x
         for i, (layer, state) in enumerate(zip(layers, states)):
             pred = layer(prev)
-            E = (
+            E = (  # ruff: ignore[non-augmented-assignment]
                 E
                 + 0.5
                 * torch.nn.functional.mse_loss(
@@ -215,7 +219,7 @@ class EqProp(LearningRuleOptimizer):
                     target_vec = torch.nn.functional.one_hot(
                         target, num_classes=output.shape[1]
                     ).float()
-                E = (
+                E = (  # ruff: ignore[non-augmented-assignment]
                     E
                     + beta
                     * torch.nn.functional.mse_loss(
@@ -227,7 +231,7 @@ class EqProp(LearningRuleOptimizer):
                 target_vec = target
                 if target.dim() > 1 and target.shape[1] > 1:
                     target_vec = target.argmax(dim=1)
-                E = (
+                E = (  # ruff: ignore[non-augmented-assignment]
                     E
                     + beta
                     * torch.nn.functional.cross_entropy(
@@ -294,7 +298,7 @@ class AdamEqProp(EqProp):
     decoupled from the settling dynamics.
     """
 
-    def __init__(
+    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         self,
         params,
         model: nn.Module,
@@ -423,14 +427,16 @@ class FiniteNudgeEqProp(LearningRuleOptimizer):
 
         for param in self.params:
             if param.grad is not None:
-                param.grad = param.grad * self.beta
+                param.grad = param.grad * self.beta  # ruff: ignore[non-augmented-assignment]
 
         for param, buffer in zip(self.params, self.buffers):
             if param.grad is not None:
                 self._apply_update(param.grad, param, buffer)
 
 
-@register_credit_assignment("lazy_eq_prop", requires=["transition_graph"], family="eqprop")
+@register_credit_assignment(
+    "lazy_eq_prop", requires=["transition_graph"], family="eqprop"
+)
 class LazyEqProp(LearningRuleOptimizer):
     """
     Lazy EqProp: Event-driven updates.

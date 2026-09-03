@@ -4,17 +4,21 @@ Pre-built benchmarks for standard tasks across all domains.
 Each benchmark returns a callable that evaluates a model and returns BenchmarkResult.
 """
 
-import builtins
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from torch import nn
-
-from computronium.domains import DomainTask
 from computronium.evaluation.base import (
     BenchmarkResult,
     MetricSuite,
     evaluate_model_on_task,
 )
+
+if TYPE_CHECKING:
+    import builtins
+    from collections.abc import Callable
+
+    from torch import nn
+
+    from computronium.domains import DomainTask
 
 # ---------------------------------------------------------------------------
 # Benchmark Registry
@@ -24,7 +28,7 @@ from computronium.evaluation.base import (
 class BenchmarkRegistry:
     """Registry of named benchmarks."""
 
-    _benchmarks: dict[str, Callable] = {}
+    _benchmarks: dict[str, Callable] = {}  # ruff: ignore[mutable-class-default]
 
     @classmethod
     def register(cls, name: str, fn: Callable) -> None:

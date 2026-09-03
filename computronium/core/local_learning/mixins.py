@@ -72,7 +72,7 @@ class MultiOptimizerMixin:
             OptimizerConfig(name="adam", lr=self.equitile_config.importance_lr),
         )
 
-        if self.equitile_config.mode in ("backprop", "ep"):
+        if self.equitile_config.mode in ("backprop", "ep"):  # ruff: ignore[literal-membership]
             self._optim_full = create_optimizer(
                 self,
                 OptimizerConfig(name="adam", lr=self.equitile_config.learning_rate),

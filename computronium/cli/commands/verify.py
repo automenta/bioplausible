@@ -1,10 +1,13 @@
 """Verify commands for the CLI."""
 
-import argparse
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from computronium.cli.shared import logger
+
+if TYPE_CHECKING:
+    import argparse
 
 __all__ = ["add_verify_subparsers", "run_verify"]
 
@@ -45,7 +48,7 @@ def run_verify(args: argparse.Namespace) -> None:
     from computronium.cli.shared import _DB_PATH, _STORAGE_URL, _set_storage
 
     if getattr(args, "db", None):
-        _DB_PATH, _STORAGE_URL = _set_storage(args.db)
+        _DB_PATH, _STORAGE_URL = _set_storage(args.db)  # ruff: ignore[used-dummy-variable]
 
     study = optuna.load_study(study_name=args.study, storage=_STORAGE_URL)
 
@@ -109,7 +112,7 @@ def run_verify(args: argparse.Namespace) -> None:
 
     if args.output:
         Path(args.output).parent.mkdir(parents=True, exist_ok=True)
-        with open(args.output, "w") as f:
+        with Path(args.output).open("w", encoding="utf-8") as f:
             for r in results:
                 f.write(json.dumps(r) + "\n")
         logger.info("Verification results written to %s", args.output)

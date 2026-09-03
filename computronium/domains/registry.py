@@ -95,7 +95,7 @@ def resolve_task(name: str) -> TaskSpec:
         ValueError: If ``name`` is not a known task.
     """
     if name not in SUPPORTED_TASKS:
-        raise ValueError(  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
+        raise ValueError(  # descriptive message is the public API
             f"unknown task {name!r}; available: {sorted(SUPPORTED_TASKS)}"
         )
     from computronium.domains.factory import create_task

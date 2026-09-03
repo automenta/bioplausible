@@ -1,6 +1,8 @@
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from computronium.hyperopt.eval_tiers import PatientLevel
+if TYPE_CHECKING:
+    from computronium.hyperopt.eval_tiers import PatientLevel
 
 __all__ = [
     "ExperimentTask",

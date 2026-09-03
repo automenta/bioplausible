@@ -1,7 +1,8 @@
 """Search (HPO) commands for the CLI."""
 
-import argparse
 import json
+import pathlib
+from typing import TYPE_CHECKING
 
 from computronium.cli.shared import (
     FAMILY_MAP,
@@ -12,6 +13,9 @@ from computronium.cli.shared import (
     _TrialContext,
     logger,
 )
+
+if TYPE_CHECKING:
+    import argparse
 
 __all__ = ["add_search_subparsers", "run_search"]
 
@@ -136,7 +140,7 @@ def run_search(args: argparse.Namespace) -> None:
         if args.output:
             # Export all trials as JSONL
             trials = study.trials
-            with open(args.output, "w") as f:
+            with pathlib.Path(args.output).open("w", encoding="utf-8") as f:
                 for t in trials:
                     f.write(
                         json.dumps({

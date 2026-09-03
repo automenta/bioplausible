@@ -127,10 +127,10 @@ class ConvTileNet(BioModel):
         spec,
         input_dim,
         output_dim,
-        hidden_dim,
+        hidden_dim,  # ruff: ignore[unused-class-method-argument]
         num_layers,
         device,
-        task_type,
+        task_type,  # ruff: ignore[unused-class-method-argument]
         **kwargs,
     ):
         """Build ConvTileNet from factory arguments."""
@@ -306,7 +306,7 @@ class VisionAugmentation:
 
     def _random_crop(self, x: Tensor) -> Tensor:
         """Random crop."""
-        b, c, h, w = x.shape
+        _b, _c, h, w = x.shape
         top = torch.randint(0, h - self.crop_size + 1, (1,)).item()
         left = torch.randint(0, w - self.crop_size + 1, (1,)).item()
         return x[:, :, top : top + self.crop_size, left : left + self.crop_size]
@@ -320,10 +320,10 @@ class VisionAugmentation:
     def _color_jitter(self, x: Tensor) -> Tensor:
         """Simple color jitter."""
         brightness = torch.empty(1).uniform_(0.8, 1.2).item()
-        x = x * brightness
+        x = x * brightness  # ruff: ignore[non-augmented-assignment]
 
         contrast = torch.empty(1).uniform_(0.8, 1.2).item()
-        x = x * contrast
+        x = x * contrast  # ruff: ignore[non-augmented-assignment]
 
         return x
 

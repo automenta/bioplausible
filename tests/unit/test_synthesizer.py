@@ -16,7 +16,7 @@ from computronium.execution.synthesizer import ResearchSynthesizer
 @pytest.fixture
 def synth_db_path() -> str:
     """Create a temporary SQLite DB with Optuna-compatible schema + test data."""
-    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)  # ruff: ignore[open-file-with-context-handler]
     tmp.close()
     _create_schema(tmp.name)
     _populate_test_data(tmp.name)
@@ -241,7 +241,7 @@ def test_get_trials_df_filters_incomplete(synth_db_path: str) -> None:
 @pytest.fixture
 def empty_db_path() -> str:
     """A database with correct schema but no data."""
-    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)  # ruff: ignore[open-file-with-context-handler]
     tmp.close()
     _create_schema(tmp.name)
     yield tmp.name

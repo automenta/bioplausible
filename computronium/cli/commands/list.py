@@ -1,9 +1,12 @@
 """List models CLI command."""
 
-import argparse
 import logging
+from typing import TYPE_CHECKING
 
 from computronium.core.registry import ComponentCategory, Registry
+
+if TYPE_CHECKING:
+    import argparse
 
 
 def add_list_subparsers(subparsers: argparse._SubParsersAction) -> None:

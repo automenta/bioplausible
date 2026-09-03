@@ -327,8 +327,8 @@ def analyze_parameter_efficiency(
 
     with torch.no_grad():
         for input_ids, targets in val_loader:
-            input_ids = input_ids.to(device)
-            targets = targets.to(device)
+            input_ids = input_ids.to(device)  # ruff: ignore[redefined-loop-name]
+            targets = targets.to(device)  # ruff: ignore[redefined-loop-name]
 
             if hasattr(model, "forward") and hasattr(model, "compute_loss"):
                 logits = model(input_ids)
@@ -401,8 +401,8 @@ def analyze_flop_efficiency(
 
     with torch.no_grad():
         for input_ids, targets in val_loader:
-            input_ids = input_ids.to(device)
-            targets = targets.to(device)
+            input_ids = input_ids.to(device)  # ruff: ignore[redefined-loop-name]
+            targets = targets.to(device)  # ruff: ignore[redefined-loop-name]
 
             if hasattr(model, "forward") and hasattr(model, "compute_loss"):
                 logits = model(input_ids)

@@ -1,6 +1,12 @@
 """Shared test fixtures and configuration."""
 
 import os
+from typing import cast
+from unittest.mock import MagicMock
+
+import pytest
+import torch
+from torch import nn
 
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 
@@ -23,15 +29,8 @@ logging.basicConfig(
 
 # Hard dependencies — no mock stubs needed
 # computronium.acceleration checks for cupy
-from unittest.mock import MagicMock  # ruff: ignore[module-import-not-at-top-of-file]
 
 sys.modules["cupy"] = MagicMock()
-
-from typing import cast
-
-import pytest
-import torch
-from torch import nn
 
 
 def _transition_modules_autodiscover(model: nn.Module) -> list[nn.Module]:

@@ -86,7 +86,7 @@ def test_register_default_config_rejects_non_dict():
 def test_default_configs_dict_is_read_only_by_convention():
     # The module exports the dict but mutation doesn't persist through accessors.
     # This documents the intended usage: callers use get_named_config / register_*.
-    cfg = get_named_config("vision_mlp")
+    cfg = get_named_config("vision_mlp")  # ruff: ignore[unused-variable]
     # Configs are frozen dataclasses; mutation raises FrozenInstanceError.
     # Verify original is unaffected by getting a fresh copy.
     fresh = get_named_config("vision_mlp")

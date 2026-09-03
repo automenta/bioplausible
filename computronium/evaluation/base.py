@@ -9,9 +9,8 @@ Provides:
 """
 
 # TC003: collections.abc.Callable used with from __future__ import annotations
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import torch
 from torch import nn
@@ -19,6 +18,9 @@ from torch import nn
 from computronium.core.logging import get_logger
 from computronium.domains.base import DomainTask, TaskSplit
 from computronium.utils import count_parameters
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 __all__ = [
     "BenchmarkResult",

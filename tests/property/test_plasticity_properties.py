@@ -36,7 +36,10 @@ from computronium.ontology import (
 )
 
 if TYPE_CHECKING:
-    from computronium.state import CompositeState, SystemContext
+    from computronium.state import (  # ruff: ignore[runtime-import-in-type-checking-block]
+        CompositeState,
+        SystemContext,
+    )
 
 # Tolerances
 TIGHT = {"rtol": 1e-5, "atol": 1e-6, "equal_nan": False}

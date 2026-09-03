@@ -9,11 +9,11 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-from torch import Tensor
-
 from computronium.state import CompositeState
 
 if TYPE_CHECKING:
+    from torch import Tensor
+
     from computronium.state import SystemContext
 
 __all__ = [

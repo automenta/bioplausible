@@ -51,7 +51,7 @@ class EqPropKernelBackend:
     def initialize(self, config: KernelConfig) -> None:
         """Initialize backend with configuration."""
         self._config = config
-        is_cuda = config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)
+        is_cuda = config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
         self._device = torch.device("cuda" if is_cuda else "cpu")
         self._dtype = config.dtype
 
@@ -108,7 +108,7 @@ class EqPropKernelBackend:
             self._device = layers[0].weight.device
             self._dtype = layers[0].weight.dtype
 
-    def _sync_weights_to_kernel(self) -> None:
+    def _sync_weights_to_kernel(self) -> None:  # ruff: ignore[complex-structure]
         """Sync PyTorch layer weights to EqPropKernel's internal weights."""
         if self._kernel is None or not self._layers:
             return
@@ -138,7 +138,7 @@ class EqPropKernelBackend:
                     kernel.biases["head"] = xp.asarray(
                         self._layers[-1].bias.detach().cpu().numpy()
                     )
-        elif kernel.architecture == "rnn":
+        elif kernel.architecture == "rnn":  # ruff: ignore[collapsible-if]
             # RNN architecture: W_in, W_rec, W_out
             if len(self._layers) >= 3:
                 kernel.weights["W_in"] = xp.asarray(
@@ -165,13 +165,13 @@ class EqPropKernelBackend:
                         self._layers[-1].bias.detach().cpu().numpy()
                     )
 
-    def _sync_weights_from_kernel(self) -> None:
+    def _sync_weights_from_kernel(self) -> None:  # ruff: ignore[complex-structure]
         """Sync EqPropKernel's weights back to PyTorch layers."""
         if self._kernel is None or not self._layers:
             return
 
         kernel = self._kernel
-        xp = kernel.xp
+        xp = kernel.xp  # ruff: ignore[unused-variable]
 
         def to_torch(arr):
             # Handle CuPy arrays explicitly
@@ -203,7 +203,7 @@ class EqPropKernelBackend:
             if self._layers[-1].bias is not None:
                 self._layers[-1].bias.data.copy_(to_torch(kernel.biases["W_out"]))
 
-    def forward(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
+    def forward(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:  # ruff: ignore[complex-structure]
         """Forward pass returning output and activations (for uniform interface).
 
         Runs free phase equilibrium and returns logits + intermediate activations.

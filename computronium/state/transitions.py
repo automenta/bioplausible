@@ -6,9 +6,9 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-from torch import Tensor
-
 if TYPE_CHECKING:
+    from torch import Tensor
+
     from computronium.state.composite import CompositeState
     from computronium.state.context import SystemContext
 

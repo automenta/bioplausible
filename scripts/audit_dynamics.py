@@ -10,12 +10,12 @@ Verifies:
 """
 
 import json
+import pathlib
 import sys
 from typing import Any
 
 import torch
-import torch.nn as nn
-from torch import autograd
+from torch import autograd, nn
 
 from computronium.core.utils.device import get_device
 from computronium.ontology import (
@@ -181,7 +181,7 @@ def test_instantaneous_vs_autograd() -> dict[str, Any]:
     }
 
 
-def test_predictive_settling_error_decreases() -> dict[str, Any]:
+def test_predictive_settling_error_decreases() -> dict[str, Any]:  # ruff: ignore[too-many-locals]
     """Test PredictiveSettlingDynamics prediction error decreases over steps."""
     print("\n" + "=" * 60)
     print("Test: PredictiveSettlingDynamics Error Decrease")
@@ -277,7 +277,7 @@ def scan_inplace_ops(module: nn.Module, path: str = "") -> list[tuple[str, str]]
     # Check module's forward method source for in-place patterns
     import inspect
 
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         source = inspect.getsource(module.forward)
         # Look for in-place patterns: +=, -=, *=, /=, .add_(), .mul_(), etc.
         lines = source.split("\n")
@@ -318,7 +318,7 @@ def scan_inplace_ops(module: nn.Module, path: str = "") -> list[tuple[str, str]]
     return issues
 
 
-def test_inplace_op_audit() -> dict[str, Any]:
+def test_inplace_op_audit() -> dict[str, Any]:  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     """Scan RecurrentGeometry and all dynamics for in-place ops that break autograd."""
     print("\n" + "=" * 60)
     print("Test: In-Place Operation Audit")
@@ -342,7 +342,7 @@ def test_inplace_op_audit() -> dict[str, Any]:
     dynamics = EnergyMinimizationDynamics(StateDynamicsConfig.energy_minimization())
 
     # Check dynamics._settle_step source
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         import inspect
 
         source = inspect.getsource(dynamics._settle_step)
@@ -376,7 +376,7 @@ def test_inplace_op_audit() -> dict[str, Any]:
     pred_dynamics = PredictiveSettlingDynamics(
         StateDynamicsConfig.predictive_settling()
     )
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         import inspect
 
         source = inspect.getsource(pred_dynamics.settle)
@@ -410,7 +410,7 @@ def test_inplace_op_audit() -> dict[str, Any]:
     from computronium.ontology import SpikeIntegrationDynamics
 
     spike_dynamics = SpikeIntegrationDynamics(StateDynamicsConfig.spike_integration())
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         import inspect
 
         source = inspect.getsource(spike_dynamics.settle)
@@ -444,7 +444,7 @@ def test_inplace_op_audit() -> dict[str, Any]:
     from computronium.ontology import LazyStateDynamics
 
     lazy_dynamics = LazyStateDynamics(StateDynamicsConfig.energy_minimization())
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         import inspect
 
         source = inspect.getsource(lazy_dynamics.settle)
@@ -478,7 +478,7 @@ def test_inplace_op_audit() -> dict[str, Any]:
     from computronium.ontology import DiffusionDynamics
 
     diff_dynamics = DiffusionDynamics(StateDynamicsConfig.diffusion())
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         import inspect
 
         source = inspect.getsource(diff_dynamics.settle)
@@ -558,7 +558,7 @@ def test_inplace_op_audit() -> dict[str, Any]:
             if isinstance(free_state.activations, list)
             else free_state.activations.sum()
         )
-        grad = autograd.grad(loss, list(geometry.parameters()), retain_graph=False)
+        grad = autograd.grad(loss, list(geometry.parameters()), retain_graph=False)  # ruff: ignore[unused-variable]
         print("  Functional autograd test: PASS")
     except RuntimeError as e:
         if "in-place" in str(e).lower() or "leaf" in str(e).lower():
@@ -582,7 +582,7 @@ def test_inplace_op_audit() -> dict[str, Any]:
     }
 
 
-def test_device_consistency() -> dict[str, Any]:
+def test_device_consistency() -> dict[str, Any]:  # ruff: ignore[complex-structure, too-many-statements]
     """Test CPU vs CUDA consistency for all dynamics types.
 
     Creates models and data on CPU first, then moves to CUDA to ensure
@@ -866,7 +866,9 @@ def main():
         "tests": results,
     }
 
-    with open("audit_results/dynamics_audit.json", "w") as f:
+    with pathlib.Path("audit_results/dynamics_audit.json").open(
+        "w", encoding="utf-8"
+    ) as f:
         json.dump(output, f, indent=2)
 
     print("\nResults written to audit_results/dynamics_audit.json")

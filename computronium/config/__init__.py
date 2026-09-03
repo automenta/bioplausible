@@ -68,7 +68,7 @@ from computronium.config.unified import (
 # ──────────────────────────────────────────────
 # Merged from config_loader.py
 # ──────────────────────────────────────────────
-__all__ = [
+__all__ = [  # ruff: ignore[unsorted-dunder-all]
     # New unified exports (Sprint 7)
     "DataConfig",
     "ExperimentConfig",

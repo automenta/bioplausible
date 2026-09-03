@@ -13,13 +13,13 @@ Pre-registration (Session 15.4):
 - G1 tripwire unchanged; the slope is the evidence
 """
 
-import subprocess
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import sys
 from itertools import product
 from pathlib import Path
 
 
-def run_profile(
+def run_profile(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     model: str,
     task: str,
     num_layers: int,
@@ -65,10 +65,10 @@ def run_profile(
     if feedback_gain is not None:
         cmd.extend(["--feedback-gain", str(feedback_gain)])
     print(f"Running: {' '.join(cmd)}", flush=True)
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=300)  # ruff: ignore[subprocess-run-without-check, subprocess-without-shell-equals-true]
 
 
-def main():
+def main():  # ruff: ignore[complex-structure, too-many-locals]
     output_base = Path("runs/contrastive_profile/b2_autopsy")
     output_base.mkdir(parents=True, exist_ok=True)
 
@@ -141,8 +141,8 @@ def main():
             model_dir = output_base / f"{model}_beta{beta}"
             if model_dir.exists():
                 print(f"Analyzing {model_dir}...")
-                result = subprocess.run(
-                    [
+                result = subprocess.run(  # ruff: ignore[subprocess-run-without-check, subprocess-without-shell-equals-true]
+                    [  # ruff: ignore[start-process-with-partial-path]
                         "uv",
                         "run",
                         "python",

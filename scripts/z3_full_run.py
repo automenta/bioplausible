@@ -56,7 +56,7 @@ PROMOTED_RECIPE = MetaRecipe(
 
 def _seed_task_order(seed: int) -> tuple[str, ...]:
     order = list(TASKS)
-    random.Random(seed).shuffle(order)  # noqa: S311 - deterministic design draw, not security
+    random.Random(seed).shuffle(order)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
     return tuple(order)
 
 
@@ -135,7 +135,7 @@ def _proportion_analysis(rows: list[dict], alpha: float) -> dict:
 def run(seeds: int, meta_epochs: int, eval_epochs: int, device: str) -> dict:
     registration = ThresholdRegistration.load(REGISTRATION)
     if seeds < registration.min_seeds:
-        raise ValueError(  # noqa: TRY003 - script-level guard
+        raise ValueError(
             f"seed budget {seeds} below registered floor {registration.min_seeds}"
         )
 
@@ -155,7 +155,7 @@ def run(seeds: int, meta_epochs: int, eval_epochs: int, device: str) -> dict:
         )
         elapsed = time.perf_counter() - started
         if not result["theta_invariant"]:
-            raise RuntimeError(f"theta drift at seed {seed}")  # noqa: TRY003 - script-level guard
+            raise RuntimeError(f"theta drift at seed {seed}")
         worst_z3 = min(result["tasks"][t]["accuracy"] for t in TASKS)
         random_tasks = result["baselines"]["random_psi"]["tasks"]
         worst_random = min(random_tasks[t]["accuracy"] for t in TASKS)

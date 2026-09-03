@@ -147,7 +147,7 @@ def _create_synthetic_dataset(
     return X[perm], y[perm]
 
 
-def track_1_spectral_norm(verifier) -> TrackResult:
+def track_1_spectral_norm(verifier) -> TrackResult:  # ruff: ignore[too-many-locals]
     """Core: Spectral Normalization maintains L < 1."""
     start = track_header(1, "Spectral Normalization Stability")
     input_dim, hidden_dim, output_dim = 64, 128, 10
@@ -246,7 +246,7 @@ track_1_spectral_norm.__dict__["description"] = (
 track_1_spectral_norm.__dict__["category"] = "Core Stability"
 
 
-def track_2_backprop_parity(verifier) -> TrackResult:
+def track_2_backprop_parity(verifier) -> TrackResult:  # ruff: ignore[too-many-locals]
     """Core: EqProp achieves accuracy parity with Backprop."""
     start = track_header(2, "EqProp vs Backprop Parity")
     input_dim, hidden_dim, output_dim = 64, 128, 10
@@ -342,7 +342,7 @@ track_2_backprop_parity.__dict__["description"] = (
 track_2_backprop_parity.__dict__["category"] = "Performance"
 
 
-def track_3_adversarial_healing(verifier) -> TrackResult:
+def track_3_adversarial_healing(verifier) -> TrackResult:  # ruff: ignore[too-many-locals]
     """Track 1 (README): Adversarial Self-Healing via noise damping."""
     start = track_header(3, "Adversarial Self-Healing")
     input_dim, hidden_dim, output_dim = 64, 128, 10

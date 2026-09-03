@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -11,6 +10,8 @@ import torch
 from computronium.state import CompositeState
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.state import SystemContext
 
 
@@ -45,7 +46,7 @@ def estimate_lyapunov_exponent(
 
     # Initialize perturbation vector
     v = torch.randn_like(x)
-    v = v * (perturbation_scale / (v.norm(dim=-1, keepdim=True) + 1e-8))
+    v = v * (perturbation_scale / (v.norm(dim=-1, keepdim=True) + 1e-8))  # ruff: ignore[non-augmented-assignment]
 
     x_base = x.clone()
     x_perturbed = x_base + v
@@ -135,7 +136,7 @@ class LyapunovEstimator:
         eps = self.perturbation_scale
 
         v = torch.randn_like(x)
-        v = v * (eps / (v.norm(dim=-1, keepdim=True) + 1e-8))
+        v = v * (eps / (v.norm(dim=-1, keepdim=True) + 1e-8))  # ruff: ignore[non-augmented-assignment]
 
         x_perturbed = x + v
         z_perturbed = CompositeState(
@@ -162,7 +163,7 @@ class LyapunovEstimator:
         return 0.0
 
 
-def estimate_lyapunov_spectrum(
+def estimate_lyapunov_spectrum(  # ruff: ignore[too-many-locals]
     transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
     z: CompositeState,
     context: SystemContext,

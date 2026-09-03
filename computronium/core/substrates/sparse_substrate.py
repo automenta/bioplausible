@@ -9,13 +9,15 @@ Models sparsity-constrained hardware and algorithms:
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import torch
 from torch import Tensor
 
 from computronium.ontology import DigitalSubstrate, SubstrateConfig
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class SparseSubstrate(DigitalSubstrate):
@@ -125,7 +127,7 @@ class SparseSubstrate(DigitalSubstrate):
         mask.scatter_(-1, topk_indices, 1.0)
         return mask.view(*batch, out_features, -1)[..., : weight.shape[-1]]
 
-    def _create_block_mask(self, weight: Tensor, device: torch.device) -> Tensor:
+    def _create_block_mask(self, weight: Tensor, device: torch.device) -> Tensor:  # ruff: ignore[too-many-locals]
         """Create block sparsity mask."""
         block_h, block_w = self.block_size
         *batch, out_features, in_features = weight.shape

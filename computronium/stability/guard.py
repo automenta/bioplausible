@@ -141,7 +141,7 @@ class StabilityGuard:
 
         eps = self.estimator.perturbation_scale
         v = torch.randn_like(activity)
-        v = v / (v.norm(dim=-1, keepdim=True) + 1e-8)
+        v = v / (v.norm(dim=-1, keepdim=True) + 1e-8)  # ruff: ignore[non-augmented-assignment]
 
         x_perturbed = activity + eps * v
         state_perturbed = {**state, "x": x_perturbed}

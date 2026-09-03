@@ -256,7 +256,7 @@ def _probe(
     )
 
 
-def _walk_seed(  # ruff: ignore[too-many-arguments] - walk identity tuple travels together
+def _walk_seed(
     credit: str,
     frozen: bool,
     env: DepthEnv,
@@ -292,7 +292,7 @@ def _walk_seed(  # ruff: ignore[too-many-arguments] - walk identity tuple travel
     return probe, late, records
 
 
-def _walk_arm(  # ruff: ignore[too-many-arguments] - arm identity tuple travels together
+def _walk_arm(
     label: str,
     credit: str,
     frozen: bool,
@@ -404,7 +404,7 @@ def _feasibility_grid(
     return grid, tuple(never)
 
 
-def _verify_controls(  # ruff: ignore[too-many-arguments] - verdict identity travels together
+def _verify_controls(
     envs: tuple[DepthEnv, ...],
     control_records_by_env: dict[str, list[FrontierRecord]],
     chance: float,
@@ -476,7 +476,7 @@ class TrialResult:
         }
 
 
-def run_trial(  # ruff: ignore[too-many-locals] - trial identity tuple travels together
+def run_trial(  # ruff: ignore[too-many-locals]
     config: MemoryBudgetConfig,
     preregistration: PowerPreregistration | None = None,
 ) -> TrialResult:
@@ -548,9 +548,7 @@ def run_trial(  # ruff: ignore[too-many-locals] - trial identity tuple travels t
     if preregistration is not None:
         control = preregistration.embedded_control
         if control is None:  # unreachable: the claim-grade gate requires the arm
-            raise ValueError(  # ruff: ignore[raise-vanilla-args] - unreachable guard
-                "registered preregistration carries no embedded control"
-            )
+            raise ValueError("registered preregistration carries no embedded control")
         registered_control = control
         prereg = preregistration
     control_verdicts = _verify_controls(
@@ -636,7 +634,7 @@ def _contrasts(
     return contrasts
 
 
-def _pilot_preregistration(  # ruff: ignore[too-many-arguments] - prereg identity tuple travels together
+def _pilot_preregistration(
     arms: dict[str, ArmOutcome],
     envs: tuple[DepthEnv, ...],
     config: MemoryBudgetConfig,
@@ -763,7 +761,7 @@ def _verify_walled_premise(
         raise ValueError(msg)
 
 
-def run_boundary_map(  # ruff: ignore[too-many-locals] - map identity tuple travels together
+def run_boundary_map(  # ruff: ignore[too-many-locals]
     config: MemoryBudgetConfig,
     *,
     depths: tuple[int, ...] = BOUNDARY_DEPTHS,

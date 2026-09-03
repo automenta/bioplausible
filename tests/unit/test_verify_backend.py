@@ -3,10 +3,10 @@ import pathlib
 import sys
 
 # Add repo root to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))  # ruff: ignore[os-path-abspath, os-path-join, os-path-dirname]
 
 
-def verify_backend():
+def verify_backend():  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
     print("=" * 60)
     print("Backend Verification")
     print("=" * 60)
@@ -65,7 +65,7 @@ def verify_backend():
 
     # 4. Check Triton
     print("\n[Checking Triton]...")
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         from computronium.acceleration.triton_kernels import HAS_TRITON, TritonEqPropOps
 
         print(f"HAS_TRITON: {HAS_TRITON}")

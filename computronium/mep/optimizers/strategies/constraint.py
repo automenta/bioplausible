@@ -84,7 +84,7 @@ class SettlingSpectralPenalty:
 
             if sigma > self.gamma:
                 diff = sigma - self.gamma
-                penalty = penalty + self.lambda_penalty * (diff**2)
+                penalty = penalty + self.lambda_penalty * (diff**2)  # ruff: ignore[non-augmented-assignment]
 
         return penalty
 
@@ -109,16 +109,16 @@ class SettlingSpectralPenalty:
 
         if u is None:
             u = torch.randn(h, device=W.device, dtype=W.dtype)
-            u = u / (u.norm() + epsilon)
+            u = u / (u.norm() + epsilon)  # ruff: ignore[non-augmented-assignment]
         if v is None:
             v = torch.randn(w, device=W.device, dtype=W.dtype)
-            v = v / (v.norm() + epsilon)
+            v = v / (v.norm() + epsilon)  # ruff: ignore[non-augmented-assignment]
 
         for _ in range(niter):
             v = W.T @ u
-            v = v / (v.norm() + epsilon)
+            v = v / (v.norm() + epsilon)  # ruff: ignore[non-augmented-assignment]
             u = W @ v
-            u = u / (u.norm() + epsilon)
+            u = u / (u.norm() + epsilon)  # ruff: ignore[non-augmented-assignment]
 
         sigma = (u @ W @ v).abs()
         return sigma, u, v

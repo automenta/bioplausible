@@ -8,19 +8,17 @@ import pytest
 import torch
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from torch import nn, optim
+from torch import nn
 
 from computronium.core.local_learning.builder import (
     TileAlgorithm,
     TileAlgorithmConfig,
 )
 from computronium.core.local_learning.settling import (
-    SettleProtocol,
     settle_universal,
 )
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 from computronium.models.native.fa_native import create_native_fa_mlp
-
 
 # =============================================================================
 # Shared Fixtures & Helpers
@@ -82,7 +80,7 @@ class TestEPGradientEquivalence:
         reason="GATE-0: pre-existing EqProp gradient drift — "
         "max EP-BPTT cosine < 0.5. Locked until LOOP/RULE parity work lands."
     )
-    def test_ep_gradient_matches_bptt(self, synthetic_mlp_task, data):
+    def test_ep_gradient_matches_bptt(self, synthetic_mlp_task, data):  # ruff: ignore[too-many-locals]
         """EP gradient should align with BPTT gradient at finite β."""
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
@@ -101,7 +99,7 @@ class TestEPGradientEquivalence:
 
         # --- EP gradient (contrastive method) ---
         model.train()
-        result = model.train_step(xb, yb)
+        result = model.train_step(xb, yb)  # ruff: ignore[unused-variable]
         ep_grads = [
             p.grad.clone() if p.grad is not None else torch.zeros_like(p)
             for p in model.parameters()
@@ -128,7 +126,7 @@ class TestEPGradientEquivalence:
         )
 
     @pytest.mark.xfail(reason="GATE-0: pre-existing EqProp gradient drift")
-    def test_deq_gradients_match_bptt_wired_up(self, synthetic_mlp_task):
+    def test_deq_gradients_match_bptt_wired_up(self, synthetic_mlp_task):  # ruff: ignore[too-many-locals]
         """Wire up the disabled test_deq.py::test_gradients_match_bptt."""
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
@@ -181,7 +179,7 @@ class TestLyapunovEnergyDescent:
         model = _create_tile_ep_model(input_dim, hidden_dim, output_dim)
         model.eval()
 
-        xb, yb = x[:8], y[:8]
+        xb, yb = x[:8], y[:8]  # ruff: ignore[unused-variable]
 
         # Use settle_universal to get trajectory
         with torch.no_grad():
@@ -192,7 +190,7 @@ class TestLyapunovEnergyDescent:
                 convergence_threshold=1e-4,
                 convergence_start=5,
             )
-            out, steps_taken, converged, telemetry = settle_universal(
+            _out, _steps_taken, _converged, telemetry = settle_universal(
                 model, xb, config=config
             )
 
@@ -220,9 +218,9 @@ class TestFixedPointReliability:
 
     @settings(max_examples=5, deadline=None)
     @given(st.data())
-    def test_fixed_point_uniqueness_tile_ep(self, synthetic_mlp_task, data):
+    def test_fixed_point_uniqueness_tile_ep(self, synthetic_mlp_task, data):  # ruff: ignore[too-many-locals]
         """Run relax from multiple initializations, assert convergence."""
-        x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
+        x, _y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
         model = _create_tile_ep_model(input_dim, hidden_dim, output_dim)
         model.eval()
@@ -237,10 +235,10 @@ class TestFixedPointReliability:
                 convergence_threshold=1e-4,
                 convergence_start=5,
             )
-            out1, steps1, converged1, telemetry1 = settle_universal(
+            out1, _steps1, _converged1, _telemetry1 = settle_universal(
                 model, xb, config=config
             )
-            out2, steps2, converged2, telemetry2 = settle_universal(
+            out2, _steps2, _converged2, _telemetry2 = settle_universal(
                 model, xb, config=config
             )
 
@@ -265,7 +263,7 @@ class TestWeightTransportFreeness:
 
     def test_tile_fa_backward_weights_not_transpose(self, synthetic_mlp_task):
         """Assert B ≠ W.T at initialization for Tile FA."""
-        x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
+        _x, _y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
         config = TileAlgorithmConfig(
             input_dim=input_dim,
@@ -314,7 +312,7 @@ class TestWeightTransportFreeness:
 
     def test_tile_fa_backward_path_separate(self, synthetic_mlp_task):
         """Assert backward pass doesn't read forward weights (separate tensors)."""
-        x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
+        _x, _y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
         config = TileAlgorithmConfig(
             input_dim=input_dim,
@@ -370,7 +368,7 @@ class TestAdaptiveFAAlignment:
     @pytest.mark.xfail(
         reason="AdaptiveFA feedback LR too small to show alignment in 50 steps"
     )
-    def test_feedback_alignment_improves(self, synthetic_mlp_task):
+    def test_feedback_alignment_improves(self, synthetic_mlp_task):  # ruff: ignore[complex-structure, too-many-locals]
         """After K=50 steps, cos(B, W.T) should increase from initial random value."""
         x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 

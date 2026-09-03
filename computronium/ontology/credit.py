@@ -298,7 +298,7 @@ def _propagate_targets(
     out_dim = acts[-1].shape[-1]
     targets: list[Tensor | None] = [None] * len(acts)
     targets[-1] = torch.nn.functional.one_hot(y, num_classes=out_dim).float()
-    for l in range(min(len(weight_names), len(acts) - 1) - 1, -1, -1):
+    for l in range(min(len(weight_names), len(acts) - 1) - 1, -1, -1):  # ruff: ignore[ambiguous-variable-name]
         nxt = targets[l + 1]
         if nxt is None:
             break
@@ -388,7 +388,7 @@ class ThermodynamicContrast:
         # Compute contrastive Hebbian gradients for each weight matrix
         # Assume activations are ordered: [input, hidden1, hidden2, ..., output]
         n_layers = len(free_acts) - 1
-        for l in range(n_layers):
+        for l in range(n_layers):  # ruff: ignore[ambiguous-variable-name]
             if l < len(weight_names):
                 # Free phase correlation: free_pre^T @ free_post
                 free_pre = free_acts[l]  # (batch, in_dim)
@@ -504,7 +504,7 @@ class RandomProjectionsCredit:
         hidden_err = delta_out
         for i in range(n_trans - 1, -1, -1):
             grads.append(err.T @ acts[i] / batch)
-            err = err @ self._feedback_weights[weight_names[i]]
+            err = err @ self._feedback_weights[weight_names[i]]  # ruff: ignore[non-augmented-assignment]
             if i == n_trans - 1:
                 # Error at the last hidden layer: upstream of the recurrent
                 # self-connection.
@@ -777,7 +777,7 @@ class TargetInversionCredit:
             if tgt is None:
                 continue
             delta = nudged_acts[i] - tgt
-            total = total + (delta**2).mean()
+            total = total + (delta**2).mean()  # ruff: ignore[non-augmented-assignment]
         return total
 
 

@@ -389,7 +389,7 @@ def verify_fidelity_standing(
     )
 
 
-def verify_replay(  # ruff: ignore[too-many-arguments] - episode context travels as one bundle
+def verify_replay(
     coordinate: str,
     *,
     seed: int,

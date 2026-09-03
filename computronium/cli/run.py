@@ -30,7 +30,6 @@ from computronium.cli.commands.train import (
     run_training,
 )
 from computronium.cli.commands.verify import add_verify_subparsers, run_verify
-from computronium.core.registry import ComponentCategory, Registry
 
 
 def main() -> None:
@@ -73,7 +72,7 @@ def main() -> None:
         "verify": run_verify,
         "pareto": run_pareto,
         "portfolio": run_portfolio,
-        "benchmark": lambda args: run_benchmark_cli(),
+        "benchmark": lambda args: run_benchmark_cli(),  # ruff: ignore[unused-lambda-argument]
         "list": run_list,
     }
 

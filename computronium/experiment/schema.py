@@ -171,7 +171,7 @@ class Campaign(BaseModel):
     stages: list[Stage] = Field(min_length=1)
     reproducibility: Reproducibility = Field(default_factory=Reproducibility)
 
-    def geometry(self, task: str) -> tuple[int, int]:  # ruff: ignore[no-self-use]  (kept as a method for pydantic-model ergonomics)
+    def geometry(self, task: str) -> tuple[int, int]:
         """Return the resolved (input_dim, output_dim) for ``task``."""
         spec = resolve_task(task)
         return spec.input_dim, spec.output_dim

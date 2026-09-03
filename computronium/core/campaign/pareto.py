@@ -297,7 +297,7 @@ def _hypervolume_monte_carlo(
 
     # Seeded local stream: the estimate must be reproducible run-to-run (the
     # report contract) and must never consume the ambient RNG mid-campaign.
-    rng = random.Random(0)
+    rng = random.Random(0)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
 
     # Normalize
     normalized = []

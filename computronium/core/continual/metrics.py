@@ -84,7 +84,7 @@ class CLMetrics:
     total_time_s: float = 0.0
 
 
-def compute_cl_metrics(
+def compute_cl_metrics(  # ruff: ignore[complex-structure, too-many-locals]
     model: ContinualJointSystem,
     task_loaders: list,
     current_task: int,
@@ -107,8 +107,8 @@ def compute_cl_metrics(
         model.eval()
         with torch.no_grad():
             for x, y in loader:
-                x = x.view(x.shape[0], -1).to(device)
-                y = y.to(device)
+                x = x.view(x.shape[0], -1).to(device)  # ruff: ignore[redefined-loop-name]
+                y = y.to(device)  # ruff: ignore[redefined-loop-name]
                 logits = model(x, task_id=i)
                 # Mask to task-relevant classes
                 task_start = i * CL_CLASSES_PER_TASK

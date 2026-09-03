@@ -41,7 +41,7 @@ from .rigorous import (
     set_all_seeds,
 )
 
-__all__ = [
+__all__ = [  # ruff: ignore[unsorted-dunder-all]
     # NanoGPT comparison
     "NanoGPTModel",
     "NanoGPTConfig",

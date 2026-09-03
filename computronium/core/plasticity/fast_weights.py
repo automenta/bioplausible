@@ -163,7 +163,7 @@ class FastWeightPlasticity:
 
             # Compute outer product per batch element
             # pre: [batch, input_dim], post: [batch, output_dim]
-            # outer: [batch, input_dim * output_dim]
+            # outer: [batch, input_dim * output_dim]  # ruff: ignore[commented-out-code]
             for b in range(batch_size):
                 pre_b = pre[b].flatten()
                 post_b = post[b].flatten()
@@ -174,7 +174,7 @@ class FastWeightPlasticity:
                 proj = self._get_proj_matrix(outer.shape[0], device)
                 projected = proj @ outer  # [fast_weight_dim]
 
-                new_fast_weights[b] = (
+                new_fast_weights[b] = (  # ruff: ignore[non-augmented-assignment]
                     new_fast_weights[b]
                     + self._config.learning_rate
                     * self._config.outer_product_scale

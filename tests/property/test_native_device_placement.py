@@ -97,9 +97,7 @@ def _named_buffers(system: Any) -> dict[str, torch.Tensor]:
 
 def test_unknown_kwargs_are_rejected() -> None:
     with pytest.raises(TypeError):
-        _eqprop.create_native_eqprop_mlp(
-            INPUT_DIM, HIDDEN_DIM, OUTPUT_DIM, **{"bogus": 1}
-        )
+        _eqprop.create_native_eqprop_mlp(INPUT_DIM, HIDDEN_DIM, OUTPUT_DIM, bogus=1)
 
 
 def test_default_construction_stays_on_cpu() -> None:

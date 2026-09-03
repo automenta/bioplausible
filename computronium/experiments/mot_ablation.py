@@ -93,7 +93,7 @@ def _create_mot_config(
         config["top_k"] = top_k
 
     # Task-specific dims
-    if task in ("mnist", "fashion_mnist"):
+    if task in ("mnist", "fashion_mnist"):  # ruff: ignore[literal-membership]
         config["input_dim"] = 784
         config["output_dim"] = 10
     elif task == "cifar10":
@@ -211,13 +211,13 @@ def run_mot_ablation(config: MoTAblationConfig) -> list[dict]:
     logger.info("MoT Ablation: ~%d total experiments", total)
 
     exp_count = 0
-    for task in config.tasks:
+    for task in config.tasks:  # ruff: ignore[too-many-nested-blocks]
         for routing_mode in config.routing_modes:
             for tile_algorithm in config.tile_algorithms:
                 for num_tiles in config.num_tiles:
                     top_k_values = (
                         config.topk_values
-                        if routing_mode in ("sparse", "topk", "random")
+                        if routing_mode in ("sparse", "topk", "random")  # ruff: ignore[literal-membership]
                         else [None]
                     )
                     for top_k in top_k_values:
@@ -248,7 +248,7 @@ def run_mot_ablation(config: MoTAblationConfig) -> list[dict]:
     return results
 
 
-def _analyze_routing_efficiency(results: list[dict]) -> dict:
+def _analyze_routing_efficiency(results: list[dict]) -> dict:  # ruff: ignore[too-many-locals]
     """Analyze sparse vs dense routing efficiency."""
     import pandas as pd
 
@@ -369,7 +369,7 @@ def _save_results(results: list[dict], output_dir: str) -> None:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    with Path(output_path / "raw_results.jsonl").open("w") as f:
+    with Path(output_path / "raw_results.jsonl").open("w", encoding="utf-8") as f:
         for r in results:
             f.write(json.dumps(r, default=str) + "\n")
 
@@ -389,7 +389,7 @@ def _generate_report(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    with Path(output_path / "mot_ablation_report.md").open("w") as f:
+    with Path(output_path / "mot_ablation_report.md").open("w", encoding="utf-8") as f:
         f.write("# Mixture-of-Tiles (MoT) Ablation Report\n\n")
 
         f.write("## Routing Efficiency Analysis\n\n")
@@ -488,12 +488,16 @@ def main():
 
     # Analyze routing efficiency
     routing_analysis = _analyze_routing_efficiency(results)
-    with Path(Path(config.output_dir) / "routing_analysis.json").open("w") as f:
+    with Path(Path(config.output_dir) / "routing_analysis.json").open(
+        "w", encoding="utf-8"
+    ) as f:
         json.dump(routing_analysis, f, indent=2, default=str)
 
     # Find optimal configs
     optimal_configs = _find_optimal_configs(results)
-    with Path(Path(config.output_dir) / "optimal_configs.json").open("w") as f:
+    with Path(Path(config.output_dir) / "optimal_configs.json").open(
+        "w", encoding="utf-8"
+    ) as f:
         json.dump(optimal_configs, f, indent=2, default=str)
 
     # Generate report

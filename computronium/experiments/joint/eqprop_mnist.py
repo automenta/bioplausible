@@ -100,7 +100,7 @@ def _decay_lr(system: object, gamma: float, epoch: int, start: int) -> None:
     update.config = replace(config, step_size=float(step_size) * gamma)
 
 
-def train_eqprop_mnist(config: EqPropMnistConfig) -> dict[str, object]:  # noqa: PLR0914 - epoch schedule state (best/patience/lr)
+def train_eqprop_mnist(config: EqPropMnistConfig) -> dict[str, object]:  # ruff: ignore[too-many-locals]
     """Run the full training schedule and return the result record."""
     seed_everything(config.seed)
 

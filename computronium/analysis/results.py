@@ -11,15 +11,15 @@ from pathlib import Path
 import numpy as np
 
 from computronium.core.logging import get_logger
-from computronium.hyperopt.metrics import non_dominated_indices
-
-logger = get_logger()
-
 from computronium.hyperopt.comparison import (
     ComparisonMetric,
     compute_algorithm_rankings,
     group_trials_by_family,
 )
+from computronium.hyperopt.metrics import non_dominated_indices
+
+logger = get_logger()
+
 
 __all__ = [
     "compute_pareto_frontier",
@@ -32,7 +32,7 @@ __all__ = [
 ]
 
 
-def load_trials(db_path: str) -> list[dict[str, object]]:
+def load_trials(db_path: str) -> list[dict[str, object]]:  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
     """
     Load all trials from Optuna SQLite database.
     """
@@ -140,7 +140,7 @@ def load_trials(db_path: str) -> list[dict[str, object]]:
         trial["user_attrs"] = user_attrs
 
         # Merge with hyperopt_logs for detailed metrics (param_count, time)
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             cursor.execute(
                 """
                 SELECT param_count, iteration_time
@@ -149,7 +149,7 @@ def load_trials(db_path: str) -> list[dict[str, object]]:
             """,
                 (trial_id,),
             )
-            row = cursor.fetchone()
+            row = cursor.fetchone()  # ruff: ignore[redefined-loop-name]
             if row:
                 if row["param_count"]:
                     trial["param_count"] = row["param_count"]

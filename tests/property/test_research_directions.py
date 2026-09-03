@@ -14,8 +14,8 @@ import torch
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from computronium.core.registry import ComponentCategory, Registry
 from computronium.core.model_spec import get_model_spec
+from computronium.core.registry import ComponentCategory, Registry
 
 # =============================================================================
 # Shared Fixtures & Helpers
@@ -57,7 +57,7 @@ class TestHolomorphicEP:
         self, model_name, synthetic_mlp_task, data
     ):
         """HolomorphicEP should have complex-valued weights."""
-        x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
+        _x, _y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
         try:
             spec = get_model_spec(model_name)
@@ -144,7 +144,7 @@ class TestDirectedEP:
         self, model_name, synthetic_mlp_task, data
     ):
         """DirectedEP should have separate forward and feedback weights (not tied)."""
-        x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
+        _x, _y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
         try:
             spec = get_model_spec(model_name)
@@ -249,7 +249,7 @@ class TestFiniteNudgeEP:
     @given(st.data())
     def test_finite_nudge_has_large_beta(self, model_name, synthetic_mlp_task, data):
         """FiniteNudgeEP should be configurable with large beta (>= 1.0)."""
-        x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
+        _x, _y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
         try:
             spec = get_model_spec(model_name)
@@ -279,7 +279,7 @@ class TestFiniteNudgeEP:
     @pytest.mark.xfail(
         reason="FiniteNudgeEP with large beta may be unstable; verifying mechanics only"
     )
-    def test_finite_nudge_stable_with_large_beta(
+    def test_finite_nudge_stable_with_large_beta(  # ruff: ignore[too-many-locals]
         self, model_name, synthetic_mlp_task, data
     ):
         """FiniteNudgeEP should not diverge with beta=1.0."""
@@ -317,7 +317,7 @@ class TestFiniteNudgeEP:
         final_loss = losses[-1]
 
         # Check stability: no NaN, no explosion
-        assert all(torch.isfinite(torch.tensor(l)) for l in losses), (
+        assert all(torch.isfinite(torch.tensor(l)) for l in losses), (  # ruff: ignore[ambiguous-variable-name]
             f"{model_name}: NaN/Inf loss detected"
         )
 
@@ -345,7 +345,7 @@ class TestWiredUpResearchTracks:
     )
     def test_model_builds_and_runs_forward(self, model_name, synthetic_mlp_task):
         """All three models should build and run forward pass."""
-        x, y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
+        x, _y, input_dim, hidden_dim, output_dim = synthetic_mlp_task
 
         try:
             spec = get_model_spec(model_name)

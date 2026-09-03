@@ -55,7 +55,7 @@ def compute_spectral_radius_proxy(activations: dict[str, np.ndarray]) -> float:
 
 def load_trajectory(filepath: Path) -> JointTrajectory:
     """Load trajectory from JSON file."""
-    with Path(filepath).open() as f:
+    with Path(filepath).open(encoding="utf-8") as f:
         data = json.load(f)
     traj_data = data.get("trajectory", {})
     return JointTrajectory(
@@ -87,11 +87,11 @@ def save_trajectory(
             "accuracy": traj.accuracy,
         },
     }
-    with Path(filepath).open("w") as f:
+    with Path(filepath).open("w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
 
-def plot_training_dynamics(
+def plot_training_dynamics(  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
     trajectory: JointTrajectory,
     coordinate: dict[str, str] | None = None,
     save_html: str | Path | None = None,
@@ -156,8 +156,8 @@ def plot_training_dynamics(
             y=trajectory.energy,
             name="Energy",
             mode="lines+markers",
-            line=dict(color=colors[0], width=2),
-            marker=dict(size=6),
+            line={"color": colors[0], "width": 2},
+            marker={"size": 6},
         ),
         row=1,
         col=1,
@@ -170,8 +170,8 @@ def plot_training_dynamics(
             y=trajectory.loss,
             name="Loss",
             mode="lines+markers",
-            line=dict(color=colors[1], width=2),
-            marker=dict(size=6),
+            line={"color": colors[1], "width": 2},
+            marker={"size": 6},
         ),
         row=1,
         col=2,
@@ -195,7 +195,7 @@ def plot_training_dynamics(
                     y=norms,
                     name=f"Activity: {layer_name}",
                     mode="lines",
-                    line=dict(color=colors[i % len(colors)], width=1.5),
+                    line={"color": colors[i % len(colors)], "width": 1.5},
                     showlegend=True,
                 ),
                 row=2,
@@ -220,9 +220,11 @@ def plot_training_dynamics(
                     y=norms,
                     name=f"Plastic: {var_name}",
                     mode="lines",
-                    line=dict(
-                        color=colors[(i + 3) % len(colors)], width=1.5, dash="dot"
-                    ),
+                    line={
+                        "color": colors[(i + 3) % len(colors)],
+                        "width": 1.5,
+                        "dash": "dot",
+                    },
                     showlegend=True,
                 ),
                 row=2,
@@ -247,9 +249,11 @@ def plot_training_dynamics(
                     y=norms,
                     name=f"Substrate: {var_name}",
                     mode="lines",
-                    line=dict(
-                        color=colors[(i + 5) % len(colors)], width=1.5, dash="dash"
-                    ),
+                    line={
+                        "color": colors[(i + 5) % len(colors)],
+                        "width": 1.5,
+                        "dash": "dash",
+                    },
                     showlegend=True,
                 ),
                 row=3,
@@ -263,8 +267,8 @@ def plot_training_dynamics(
             y=trajectory.spectral_radius,
             name="ρ(J_F)",
             mode="lines+markers",
-            line=dict(color=colors[2], width=2),
-            marker=dict(size=6, symbol="diamond"),
+            line={"color": colors[2], "width": 2},
+            marker={"size": 6, "symbol": "diamond"},
         ),
         row=3,
         col=2,
@@ -278,8 +282,8 @@ def plot_training_dynamics(
                 y=trajectory.gate_entropy,
                 name="Gate Entropy",
                 mode="lines+markers",
-                line=dict(color=colors[3], width=2),
-                marker=dict(size=6, symbol="square"),
+                line={"color": colors[3], "width": 2},
+                marker={"size": 6, "symbol": "square"},
             ),
             row=4,
             col=1,
@@ -293,8 +297,8 @@ def plot_training_dynamics(
                 y=trajectory.accuracy,
                 name="Accuracy",
                 mode="lines+markers",
-                line=dict(color=colors[4], width=2),
-                marker=dict(size=6, symbol="triangle-up"),
+                line={"color": colors[4], "width": 2},
+                marker={"size": 6, "symbol": "triangle-up"},
             ),
             row=4,
             col=2,
@@ -307,13 +311,13 @@ def plot_training_dynamics(
         title_font_size=16,
         template="plotly_white",
         showlegend=True,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1,
-        ),
+        legend={
+            "orientation": "h",
+            "yanchor": "bottom",
+            "y": 1.02,
+            "xanchor": "right",
+            "x": 1,
+        },
         hovermode="x unified",
     )
 
@@ -396,8 +400,8 @@ def plot_plasticity_comparison(
                     y=values,
                     name=name,
                     mode="lines+markers",
-                    line=dict(color=colors[j % len(colors)], width=2),
-                    marker=dict(size=5),
+                    line={"color": colors[j % len(colors)], "width": 2},
+                    marker={"size": 5},
                     showlegend=(i == 0),  # Only show legend once
                 ),
                 row=row,
@@ -572,8 +576,8 @@ def plot_resource_usage(
                 y=values,
                 name=metric,
                 mode="lines+markers",
-                line=dict(color=colors[i % len(colors)], width=2),
-                marker=dict(size=6),
+                line={"color": colors[i % len(colors)], "width": 2},
+                marker={"size": 6},
             ),
             row=row,
             col=col,

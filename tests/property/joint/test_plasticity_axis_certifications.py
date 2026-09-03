@@ -44,7 +44,7 @@ def _create_test_context(plasticity_config: PlasticityConfig = None):
         GeometryConfig.recurrent(input_dim=10, output_dim=2, hidden_dims=(20,)),
         hidden_dim=20,
     )
-    dynamics = EnergyMinimizationDynamics(
+    dynamics = EnergyMinimizationDynamics(  # ruff: ignore[unused-variable]
         StateDynamicsConfig.energy_minimization(max_steps=3, beta=0.5)
     )
 
@@ -95,7 +95,7 @@ def _create_test_context(plasticity_config: PlasticityConfig = None):
 def test_null_plasticity_axis_certification():
     """NullPlasticity should pass axis certification (Zero-Extension Theorem)."""
     plasticity = NullPlasticity()
-    config = PlasticityConfig.null()
+    config = PlasticityConfig.null()  # ruff: ignore[unused-variable]
 
     # Basic properties
     assert plasticity.config.plasticity_type == "null"
@@ -125,7 +125,7 @@ def test_null_plasticity_protocol_compliance():
 
 def test_null_plasticity_preserves_joint_invariants():
     """NullPlasticity should preserve joint system invariants."""
-    context, geometry, registry = _create_test_context(PlasticityConfig.null())
+    context, geometry, _registry = _create_test_context(PlasticityConfig.null())
     plasticity = NullPlasticity()
 
     z = CompositeState(
@@ -182,7 +182,7 @@ class RoutingPlasticity:
         if "x" in z.activity:
             x = z.activity["x"]
             # Gate logits evolve based on input
-            new_psi["gate_logits"] = new_psi["gate_logits"] + 0.01 * x.mean(
+            new_psi["gate_logits"] = new_psi["gate_logits"] + 0.01 * x.mean(  # ruff: ignore[non-augmented-assignment]
                 dim=1, keepdim=True
             ).expand(-1, 32)
             # Active routes = sigmoid(gate_logits) > 0.5
@@ -211,7 +211,7 @@ def test_routing_plasticity_axis_certification():
     assert psi["active_routes"].shape == (4, 32)
 
     # Step should update psi
-    context, geometry, registry = _create_test_context(
+    context, geometry, _registry = _create_test_context(
         PlasticityConfig.routing(gate_dim=32)
     )
     z = CompositeState(
@@ -299,7 +299,7 @@ def test_fast_weight_plasticity_axis_certification():
     assert "fast_weights" in psi
     assert psi["fast_weights"].shape == (4, 64)
 
-    context, geometry, registry = _create_test_context(
+    context, geometry, _registry = _create_test_context(
         PlasticityConfig.fast_weights(fast_weight_dim=64)
     )
     z = CompositeState(
@@ -368,7 +368,7 @@ def test_substrate_coupled_plasticity_axis_certification():
     psi = plasticity.initial_psi(None)
     assert psi == {}
 
-    context, geometry, registry = _create_test_context(
+    context, geometry, _registry = _create_test_context(
         PlasticityConfig.substrate_coupled()
     )
     z = CompositeState(
@@ -423,7 +423,7 @@ class RuleStatePlasticity:
         # Operator logits evolve based on input
         if "x" in z.activity:
             x = z.activity["x"]
-            new_psi["operator_logits"] = new_psi["operator_logits"] + 0.01 * x.mean(
+            new_psi["operator_logits"] = new_psi["operator_logits"] + 0.01 * x.mean(  # ruff: ignore[non-augmented-assignment]
                 dim=1, keepdim=True
             ).expand(-1, 8)
         return new_psi
@@ -440,7 +440,7 @@ def test_rule_state_plasticity_axis_certification():
     assert "operator_logits" in psi
     assert psi["operator_logits"].shape == (4, 8)
 
-    context, geometry, registry = _create_test_context(
+    context, geometry, _registry = _create_test_context(
         PlasticityConfig.rule_state(num_operators=8)
     )
     z = CompositeState(
@@ -542,7 +542,7 @@ def test_consolidation_with_plasticity_config():
     """Consolidation should respect plasticity config consolidation_config."""
     from computronium.core.joint import ConsolidationConfig, consolidate
 
-    context, geometry, registry = _create_test_context(
+    _context, _geometry, _registry = _create_test_context(
         PlasticityConfig.fast_weights(
             fast_weight_dim=20, consolidation_config={"promotion_scale": 0.1}
         )
@@ -661,7 +661,7 @@ def test_zero_extension_theorem_null_plasticity():
 
     # Joint with NullPlasticity
     plasticity = NullPlasticity()
-    context, geometry_j, registry = _create_test_context(PlasticityConfig.null())
+    context, _geometry_j, _registry = _create_test_context(PlasticityConfig.null())
 
     x = torch.randn(4, 10)
     y = torch.randint(0, 2, (4,))

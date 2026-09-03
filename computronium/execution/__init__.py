@@ -30,7 +30,7 @@ Usage:
 # `core.trainer` needs — no longer drags in `execution.engine`/`strategy` →
 # `hyperopt` → `zoo`, which also slims the `core` import graph.
 
-_LAZY: dict[str, tuple[str, str | None]] = {
+_LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-module]
     "BaseExecutionCallback": (
         "computronium.execution.callbacks",
         "BaseExecutionCallback",
@@ -64,7 +64,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     ),
 }
 
-__all__ = sorted(_LAZY)
+__all__ = sorted(_LAZY)  # ruff: ignore[invalid-all-format]
 
 
 def __getattr__(name: str) -> object:

@@ -82,7 +82,6 @@ class AuditRow:
 
 def _load_registry() -> None:
     """Import the registration modules so every component is present."""
-    from computronium import mep  # noqa: F401
 
     Registry.list()  # triggers lazy native + ontology registration
 

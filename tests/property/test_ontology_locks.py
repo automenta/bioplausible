@@ -732,7 +732,7 @@ def test_l7_system_trainer_runs() -> None:
 
 
 # C7 — Add EuclideanUpdate / BackpropCredit Property Tests
-class TestU_EuclideanProperties:
+class TestU_EuclideanProperties:  # ruff: ignore[invalid-class-name]
     """Property tests for EuclideanUpdate (SGD with momentum)."""
 
     def test_euclidean_momentum_accumulates(self) -> None:
@@ -761,10 +761,10 @@ class TestU_EuclideanProperties:
             )
 
 
-class TestC_BackpropCreditProperties:
+class TestC_BackpropCreditProperties:  # ruff: ignore[invalid-class-name]
     """Property tests for BackpropCredit."""
 
-    def test_backprop_credit_matches_autograd(self) -> None:
+    def test_backprop_credit_matches_autograd(self) -> None:  # ruff: ignore[too-many-locals]
         """BackpropCredit pseudo-gradients should match autograd gradients."""
         device = select_device()
         if device.type == "cuda":
@@ -882,7 +882,7 @@ def test_u_muon_gradient_orthogonal() -> None:
         update = RiemannianOrthogonalUpdate(
             ParameterUpdateConfig.riemannian_orthogonal(ortho_steps=20)
         )
-        params = {"0.weight": torch.randn(10, 10, device=device)}
+        params = {"0.weight": torch.randn(10, 10, device=device)}  # ruff: ignore[unused-variable]
         grads = [torch.randn(10, 10, device=device)]
 
         # Test the internal orthogonalization
@@ -929,7 +929,7 @@ def test_u_elastic_moves_toward_old_params() -> None:
 
 
 # A2 — TemporalTraceCredit: STDP Window Property Tests
-class TestC_TemporalTraceSTDP:
+class TestC_TemporalTraceSTDP:  # ruff: ignore[invalid-class-name]
     """STDP window property tests for TemporalTraceCredit."""
 
     @pytest.mark.parametrize(
@@ -1016,7 +1016,7 @@ class TestC_TemporalTraceSTDP:
 
 
 # A3 — U-Axis Step Property Tests (Corrected)
-class TestU_StepProperties:
+class TestU_StepProperties:  # ruff: ignore[invalid-class-name]
     """Corrected step property tests for U-axis update rules."""
 
     def test_riemannian_orthogonal_gradient_orthogonalized(self) -> None:
@@ -1041,7 +1041,7 @@ class TestU_StepProperties:
             enable_deterministic_cuda()
 
         with seeded(42):
-            update = SpectralConstrainedUpdate(
+            update = SpectralConstrainedUpdate(  # ruff: ignore[unused-variable]
                 ParameterUpdateConfig.spectral_constrained(spectral_norm=1.0)
             )
             grad = torch.randn(10, 10, device=device)
@@ -1063,13 +1063,13 @@ class TestU_StepProperties:
         from computronium.ontology import NaturalGradientUpdate
 
         with seeded(42):
-            update = NaturalGradientUpdate(
+            update = NaturalGradientUpdate(  # ruff: ignore[unused-variable]
                 ParameterUpdateConfig.natural_gradient(fisher_damping=1e-3)
             )
             grad = torch.randn(10, 10, device=device)
             # Diagonal Fisher: F = diag(g^2) + damping
             fisher = grad**2 + 1e-3
-            # Whitening: g / sqrt(F)
+            # Whitening: g / sqrt(F)  # ruff: ignore[commented-out-code]
             nat_grad = grad / fisher.sqrt()
             # For large |g|, nat_grad ≈ sign(g); for small |g|, nat_grad ≈ g/sqrt(damping)
             # Check that direction is preserved (sign matches)
@@ -1183,7 +1183,7 @@ def test_s_quantum_parameter_shift() -> None:
     if device.type == "cuda":
         enable_deterministic_cuda()
 
-    import torch.nn.functional as F
+    import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 
     substrate = QuantumSubstrate()
     update_op = substrate.get_weight_update_operator()

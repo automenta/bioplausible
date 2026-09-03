@@ -55,7 +55,7 @@ from .search_space import (
 __version__ = "0.1.0"
 
 # Optuna is now required
-HAS_OPTUNA = True
+HAS_OPTUNA = True  # ruff: ignore[non-empty-init-module]
 
 # Evaluation tiers for patience-based optimization
 # Core Optuna integration

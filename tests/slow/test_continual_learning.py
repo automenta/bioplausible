@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch.utils.data import DataLoader, TensorDataset
 
 from computronium.core.continual import (
@@ -514,7 +514,7 @@ class TestCLMetrics:
             fast_weight_model, task_loaders, 4, accuracy_matrix
         )
 
-        # BWT = mean(acc_after_all - acc_after_own_task)
+        # BWT = mean(acc_after_all - acc_after_own_task)  # ruff: ignore[commented-out-code]
         # Task 0: 0.93 - 0.8 = 0.13
         # Task 1: 0.9 - 0.8 = 0.1
         # Task 2: 0.88 - 0.8 = 0.08
@@ -541,7 +541,7 @@ class TestStabilityGuard:
 
     def test_check_stability_returns_verdict(self, fast_weight_model, mnist_batch):
         """Test stability check returns a GuardDecision."""
-        x, y = mnist_batch
+        x, _y = mnist_batch
         guard = create_stability_guard()
         transition_fn = make_transition_fn(fast_weight_model)
         context = fast_weight_model.joint_system.context
@@ -757,7 +757,7 @@ def _train_single_task(arm_factory, task_id: int, device, epochs: int = 2) -> fl
     random.seed(42)
     torch.manual_seed(42)
 
-    model, extra = arm_factory(
+    model, _extra = arm_factory(
         CLConfig.input_dim, CLConfig.hidden_dim, CLConfig.output_dim, str(device)
     )
     task = SplitMNIST(task_id=task_id, batch_size=64, device=str(device), num_workers=0)
@@ -769,16 +769,16 @@ def _train_single_task(arm_factory, task_id: int, device, epochs: int = 2) -> fl
     model.train()
     for _ in range(epochs):
         for x, y in loader:
-            x = x.view(x.shape[0], -1).to(device)
-            y = y.to(device)
+            x = x.view(x.shape[0], -1).to(device)  # ruff: ignore[redefined-loop-name]
+            y = y.to(device)  # ruff: ignore[redefined-loop-name]
             model.train_step(x, y, task_id=task_id)
 
     model.eval()
     correct = total = 0
     with torch.no_grad():
         for x, y in test_loader:
-            x = x.view(x.shape[0], -1).to(device)
-            y = y.to(device)
+            x = x.view(x.shape[0], -1).to(device)  # ruff: ignore[redefined-loop-name]
+            y = y.to(device)  # ruff: ignore[redefined-loop-name]
             logits = model(x, task_id=task_id)
             task_logits = logits[:, task_id * 2 : task_id * 2 + 2]
             correct += (task_logits.argmax(dim=1) == y).sum().item()

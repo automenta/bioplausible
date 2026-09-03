@@ -11,8 +11,6 @@ independently of the weights/activities.
 from collections import deque
 from typing import TYPE_CHECKING
 
-from computronium.graph.nodes import NodeBase, Slot
-
 __all__ = [
     "Edge",
     "GraphStructure",
@@ -21,6 +19,7 @@ __all__ = [
 ]
 if TYPE_CHECKING:
     from computronium.graph.inference import InferenceSGD
+    from computronium.graph.nodes import NodeBase, Slot
 
 
 class Edge:
@@ -121,7 +120,7 @@ class GraphStructure:
         """Get all outgoing edges from this node."""
         return self._successors.get(node.name, [])
 
-    def topological_order(self) -> list[NodeBase]:
+    def topological_order(self) -> list[NodeBase]:  # ruff: ignore[complex-structure]
         """Return nodes in topological order via Kahn's algorithm.
 
         Raises:

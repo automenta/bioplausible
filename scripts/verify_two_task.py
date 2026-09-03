@@ -70,8 +70,8 @@ def _eval_task(model, loader, task_id, device) -> float:
     correct = total = 0
     with torch.no_grad():
         for x, y in loader:
-            x = x.view(x.shape[0], -1).to(device)
-            y = y.to(device)
+            x = x.view(x.shape[0], -1).to(device)  # ruff: ignore[redefined-loop-name]
+            y = y.to(device)  # ruff: ignore[redefined-loop-name]
             logits = model(x, task_id=task_id)
             task_logits = logits[:, task_id * 2 : task_id * 2 + 2]
             correct += (task_logits.argmax(dim=1) == y).sum().item()
@@ -79,7 +79,7 @@ def _eval_task(model, loader, task_id, device) -> float:
     return correct / total if total else 0.0
 
 
-def two_task_forgetting(
+def two_task_forgetting(  # ruff: ignore[complex-structure]
     arm_name: str, config: CLConfig, device: str, seed: int
 ) -> tuple[float, float, float]:
     """Train task0 then task1; return forgetting on task 0."""
@@ -95,7 +95,7 @@ def two_task_forgetting(
         # Arm-specific boundary setup
         if arm_name == "fast_weights":
             model.reset_plastic_state()
-        elif arm_name in ("ewc", "si"):
+        elif arm_name in ("ewc", "si"):  # ruff: ignore[literal-membership]
             extra.start_task()
         elif arm_name == "lwf":
             extra.set_prev_model(copy.deepcopy(model))
@@ -103,8 +103,8 @@ def two_task_forgetting(
         model.train()
         for epoch in range(config.epochs_per_task):
             for x, y in loaders[task_id]:
-                x = x.view(x.shape[0], -1).to(device)
-                y = y.to(device)
+                x = x.view(x.shape[0], -1).to(device)  # ruff: ignore[redefined-loop-name]
+                y = y.to(device)  # ruff: ignore[redefined-loop-name]
                 if arm_name == "lwf":
                     from computronium.core.system_trainer import _lwf_train_step
 
@@ -120,7 +120,7 @@ def two_task_forgetting(
                         model.train_step(rx, ry, task_id=rt[0].item())
                 else:
                     model.train_step(x, y, task_id=task_id)
-            if arm_name in ("ewc", "si"):
+            if arm_name in ("ewc", "si"):  # ruff: ignore[literal-membership]
                 extra.update_importance()
 
     # Forgetting on task 0: acc_after_t0 - acc_after_t1

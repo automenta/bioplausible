@@ -23,7 +23,7 @@ type LossFn = Callable[
 ]
 
 
-class _HasTrainStep(Protocol):
+class _HasTrainStep(Protocol):  # ruff: ignore[unused-private-protocol]
     """Protocol for objects that implement _forward_train."""
 
     @abstractmethod
@@ -44,7 +44,7 @@ def _default_loss(
     return loss, logits, None
 
 
-def supervised_step(  # ruff: ignore[too-many-arguments]  # training-step contract: model, optimizer, x, y, + 2 kwargs
+def supervised_step(  # training-step contract: model, optimizer, x, y, + 2 kwargs
     model: nn.Module,
     optimizer: torch.optim.Optimizer,
     x: torch.Tensor,

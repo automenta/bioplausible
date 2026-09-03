@@ -40,7 +40,7 @@ class TestThetaInvarianceAudit:
     def test_detects_drift(self):
         model = _Model()
         model.theta.requires_grad_(False)
-        with ThetaInvarianceAudit(model, selector=_select_theta) as audit:
+        with ThetaInvarianceAudit(model, selector=_select_theta) as audit:  # ruff: ignore[multiple-with-statements]
             with torch.no_grad():
                 model.theta.add_(1e-3)
         report = audit.report
@@ -53,7 +53,7 @@ class TestThetaInvarianceAudit:
 
     def test_entry_raises_on_trainable_selection(self):
         model = _Model()
-        with pytest.raises(RuntimeError, match="trainable"):
+        with pytest.raises(RuntimeError, match="trainable"):  # ruff: ignore[multiple-with-statements]
             with ThetaInvarianceAudit(model, selector=_select_theta):
                 pass
 

@@ -5,16 +5,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 
 from computronium.core.logging import get_logger
-from computronium.core.utils.device import get_device
 from computronium.core.pipeline import apply_autograd_update
+from computronium.core.utils.device import get_device
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 from computronium.models.native.sparse_eqprop_native import create_native_sparse_eqprop
-from computronium.models.native.ternary_eqprop_native import (
-    create_native_ternary_eqprop,
-)
 
 from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
 from ._base import build_track_result, track_header
@@ -131,7 +128,7 @@ def track_16_fpga_quantization(verifier) -> TrackResult:
     return result
 
 
-def track_17_analog_photonics(verifier) -> TrackResult:
+def track_17_analog_photonics(verifier) -> TrackResult:  # ruff: ignore[too-many-locals]
     """Track 17: Analog/Photonics - Noise Robustness."""
     start = track_header(17, "Analog/Photonics Noise Robustness")
     input_dim, hidden_dim, output_dim = 64, 128, 10
@@ -143,17 +140,18 @@ def track_17_analog_photonics(verifier) -> TrackResult:
         "\n[17a] Training with %.1f%% analog noise injection...", noise_level * 100
     )
     # Use native eqprop with noise - the substrate handles noise injection
-    from computronium.ontology import DigitalSubstrate, SubstrateConfig, SubstrateType
     from computronium.core.system_trainer import compose_system
     from computronium.ontology import (
-        GeometryConfig,
-        RecurrentGeometry,
-        EnergyMinimizationDynamics,
-        StateDynamicsConfig,
-        ThermodynamicContrast,
         CreditAssignmentConfig,
+        DigitalSubstrate,
+        EnergyMinimizationDynamics,
         EuclideanUpdate,
+        GeometryConfig,
         ParameterUpdateConfig,
+        RecurrentGeometry,
+        StateDynamicsConfig,
+        SubstrateConfig,
+        ThermodynamicContrast,
     )
 
     substrate = DigitalSubstrate(
@@ -231,7 +229,7 @@ def track_17_analog_photonics(verifier) -> TrackResult:
     return result
 
 
-def track_18_thermodynamic_dna(verifier) -> TrackResult:
+def track_18_thermodynamic_dna(verifier) -> TrackResult:  # ruff: ignore[too-many-locals]
     """Track 18: DNA/Chemical - Thermodynamic Efficiency."""
     start = track_header(18, "DNA/Thermodynamic Constraints")
     input_dim, hidden_dim, output_dim = 64, 128, 10

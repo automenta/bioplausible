@@ -1,24 +1,14 @@
 import torch
-from torch import nn
 
-from computronium.core.local_learning.rules.hebbian import (
-    ContrastiveHebbianLearning,
-)
+from computronium.core.local_learning.builder import TileAlgorithm, TileAlgorithmConfig
 from computronium.core.logging import get_logger
-from computronium.models.native.tile_native import (
-    create_native_tile_ep,
-    create_native_tile_fa,
-    create_native_tile_tp,
-    create_native_tile_pc,
-    create_native_tile_hebbian,
-    create_native_tile_snn,
-    create_native_tile_gnn,
-)
 from computronium.models.native.fa_native import (
     create_native_fa_adaptive,
     create_native_fa_equilibrium_alignment,
 )
-from computronium.core.local_learning.builder import TileAlgorithm, TileAlgorithmConfig
+from computronium.models.native.tile_native import (
+    create_native_tile_hebbian,
+)
 
 from ..notebook import TrackResult
 

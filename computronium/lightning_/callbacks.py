@@ -7,14 +7,18 @@ analysis paths with idiomatic Lightning hooks.
 
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+import torch
+from pytorch_lightning.callbacks import Callback
 
 from computronium.core.logging import get_logger
 
 logger = get_logger()
 
-import pytorch_lightning as pl
-import torch
-from pytorch_lightning.callbacks import Callback
+
+if TYPE_CHECKING:
+    import pytorch_lightning as pl
 
 __all__ = [
     "BioPrecisionCallback",

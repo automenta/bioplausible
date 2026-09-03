@@ -6,15 +6,18 @@ Extracted from ``zoo/base.py`` so that ``equitile/`` can depend on
 """
 
 from abc import ABC
+from typing import TYPE_CHECKING
 
 import torch
 from torch import nn
 
-from computronium.config.experiment import ModelConfig
 from computronium.core.checkpoint_mixin import CheckpointMixin
 from computronium.core.losses import compute_accuracy
 from computronium.core.spectral_mixin import SpectralMixin
 from computronium.core.training_mixin import TrainingMixin
+
+if TYPE_CHECKING:
+    from computronium.config.experiment import ModelConfig
 
 __all__ = [
     "BioModel",
@@ -37,7 +40,7 @@ class BioModel(nn.Module, ABC, TrainingMixin, SpectralMixin, CheckpointMixin):
     default_activation: str = "relu"
 
     # Capability declaration for Registry (REFACTOR3 §4).
-    provides: list[str] = ["transition_graph", "standard_autograd"]
+    provides: list[str] = ["transition_graph", "standard_autograd"]  # ruff: ignore[mutable-class-default]
 
     def __init__(
         self,

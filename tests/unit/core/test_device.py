@@ -189,7 +189,7 @@ class TestComponentDeviceConsistency:
 
     def test_routing_plasticity_no_internal_state(self, device_cpu, device_cuda):
         """RoutingPlasticity has no internal persistent tensors."""
-        plasticity = RoutingPlasticity(gate_dim=64, decay=0.99, learning_rate=0.01)
+        plasticity = RoutingPlasticity(gate_dim=64, decay=0.99, learning_rate=0.01)  # ruff: ignore[unused-variable]
         # No internal state to move
         assert True
 
@@ -205,7 +205,7 @@ class TestComponentDeviceConsistency:
 
     def test_null_plasticity_no_internal_state(self, device_cpu, device_cuda):
         """NullPlasticity has no internal state."""
-        plasticity = NullPlasticity()
+        plasticity = NullPlasticity()  # ruff: ignore[unused-variable]
         assert True
 
     def test_joint_system_all_plasticity_types(self, device_cpu, device_cuda):

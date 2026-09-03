@@ -128,7 +128,7 @@ class RuleFrontierFinder(_FrontierFinder[RuleFrontierDecision]):
     _default_budget: int = 100
     _default_epochs: int = _DEFAULT_EPOCHS
 
-    def __init__(  # ruff: ignore[too-many-arguments]  (subclass ctor re-exposes the base knobs + own model)
+    def __init__(  # ruff: ignore[too-many-arguments]
         self,
         driver: FrontierDriver,
         *,
@@ -210,7 +210,7 @@ class RuleFrontierFinder(_FrontierFinder[RuleFrontierDecision]):
         )
 
 
-def find_rule_frontier(  # ruff: ignore[too-many-arguments]  (convenience wrapper mirrors finder constructor)
+def find_rule_frontier(  # ruff: ignore[too-many-arguments]
     driver: FrontierDriver,
     *,
     rule: str,

@@ -1,5 +1,8 @@
 # TODO10.md — Active Plan: The Library, Proven Continuously
 
+> **CLOSED 2026-09-03 → superseded by [TODO11.md](TODO11.md).** (R10 closed
+> 2026-09-02; header marked when R11's first landing landed.)
+
 > **Opened 2026-09-02.** Successor to [TODO9.md](TODO9.md) (R9 stress trials
 > landed claim-grade; leftovers parked in the deferred register below).
 > Research catalog: [RESEARCH3.md](RESEARCH3.md).

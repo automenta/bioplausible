@@ -304,7 +304,7 @@ def _probe(
     )
 
 
-def _walk_seed(  # ruff: ignore[too-many-arguments] - walk identity tuple travels together
+def _walk_seed(
     credit: str,
     frozen: bool,
     env: ConstraintEnv,
@@ -340,7 +340,7 @@ def _walk_seed(  # ruff: ignore[too-many-arguments] - walk identity tuple travel
     return probe, late, records
 
 
-def _walk_arm(  # ruff: ignore[too-many-arguments] - arm identity tuple travels together
+def _walk_arm(
     credit: str,
     frozen: bool,
     envs: tuple[ConstraintEnv, ...],

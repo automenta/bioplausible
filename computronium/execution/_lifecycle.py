@@ -11,12 +11,14 @@ import sqlite3
 import zipfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
-
-import torch
+from typing import TYPE_CHECKING
 
 from computronium.core.checkpoint import save_checkpoint
 from computronium.core.logging import get_logger
 from computronium.core.training_state import TRAINING_CHECKPOINTS_DDL
+
+if TYPE_CHECKING:
+    import torch
 
 __all__ = [
     "ARTIFACTS_DIR",
@@ -75,20 +77,20 @@ class PromotionGate:
         rew = metrics.get("reward")
 
         # Check Accuracy
-        if "accuracy" in thresholds:
+        if "accuracy" in thresholds:  # ruff: ignore[collapsible-if]
             if acc is None or acc < thresholds["accuracy"]:
                 return False
 
         # Check Reward
-        if "reward" in thresholds:
+        if "reward" in thresholds:  # ruff: ignore[collapsible-if]
             if rew is None or rew < thresholds["reward"]:
                 return False
 
         # Check Efficiency (if available)
-        if (
+        if (  # ruff: ignore[needless-bool]
             "time" in metrics
             and metrics["time"] > 0
-            and (task_name in ["digits", "mnist"] and metrics["time"] > 600.0)
+            and (task_name in ["digits", "mnist"] and metrics["time"] > 600.0)  # ruff: ignore[literal-membership]
         ):  # > 10 mins for MNIST is bad
             return False
 
@@ -146,7 +148,7 @@ class ExperimentArchiver:
         Returns:
             Path to the created ZIP file, or None if failed.
         """
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             trial_name = f"trial_{trial_id}_{config.get('model', 'unknown')}"
             trial_dir = self.base_dir / trial_name
             trial_dir.mkdir(exist_ok=True)
@@ -161,21 +163,21 @@ class ExperimentArchiver:
                 },
             )
 
-            with Path(trial_dir / "config.json").open("w") as f:
+            with Path(trial_dir / "config.json").open("w", encoding="utf-8") as f:
                 json.dump(config, f, indent=2)
 
-            with Path(trial_dir / "metrics.json").open("w") as f:
+            with Path(trial_dir / "metrics.json").open("w", encoding="utf-8") as f:
                 json.dump(metrics, f, indent=2)
 
             repro_script = self._generate_reproduction_script(
                 config.get("model", "unknown"), config, metrics
             )
-            with Path(trial_dir / "reproduce.py").open("w") as f:
+            with Path(trial_dir / "reproduce.py").open("w", encoding="utf-8") as f:
                 f.write(repro_script)
 
             if extra_files:
                 for fname, content in extra_files.items():
-                    with Path(trial_dir / fname).open("w") as f:
+                    with Path(trial_dir / fname).open("w", encoding="utf-8") as f:
                         f.write(content)
 
             zip_path = self.base_dir / f"{trial_name}.zip"
@@ -304,7 +306,7 @@ class CheckpointManager:
             return
 
         conn = sqlite3.connect(self.db_path, timeout=10.0)
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             data = []
             for r in self.buffer:
                 train_acc = r.metrics.get(
@@ -364,7 +366,7 @@ class CurriculumManager:
         TRACKS (Dict[str, List[str]]): Mapping of track names to ordered task lists.
     """
 
-    TRACKS: dict[str, list[str]] = {
+    TRACKS: dict[str, list[str]] = {  # ruff: ignore[mutable-class-default]
         "vision": [
             "digits",
             "usps",

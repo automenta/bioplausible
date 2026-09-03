@@ -7,11 +7,14 @@ import time
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import torch
 
-from computronium.core.local_learning.builder import TileAlgorithm
 from computronium.core.logging import get_logger
+
+if TYPE_CHECKING:
+    from computronium.core.local_learning.builder import TileAlgorithm
 
 __all__ = [
     "BenchmarkConfig",

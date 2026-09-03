@@ -282,7 +282,7 @@ def test_infer_metadata_default_factory():
     Registry.clear()
 
     class ModelWithProvides:
-        provides = ["transition_graph", "standard_autograd"]
+        provides = ["transition_graph", "standard_autograd"]  # ruff: ignore[mutable-class-default]
 
     meta = ComponentMetadata(name="test", category=ComponentCategory.MODEL)
     Registry._infer_metadata(ModelWithProvides, meta)
@@ -294,7 +294,7 @@ def test_infer_metadata_preserves_explicit():
     Registry.clear()
 
     class ModelWithProvides:
-        provides = ["transition_graph"]
+        provides = ["transition_graph"]  # ruff: ignore[mutable-class-default]
 
     meta = ComponentMetadata(
         name="test", category=ComponentCategory.MODEL, provides=["explicit"]

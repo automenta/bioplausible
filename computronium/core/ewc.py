@@ -21,7 +21,7 @@ def update_fisher(
         task_id: Unique identifier for this task.
         loss_fn: Loss function (default: cross_entropy).
     """
-    import torch.nn.functional as F
+    import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 
     model.train()
     fisher = {}

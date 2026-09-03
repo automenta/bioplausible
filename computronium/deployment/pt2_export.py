@@ -4,10 +4,13 @@ PT2 (torch.export) export utilities.
 Replaces the deprecated torch.jit path, which is unsupported on Python 3.14+.
 """
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 from torch import nn
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def export_to_pt2(
@@ -31,7 +34,7 @@ def export_to_pt2(
     """
     model.eval()
 
-    if isinstance(input_sample, torch.Tensor):
+    if isinstance(input_sample, torch.Tensor):  # ruff: ignore[if-else-block-instead-of-if-exp]
         args = (input_sample,)
     else:
         args = input_sample

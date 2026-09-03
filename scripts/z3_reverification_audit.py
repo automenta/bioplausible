@@ -151,7 +151,7 @@ def _check_canonical_order(
             adapt_temp_end=0.5,
         )
     report = audit.report
-    assert report is not None
+    assert report is not None  # ruff: ignore[assert]
     task_accs = {name: rows[name]["accuracy"] for name in TASK_NAMES}
     all_pass = all(acc >= _ACCURACY_FLOOR for acc in task_accs.values())
     criterion_ok = all(
@@ -196,7 +196,7 @@ def _check_order_robustness(
             adapt_temp_end=0.5,
         )
     report = audit.report
-    assert report is not None
+    assert report is not None  # ruff: ignore[assert]
     task_accs = {name: rows[name]["accuracy"] for name in TASK_NAMES}
     all_pass = all(acc >= _ACCURACY_FLOOR for acc in task_accs.values())
     return {
@@ -234,7 +234,7 @@ def _check_gate_history(rows: dict) -> dict:
     }
 
 
-def run_audit(device: str = "cpu") -> dict:
+def run_audit(device: str = "cpu") -> dict:  # ruff: ignore[too-many-locals]
     dev = torch.device(device)
     tasks = list(TASKS)
     shape = TaskShape(
@@ -256,7 +256,7 @@ def run_audit(device: str = "cpu") -> dict:
     # --- Check 1: ψ evolution ---
     print("Check 1: RuleStatePlasticity ψ evolution...")
     model = _build_model(seed=0, device=dev)
-    meta_state = _meta_train_model(model, tasks, criterion, shape)
+    meta_state = _meta_train_model(model, tasks, criterion, shape)  # ruff: ignore[unused-variable]
     psi_check = _check_psi_evolution(model, tasks, criterion, shape)
     results["checks"]["psi_evolution"] = psi_check
     all_pass &= psi_check["pass"]

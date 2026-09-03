@@ -122,7 +122,7 @@ class TimeSeriesTask(DomainTask):
                 if max_batches and i >= max_batches:
                     break
 
-                inputs, targets = inputs.to(self.device), targets.to(self.device)
+                inputs, targets = inputs.to(self.device), targets.to(self.device)  # ruff: ignore[redefined-loop-name]
                 outputs = model(inputs)
 
                 total_mse += nn.functional.mse_loss(

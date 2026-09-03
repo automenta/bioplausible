@@ -42,7 +42,7 @@ def configure(kb_path: str | None = None, failure_path: str | None = None) -> No
         kb_path: Override the KnowledgeBase DB path (defaults to env/``cwd``).
         failure_path: Override the FailureTracker DB path.
     """
-    global _KB_PATH, _FAILURE_PATH, _KB_INST, _FAILURE_INST
+    global _KB_PATH, _FAILURE_PATH, _KB_INST, _FAILURE_INST  # ruff: ignore[global-statement]
     if kb_path is not None:
         _KB_PATH = kb_path
     if failure_path is not None:
@@ -53,7 +53,7 @@ def configure(kb_path: str | None = None, failure_path: str | None = None) -> No
 
 def _kb() -> object:
     """Return the shared KnowledgeBase instance (auto_embed off for fast writes)."""
-    global _KB_INST
+    global _KB_INST  # ruff: ignore[global-statement]
     if _KB_INST is None:
         from computronium.knowledge.kb import KnowledgeBase
 
@@ -63,7 +63,7 @@ def _kb() -> object:
 
 def _failures() -> object:
     """Return the shared FailureTracker instance."""
-    global _FAILURE_INST
+    global _FAILURE_INST  # ruff: ignore[global-statement]
     if _FAILURE_INST is None:
         from computronium.execution._state import FailureTracker
 
@@ -169,7 +169,7 @@ def _record_success(
     flops = metrics.get("forward_flops", 0.0) + metrics.get("backward_flops", 0.0)
     mem = metrics.get("peak_memory_mb", metrics.get("memory_mb", 0.0))
     wall = metrics.get("wall_time_s", metrics.get("time", 0.0))
-    finding = (
+    finding = (  # ruff: ignore[unused-variable]
         f"rule {model} on {task}: final_acc={acc:.4f} "
         f"flops={flops:.3e} mem={mem:.1f}MB time={wall:.2f}s"
     )

@@ -118,7 +118,7 @@ def _parse_split_digits(task_name: str) -> tuple[list[int] | None, str]:
     return included_classes, base_name
 
 
-def _normalize_vision_name(base_name: str) -> str:
+def _normalize_vision_name(base_name: str) -> str:  # ruff: ignore[too-many-return-statements]
     """Normalize a vision dataset name to the canonical key."""
     match base_name:
         case n if "kmnist" in n or "kuzushiji" in n:
@@ -139,7 +139,7 @@ def _normalize_vision_name(base_name: str) -> str:
             return base_name
 
 
-def create_task(
+def create_task(  # ruff: ignore[too-many-return-statements]
     task_name: str, device: str = "cpu", quick_mode: bool = False, **kwargs
 ) -> TaskProtocol:
     """Factory function for tasks. Maps string names to Task classes via heuristics."""
@@ -183,7 +183,7 @@ def create_task(
                 **kwargs,
             )
         case _:
-            included_classes, base_name = _parse_split_digits(task_name)
+            _included_classes, base_name = _parse_split_digits(task_name)
 
     VISION_KEYWORDS = {"vision", "mnist", "cifar", "fashion", "digits", "usps", "svhn"}
 

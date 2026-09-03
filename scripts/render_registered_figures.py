@@ -12,15 +12,19 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import subprocess
-from collections.abc import Callable
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
 from pathlib import Path
 
 import matplotlib
 
 matplotlib.use("Agg")
 
+from typing import TYPE_CHECKING
+
 import matplotlib.pyplot as plt
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = REPO_ROOT / "docs" / "figures" / "registered"
@@ -36,7 +40,13 @@ ARM_STYLE = {
 def _git_commit() -> str:
     try:
         return subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True, timeout=10
+            [  # ruff: ignore[start-process-with-partial-path] git is on PATH
+                "git",
+                "rev-parse",
+                "HEAD",
+            ],
+            text=True,
+            timeout=10,
         ).strip()
     except OSError, subprocess.SubprocessError:
         return "unknown"

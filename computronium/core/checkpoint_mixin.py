@@ -7,10 +7,7 @@ implementations scattered across the codebase.
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Self
-
-import torch
+from typing import TYPE_CHECKING, Self
 
 from computronium.core.checkpoint import (
     Checkpoint,
@@ -18,6 +15,11 @@ from computronium.core.checkpoint import (
     save_checkpoint,
 )
 from computronium.core.logging import get_logger
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    import torch
 
 logger = get_logger()
 

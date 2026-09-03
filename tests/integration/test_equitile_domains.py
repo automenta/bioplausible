@@ -433,7 +433,7 @@ class TestRL:
         assert len(buffer) == 10
 
         # Get data with GAE
-        obs, actions, advantages, returns, log_probs = buffer.get(
+        obs, _actions, advantages, returns, _log_probs = buffer.get(
             gamma=0.99,
             lam=0.95,
             last_value=0.0,
@@ -529,7 +529,7 @@ class TestDomainIntegration:
         # Use vision output as RL observation
         obs = vision_output
         with torch.no_grad():
-            action, value, log_prob = rl_model.act(obs)
+            action, _value, _log_prob = rl_model.act(obs)
 
         assert action.shape[0] == 4
 
@@ -559,7 +559,7 @@ class TestDomainIntegration:
         # Use last hidden state as RL observation
         obs = hidden[:, -1, :]  # Last token
         with torch.no_grad():
-            action, value, log_prob = rl_model.act(obs)
+            action, _value, _log_prob = rl_model.act(obs)
 
         assert action.shape[0] == 4
 

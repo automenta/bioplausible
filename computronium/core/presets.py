@@ -32,6 +32,7 @@ from computronium.ontology import (
     InstantaneousDynamics,
     LocalGoodnessCredit,
     MemristiveSubstrate,
+    NeuromorphicSubstrate,
     ParameterUpdateConfig,
     PredictiveSettlingDynamics,
     RandomProjectionsCredit,
@@ -117,7 +118,7 @@ def _default_update(lr: float = 0.001) -> EuclideanUpdate:
 
 
 def _instant_backprop_system(
-    substrate: DigitalSubstrate | MemristiveSubstrate,
+    substrate: DigitalSubstrate | MemristiveSubstrate | NeuromorphicSubstrate,
     input_dim: int,
     hidden_dims: tuple[int, ...],
     output_dim: int,
@@ -194,6 +195,47 @@ def create_memristive_mlp(
     """
     substrate = MemristiveSubstrate(
         SubstrateConfig.memristive(noise_level=noise_level, device=device)
+    )
+    return _instant_backprop_system(
+        substrate, input_dim, hidden_dims, output_dim, lr, init_scale
+    )
+
+
+def create_neuromorphic_mlp(
+    input_dim: int,
+    hidden_dims: tuple[int, ...],
+    output_dim: int,
+    lr: float = 0.001,
+    noise_level: float = 0.0,
+    sparsity: float = 0.95,
+    init_scale: float = 0.1,
+    device: str = "cpu",
+) -> System:
+    """Create a neuromorphic-substrate Backprop MLP system (5-D coordinate).
+
+    Same coordinate as :func:`create_backprop_mlp` with the S-axis swapped:
+    the state is thinned to the active spike set each forward step — every
+    activation element survives with probability ``1 - sparsity`` — plus
+    additive state noise of ``noise_level`` standard deviations. At the
+    default ``sparsity`` the thinning walls learning at chance.
+
+    Args:
+        input_dim: Input dimension (e.g. 784 for MNIST)
+        hidden_dims: Tuple of hidden layer dimensions
+        output_dim: Output dimension
+        lr: Learning rate
+        noise_level: Additive state-noise standard deviation
+        sparsity: Target spike sparsity ratio [0, 1) (fraction dropped per step)
+        init_scale: Weight initialization scale
+        device: Target device ("cpu" or "cuda")
+
+    Returns:
+        A composed 5-D System on the neuromorphic substrate.
+    """
+    substrate = NeuromorphicSubstrate(
+        SubstrateConfig.neuromorphic(
+            noise_level=noise_level, sparsity=sparsity, device=device
+        )
     )
     return _instant_backprop_system(
         substrate, input_dim, hidden_dims, output_dim, lr, init_scale
@@ -281,7 +323,7 @@ def create_fa_mlp(
     return compose_system(substrate, geometry, dynamics, credit, update)
 
 
-def create_ff_mlp(
+def create_ff_mlp(  # ruff: ignore[complex-structure, too-many-locals]
     input_dim: int,
     hidden_dims: tuple[int, ...],
     output_dim: int,
@@ -315,7 +357,7 @@ def create_ff_mlp(
         A composed 5-D System with custom Forward-Forward train_step.
     """
     import torch
-    import torch.nn.functional as F
+    import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
     from torch import nn
     from torch.optim import Adam
 
@@ -333,7 +375,7 @@ def create_ff_mlp(
     # Build per-layer linear modules with ReLU and L2 normalization to match FFLayer
     # Geometry params are at even indices: 0, 2, 4... (Linear layers)
     # with ReLU at odd indices: 1, 3, 5...
-    layer_dims = [input_dim] + list(hidden_dims[:n_layers])
+    layer_dims = [input_dim] + list(hidden_dims[:n_layers])  # ruff: ignore[collection-literal-concatenation]
     layers = nn.ModuleList()
     layer_opts = []
     for i in range(n_layers):
@@ -377,7 +419,7 @@ def create_ff_mlp(
             self.credit = base.credit
             self.update = base.update
 
-        def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:
+        def train_step(self, x: torch.Tensor, y: torch.Tensor) -> dict[str, float]:  # ruff: ignore[too-many-locals]
             if x.dim() > 2:
                 x = x.view(x.size(0), -1)
             x = x.to(device)
@@ -869,7 +911,7 @@ def create_tile_mlp(
     return compose_system(substrate, geometry, dynamics, credit, update)
 
 
-__all__ = [
+__all__ = [  # ruff: ignore[unsorted-dunder-all]
     # 5-D factories
     "create_backprop_mlp",
     "create_eqprop_mlp",

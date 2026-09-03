@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, TypeVar
 
@@ -14,11 +13,14 @@ from computronium.ontology import (
     StateDynamics,
     Substrate,
 )
-from computronium.state import SystemContext
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     import torch
     from torch import Tensor
+
+    from computronium.state import SystemContext
 
 
 class JointSystem[
@@ -96,12 +98,12 @@ class _DataProvider(Protocol):
 
 
 __all__ = [
+    "TC",
+    "TD",
+    "TG",
+    "TS",
+    "TU",
     "JointSystem",
     "SystemTrainerConfig",
     "_DataProvider",
-    "TS",
-    "TG",
-    "TD",
-    "TC",
-    "TU",
 ]

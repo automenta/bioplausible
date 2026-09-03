@@ -61,7 +61,7 @@ def compute_tile_prediction(
     pred = sum(inputs)
 
     if bias is not None:
-        pred = pred + bias.unsqueeze(0)
+        pred = pred + bias.unsqueeze(0)  # ruff: ignore[non-augmented-assignment]
 
     return pred
 
@@ -111,7 +111,7 @@ def compute_activity_update(
     grad = error + lambda_error * activity
 
     for feedback in fwd_feedback:
-        grad = grad + feedback
+        grad = grad + feedback  # ruff: ignore[non-augmented-assignment]
 
     delta = step_size * importance * grad
     new_activity = activity - delta

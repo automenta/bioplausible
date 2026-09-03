@@ -5,13 +5,16 @@ Captures detailed metrics during training (gradients, weight norms, loss curves)
 to analyze convergence behavior, detect overfitting, and measure sample efficiency.
 """
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from computronium.core.logging import get_logger
 from computronium.core.training_state import EpochCheckpoint as TrainingCheckpoint
 from computronium.core.training_state import TrainingTrajectory
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = get_logger()
 
@@ -29,7 +32,7 @@ class ContinuousTrainingSchedule:
     """
 
     # Standard checkpoints (logarithmic-ish scale)
-    DEFAULT_CHECKPOINTS = [1, 2, 5, 10, 20, 50, 100, 200, 300, 400, 500]
+    DEFAULT_CHECKPOINTS = [1, 2, 5, 10, 20, 50, 100, 200, 300, 400, 500]  # ruff: ignore[mutable-class-default]
 
     def __init__(self, max_epochs: int = 100, enable_pruning: bool = True) -> None:
         """

@@ -13,7 +13,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Protocol
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
 
 if TYPE_CHECKING:
@@ -109,7 +109,7 @@ def scatter_mean(
     if dim_size is None:
         dim_size = int(index.max().item()) + 1
 
-    out = src.new_zeros((dim_size,) + src.shape[1:])
+    out = src.new_zeros((dim_size,) + src.shape[1:])  # ruff: ignore[collection-literal-concatenation]
     count = src.new_zeros(dim_size)
 
     out.index_add_(dim, index, src)
@@ -126,7 +126,7 @@ def scatter_sum(
     if dim_size is None:
         dim_size = int(index.max().item()) + 1
 
-    out = src.new_zeros((dim_size,) + src.shape[1:])
+    out = src.new_zeros((dim_size,) + src.shape[1:])  # ruff: ignore[collection-literal-concatenation]
     out.index_add_(dim, index, src)
     return out
 
@@ -138,7 +138,7 @@ def scatter_max(
     if dim_size is None:
         dim_size = int(index.max().item()) + 1
 
-    out = src.new_full((dim_size,) + src.shape[1:], float("-inf"))
+    out = src.new_full((dim_size,) + src.shape[1:], float("-inf"))  # ruff: ignore[collection-literal-concatenation]
     out.index_reduce_(dim, index, src, reduce="amax")
 
     out[out == float("-inf")] = 0
@@ -217,7 +217,7 @@ class ConvFeatureExtractor(nn.Module):
 
         for _ in range(len(config.conv_channels)):
             if config.use_pooling:
-                size = size // config.pooling_size
+                size = size // config.pooling_size  # ruff: ignore[non-augmented-assignment]
 
         return channels * size * size
 
@@ -294,7 +294,7 @@ class TemporalPositionalEncoding(nn.Module):
         self.register_buffer("pe", pe.unsqueeze(0))
 
     def forward(self, x: Tensor) -> Tensor:
-        x = x + self.pe[:, : x.size(1), :]
+        x = x + self.pe[:, : x.size(1), :]  # ruff: ignore[non-augmented-assignment]
         return self.dropout(x)
 
 
@@ -312,7 +312,7 @@ class TemporalAttentionLayer(nn.Module):
         self.num_heads = num_heads
         self.head_dim = embed_dim // num_heads
 
-        assert embed_dim % num_heads == 0, "embed_dim must be divisible by num_heads"
+        assert embed_dim % num_heads == 0, "embed_dim must be divisible by num_heads"  # ruff: ignore[assert]
 
         self.q_proj = nn.Linear(embed_dim, embed_dim)
         self.k_proj = nn.Linear(embed_dim, embed_dim)
@@ -402,16 +402,16 @@ class TimeSeriesTileNetLayer(nn.Module):
     def forward(self, x: Tensor, mask: Tensor | None = None) -> Tensor:
         if self.attention is not None:
             attn_output = self.attention(x, mask)
-            x = x + attn_output
+            x = x + attn_output  # ruff: ignore[non-augmented-assignment]
             x = self.norm1(x)
 
         batch_size, seq_len, hidden_dim = x.shape
         x_flat = x.view(batch_size * seq_len, hidden_dim)
         tile_output = self.tile_model(x_flat)
-        x = x + tile_output.view(batch_size, seq_len, hidden_dim)
+        x = x + tile_output.view(batch_size, seq_len, hidden_dim)  # ruff: ignore[non-augmented-assignment]
 
         ffn_output = self.ffn(x)
-        x = x + ffn_output
+        x = x + ffn_output  # ruff: ignore[non-augmented-assignment]
         x = self.norm2(x)
         return x
 
@@ -452,14 +452,14 @@ class GraphTileNetLayer(nn.Module):
 
     def forward(self, node_features: Tensor, edge_index: Tensor) -> Tensor:
         attn_output = self.attention(node_features, edge_index)
-        node_features = node_features + self.dropout(attn_output)
+        node_features = node_features + self.dropout(attn_output)  # ruff: ignore[non-augmented-assignment]
         node_features = self.norm(node_features)
 
         tile_output = self.tile_model(node_features)
-        node_features = node_features + tile_output
+        node_features = node_features + tile_output  # ruff: ignore[non-augmented-assignment]
 
         ffn_output = self.ffn(node_features)
-        node_features = node_features + ffn_output
+        node_features = node_features + ffn_output  # ruff: ignore[non-augmented-assignment]
         return node_features
 
 
@@ -508,7 +508,7 @@ class GraphAttentionLayer(nn.Module):
         self.num_heads = num_heads
         self.head_dim = out_features // num_heads
 
-        assert out_features % num_heads == 0, (
+        assert out_features % num_heads == 0, (  # ruff: ignore[assert]
             "out_features must be divisible by num_heads"
         )
 

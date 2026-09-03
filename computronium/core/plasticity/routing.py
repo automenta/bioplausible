@@ -137,7 +137,7 @@ class RoutingPlasticity:
             # Compute gate update from input statistics
             gate_drive = x.abs().mean(dim=1, keepdim=True)  # [batch, 1]
             gate_drive = gate_drive.expand(-1, self.gate_dim)
-            new_gate_logits = new_gate_logits + self._config.learning_rate * gate_drive
+            new_gate_logits = new_gate_logits + self._config.learning_rate * gate_drive  # ruff: ignore[non-augmented-assignment]
 
         # Compute active routes
         # Use training mode if context has theta with requires_grad
@@ -171,7 +171,7 @@ class RoutingPlasticity:
             routes.scatter_(-1, indices, 1.0)
             return routes
         else:
-            # Threshold-based (sigmoid > 0.5)
+            # Threshold-based (sigmoid > 0.5)  # ruff: ignore[commented-out-code]
             return (torch.sigmoid(logits) > 0.5).float()
 
     def modulate(

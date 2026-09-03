@@ -48,7 +48,7 @@ class TPKernelBackend:
         self._config = config
         self._device = torch.device(
             "cuda"
-            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)
+            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
             else "cpu"
         )
         self._dtype = config.dtype
@@ -133,7 +133,7 @@ class TPKernelBackend:
             of forward layer ``i``.
         """
         L = len(self._forward_layers)
-        targets: list[Tensor] = [None] * L  # type: ignore
+        targets: list[Tensor] = [None] * L  # type: ignore  # ruff: ignore[blanket-type-ignore]
         targets[-1] = output_target
 
         # Propagate target backward through inverse layers (ordered output->input).
@@ -147,7 +147,7 @@ class TPKernelBackend:
                     current_target = self._activation(current_target)
             targets[L - 2 - k] = current_target
 
-        return targets  # type: ignore
+        return targets  # type: ignore  # ruff: ignore[blanket-type-ignore]
 
     def backward(
         self,
@@ -220,7 +220,7 @@ class TPKernelBackend:
                 elif param_type == "bias" and layer.bias is not None:
                     layer.bias.add_(grad)
 
-    def kernel_train_step(
+    def kernel_train_step(  # ruff: ignore[too-many-locals, too-many-statements]
         self,
         model: torch.nn.Module,
         config: KernelConfig | None,

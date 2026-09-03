@@ -18,7 +18,7 @@ __all__ = [
 ]
 
 
-def generate_experiment_report(
+def generate_experiment_report(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     db_path: str, tier: str, output_path: str = "experiment_report.md"
 ) -> str:
     """
@@ -80,7 +80,7 @@ def generate_experiment_report(
         bp_accs = matrix.get("Backprop Baseline", {}).get(task, [])
         if not bp_accs:
             # Fallback alias search
-            for m in matrix.keys():
+            for m in matrix.keys():  # ruff: ignore[in-dict-keys]
                 if "backprop" in m.lower():
                     bp_accs = matrix[m].get(task, [])
                     break
@@ -120,7 +120,7 @@ def generate_experiment_report(
     lines.append("\n## 2. Performance Matrix (Accuracy)")
 
     # Header
-    sorted_tasks = sorted(list(tasks_seen))
+    sorted_tasks = sorted(list(tasks_seen))  # ruff: ignore[unnecessary-double-cast-or-process]
     lines.append(
         "| Model | " + " | ".join([t.upper() for t in sorted_tasks]) + " | Mean |"
     )
@@ -187,7 +187,7 @@ def generate_experiment_report(
             )
 
     # Save to file
-    with pathlib.Path(output_path).open("w") as f:
+    with pathlib.Path(output_path).open("w", encoding="utf-8") as f:
         f.write("\n".join(lines))
 
     return "\n".join(lines)

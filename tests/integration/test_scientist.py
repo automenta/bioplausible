@@ -42,7 +42,7 @@ def test_strategy_empty_db(temp_db):
     assert task.priority >= 80.0
     # Should pick one of the models
     assert (
-        task.model_name in Registry._components.get(ComponentCategory.MODEL, {}).keys()
+        task.model_name in Registry._components.get(ComponentCategory.MODEL, {}).keys()  # ruff: ignore[in-dict-keys]
     )
 
 
@@ -57,7 +57,7 @@ def test_strategy_timeout_constraints(temp_db):
             {
                 "issue": "Frequent timeouts",
                 "affected_models": [
-                    list(Registry._components.get(ComponentCategory.MODEL, {}).keys())[
+                    list(Registry._components.get(ComponentCategory.MODEL, {}).keys())[  # ruff: ignore[unnecessary-iterable-allocation-for-first-element]
                         0
                     ]
                 ],
@@ -65,7 +65,7 @@ def test_strategy_timeout_constraints(temp_db):
         ]
     }
 
-    with patch.object(state, "get_failure_analysis", return_value=mock_analysis):
+    with patch.object(state, "get_failure_analysis", return_value=mock_analysis):  # ruff: ignore[multiple-with-statements]
         # We also need to mock get_progress so we can enter generation loop
         # We can just return empty progress, so it generates Smoke tier tasks
         with patch.object(state, "get_progress", return_value={}):
@@ -76,7 +76,7 @@ def test_strategy_timeout_constraints(temp_db):
                 c
                 for c in candidates
                 if c.model_name
-                == list(Registry._components.get(ComponentCategory.MODEL, {}).keys())[0]
+                == list(Registry._components.get(ComponentCategory.MODEL, {}).keys())[0]  # ruff: ignore[unnecessary-iterable-allocation-for-first-element]
             ]
 
             assert len(affected_candidates) > 0
@@ -92,7 +92,7 @@ def test_strategy_verification_scheduling(temp_db):
     state = ExperimentState(temp_db)
     storage = HyperoptStorage(temp_db)
 
-    model = list(Registry._components.get(ComponentCategory.MODEL, {}).keys())[0]
+    model = list(Registry._components.get(ComponentCategory.MODEL, {}).keys())[0]  # ruff: ignore[unnecessary-iterable-allocation-for-first-element]
     task_name = "mnist"
 
     # Create a high-performing STANDARD trial

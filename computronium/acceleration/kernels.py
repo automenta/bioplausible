@@ -165,7 +165,7 @@ if _detected_cuda_path:
         os.environ["PATH"] = str(bin_path) + os.pathsep + os.environ.get("PATH", "")
 
 # Try to import CuPy for GPU
-try:
+try:  # ruff: ignore[too-many-statements-in-try-clause]
     import cupy as cp
 
     # Guard against mock/stub cupy (e.g. from test conftest mocking)
@@ -248,7 +248,6 @@ def tanh_deriv(x: np.ndarray, xp: object = np) -> np.ndarray:
 
 
 def spectral_normalize(
-    # ruff: file-ignore[N803] - W is conventional notation for weight matrix in spectral normalization
     W: np.ndarray,
     num_iters: int = 1,
     u: np.ndarray | None = None,
@@ -294,8 +293,7 @@ class EqPropKernel:
         ...     print(f"Loss: {metrics['loss']:.4f}")
     """
 
-    # ruff: file-ignore[PLR0913, PLR0917] - domain-specific kernel with many config params
-    def __init__(
+    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         self,
         input_dim: int,
         hidden_dim: int,
@@ -358,7 +356,7 @@ class EqPropKernel:
             }
             self.sn_state: dict[str, np.ndarray | None] = {"W_rec_u": None}
         else:
-            raise ValueError(f"Unknown architecture: {self.architecture}")  # ruff: ignore[raise-vanilla-args]
+            raise ValueError(f"Unknown architecture: {self.architecture}")
 
         # Adam state
         self.adam_state = {
@@ -374,7 +372,7 @@ class EqPropKernel:
         """Initialize weight matrix with Xavier-like initialization."""
         xp = self.xp
         std = scale * np.sqrt(2.0 / (in_dim + out_dim))
-        W = xp.random.randn(out_dim, in_dim).astype(np.float32) * std  # ruff: ignore[non-lowercase-variable-in-function] - W is conventional notation for weight matrix
+        W = xp.random.randn(out_dim, in_dim).astype(np.float32) * std
         return W
 
     def _get_normalized_weights(self) -> dict[str, np.ndarray]:
@@ -414,7 +412,7 @@ class EqPropKernel:
         self.sn_state[sn_state_key] = new_u_state
         return normalized_weight
 
-    def forward_step(
+    def forward_step(  # ruff: ignore[too-many-return-statements]
         self,
         h: np.ndarray,
         x_emb: np.ndarray,
@@ -583,7 +581,7 @@ class EqPropKernel:
     def _check_convergence(self, h: np.ndarray, h_prev: np.ndarray, step: int) -> bool:
         """Check if the equilibrium has converged."""
         # OPTIMIZATION: Use max norm (simpler, faster)
-        # Original: diff = self.xp.max(self.xp.linalg.norm(h - h_prev, axis=1))
+        # Original: diff = self.xp.max(self.xp.linalg.norm(h - h_prev, axis=1))  # ruff: ignore[commented-out-code]
         diff = self.xp.abs(h - h_prev).max()
         threshold = self._get_convergence_threshold(step)
         return diff < threshold
@@ -684,7 +682,7 @@ class EqPropKernel:
         )
 
         # Nudged Phase
-        h_nudged, act_log_nudged, info_nudged = self.solve_equilibrium(x, nudge_grad)
+        _h_nudged, act_log_nudged, info_nudged = self.solve_equilibrium(x, nudge_grad)
 
         # Compute Updates
         grads = self.compute_hebbian_update(act_log_free[-1], act_log_nudged[-1], x)
@@ -922,7 +920,7 @@ class EqPropKernelBPTT:
             dtanh = dh * tanh_deriv(pre_act, xp)  # [batch, hidden]
 
             # Accumulate gradients
-            if t > 0:
+            if t > 0:  # ruff: ignore[if-else-block-instead-of-if-exp]
                 h_prev = trajectory[t - 1][1]
             else:
                 h_prev = xp.zeros_like(h)

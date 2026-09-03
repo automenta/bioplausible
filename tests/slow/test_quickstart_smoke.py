@@ -22,7 +22,7 @@ QUICKSTART = Path(__file__).resolve().parents[2] / "scripts" / "quickstart.py"
 @pytest.mark.timeout(600)
 def test_quickstart_end_to_end() -> None:
     env = {**os.environ, "QUICKSTART_EPOCHS": "1"}
-    proc = subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - fixed argv
+    proc = subprocess.run(  # ruff: ignore[subprocess-run-without-check]
         [sys.executable, str(QUICKSTART)],
         env=env,
         capture_output=True,

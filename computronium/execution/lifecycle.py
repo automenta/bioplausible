@@ -4,12 +4,15 @@ Execution strategy lifecycle: planning next experiments and batching.
 
 import random
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from computronium.execution.candidate_gen import (
     CandidateGenerator,
     ExecutionStrategyConfig,
 )
-from computronium.execution.task import ExperimentTask
+
+if TYPE_CHECKING:
+    from computronium.execution.task import ExperimentTask
 
 
 @dataclass
@@ -58,7 +61,7 @@ class ExecutionStrategy:
                     total_standard_trials,
                 )
 
-        candidates.sort(key=lambda x: x.priority + random.uniform(0, 5), reverse=True)
+        candidates.sort(key=lambda x: x.priority + random.uniform(0, 5), reverse=True)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
         return candidates[0]
 
     def plan_batch(self, batch_size: int) -> list[ExperimentTask]:
@@ -71,7 +74,7 @@ class ExecutionStrategy:
 
         # Add noise to priority for diversity
         for c in candidates:
-            c.priority += random.uniform(0, 5)
+            c.priority += random.uniform(0, 5)  # ruff: ignore[suspicious-non-cryptographic-random-usage]
 
         candidates.sort(key=lambda x: x.priority, reverse=True)
 

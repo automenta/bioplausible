@@ -18,6 +18,7 @@ import itertools
 import time
 
 import torch
+
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 
 # Test grid: (threshold, start) pairs

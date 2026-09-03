@@ -5,13 +5,16 @@ Maps ModelSpec and SearchSpace definitions to Optuna suggest_* calls.
 Replaces custom evolution code with Optuna's proven algorithms.
 """
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import optuna
 from optuna.pruners import HyperbandPruner, MedianPruner
 from optuna.samplers import NSGAIISampler, TPESampler
 
 from computronium.core.model_spec import get_model_spec
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 __all__ = [
     "create_optuna_space",
@@ -48,7 +51,7 @@ def scalarize_objectives(
     return score
 
 
-def create_optuna_space(  # ruff: ignore[too-many-arguments]  (trial, model, meta + 3 optional override/config kwargs)
+def create_optuna_space(  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
     trial: optuna.Trial,
     model_name: str,
     constraints: dict[str, object] | None = None,
@@ -118,7 +121,7 @@ def create_optuna_space(  # ruff: ignore[too-many-arguments]  (trial, model, met
                 and all(isinstance(v, (int, float)) for v in override)
                 and not has_choices
             )
-            if is_range and spec.param_type in ("continuous", "discrete"):
+            if is_range and spec.param_type in ("continuous", "discrete"):  # ruff: ignore[literal-membership]
                 # Explicit [min, max] range for params sampled as a range
                 min_v, max_v = override
                 spec.range_min = min_v
@@ -126,7 +129,7 @@ def create_optuna_space(  # ruff: ignore[too-many-arguments]  (trial, model, met
             elif override_is_list:
                 # Full choices list (authoritative for both categorical and
                 # discrete-with-choices params like hidden_dim)
-                spec.choices = [c for c in override]
+                spec.choices = [c for c in override]  # ruff: ignore[unnecessary-comprehension]
                 if has_choices and spec.param_type == "categorical":
                     spec.default = spec.choices[0]
             space[param_name] = spec
@@ -165,7 +168,7 @@ def create_optuna_space(  # ruff: ignore[too-many-arguments]  (trial, model, met
                         c for c in spec.choices if c <= constraints["max_layers"]
                     ]
 
-            elif param_name == "steps" and "max_steps" in constraints:
+            elif param_name == "steps" and "max_steps" in constraints:  # ruff: ignore[collapsible-if]
                 if spec.range_max is not None:
                     max_val = min(max_val, constraints["max_steps"])
 

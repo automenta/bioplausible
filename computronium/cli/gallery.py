@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess  # ruff: ignore[suspicious-subprocess-import] fixed args, no shell
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import sys
 from pathlib import Path
 
@@ -28,7 +28,7 @@ DEMO_TESTS = ("tests/integration", "-k", "demo")
 
 def _run_demo_suite() -> int:
     cmd = [sys.executable, "-m", "pytest", *DEMO_TESTS, "-q"]
-    return subprocess.run(cmd, check=False).returncode  # ruff: ignore[subprocess-without-shell-equals-true] - fixed args
+    return subprocess.run(cmd, check=False).returncode  # ruff: ignore[subprocess-without-shell-equals-true]
 
 
 def main(argv: list[str] | None = None) -> int:

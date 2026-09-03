@@ -45,7 +45,7 @@ def estimate_lyapunov(model: nn.Module, x: torch.Tensor, steps: int = 50) -> flo
     if hasattr(model, "W_rec"):
         w = model.W_rec.weight
         torch.linalg.norm(w, ord=2).item()
-        # print(f"    [Inside LE] Internal L={L:.4f}")
+        # print(f"    [Inside LE] Internal L={L:.4f}")  # ruff: ignore[commented-out-code]
 
     # 1. Trajectory A
     hA = torch.zeros(batch_size, model.hidden_dim, device=x.device)
@@ -81,7 +81,7 @@ def estimate_lyapunov(model: nn.Module, x: torch.Tensor, steps: int = 50) -> flo
         else:
             ratio = dist / epsilon
             # if t < 5 and ratio > 1.05:
-            #    print(f"    Step {t}: ratio={ratio:.4f} (Expansion!)")
+            #    print(f"    Step {t}: ratio={ratio:.4f} (Expansion!)")  # ruff: ignore[commented-out-code]
             divergences.append(np.log(ratio))
 
     # Mean Lyapunov Exponent

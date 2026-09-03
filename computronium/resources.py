@@ -196,11 +196,11 @@ class ResourceUsage:
         )
 
     @classmethod
-    def measure(
+    def measure(  # ruff: ignore[complex-structure]
         cls,
-        model: nn.Module,
-        input_tensor: torch.Tensor,
-        plastic_state: dict[str, torch.Tensor] | None = None,
+        model: nn.Module,  # ruff: ignore[undefined-name]
+        input_tensor: torch.Tensor,  # ruff: ignore[undefined-name]
+        plastic_state: dict[str, torch.Tensor] | None = None,  # ruff: ignore[undefined-name]
         device: str | None = None,
     ) -> ResourceUsage:
         """Measure resource usage for one forward/backward pass.

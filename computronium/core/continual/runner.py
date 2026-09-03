@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from computronium.core.continual.system import ContinualJointSystem
 
 
-def run_continual_learning(
+def run_continual_learning(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     arm_name: str,
     config: CLConfig,
     protocol: str = "task_incremental",
@@ -129,7 +129,7 @@ def run_continual_learning(
     stability_verdicts: list = []
     start_time = time.perf_counter()
 
-    if protocol == "task_incremental":
+    if protocol == "task_incremental":  # ruff: ignore[too-many-nested-blocks]
         # Task boundaries are signaled
         for task_id in range(CL_NUM_TASKS):
             model.set_task(task_id)
@@ -154,8 +154,8 @@ def run_continual_learning(
 
             for epoch in range(config.epochs_per_task):
                 for batch_idx, (x, y) in enumerate(loader):
-                    x = x.view(x.shape[0], -1).to(device)
-                    y = y.to(device)
+                    x = x.view(x.shape[0], -1).to(device)  # ruff: ignore[redefined-loop-name]
+                    y = y.to(device)  # ruff: ignore[redefined-loop-name]
 
                     # Arm-specific training step
                     if arm_name == "lwf":
@@ -166,7 +166,7 @@ def run_continual_learning(
                         metrics = _si_train_step(model, x, y, task_id, si_tracker)
                     else:
                         # Use joint system's train_step with task-masked loss
-                        metrics = model.train_step(x, y, task_id=task_id)
+                        metrics = model.train_step(x, y, task_id=task_id)  # ruff: ignore[unused-variable]
 
                     # Stability check
                     verdict = check_stability(
@@ -210,8 +210,8 @@ def run_continual_learning(
                 model.eval()
                 with torch.no_grad():
                     for x, y in test_loaders[eval_task_id]:
-                        x = x.view(x.shape[0], -1).to(device)
-                        y = y.to(device)
+                        x = x.view(x.shape[0], -1).to(device)  # ruff: ignore[redefined-loop-name]
+                        y = y.to(device)  # ruff: ignore[redefined-loop-name]
                         logits = model(x, task_id=eval_task_id)
                         task_start = eval_task_id * 2  # CL_CLASSES_PER_TASK
                         task_end = task_start + 2
@@ -227,7 +227,7 @@ def run_continual_learning(
     elif protocol == "task_free":
         # No task boundaries - gradual shift (simulate by mixing tasks)
         all_loaders = [iter(task_loaders[i]) for i in range(CL_NUM_TASKS)]
-        total_batches = config.epochs_per_task * max(len(l) for l in task_loaders)
+        total_batches = config.epochs_per_task * max(len(l) for l in task_loaders)  # ruff: ignore[ambiguous-variable-name]
 
         for batch_idx in range(total_batches):
             task_id = batch_idx % CL_NUM_TASKS
@@ -272,8 +272,8 @@ def run_continual_learning(
                         model.eval()
                         with torch.no_grad():
                             for ex, ey in test_loaders[eval_task_id]:
-                                ex = ex.view(ex.shape[0], -1).to(device)
-                                ey = ey.to(device)
+                                ex = ex.view(ex.shape[0], -1).to(device)  # ruff: ignore[redefined-loop-name]
+                                ey = ey.to(device)  # ruff: ignore[redefined-loop-name]
                                 elogits = model(ex, task_id=eval_task_id)
                                 task_start = eval_task_id * 2
                                 task_end = task_start + 2

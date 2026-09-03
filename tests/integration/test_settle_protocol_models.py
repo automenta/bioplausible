@@ -184,7 +184,7 @@ class TestTileAlgorithmSettleProtocol:
         """Loose convergence threshold triggers early stop."""
         model.convergence_threshold = 1.0
         x = torch.randn(4, 20)
-        state, steps_taken, converged, telemetry = _run_model_settle(
+        _state, steps_taken, converged, _telemetry = _run_model_settle(
             model, x, max_steps=20, convergence_threshold=1.0
         )
         assert converged
@@ -201,7 +201,7 @@ class TestTileAlgorithmSettleProtocol:
         )
         assert isinstance(model, SettleProtocol)
         x = torch.randn(4, 20)
-        state, steps_taken, converged, telemetry = _run_model_settle(
+        _state, _steps_taken, _converged, telemetry = _run_model_settle(
             model, x, max_steps=10
         )
         assert isinstance(telemetry, SettleTelemetry)

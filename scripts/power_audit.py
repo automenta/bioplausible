@@ -86,7 +86,7 @@ def main() -> None:
         + (
             "the 0.05 floor is interpretable at this scale"
             if powered
-            else "the null is not evidence of no effect; scale or design must change first"  # ruff: ignore[line-too-long] - verdict phrasing
+            else "the null is not evidence of no effect; scale or design must change first"
         )
     )
     if not powered and not math.isfinite(mde):

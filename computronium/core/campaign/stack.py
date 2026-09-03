@@ -122,9 +122,7 @@ def grid_sampler(grid: Sequence[str], experiments_per_iter: int) -> CoordinateSa
 
     coords = tuple(dict.fromkeys(grid))
     if not coords:
-        raise ValueError(  # ruff: ignore[raise-vanilla-args] - one-off validation message
-            "empty coordinate grid"
-        )
+        raise ValueError("empty coordinate grid")
 
     def sample(_rng: random.Random, iteration: int, experiment: int) -> str:
         return coords[(iteration * experiments_per_iter + experiment) % len(coords)]
@@ -212,7 +210,7 @@ class CampaignStack:
             backend, ``None`` = build in place); θ restore copies honor it.
     """
 
-    def __init__(  # ruff: ignore[too-many-arguments] - facade surface, all independently settable
+    def __init__(
         self,
         root: str | Path,
         *,
@@ -244,7 +242,7 @@ class CampaignStack:
 
     # -- orchestration -----------------------------------------------------
 
-    def run_campaign(  # ruff: ignore[too-many-arguments] - orchestration knobs, all defaulted
+    def run_campaign(  # ruff: ignore[too-many-arguments]
         self,
         *,
         iterations: int = 1,
@@ -369,7 +367,7 @@ class CampaignStack:
         for iteration in range(start_iteration + 1, start_iteration + iterations + 1):
             # Coordinate stream is derived from (seed, campaign, iteration):
             # resume replays identical proposals without persistent sampler state.
-            rng = random.Random(  # ruff: ignore[suspicious-non-cryptographic-random-usage] - sampling, not security-sensitive
+            rng = random.Random(  # ruff: ignore[suspicious-non-cryptographic-random-usage]
                 f"{self.seed}:{campaign_id}:{iteration}"
             )
             self._event(f"Iteration {iteration}: {experiments_per_iter} proposals")
@@ -434,7 +432,7 @@ class CampaignStack:
         )
         return verdict
 
-    def _evaluate(  # ruff: ignore[too-many-arguments] - episode context travels as one bundle
+    def _evaluate(
         self,
         *,
         campaign_id: str,

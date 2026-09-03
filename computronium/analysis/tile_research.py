@@ -5,16 +5,19 @@ Ported from equitile/analysis/research.py to work with TileAlgorithm substrate.
 
 import json
 import time
-from collections.abc import Callable
 from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
-from typing import Literal, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 import torch
 
 from computronium.config.unified import ExperimentConfig
 from computronium.core.checkpoint import save_checkpoint
-from computronium.core.local_learning.builder import TileAlgorithm
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from computronium.core.local_learning.builder import TileAlgorithm
 
 __all__ = [
     "AblationConfig",
@@ -197,7 +200,7 @@ class ExperimentTracker:
                 for tile in model.graph.all_tiles
             ],
         }
-        with Path(path).open("w") as f:
+        with Path(path).open("w", encoding="utf-8") as f:
             json.dump(graph_data, f, indent=2)
 
     @overload
@@ -261,7 +264,9 @@ class ExperimentTracker:
         metric_keys = set()
         for m in self._metrics:
             metric_keys.update(
-                k for k in m.keys() if k not in ("timestamp", "step", "epoch")
+                k
+                for k in m
+                if k not in ("timestamp", "step", "epoch")  # ruff: ignore[literal-membership]
             )
 
         # Compute stats for each metric
@@ -285,17 +290,17 @@ class ExperimentTracker:
         """
         # Save params
         params_path = self.log_dir / "params.json"
-        with Path(params_path).open("w") as f:
+        with Path(params_path).open("w", encoding="utf-8") as f:
             json.dump(self._params, f, indent=2)
 
         # Save metrics
         metrics_path = self.log_dir / "metrics.json"
-        with Path(metrics_path).open("w") as f:
+        with Path(metrics_path).open("w", encoding="utf-8") as f:
             json.dump(self._metrics, f, indent=2)
 
         # Save summary
         summary_path = self.log_dir / "summary.json"
-        with Path(summary_path).open("w") as f:
+        with Path(summary_path).open("w", encoding="utf-8") as f:
             json.dump(self.get_summary(), f, indent=2)
 
         return str(self.log_dir)
@@ -325,7 +330,7 @@ class ExperimentTracker:
             keys.update(m.keys())
 
         # Write CSV
-        with Path(path).open("w") as f:
+        with Path(path).open("w", encoding="utf-8") as f:
             # Header
             f.write(",".join(sorted(keys)) + "\n")
 
@@ -575,7 +580,7 @@ class VisualizationHelper:
             if layer not in layers:
                 layers[layer] = []
 
-            if tile.error is not None:
+            if tile.error is not None:  # ruff: ignore[if-else-block-instead-of-if-exp]
                 error_norm = tile.error.norm(p=2).item()
             else:
                 error_norm = 0.0
@@ -844,7 +849,7 @@ class AblationStudy:
 
         # Save comparison
         path = self.log_dir / "comparison.json"
-        with Path(path).open("w") as f:
+        with Path(path).open("w", encoding="utf-8") as f:
             json.dump(comparison, f, indent=2)
 
         return comparison
@@ -878,7 +883,7 @@ class AblationStudy:
 
         # Save
         path = self.log_dir / "results.md"
-        with Path(path).open("w") as f:
+        with Path(path).open("w", encoding="utf-8") as f:
             f.write(table)
 
         return table

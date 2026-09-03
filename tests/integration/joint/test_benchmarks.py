@@ -191,11 +191,11 @@ class TestBenchmarkCLI:
 
     def test_benchmark_list(self):
         """Test benchmark list command."""
-        import subprocess
         import os
+        import subprocess
 
-        cwd = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        result = subprocess.run(
+        cwd = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # ruff: ignore[os-path-dirname]
+        result = subprocess.run(  # ruff: ignore[subprocess-run-without-check]
             ["uv", "run", "comp", "benchmark", "list"],
             capture_output=True,
             text=True,
@@ -210,11 +210,11 @@ class TestBenchmarkCLI:
 
     def test_benchmark_run_quick_adaptation(self):
         """Test quick adaptation efficiency benchmark."""
-        import subprocess
         import os
+        import subprocess
 
-        cwd = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        result = subprocess.run(
+        cwd = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # ruff: ignore[os-path-dirname]
+        result = subprocess.run(  # ruff: ignore[subprocess-run-without-check]
             [
                 "uv",
                 "run",
@@ -225,7 +225,7 @@ class TestBenchmarkCLI:
                 "adaptation_efficiency",
                 "--quick",
                 "--output-dir",
-                "/tmp/test_bench",
+                "/tmp/test_bench",  # ruff: ignore[hardcoded-temp-file]
             ],
             capture_output=True,
             text=True,
@@ -237,11 +237,11 @@ class TestBenchmarkCLI:
 
     def test_benchmark_run_quick_compute(self):
         """Test quick compute efficiency benchmark."""
-        import subprocess
         import os
+        import subprocess
 
-        cwd = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        result = subprocess.run(
+        cwd = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # ruff: ignore[os-path-dirname]
+        result = subprocess.run(  # ruff: ignore[subprocess-run-without-check]
             [
                 "uv",
                 "run",
@@ -252,7 +252,7 @@ class TestBenchmarkCLI:
                 "compute_efficiency",
                 "--quick",
                 "--output-dir",
-                "/tmp/test_bench",
+                "/tmp/test_bench",  # ruff: ignore[hardcoded-temp-file]
             ],
             capture_output=True,
             text=True,

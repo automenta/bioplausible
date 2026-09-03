@@ -60,7 +60,7 @@ class TestTaskRotation:
         assert task_for_visit(7, cycle) == "synthetic"
 
 
-def make_record(  # ruff: ignore[too-many-arguments] - record builder with independent defaults
+def make_record(
     coordinate: str,
     *,
     task: str = "mnist",
@@ -133,7 +133,7 @@ class TestSchemaFreeze:
         monkeypatch.setattr(
             campaign_store,
             "MIGRATIONS",
-            (lambda conn: None, lambda conn: conn.execute("DROP TABLE legacy_flags")),
+            (lambda conn: None, lambda conn: conn.execute("DROP TABLE legacy_flags")),  # ruff: ignore[unused-lambda-argument]
         )
         store = CampaignStore(db)
         assert store.schema_version == 2

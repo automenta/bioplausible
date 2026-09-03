@@ -67,7 +67,7 @@ def _hebbian_post(grad_output: Tensor, nonlinearity: str) -> Tensor:
         case "identity":
             return grad_output
         case _:
-            raise ValueError("Unknown hebbian nonlinearity")  # noqa: TRY003
+            raise ValueError("Unknown hebbian nonlinearity")
 
 
 def backprop_pseudo_grad(
@@ -127,7 +127,7 @@ def hebbian_pseudo_grad(
     return grad_x, grad_weight, grad_bias
 
 
-def eqprop_pseudo_grad(  # noqa: PLR0913, PLR0917
+def eqprop_pseudo_grad(
     x: Tensor,
     weight: Tensor,
     bias: Tensor | None,
@@ -160,7 +160,7 @@ def eqprop_pseudo_grad(  # noqa: PLR0913, PLR0917
     )
 
 
-def compute_pseudo_gradients(  # noqa: PLR0913, PLR0917
+def compute_pseudo_gradients(
     rule: CreditRule,
     x: Tensor,
     weight: Tensor,
@@ -195,4 +195,4 @@ def compute_pseudo_gradients(  # noqa: PLR0913, PLR0917
                 free_output,
             )
         case _:
-            raise ValueError("Unknown credit rule")  # noqa: TRY003
+            raise ValueError("Unknown credit rule")

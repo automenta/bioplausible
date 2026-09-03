@@ -38,7 +38,7 @@ class MockTransition:
 
     def __call__(self, z: CompositeState, context: SystemContext) -> CompositeState:
         x = z.activity["x"]
-        batch_size = x.shape[0]
+        batch_size = x.shape[0]  # ruff: ignore[unused-variable]
 
         # Simple linear dynamics: x_{t+1} = rho * x_t (deterministic)
         new_x = self.rho * x
@@ -419,7 +419,7 @@ class TestSettlingTime:
             ) -> CompositeState:
                 x = z.activity["x"]
                 # Alternate between two states
-                if self.step_count % 2 == 0:
+                if self.step_count % 2 == 0:  # ruff: ignore[if-else-block-instead-of-if-exp]
                     new_x = x * 1.1
                 else:
                     new_x = x * 0.9

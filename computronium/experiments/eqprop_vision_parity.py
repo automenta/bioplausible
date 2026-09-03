@@ -423,7 +423,9 @@ def _generate_recommendation_matrix(comparisons: dict, output_dir: str) -> None:
     df.to_csv(output_path / "recommendation_matrix.csv", index=False)
 
     # Also create markdown table
-    with Path(output_path / "recommendation_matrix.md").open("w") as f:
+    with Path(output_path / "recommendation_matrix.md").open(
+        "w", encoding="utf-8"
+    ) as f:
         f.write("# EqProp Variant Recommendation Matrix\n\n")
         for task in df["task"].unique():
             f.write(f"## {task}\n\n")
@@ -456,7 +458,7 @@ def _save_results(results: list[dict], output_dir: str) -> None:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    with Path(output_path / "raw_results.jsonl").open("w") as f:
+    with Path(output_path / "raw_results.jsonl").open("w", encoding="utf-8") as f:
         for r in results:
             f.write(json.dumps(r, default=str) + "\n")
 
@@ -479,7 +481,7 @@ def _analyze_dynamics(results: list[dict], output_dir: str) -> None:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    analyzer = DynamicsAnalyzer()
+    analyzer = DynamicsAnalyzer()  # ruff: ignore[unused-variable]
 
     for task in df["task"].unique():
         task_df = df[df["task"] == task]
@@ -546,7 +548,9 @@ def main():
 
     # Statistical comparison
     comparisons = _statistical_comparison(results)
-    with Path(Path(config.output_dir) / "statistical_comparisons.json").open("w") as f:
+    with Path(Path(config.output_dir) / "statistical_comparisons.json").open(
+        "w", encoding="utf-8"
+    ) as f:
         json.dump(comparisons, f, indent=2, default=str)
 
     # Generate recommendation matrix

@@ -1,10 +1,13 @@
 """Compare commands for the CLI."""
 
-import argparse
 import csv
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from computronium.cli.shared import logger
+
+if TYPE_CHECKING:
+    import argparse
 
 __all__ = ["add_compare_subparsers", "run_compare"]
 
@@ -49,7 +52,7 @@ def run_compare(args: argparse.Namespace) -> None:
     from computronium.hyperopt.comparison import compute_algorithm_rankings
 
     if getattr(args, "db", None):
-        _DB_PATH, _STORAGE_URL = _set_storage(args.db)
+        _DB_PATH, _STORAGE_URL = _set_storage(args.db)  # ruff: ignore[used-dummy-variable]
 
     study_names = []
     if args.studies:
@@ -76,7 +79,7 @@ def run_compare(args: argparse.Namespace) -> None:
 
     # Write CSV
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
-    with open(args.output, "w", newline="") as f:
+    with Path(args.output).open("w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
             "rank",

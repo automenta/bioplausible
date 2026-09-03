@@ -66,7 +66,7 @@ class TestReplayBuffer:
         y = torch.randint(0, 2, (50,), device=device)
         buffer.add(x, y, task_id=0)
 
-        rx, ry, rt = buffer.sample(200)
+        rx, _ry, _rt = buffer.sample(200)
         assert rx.shape[0] == 50  # Buffer size, not 200
 
     def test_empty_buffer_raises(self, device):
@@ -107,7 +107,7 @@ class TestReplayBuffer:
             y = torch.full((10,), task_id, device=device, dtype=torch.long)
             buffer.add(x, y, task_id=task_id)
 
-        rx, ry, rt = buffer.sample(30)
+        _rx, _ry, rt = buffer.sample(30)
         unique_tasks = rt.unique().tolist()
         # Should have samples from all tasks
         assert len(unique_tasks) >= 2  # At least 2 of the 3 tasks

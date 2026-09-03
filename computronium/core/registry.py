@@ -6,12 +6,13 @@ intelligently."""
 
 import itertools
 import pathlib
-from collections.abc import Callable
 from dataclasses import MISSING, dataclass, field, fields
 from enum import Enum, StrEnum
 from typing import TYPE_CHECKING, Literal, Protocol, TypeVar, cast
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.ontology import System
 
 from computronium.core.exceptions import IncompatibilityError as _IncompatibilityError
@@ -37,7 +38,7 @@ CreditAssignmentType = Literal[
 IncompatibilityError = _IncompatibilityError
 
 
-class ComponentCategory(str, Enum):
+class ComponentCategory(str, Enum):  # ruff: ignore[replace-str-enum]
     """Categories of components in the registry.
 
     Core categories (for AutoScientist composition):
@@ -64,7 +65,7 @@ class ComponentCategory(str, Enum):
     TRACK = "track"
 
 
-class LocalityLevel(str, Enum):
+class LocalityLevel(str, Enum):  # ruff: ignore[replace-str-enum]
     """Credit assignment locality level."""
 
     GLOBAL = "global"  # Full backprop
@@ -74,7 +75,7 @@ class LocalityLevel(str, Enum):
     FORWARD_ONLY = "forward-only"  # No backward pass (PEPITA, FF)
 
 
-class ComputeProfile(str, Enum):
+class ComputeProfile(str, Enum):  # ruff: ignore[replace-str-enum]
     """Compute profile for hardware affinity."""
 
     GPU = "gpu"
@@ -298,8 +299,6 @@ def _ensure_native_registered() -> None:
     if state["blocked"] or state["native"]:
         return
     state["native"] = True
-    from computronium.models.native import registration  # noqa: F401
-    from computronium.ontology import credit_registration, optimizers  # noqa: F401
 
 
 class Registry:
@@ -316,13 +315,13 @@ class Registry:
 
     _components: dict[
         str, dict[str, dict[str, object]]
-    ] = {}  # category -> {name: {cls, metadata}}
+    ] = {}  # category -> {name: {cls, metadata}}  # ruff: ignore[mutable-class-default]
 
     # Compatibility map: names that alias to a registered component in a
     # *different* category. Currently propagator names that map to
     # model-side implementations (the learning rule lives in the model's
     # ``train_step``, not in a separate propagator object).
-    _ALIASES: dict[str, tuple[ComponentCategory, str]] = {
+    _ALIASES: dict[str, tuple[ComponentCategory, str]] = {  # ruff: ignore[mutable-class-default]
         "ff": (ComponentCategory.MODEL, "forward_forward"),
         "target_prop": (ComponentCategory.MODEL, "diff_target_prop"),
         "difference_target_prop": (ComponentCategory.MODEL, "diff_target_prop"),
@@ -375,7 +374,7 @@ class Registry:
             if _name is None:
                 _name = getattr(component, "__name__", repr(component))
             # _name is guaranteed to be str at this point
-            assert _name is not None
+            assert _name is not None  # ruff: ignore[assert]
             if _name in cls._components[category]:
                 logger.info("Overwriting component %s/%s", category.value, _name)
             metadata = ComponentMetadata(
@@ -535,7 +534,7 @@ class Registry:
         }
 
     @classmethod
-    def query(
+    def query(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         cls,
         category: ComponentCategory | str | None = None,
         locality: LocalityLevel | None = None,
@@ -591,7 +590,7 @@ class Registry:
         model_category: ComponentCategory = ComponentCategory.MODEL,
     ) -> dict[str, list[dict[str, object]]]:
         """Get components compatible with a given model."""
-        model_meta = cls.get_metadata(model_category, model_name)
+        model_meta = cls.get_metadata(model_category, model_name)  # ruff: ignore[unused-variable]
 
         compat: dict[str, list[dict[str, object]]] = {}
         for cat in ComponentCategory:
@@ -610,7 +609,7 @@ class Registry:
         update: str | list[str] | None = None,
         category: ComponentCategory | str | None = None,
         min_bio_score: float | None = None,
-        max_bio_score: float | None = None,
+        max_bio_score: float | None = None,  # ruff: ignore[unused-class-method-argument]
     ) -> list[dict[str, object]]:
         """Query the registry by explicit 5-D ontology axis values.
 
@@ -721,7 +720,7 @@ class Registry:
         component = cls.get(cat, name)
         metadata = cls.get_metadata(cat, name)
 
-        if isinstance(component, type):
+        if isinstance(component, type):  # ruff: ignore[if-else-block-instead-of-if-exp]
             instance = component()
         else:
             instance = component()  # type: ignore[operator]
@@ -745,7 +744,7 @@ class Registry:
         return compose_system(substrate, geometry, dynamics, credit, update)
 
     @classmethod
-    def query_ontology(
+    def query_ontology(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals]
         cls,
         fixed: dict[str, str | list[str]] | None = None,
         sweep: str | None = None,

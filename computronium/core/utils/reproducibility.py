@@ -100,17 +100,17 @@ class ReproducibilityTracker:
         git_commit = None
         git_branch = None
         try:
-            import subprocess
+            import subprocess  # ruff: ignore[suspicious-subprocess-import]
 
             git_commit = (
                 subprocess
-                .check_output(["git", "rev-parse", "HEAD"])
+                .check_output(["git", "rev-parse", "HEAD"])  # ruff: ignore[start-process-with-partial-path]
                 .decode("ascii")
                 .strip()
             )
             git_branch = (
                 subprocess
-                .check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"])
+                .check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"])  # ruff: ignore[start-process-with-partial-path]
                 .decode("ascii")
                 .strip()
             )
@@ -147,7 +147,7 @@ class ReproducibilityTracker:
         """Generate unique experiment ID."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         hash_input = f"{timestamp}_{self.seed}_{os.getpid()}"
-        hash_id = hashlib.md5(hash_input.encode()).hexdigest()[:8]
+        hash_id = hashlib.md5(hash_input.encode()).hexdigest()[:8]  # ruff: ignore[hashlib-insecure-hash-function]
         return f"exp_{timestamp}_{hash_id}"
 
     def log_config(self, config: object, name: str = "config") -> None:
@@ -207,12 +207,12 @@ class ReproducibilityTracker:
 
         # Save to file
         filepath = self.results_dir / f"{self.experiment_id}.json"
-        with Path(filepath).open("w") as f:
+        with Path(filepath).open("w", encoding="utf-8") as f:
             json.dump(bundle, f, indent=2, default=str)
 
         # Also save as latest
         latest_path = self.results_dir / "latest.json"
-        with Path(latest_path).open("w") as f:
+        with Path(latest_path).open("w", encoding="utf-8") as f:
             json.dump(bundle, f, indent=2, default=str)
 
         logger.info("Results saved to %s", filepath)
@@ -235,7 +235,7 @@ class ReproducibilityTracker:
         if not filepath.exists():
             raise FileNotFoundError(f"Experiment {experiment_id} not found")
 
-        with Path(filepath).open() as f:
+        with Path(filepath).open(encoding="utf-8") as f:
             return json.load(f)
 
     def verify_reproducibility(self, results_path: Path) -> dict[str, bool]:
@@ -251,7 +251,7 @@ class ReproducibilityTracker:
         dict
             Verification results
         """
-        with Path(results_path).open() as f:
+        with Path(results_path).open(encoding="utf-8") as f:
             bundle = json.load(f)
 
         verification = {
@@ -305,20 +305,20 @@ class ReproducibleConfig(BaseConfig):
 
     def save(self, path: str) -> None:
         """Save configuration to file."""
-        with Path(path).open("w") as f:
+        with Path(path).open("w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2)
 
     @classmethod
     def load(cls, path: str) -> ReproducibleConfig:
         """Load configuration from file."""
-        with Path(path).open() as f:
+        with Path(path).open(encoding="utf-8") as f:
             data = json.load(f)
         return cls(**data)
 
     def get_hash(self) -> str:
         """Get hash of configuration for versioning."""
         config_str = json.dumps(self.to_dict(), sort_keys=True)
-        return hashlib.md5(config_str.encode()).hexdigest()[:12]
+        return hashlib.md5(config_str.encode()).hexdigest()[:12]  # ruff: ignore[hashlib-insecure-hash-function]
 
 
 # =============================================================================

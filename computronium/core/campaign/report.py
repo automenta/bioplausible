@@ -235,7 +235,7 @@ def _attribution_dict(attribution: CanonicalAttribution) -> dict:
     }
 
 
-def build_discovery_report(  # ruff: ignore[too-many-arguments] - section knobs, all defaulted
+def build_discovery_report(
     records: Sequence[FrontierRecord],
     *,
     metric: str = "task_accuracy",

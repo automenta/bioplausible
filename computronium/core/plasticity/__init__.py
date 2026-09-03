@@ -27,7 +27,7 @@ from computronium.core.plasticity.substrate_coupled import (
     create_substrate_coupled_plasticity,
 )
 
-__all__ = [
+__all__ = [  # ruff: ignore[unsorted-dunder-all]
     # Base
     "PlasticityConfig",
     "PlasticityPrimitive",

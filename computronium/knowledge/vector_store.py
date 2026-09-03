@@ -133,7 +133,7 @@ class VectorStore:
 
         results = []
         for score, idx in zip(scores[0], indices[0]):
-            if idx >= 0 and idx < len(self.vector_ids):
+            if idx >= 0 and idx < len(self.vector_ids):  # ruff: ignore[collapsible-if]
                 if score >= min_similarity:
                     entry_id = self.vector_ids[idx]
                     results.append((entry_id, float(score)))
@@ -204,7 +204,7 @@ class VectorStore:
                     "Loaded persisted vector index with %d vectors",
                     len(self.vector_ids),
                 )
-                return True
+                return True  # ruff: ignore[try-consider-else]
             except (OSError, RuntimeError, ValueError) as e:
                 logger.warning("Failed to load persisted vector index: %s", e)
         return False

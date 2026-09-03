@@ -112,7 +112,7 @@ from computronium.state import (
     SystemContext,
 )
 
-__all__ = [
+__all__ = [  # ruff: ignore[unsorted-dunder-all]
     # Substrate
     "SubstrateType",
     "SubstrateConfig",
@@ -164,7 +164,7 @@ __all__ = [
     "SpectralConstrainedUpdate",
     "NaturalGradientUpdate",
     "ElasticConsolidationUpdate",
-    # Plasticity (M-axis)
+    # Plasticity (M-axis)  # ruff: ignore[commented-out-code]
     "PlasticityPrimitive",
     "PlasticityConfig",
     "TransitionFn",

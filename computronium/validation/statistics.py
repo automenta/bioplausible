@@ -59,7 +59,7 @@ def bootstrap_percentile_ci(
     """
     arr = np.asarray(data, dtype=float)
     if arr.size == 0:
-        raise ValueError(  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
+        raise ValueError(  # descriptive message is the public API
             "cannot bootstrap an empty sample"
         )
     rng = np.random.default_rng(seed)
@@ -72,7 +72,7 @@ def bootstrap_percentile_ci(
     return float(lo), float(hi)
 
 
-def bootstrap_bca_ci(  # ruff: ignore[too-many-locals]  (BCa keeps z0, acceleration, and two BCa quantile adjusters local)
+def bootstrap_bca_ci(  # ruff: ignore[too-many-locals]
     data: Sequence[float],
     stat: Statistic = np.mean,
     *,
@@ -100,7 +100,7 @@ def bootstrap_bca_ci(  # ruff: ignore[too-many-locals]  (BCa keeps z0, accelerat
     arr = np.asarray(data, dtype=float)
     n = arr.size
     if n == 0:
-        raise ValueError(  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
+        raise ValueError(  # descriptive message is the public API
             "cannot bootstrap an empty sample"
         )
     rng = np.random.default_rng(seed)
@@ -112,7 +112,7 @@ def bootstrap_bca_ci(  # ruff: ignore[too-many-locals]  (BCa keeps z0, accelerat
     observed = stat(arr)
     theta_hat = np.asarray(observed, dtype=float)
     if not np.isfinite(theta_hat) or boot.size == 0:
-        raise ValueError(  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
+        raise ValueError(  # descriptive message is the public API
             f"statistic returned non-finite value {observed!r}"
         )
 
@@ -144,7 +144,7 @@ def bootstrap_bca_ci(  # ruff: ignore[too-many-locals]  (BCa keeps z0, accelerat
     return float(np.quantile(boot, lo_q)), float(np.quantile(boot, hi_q))
 
 
-def bootstrap_ci(  # ruff: ignore[too-many-arguments]  (stat, n_boot, alpha, method, seed for one dispatch entrypoint)
+def bootstrap_ci(
     data: Sequence[float],
     stat: Statistic = np.mean,
     *,
@@ -175,7 +175,7 @@ def bootstrap_ci(  # ruff: ignore[too-many-arguments]  (stat, n_boot, alpha, met
         )
     if method == "bca":
         return bootstrap_bca_ci(data, stat, n_boot=n_boot, alpha=alpha, seed=seed)
-    raise ValueError(  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
+    raise ValueError(  # descriptive message is the public API
         f"unknown bootstrap method {method!r} (use 'percentile'|'bca')"
     )
 
@@ -199,15 +199,15 @@ def cohens_d(group_a: Sequence[float], group_b: Sequence[float]) -> float:
     """
     a = np.asarray(group_a, dtype=float)
     b = np.asarray(group_b, dtype=float)
-    if a.size < 2 or b.size < 2:  # ruff: ignore[magic-value-comparison]  (t-test needs >=2 obs/sample)
-        raise ValueError(  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
+    if a.size < 2 or b.size < 2:
+        raise ValueError(  # descriptive message is the public API
             "Cohen's d requires at least 2 observations per group"
         )
     var_a = np.var(a, ddof=1)
     var_b = np.var(b, ddof=1)
     pooled = (var_a + var_b) / 2
     if pooled == 0:
-        raise ValueError(  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
+        raise ValueError(  # descriptive message is the public API
             "Cohen's d undefined: both samples have zero variance"
         )
     mean_diff = float(np.mean(a) - np.mean(b))
@@ -231,8 +231,8 @@ def cohens_dz(diffs: Sequence[float]) -> float:
             identical (dz undefined).
     """
     d = np.asarray(diffs, dtype=float)
-    if d.size < 2:  # ruff: ignore[magic-value-comparison]  (t-test needs >=2 obs/sample)
-        raise ValueError(  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
+    if d.size < 2:
+        raise ValueError(  # descriptive message is the public API
             "Cohen's dz requires at least 2 differences"
         )
     sd = np.std(d, ddof=1)
@@ -260,7 +260,7 @@ def cliffs_delta(group_a: Sequence[float], group_b: Sequence[float]) -> float:
     a = np.asarray(group_a, dtype=float)
     b = np.asarray(group_b, dtype=float)
     if a.size == 0 or b.size == 0:
-        raise ValueError(  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
+        raise ValueError(  # descriptive message is the public API
             "Cliff's delta requires two non-empty samples"
         )
     wins = sum(1 for x in a for y in b if x > y)
@@ -285,7 +285,7 @@ def benjamini_hochberg(p_values: Sequence[float]) -> list[float]:
     """
     ps = np.asarray(p_values, dtype=float)
     if np.any((ps < 0) | (ps > 1)):
-        raise ValueError(  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
+        raise ValueError(  # descriptive message is the public API
             "p-values must lie in [0, 1]"
         )
     n = ps.size
@@ -323,8 +323,8 @@ def power_for_two_sample(
     """
     from scipy.stats import nct, t
 
-    if n_per_group < 2:  # ruff: ignore[magic-value-comparison]  (t-test needs >=2 obs/group)
-        raise ValueError(  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
+    if n_per_group < 2:
+        raise ValueError(  # descriptive message is the public API
             "power requires at least 2 observations per group"
         )
     df = 2 * n_per_group - 2
@@ -407,9 +407,7 @@ def fisher_exact_p_one_sided(
         P(control failures >= observed | margins), in [0, 1].
     """
     if not 0 <= failures_treatment <= arm_size or not 0 <= failures_control <= arm_size:
-        raise ValueError(  # noqa: TRY003 - caller passes seed counts directly
-            "failure counts must lie within [0, arm_size]"
-        )
+        raise ValueError("failure counts must lie within [0, arm_size]")
     total_failures = failures_treatment + failures_control
     total = 2 * arm_size
     p = Fraction(0)

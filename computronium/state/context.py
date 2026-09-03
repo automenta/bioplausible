@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -10,6 +9,8 @@ import torch
 from torch import Tensor
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from computronium.ontology import (
         CreditAssignmentConfig,
         Geometry,

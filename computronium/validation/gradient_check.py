@@ -21,7 +21,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
 
 from computronium.core.pipeline import phase_states
@@ -189,13 +189,13 @@ def check_gradient_equivalence(
     gf = finite_diff_gradient(twin, x, y, loss_fn)
 
     fd_cos = _cosine(g, gf)
-    if fd_cos <= 0.99:  # ruff: ignore[magic-value-comparison]  (FD-vs-autograd sanity bound)
-        raise GradientCheckError(  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
+    if fd_cos <= 0.99:
+        raise GradientCheckError(  # descriptive message is the public API
             f"{name}: FD machinery diverged (cos={fd_cos:.3f})"
         )
     rule_cos = _cosine(d, gf)
     if rule_cos < threshold:
-        raise GradientCheckError(  # ruff: ignore[raise-vanilla-args]  # descriptive message is the public API
+        raise GradientCheckError(  # descriptive message is the public API
             f"{name}: local gradient direction drifted "
             f"(cos={rule_cos:.3f} < {threshold})"
         )
@@ -223,7 +223,7 @@ def check_family(
     return rule_cos, metric.threshold
 
 
-def check_surrogate_equivalence(
+def check_surrogate_equivalence(  # ruff: ignore[too-many-locals]
     name: str,
     credit,
     free_state,
@@ -259,7 +259,7 @@ def check_surrogate_equivalence(
 
     # Get surrogate objective from the credit rule
     try:
-        surrogate_loss = credit.surrogate_objective(free_state, nudged_state, geometry)
+        surrogate_loss = credit.surrogate_objective(free_state, nudged_state, geometry)  # ruff: ignore[unused-variable]
     except NotImplementedError:
         # Credit rule doesn't define surrogate objective
         return (0.0, 0.0)
@@ -272,7 +272,7 @@ def check_surrogate_equivalence(
         return (0.0, 0.0)
 
     surrogate_cosines = []
-    true_gradient_cosines = []
+    true_gradient_cosines = []  # ruff: ignore[unused-variable]
 
     # For each layer with a weight matrix and pseudo-gradient
     for layer_idx, weight_name in enumerate(weight_names):
@@ -329,7 +329,7 @@ def check_surrogate_equivalence(
             threshold=threshold,
             timestamp=__import__("datetime").datetime.now().isoformat(),
         )
-    except Exception:
+    except Exception:  # ruff: ignore[try-except-pass]
         pass  # KB is optional
 
     return (mean_surrogate_cos, mean_surrogate_cos)

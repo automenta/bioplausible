@@ -96,7 +96,7 @@ def _scalar(value: Tensor | float) -> float:
     return value.item() if isinstance(value, Tensor) else float(value)
 
 
-def run_train_step(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # 5/6-axis pipeline contract + x/y
+def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many-arguments, too-many-locals]
     substrate: Substrate,
     geometry: Geometry,
     dynamics: StateDynamics,

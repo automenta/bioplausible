@@ -5,7 +5,6 @@ Provides the 6-D joint state representation and lifecycle management.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
@@ -13,6 +12,8 @@ import torch
 from torch import Tensor
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from computronium.core.joint.trajectory import JointTrajectory
 
 
@@ -113,7 +114,7 @@ class StateRegistry:
         """Get a state variable by name."""
         return self._variables.get(name)
 
-    def validate(self, z: CompositeState) -> None:
+    def validate(self, z: CompositeState) -> None:  # ruff: ignore[complex-structure]
         """Validate that CompositeState contains all registered variables.
 
         Args:

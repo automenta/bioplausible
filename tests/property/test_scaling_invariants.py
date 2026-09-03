@@ -12,6 +12,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from torch import nn, optim
 
+from computronium.core.system_trainer import compose_system
 from computronium.models.native.backprop_native import create_native_backprop_mlp
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 from computronium.ontology import (
@@ -27,10 +28,8 @@ from computronium.ontology import (
     RecurrentGeometry,
     StateDynamicsConfig,
     SubstrateConfig,
-    SubstrateType,
     ThermodynamicContrast,
 )
-from computronium.core.system_trainer import compose_system
 
 
 def _make_synthetic_dataset(
@@ -252,7 +251,7 @@ class TestDeepNetworkCreditAssignment:
 
         # Check gradient flow through first layer
         model.train()  # type: ignore[attr-defined]
-        metrics = model.train_step(x, y)
+        metrics = model.train_step(x, y)  # ruff: ignore[unused-variable]
 
         # Find first layer weight via geometry params
         params = model.geometry.params
@@ -346,7 +345,7 @@ class TestEqPropBackpropAccuracyParity:
 
         # Backprop - uses native model directly
         bp_model.train()  # type: ignore[attr-defined]
-        optimizer = optim.Adam([p for p in bp_model.geometry.params.values()], lr=0.01)
+        optimizer = optim.Adam([p for p in bp_model.geometry.params.values()], lr=0.01)  # ruff: ignore[unnecessary-comprehension]
         for epoch in range(5):
             optimizer.zero_grad()
             logits = bp_model.forward(x_train)
@@ -425,7 +424,7 @@ class TestNoiseDampingSelfHealing:
             # running the dynamics with the noisy state. For now, we verify
             # the model can train without error after noise injection.
             model.train()  # type: ignore[attr-defined]
-            result = model.train_step(x[:4], y[:4])
+            result = model.train_step(x[:4], y[:4])  # ruff: ignore[unused-variable]
 
             # Get final hidden state after settling
             with torch.no_grad():

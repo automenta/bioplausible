@@ -71,9 +71,9 @@ def _convert_fstring_to_percent(template: str) -> tuple[str, list[str]]:
     return fmt, args
 
 
-def _process_file(path: pathlib.Path) -> bool:
+def _process_file(path: pathlib.Path) -> bool:  # ruff: ignore[too-many-locals]
     """Process a single file. Returns True if modified."""
-    source = path.read_text()
+    source = path.read_text(encoding="utf-8")
     modified = False
     new_lines: list[str] = []
 
@@ -111,7 +111,7 @@ def _process_file(path: pathlib.Path) -> bool:
             modified = True
             continue
 
-        # Build: logger.info("fmt %s", arg1, arg2, exc_info=True)
+        # Build: logger.info("fmt %s", arg1, arg2, exc_info=True)  # ruff: ignore[commented-out-code]
         arg_list = ", ".join(args) if args else ""
         exc_part = exc_info_str if exc_info_str else ""
 
@@ -128,7 +128,7 @@ def _process_file(path: pathlib.Path) -> bool:
         modified = True
 
     if modified:
-        path.write_text("\n".join(new_lines))
+        path.write_text("\n".join(new_lines), encoding="utf-8")
     return modified
 
 

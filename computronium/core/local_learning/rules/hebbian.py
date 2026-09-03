@@ -55,7 +55,7 @@ class ContrastiveHebbianLearning(LearningRuleOptimizer):
         super().__init__(params, model, lr, momentum, weight_decay)
         self.clamp_strength = clamp_strength
 
-    def step(self, x: torch.Tensor, target: torch.Tensor | None = None) -> None:
+    def step(self, x: torch.Tensor, target: torch.Tensor | None = None) -> None:  # ruff: ignore[complex-structure]
         if target is None:
             raise ValueError("CHL requires target")
 

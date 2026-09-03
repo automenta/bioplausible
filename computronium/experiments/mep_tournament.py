@@ -75,7 +75,7 @@ class MEPConfig:
             "feedback_type": self.feedback,
         })
         # Task-specific dims
-        if self.task in ("mnist", "fashion_mnist"):
+        if self.task in ("mnist", "fashion_mnist"):  # ruff: ignore[literal-membership]
             kwargs["input_dim"] = 784
             kwargs["output_dim"] = 10
         else:
@@ -128,7 +128,7 @@ def _run_single_mep_experiment(config: MEPConfig, device: str) -> dict:
         device=device,
     )
 
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         trainer = CoreTrainer(trainer_config)
         start_time = time.time()
         history = trainer.fit()
@@ -259,7 +259,7 @@ def _analyze_factor_importance(results: list[dict]) -> dict:
 
         # Two-way interactions
         for f1, f2 in itertools.combinations(factor_cols, 2):
-            try:
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 # Create interaction groups
                 task_df[f"{f1}_{f2}"] = task_df[f1] + "_" + task_df[f2]
                 groups = [
@@ -281,7 +281,7 @@ def _analyze_factor_importance(results: list[dict]) -> dict:
                         "p_value": float(p_val),
                         "significant": p_val < 0.05,
                     }
-            except Exception:
+            except Exception:  # ruff: ignore[try-except-pass]
                 pass
 
         importance[task] = task_importance
@@ -330,7 +330,7 @@ def _save_results(results: list[dict], output_dir: str) -> None:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    with Path(output_path / "raw_results.jsonl").open("w") as f:
+    with Path(output_path / "raw_results.jsonl").open("w", encoding="utf-8") as f:
         for r in results:
             f.write(json.dumps(r, default=str) + "\n")
 
@@ -367,7 +367,7 @@ def main():
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
 
-    if args.factors:
+    if args.factors:  # ruff: ignore[if-else-block-instead-of-if-exp]
         factors = json.loads(args.factors)
     else:
         factors = MEP_FACTORS
@@ -393,12 +393,16 @@ def main():
 
     # Analyze factor importance
     importance = _analyze_factor_importance(results)
-    with Path(Path(config.output_dir) / "factor_importance.json").open("w") as f:
+    with Path(Path(config.output_dir) / "factor_importance.json").open(
+        "w", encoding="utf-8"
+    ) as f:
         json.dump(importance, f, indent=2, default=str)
 
     # Find best presets
     presets = _find_best_presets(results)
-    with Path(Path(config.output_dir) / "best_presets.json").open("w") as f:
+    with Path(Path(config.output_dir) / "best_presets.json").open(
+        "w", encoding="utf-8"
+    ) as f:
         json.dump(presets, f, indent=2, default=str)
 
     # Generate report
@@ -412,7 +416,7 @@ def _generate_report(importance: dict, presets: dict, output_dir: str) -> None:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    with Path(output_path / "tournament_report.md").open("w") as f:
+    with Path(output_path / "tournament_report.md").open("w", encoding="utf-8") as f:
         f.write("# MEP Preset Tournament Report\n\n")
 
         f.write("## Factor Importance\n\n")

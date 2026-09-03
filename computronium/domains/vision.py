@@ -66,7 +66,7 @@ class VisionTask(DomainTask):
             tags=["vision", "image"],
         )
 
-    def setup(self) -> None:
+    def setup(self) -> None:  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
         """Load vision datasets."""
         key = self.dataset_name.lower()
         default_transform = build_transform(key) if key in normalization else None
@@ -198,7 +198,7 @@ class VisionTask(DomainTask):
 
         if split == TaskSplit.TRAIN:
             return self._train_loader
-        elif split in (TaskSplit.VAL, TaskSplit.TEST):
+        elif split in (TaskSplit.VAL, TaskSplit.TEST):  # ruff: ignore[literal-membership]
             return self._val_loader
         else:
             return self._train_loader
@@ -223,7 +223,7 @@ class VisionTask(DomainTask):
                     if max_batches and i >= max_batches:
                         break
 
-                    inputs, targets = inputs.to(self.device), targets.to(self.device)
+                    inputs, targets = inputs.to(self.device), targets.to(self.device)  # ruff: ignore[redefined-loop-name]
                     outputs = model(inputs)
                     loss = self.compute_loss(outputs, targets)
 

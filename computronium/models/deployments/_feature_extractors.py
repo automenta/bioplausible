@@ -53,7 +53,7 @@ __all__ = [
 ]
 
 
-def tile_model_factory(  # ruff: ignore[too-many-locals] - typed extraction from untyped kwargs requires many locals
+def tile_model_factory(  # ruff: ignore[too-many-locals]
     *, input_dim: int, output_dim: int, **kwargs: object
 ) -> TileAlgorithm:
     """Bind the generic tile-model factory interface to ``TileAlgorithm``.

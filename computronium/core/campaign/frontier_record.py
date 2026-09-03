@@ -9,6 +9,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from computronium.core.profiling import (
+        ResourceUsage,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +158,3 @@ class FrontierRecord:
 
 
 # Re-export ResourceUsage for convenience
-from computronium.core.profiling import (
-    ResourceUsage,
-)

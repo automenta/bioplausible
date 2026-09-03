@@ -6,13 +6,16 @@ Internal module: all helpers are `_`-prefixed per AGENTS.md.
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Generator
+from typing import TYPE_CHECKING
 
 import torch
 from torch import Tensor
 
 from computronium.core.pipeline import task_loss
 from computronium.ontology import System, SystemState
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 # ----------------------------------------------------------------------
 # Constants (do not inline shapes)
@@ -24,8 +27,8 @@ SETTLE_ITERS = 50
 
 # Tolerances
 BITWISE = 0  # exact ==
-TIGHT = dict(rtol=1e-5, atol=1e-6)
-LOOSE = dict(rtol=1e-4, atol=1e-5)
+TIGHT = {"rtol": 1e-5, "atol": 1e-6}
+LOOSE = {"rtol": 1e-4, "atol": 1e-5}
 
 
 # ----------------------------------------------------------------------
@@ -170,7 +173,7 @@ def _all_registered_model_names() -> list[str]:
         return []
 
 
-def _round_trip_configs(system: System) -> System:
+def _round_trip_configs(system: System) -> System:  # ruff: ignore[too-many-locals]
     """Serialize system configs to JSON and reconstruct.
 
     For now, this is a placeholder that re-creates from configs.
@@ -206,11 +209,11 @@ def _round_trip_configs(system: System) -> System:
     # Map substrate type to class
     substrate_map = {
         "digital": DigitalSubstrate,
-        "analog": lambda c: DigitalSubstrate(c),
-        "memristor": lambda c: DigitalSubstrate(c),
-        "optical": lambda c: DigitalSubstrate(c),
-        "neuromorphic": lambda c: DigitalSubstrate(c),
-        "quantum": lambda c: DigitalSubstrate(c),
+        "analog": lambda c: DigitalSubstrate(c),  # ruff: ignore[unnecessary-lambda]
+        "memristor": lambda c: DigitalSubstrate(c),  # ruff: ignore[unnecessary-lambda]
+        "optical": lambda c: DigitalSubstrate(c),  # ruff: ignore[unnecessary-lambda]
+        "neuromorphic": lambda c: DigitalSubstrate(c),  # ruff: ignore[unnecessary-lambda]
+        "quantum": lambda c: DigitalSubstrate(c),  # ruff: ignore[unnecessary-lambda]
     }
     substrate_cls = substrate_map.get(substrate_cfg.device, DigitalSubstrate)
     substrate = substrate_cls(substrate_cfg)

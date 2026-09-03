@@ -236,7 +236,7 @@ def visualize_signal_propagation(
     """
     Create visualizations for the signal propagation experiment.
     """
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         depths = results["depths"]
 
         plt.figure(figsize=(15, 10))

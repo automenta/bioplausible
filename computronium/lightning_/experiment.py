@@ -57,7 +57,7 @@ def run_pl_trial(
         logger=False,
     )
 
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         trainer.fit(module, train_loader, val_loader)
         metrics = trainer.callback_metrics
         if "val_acc" in metrics:
@@ -71,7 +71,7 @@ def run_pl_trial(
                 "accuracy": val_acc,
                 "loss": val_loss,
             }
-        return {"accuracy": 0.0, "loss": 0.0}
+        return {"accuracy": 0.0, "loss": 0.0}  # ruff: ignore[try-consider-else]
     except Exception as e:  # broad: best-effort
         logger.error("PL trial failed: %s", e, exc_info=True)
         return None
@@ -113,7 +113,7 @@ def run_pl_trial_with_wandb(
         enable_wandb=True,
     )
 
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         trainer.fit(module, train_loader, val_loader)
         metrics = trainer.callback_metrics
         if "val_acc" in metrics:
@@ -127,7 +127,7 @@ def run_pl_trial_with_wandb(
                 "accuracy": val_acc,
                 "loss": val_loss,
             }
-        return {"accuracy": 0.0, "loss": 0.0}
+        return {"accuracy": 0.0, "loss": 0.0}  # ruff: ignore[try-consider-else]
     except Exception as e:  # broad: best-effort
         logger.error("PL+W&B trial failed: %s", e, exc_info=True)
         return None

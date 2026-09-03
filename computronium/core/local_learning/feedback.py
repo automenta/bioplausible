@@ -6,16 +6,20 @@ Provides standard feedback mechanisms for the tile algorithm:
 - No feedback for pure feedforward Hebbian / single-pass settling
 """
 
-from computronium.core.local_learning.protocols import (
-    TileGraph,
-    TileState,
-    WeightLookup,
-)
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from torch import Tensor
+
+    from computronium.core.local_learning.protocols import (
+        TileGraph,
+        TileState,
+        WeightLookup,
+    )
 
 
 def symmetric_feedback(tile: TileState, graph: TileGraph, lookup: WeightLookup) -> list:
     """Symmetric (transpose) backward projection; EP/PC/TB/Hebbian default."""
-    from torch import Tensor
 
     feedback: list[Tensor] = []
     for dst_id in tile.fwd_neighbors:

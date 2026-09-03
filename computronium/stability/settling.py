@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import torch
 
-from computronium.state import CompositeState
-
 if TYPE_CHECKING:
-    from computronium.state import SystemContext
+    from collections.abc import Callable
+
+    from computronium.state import CompositeState, SystemContext
 
 
 def measure_settling_time(
@@ -164,7 +163,7 @@ class SettlingMonitor:
 
         if b > 0:
             # Time to reach tolerance: tolerance = a * exp(-b * t)
-            # t = (log(a) - log(tolerance)) / b
+            # t = (log(a) - log(tolerance)) / b  # ruff: ignore[commented-out-code]
             a = torch.exp(coeffs[0]).item()
             if a > self.tolerance:
                 estimated = int(
@@ -179,7 +178,7 @@ class SettlingMonitor:
         return self.max_steps
 
 
-def measure_settling_time_full_state(
+def measure_settling_time_full_state(  # ruff: ignore[complex-structure]
     transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
     z: CompositeState,
     context: SystemContext,

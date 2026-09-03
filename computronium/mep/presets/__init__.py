@@ -13,9 +13,8 @@ __all__ = [
     "smep_fast",
 ]
 
-from collections.abc import Iterable
 
-from torch import nn
+from typing import TYPE_CHECKING
 
 from computronium.core.local_learning.rules.composite_adapter import (
     CompositeOptimizerAdapter,
@@ -35,12 +34,18 @@ from computronium.mep.optimizers import (
     NoFeedback,
     SpectralConstraint,
 )
-from computronium.mep.optimizers.strategies.update import (
-    Backend,  # ruff: ignore[typing-only-first-party-import]  # annotation name resolved at runtime (no future-annotations import)
-)
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from torch import nn
+
+    from computronium.mep.optimizers.strategies.update import (
+        Backend,  # annotation name resolved at runtime (no future-annotations import)
+    )
 
 
-def smep(
+def smep(  # ruff: ignore[too-many-arguments, too-many-positional-arguments, non-empty-init-module]
     params: Iterable[nn.Parameter],
     model: nn.Module,
     mode: str = "backprop",
@@ -144,7 +149,7 @@ def smep(
     )
 
 
-def sdmep(
+def sdmep(  # ruff: ignore[too-many-arguments, too-many-positional-arguments, non-empty-init-module]
     params: Iterable[nn.Parameter],
     model: nn.Module,
     mode: str = "ep",
@@ -232,7 +237,7 @@ def sdmep(
     )
 
 
-def local_ep(
+def local_ep(  # ruff: ignore[too-many-arguments, too-many-positional-arguments, non-empty-init-module]
     params: Iterable[nn.Parameter],
     model: nn.Module,
     lr: float = 0.02,
@@ -297,7 +302,7 @@ def local_ep(
     )
 
 
-def natural_ep(
+def natural_ep(  # ruff: ignore[too-many-arguments, too-many-positional-arguments, non-empty-init-module]
     params: Iterable[nn.Parameter],
     model: nn.Module,
     lr: float = 0.02,
@@ -380,7 +385,7 @@ def natural_ep(
     )
 
 
-def muon_backprop(
+def muon_backprop(  # ruff: ignore[non-empty-init-module]
     params: Iterable[nn.Parameter],
     lr: float = 0.02,
     momentum: float = 0.9,
@@ -428,7 +433,7 @@ def muon_backprop(
     )
 
 
-def smep_fast(
+def smep_fast(  # ruff: ignore[too-many-arguments, too-many-positional-arguments, non-empty-init-module]
     params: Iterable[nn.Parameter],
     model: nn.Module,
     lr: float = 0.01,

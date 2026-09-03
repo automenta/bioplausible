@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -12,6 +11,8 @@ from torch import Tensor
 from computronium.state import CompositeState
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.state import SystemContext
 
 
@@ -45,7 +46,7 @@ def estimate_spectral_radius(
 
     # Initialize random vector for power iteration
     v = torch.randn_like(x_base)
-    v = v / (v.norm(dim=-1, keepdim=True) + 1e-8)
+    v = v / (v.norm(dim=-1, keepdim=True) + 1e-8)  # ruff: ignore[non-augmented-assignment]
 
     for _ in range(num_iterations):
         # Compute J * v via finite differences
@@ -140,7 +141,7 @@ class SpectralRadiusEstimator:
         # Single finite-difference step
         eps = self.perturbation_scale
         v = torch.randn_like(x)
-        v = v / (v.norm(dim=-1, keepdim=True) + 1e-8)
+        v = v / (v.norm(dim=-1, keepdim=True) + 1e-8)  # ruff: ignore[non-augmented-assignment]
 
         x_perturbed = x + eps * v
         z_perturbed = CompositeState(

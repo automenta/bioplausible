@@ -10,9 +10,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from types import TracebackType
+from typing import TYPE_CHECKING
 
 from torch import nn
+
+if TYPE_CHECKING:
+    from types import TracebackType
 
 ParamSelector = Callable[[str, nn.Parameter], bool]
 
@@ -82,7 +85,7 @@ class ThetaInvarianceAudit:
             if self._selector(name, p)
         }
 
-    def __enter__(self) -> ThetaInvarianceAudit:
+    def __enter__(self) -> ThetaInvarianceAudit:  # ruff: ignore[non-self-return-type]
         selected = self._selected()
         # Frozen check reads live parameters (clones always report False)
         frozen = all(not p.requires_grad for p in selected.values())

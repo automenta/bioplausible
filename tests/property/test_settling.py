@@ -58,11 +58,11 @@ def test_settle_single_state_trajectory_length(steps):
     def forward_step(h, x_in):
         return torch.tanh(h + x_in)
 
-    h_star, trajectory, dynamics = settle_single_state(
+    h_star, trajectory, _dynamics = settle_single_state(
         h_0, forward_step, x, steps, return_trajectory=True
     )
     if trajectory is not None:
-        expected_len = min(steps + 1, steps + 1)  # no convergence
+        expected_len = min(steps + 1, steps + 1)  # no convergence  # ruff: ignore[unused-variable]
         assert len(trajectory) == steps + 1 or len(trajectory) <= steps + 1
         assert trajectory[0].shape == h_0.shape
     assert h_star.shape == h_0.shape
@@ -79,7 +79,7 @@ def test_settle_activations_list_convergence(steps):
     def dynamics(activations, beta, target):
         return [torch.tanh(a) for a in activations]
 
-    final_acts, trajectory, dynamics_out = settle_activations_list(
+    final_acts, _trajectory, _dynamics_out = settle_activations_list(
         acts_0,
         dynamics,
         steps,

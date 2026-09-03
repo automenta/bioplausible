@@ -7,9 +7,12 @@
 Calls each node's initialize_params with a shared RNG.
 """
 
+from typing import TYPE_CHECKING
+
 import torch
 
-from computronium.graph.topology import GraphStructure
+if TYPE_CHECKING:
+    from computronium.graph.topology import GraphStructure
 
 __all__ = [
     "initialize_params",

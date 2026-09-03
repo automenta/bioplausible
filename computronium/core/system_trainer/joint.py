@@ -55,7 +55,7 @@ if TYPE_CHECKING:
     )
 
 
-def _credit_from_config(config: CreditAssignmentConfig):
+def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-many-return-statements]
     """Instantiate the credit implementation named by ``config.credit_type``."""
     from computronium.ontology import (
         BackpropCredit,
@@ -87,7 +87,7 @@ def _credit_from_config(config: CreditAssignmentConfig):
             raise ValueError(f"Unknown credit_type: {other!r}")
 
 
-def compose_joint_system[
+def compose_joint_system[  # ruff: ignore[complex-structure]
     TS: Substrate,
     TG: Geometry,
     TD: StateDynamics,
@@ -231,7 +231,7 @@ def compose_joint_system[
 
             return run_forward(self.substrate, self.geometry, self.dynamics, x)
 
-        def _make_context(self) -> SystemContext:
+        def _make_context(self) -> SystemContext:  # ruff: ignore[undefined-name]
             """Create SystemContext from this joint system."""
             from computronium.core.joint.transition import PlasticityConfig
             from computronium.state import StateRegistry, StateVariable, SystemContext
@@ -289,7 +289,7 @@ def compose_joint_system[
             )
 
         @property
-        def context(self) -> SystemContext:
+        def context(self) -> SystemContext:  # ruff: ignore[undefined-name]
             """SystemContext bound to the current θ and component configs."""
             return self._make_context()
 
@@ -320,21 +320,7 @@ def compose_joint_system[
         @classmethod
         def from_spec(cls, spec: dict) -> JointSystem:
             """Reconstruct a JointSystem from a specification dictionary."""
-            # Delegate to compose_joint_system_from_configs
-            from computronium.core.system_trainer.joint import (
-                compose_joint_system_from_configs,
-            )
-
-            return compose_joint_system_from_configs(
-                SubstrateConfig(**spec["substrate"]),
-                GeometryConfig(**spec["geometry"]),
-                StateDynamicsConfig(**spec["dynamics"]),
-                PlasticityConfig(
-                    **spec.get("plasticity", PlasticityConfig.null().__dict__)
-                ),
-                CreditAssignmentConfig(**spec["credit"]),
-                ParameterUpdateConfig(**spec["update"]),
-            )
+            return _joint_from_spec(spec)
 
     # Check if plasticity is NullPlasticity (or equivalent)
     if isinstance(plasticity, (_NullPlasticity, NullPlasticity)):
@@ -382,11 +368,11 @@ def compose_joint_system[
                 return self
 
             @property
-            def context(self) -> SystemContext:
+            def context(self) -> SystemContext:  # ruff: ignore[undefined-name]
                 """SystemContext bound to the current θ and component configs."""
                 return self._make_context()
 
-            def _make_context(self) -> SystemContext:
+            def _make_context(self) -> SystemContext:  # ruff: ignore[undefined-name]
                 from computronium.core.joint.transition import PlasticityConfig
                 from computronium.state import (
                     StateRegistry,
@@ -437,20 +423,7 @@ def compose_joint_system[
 
             @classmethod
             def from_spec(cls, spec: dict) -> JointSystem:
-                from computronium.core.system_trainer.joint import (
-                    compose_joint_system_from_configs,
-                )
-
-                return compose_joint_system_from_configs(
-                    SubstrateConfig(**spec["substrate"]),
-                    GeometryConfig(**spec["geometry"]),
-                    StateDynamicsConfig(**spec["dynamics"]),
-                    PlasticityConfig(
-                        **spec.get("plasticity", PlasticityConfig.null().__dict__)
-                    ),
-                    CreditAssignmentConfig(**spec["credit"]),
-                    ParameterUpdateConfig(**spec["update"]),
-                )
+                return _joint_from_spec(spec)
 
         return _NullJointSystem[TS, TG, TD, TC, TU](base_system)  # type: ignore[return-value]
 
@@ -467,7 +440,30 @@ def compose_joint_system[
     return joint  # type: ignore[return-value]
 
 
-def compose_joint_system_from_configs(
+def _joint_from_spec(spec: dict) -> JointSystem:
+    """Reconstruct a JointSystem from a ``to_spec`` payload (both wrappers)."""
+    from computronium.core.system_trainer.factory import (
+        _geometry_spec_parts,
+        _restore_geometry_params,
+    )
+    from computronium.core.system_trainer.joint import compose_joint_system_from_configs
+
+    geometry_cfg, serialized_params = _geometry_spec_parts(dict(spec["geometry"]))
+    joint = compose_joint_system_from_configs(
+        SubstrateConfig(**spec["substrate"]),
+        geometry_cfg,
+        StateDynamicsConfig(**spec["dynamics"]),
+        PlasticityConfig(
+            **spec.get("plasticity", dataclasses.asdict(PlasticityConfig.null()))
+        ),
+        CreditAssignmentConfig(**spec["credit"]),
+        ParameterUpdateConfig(**spec["update"]),
+    )
+    _restore_geometry_params(joint.geometry, serialized_params)
+    return joint
+
+
+def compose_joint_system_from_configs(  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
     substrate: SubstrateConfig,
     geometry: GeometryConfig,
     dynamics: StateDynamicsConfig,
@@ -509,7 +505,7 @@ def compose_joint_system_from_configs(
 
     # Instantiate geometry from config
     topology_type = geometry.topology_type.lower()
-    if topology_type in ("recurrent", "recurrent_attractor"):
+    if topology_type in ("recurrent", "recurrent_attractor"):  # ruff: ignore[literal-membership]
         hidden_dim = geometry.hidden_dims[-1] if geometry.hidden_dims else None
         recurrent_weight = None
         if geometry.recurrent_weight is not None:
@@ -517,7 +513,7 @@ def compose_joint_system_from_configs(
         geometry_instance = RecurrentGeometry(
             geometry, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight
         )
-    elif topology_type in ("tile_mesh", "tile"):
+    elif topology_type in ("tile_mesh", "tile"):  # ruff: ignore[literal-membership]
         from computronium.ontology import TileGeometry
 
         geometry_instance = TileGeometry(
@@ -552,13 +548,13 @@ def compose_joint_system_from_configs(
     # Instantiate update from config — unknown values raise (no silent
     # Euclidean fallback: a typo'd update_type must not masquerade as SGD).
     update_type = update.update_type.lower()
-    if update_type in ("riemannian_orthogonal", "muon"):
+    if update_type in ("riemannian_orthogonal", "muon"):  # ruff: ignore[literal-membership]
         update_instance = RiemannianOrthogonalUpdate(update)
-    elif update_type in ("spectral_constrained", "spectral"):
+    elif update_type in ("spectral_constrained", "spectral"):  # ruff: ignore[literal-membership]
         update_instance = SpectralConstrainedUpdate(update)
-    elif update_type in ("natural_gradient", "fisher"):
+    elif update_type in ("natural_gradient", "fisher"):  # ruff: ignore[literal-membership]
         update_instance = NaturalGradientUpdate(update)
-    elif update_type in ("elastic_consolidation", "ewc"):
+    elif update_type in ("elastic_consolidation", "ewc"):  # ruff: ignore[literal-membership]
         update_instance = ElasticConsolidationUpdate(update)
     elif update_type == "euclidean":
         update_instance = EuclideanUpdate(update)

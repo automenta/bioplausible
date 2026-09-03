@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Literal
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import Tensor, nn
 
 from computronium.core.local_learning import TileAlgorithm, TileAlgorithmConfig
@@ -156,7 +156,7 @@ class TileLM(TileAlgorithm):
     def _embed_tokens(self, input_ids: Tensor) -> Tensor:
         _, seq_len = input_ids.shape
         x = self.token_embedding(input_ids)
-        x = x + self.positional_encoding[:, :seq_len, :]
+        x = x + self.positional_encoding[:, :seq_len, :]  # ruff: ignore[non-augmented-assignment]
         return self.embed_dropout(x)
 
     def _substrate_forward(self, hidden: Tensor) -> Tensor:
@@ -214,7 +214,7 @@ class TileLM(TileAlgorithm):
     # ── Generation ───────────────────────────────────────────────────────────
 
     @torch.no_grad()
-    def generate(  # ruff: ignore[too-many-arguments]  # generation sampling contract
+    def generate(  # generation sampling contract
         self,
         input_ids: Tensor,
         max_length: int,
@@ -268,7 +268,7 @@ class TileLM(TileAlgorithm):
         return count_parameters(self, trainable_only=False)
 
     @classmethod
-    def from_lm(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
+    def from_lm(  # zoo build-classmethod contract  # ruff: ignore[too-many-arguments]
         cls,
         vocab_size: int,
         *,
@@ -310,7 +310,7 @@ class TileLM(TileAlgorithm):
         return cls(config)
 
     @classmethod
-    def build(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def build(
         cls,
         spec,
         input_dim: int,

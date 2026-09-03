@@ -204,18 +204,37 @@ def _fig_substrate_swap(record: dict) -> Figure:
     arms = record["data"]["arms"]
     names = list(arms)
     accs = [arms[name]["train_acc"] for name in names]
-    labels = [name.replace("memristive_", "memristive\nIR-drop ") for name in names]
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.bar(labels, accs, color=[COLOR_FEASIBLE, COLOR_ARM, COLOR_WALLED])
-    ax.set_ylim(0, 1)
-    chance = 1 / 10
-    chance_line(ax, chance, "chance (0.1)")
-    ax.set_ylabel("train accuracy")
-    ax.set_title(
-        "D6 — one wiring, one swapped substrate (mild IR-drop learns, severe walls)"
+    zeros = [arms[name].get("probe_state_zeros", 0.0) for name in names]
+    labels = [
+        name.replace("memristive_", "memristive\nIR-drop ").replace(
+            "neuromorphic_", "neuromorphic\nspike-drop "
+        )
+        for name in names
+    ]
+    fig, (ax_acc, ax_probe) = plt.subplots(1, 2, figsize=(11, 4))
+    acc_colors = [
+        COLOR_FEASIBLE
+        if name == "digital"
+        else COLOR_WALLED
+        if "severe" in name
+        else COLOR_ARM
+        for name in names
+    ]
+    ax_acc.bar(labels, accs, color=acc_colors)
+    ax_acc.set_ylim(0, 1)
+    chance_line(ax_acc, 1 / 10, "chance (0.1)")
+    ax_acc.set_ylabel("train accuracy")
+    ax_acc.set_title(
+        "D6 — one wiring, one swapped substrate (mild physics learns, severe walls)"
     )
     for i, acc in enumerate(accs):
-        ax.text(i, acc, f"{acc:.2f}", ha="center", va="bottom", fontsize=9)
+        ax_acc.text(i, acc, f"{acc:.2f}", ha="center", va="bottom", fontsize=9)
+    ax_probe.bar(labels, zeros, color=acc_colors)
+    ax_probe.set_ylim(0, 1)
+    ax_probe.set_ylabel("probe state zeros (fraction)")
+    ax_probe.set_title("the dial itself: dropout thins the state, noise does not")
+    for i, z in enumerate(zeros):
+        ax_probe.text(i, z, f"{z:.2f}", ha="center", va="bottom", fontsize=9)
     apply_style(fig)
     return fig
 

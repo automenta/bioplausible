@@ -14,6 +14,26 @@ from computronium.core.tile.topology import TileGraph
 if TYPE_CHECKING:
     from computronium.ontology.substrate import Substrate
 
+_DEFAULT_INIT_SCALE = 0.1
+
+
+def _linear_stack(dims: tuple[int, ...], init_scale: float) -> list[nn.Module]:
+    """MLP layers with weights rescaled from PyTorch's fan-in-adaptive init.
+
+    ``init_scale`` multiplies the default init; the config default
+    ``_DEFAULT_INIT_SCALE`` is the ×1.0 identity, so legacy builds are
+    bit-identical.
+    """
+    layers: list[nn.Module] = []
+    for i in range(len(dims) - 1):
+        layer = nn.Linear(dims[i], dims[i + 1])
+        if init_scale != _DEFAULT_INIT_SCALE:
+            layer.weight.data.mul_(init_scale / _DEFAULT_INIT_SCALE)
+        layers.append(layer)
+        if i < len(dims) - 2:
+            layers.append(nn.ReLU())
+    return layers
+
 
 # ============================================================
 # Geometry Configuration
@@ -33,7 +53,9 @@ class GeometryConfig:
             "neuromorphic", "spatial_lattice"
         connectivity: Optional adjacency specification
         recurrent_weight: Optional recurrent weight matrix (for recurrent topology)
-        init_scale: Weight initialization scale for recurrent weights
+        init_scale: Multiplicative scale on weight initialization (weights and
+            recurrent matrices; recurrent matrices additionally carry a 0.1
+            sub-scale for EqProp's small-recurrent convention)
     """
 
     input_dim: int
@@ -43,7 +65,7 @@ class GeometryConfig:
     topology_type: str
     connectivity: dict[str, object] | None
     recurrent_weight: list[list[float]] | None
-    init_scale: float = 0.1
+    init_scale: float = _DEFAULT_INIT_SCALE
 
     @classmethod
     def feedforward(
@@ -92,8 +114,8 @@ class GeometryConfig:
         input_dim: int,
         output_dim: int,
         num_layers: int,
-        neurons_per_tile: int,
-        tiles_per_layer: int,
+        neurons_per_tile: int,  # ruff: ignore[unused-class-method-argument]
+        tiles_per_layer: int,  # ruff: ignore[unused-class-method-argument]
         init_scale: float = 0.1,
     ) -> GeometryConfig:
         return cls(
@@ -222,12 +244,7 @@ class FeedforwardGeometry(nn.Module):
             *self.config.hidden_dims,
             self.config.output_dim,
         )
-        layers = []
-        for i in range(len(dims) - 1):
-            layers.append(nn.Linear(dims[i], dims[i + 1]))
-            if i < len(dims) - 2:
-                layers.append(nn.ReLU())
-        self._layers = nn.ModuleList(layers)
+        self._layers = nn.ModuleList(_linear_stack(dims, self.config.init_scale))
         self._set_param_names()
 
     def _set_param_names(self) -> None:
@@ -255,7 +272,7 @@ class FeedforwardGeometry(nn.Module):
                 if layer.bias is not None:
                     # Out-of-place add: in-place adds on grad-tracking tensors
                     # pin the whole downstream settle graph (CUDA leak)
-                    h = h + layer.bias
+                    h = h + layer.bias  # ruff: ignore[non-augmented-assignment]
             else:
                 h = layer(h)
         return h
@@ -282,7 +299,7 @@ class FeedforwardGeometry(nn.Module):
                 if layer.bias is not None:
                     # Out-of-place add: in-place adds on grad-tracking tensors
                     # pin the whole downstream settle graph (CUDA leak)
-                    h = h + layer.bias
+                    h = h + layer.bias  # ruff: ignore[non-augmented-assignment]
             else:
                 h = layer(h)
                 # Add after activation functions (ReLU, etc.)
@@ -300,7 +317,7 @@ class FeedforwardGeometry(nn.Module):
                 h = h @ layer.weight.T  # ruff: ignore[non-augmented-assignment]
                 if layer.bias is not None:
                     # Out-of-place add: in-place adds break autograd
-                    h = h + layer.bias
+                    h = h + layer.bias  # ruff: ignore[non-augmented-assignment]
             else:
                 h = layer(h)
         return h
@@ -363,12 +380,7 @@ class RecurrentGeometry(nn.Module):
             *self.config.hidden_dims,
             self.config.output_dim,
         )
-        layers = []
-        for i in range(len(dims) - 1):
-            layers.append(nn.Linear(dims[i], dims[i + 1]))
-            if i < len(dims) - 2:
-                layers.append(nn.ReLU())
-        self._layers = nn.ModuleList(layers)
+        self._layers = nn.ModuleList(_linear_stack(dims, self.config.init_scale))
         # Add recurrent weight for the last hidden layer
         if len(self.config.hidden_dims) > 0 and self._recurrent_weight is None:
             hidden_dim = self.config.hidden_dims[-1]
@@ -413,13 +425,13 @@ class RecurrentGeometry(nn.Module):
                 h = op(h, layer.weight)
                 if layer.bias is not None:
                     # Out-of-place: in-place adds break autograd
-                    h = h + layer.bias
+                    h = h + layer.bias  # ruff: ignore[non-augmented-assignment]
             else:
                 h = layer(h)
             # Apply recurrent connection after each hidden layer (except output)
             if self._recurrent_weight is not None and i < len(self._layers) - 2:
                 # Out-of-place: in-place adds break autograd
-                h = h + op(h, self._recurrent_weight)
+                h = h + op(h, self._recurrent_weight)  # ruff: ignore[non-augmented-assignment]
         return h
 
     def route(self, activations: Tensor) -> Tensor:
@@ -432,7 +444,7 @@ class RecurrentGeometry(nn.Module):
             # Hidden state should match recurrent weight dimensions
             if h.shape[-1] == self._recurrent_weight.shape[0]:
                 # Out-of-place: in-place matmul breaks autograd
-                h = h @ self._recurrent_weight.T
+                h = h @ self._recurrent_weight.T  # ruff: ignore[non-augmented-assignment]
             else:
                 # Activations are output dim; we can't apply recurrent weight
                 # This happens when route is called on output instead of hidden state
@@ -475,7 +487,7 @@ class RecurrentGeometry(nn.Module):
             if isinstance(layer, nn.Linear):
                 h = op(h, layer.weight)
                 if layer.bias is not None:
-                    h = h + layer.bias
+                    h = h + layer.bias  # ruff: ignore[non-augmented-assignment]
             else:
                 h = layer(h)
                 # Add after activation functions
@@ -483,7 +495,7 @@ class RecurrentGeometry(nn.Module):
             # Apply recurrent connection after each hidden layer (except output)
             # Out-of-place: in-place adds pin the downstream settle graph
             if self._recurrent_weight is not None and i < len(self._layers) - 2:
-                h = h + op(h, self._recurrent_weight)
+                h = h + op(h, self._recurrent_weight)  # ruff: ignore[non-augmented-assignment]
         # Add final output if last layer was Linear (no trailing activation)
         if isinstance(self._layers[-1], nn.Linear):
             acts.append(h)
@@ -607,7 +619,7 @@ class TileGeometry(nn.Module):
         params.update({f"tile_weight.{k}": v for k, v in self._tile_weights.items()})
         return params
 
-    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
+    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:  # ruff: ignore[complex-structure]
         """Route input through the tile mesh using substrate's forward operator."""
         if substrate is None:
             from computronium.ontology.substrate import DigitalSubstrate
@@ -737,7 +749,7 @@ class TileGeometry(nn.Module):
                     acts.append(act)
         return torch.cat(acts, dim=1) if acts else torch.empty(1, 0)
 
-    def update_params(self, new_params: dict[str, Tensor]) -> None:
+    def update_params(self, new_params: dict[str, Tensor]) -> None:  # ruff: ignore[complex-structure]
         """Update geometry parameters in-place from ParameterUpdate output."""
         for name, param in new_params.items():
             if name.startswith("input_proj.") and self._input_projection is not None:
@@ -814,7 +826,7 @@ class TileGeometry(nn.Module):
         """
         return self._graph.get_boundary_tiles(device_map)
 
-    def forward_with_intermediates(
+    def forward_with_intermediates(  # ruff: ignore[complex-structure]
         self, x: Tensor, substrate: Substrate | None = None
     ) -> list[Tensor]:
         """Forward pass returning intermediate activations for each layer."""

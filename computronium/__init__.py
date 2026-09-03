@@ -97,7 +97,7 @@ __version__ = "1.0.0"
 
 # Lazy imports for heavy dependencies (zoo, experiment, config, core components)
 # Name -> (submodule_path, attr_or_None). attr None returns the submodule itself.
-_LAZY: dict[str, tuple[str, str | None]] = {
+_LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-module]
     # 6-D Joint Architecture (facade exports only)
     "CompositeState": ("computronium.state", "CompositeState"),
     "CoupledTransition": ("computronium.core.joint.transition", "CoupledTransition"),
@@ -190,6 +190,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {
     # Preset Factories (5-D)
     "create_backprop_mlp": ("computronium.core.presets", "create_backprop_mlp"),
     "create_memristive_mlp": ("computronium.core.presets", "create_memristive_mlp"),
+    "create_neuromorphic_mlp": ("computronium.core.presets", "create_neuromorphic_mlp"),
     "create_eqprop_mlp": ("computronium.core.presets", "create_eqprop_mlp"),
     "create_fa_mlp": ("computronium.core.presets", "create_fa_mlp"),
     "create_ff_mlp": ("computronium.core.presets", "create_ff_mlp"),
@@ -396,6 +397,7 @@ __all__ = [
     "create_ff_mlp",
     "create_hebbian_mlp",
     "create_memristive_mlp",
+    "create_neuromorphic_mlp",
     "create_pc_mlp",
     "create_pepita_mlp",
     "create_routing_mlp",
@@ -432,7 +434,6 @@ __all__ = [
 ]
 
 
-# ruff: file-ignore[raise-vanilla-args, RUF022]
 def __getattr__(name: str) -> object:
     """Lazily import a top-level symbol on first access.
 

@@ -69,7 +69,7 @@ _AGGREGATORS = {
 class Verdict(StrEnum):
     """A model's result after a stage."""
 
-    PASS = "PASS"  # ruff: ignore[hardcoded-password-string]  (verdict label, not a secret)
+    PASS = "PASS"  # ruff: ignore[hardcoded-password-string]
     REJECT = "REJECT"
 
 
@@ -173,7 +173,7 @@ def passes_stage(stage: Stage, results: list[ProbeResult]) -> tuple[bool, str]:
 class StaircaseRunner:
     """Runs a campaign's stages, advancing only survivors (architecture §6.6)."""
 
-    def __init__(  # ruff: ignore[too-many-arguments,too-many-positional-arguments]  (runner collects all collaborators; param_counter is the DI seam for tests/CLI)
+    def __init__(
         self,
         campaign,
         report: Report,

@@ -114,7 +114,7 @@ def _generate_report(args) -> int:
         output = _generate_text_report(args.run_id, stability_data)
 
     if args.output:
-        Path(args.output).write_text(output)
+        Path(args.output).write_text(output, encoding="utf-8")
         print(f"Report written to {args.output}")
     else:
         print(output)
@@ -293,7 +293,7 @@ def _compare_stability(args) -> int:
             output += f"{coord_short:<50} {d['stability_score']:<8.3f} {d['rho_jacobian']:<8.3f} {d['lyapunov_local']:<8.3f} {d['settling_time']:<8.1f} {d['basin_stability']:<8.3f} {d['task_accuracy']:<8.4f}\n"
 
     if args.output:
-        Path(args.output).write_text(output)
+        Path(args.output).write_text(output, encoding="utf-8")
         print(f"Comparison written to {args.output}")
     else:
         print(output)
@@ -301,7 +301,7 @@ def _compare_stability(args) -> int:
     return 0
 
 
-def _summary_stability(args) -> int:
+def _summary_stability(args) -> int:  # ruff: ignore[complex-structure, too-many-branches]
     """Summary stability statistics."""
     import statistics
 

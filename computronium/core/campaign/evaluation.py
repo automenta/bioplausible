@@ -133,7 +133,7 @@ def resolve_device(device: str | None) -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def _episode_targets(  # ruff: ignore[too-many-arguments] - noise knob completes the calibration contract
+def _episode_targets(
     task_name: str,
     x: Tensor,
     generator: torch.Generator,
@@ -169,12 +169,12 @@ def _episode_targets(  # ruff: ignore[too-many-arguments] - noise knob completes
         case "parity":
             return (x > 0).sum(dim=-1) % num_classes
         case other:
-            raise ValueError(  # ruff: ignore[raise-vanilla-args] - one-off validation message
+            raise ValueError(
                 f"unsupported task family {other!r} (supported: synthetic, parity)"
             )
 
 
-def episode_batch(  # ruff: ignore[too-many-arguments] - stationarity key completes the contract
+def episode_batch(
     episode: int,
     *,
     task_name: str = "synthetic",
@@ -492,15 +492,13 @@ def _teacher_key(
     segmented legacy stream would silently re-open the imp-54
     non-stationarity inside each segment."""
     if segment is not None and not stationary:
-        raise ValueError(  # ruff: ignore[raise-vanilla-args] - one-off validation message
-            "segment-keyed teachers require stationary_teacher=True"
-        )
+        raise ValueError("segment-keyed teachers require stationary_teacher=True")
     if not stationary:
         return None
     return (campaign_id, coordinate, seed) + ((segment,) if segment else ())
 
 
-def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always defaults
+def evaluate_episode(  # ruff: ignore[too-many-arguments]
     joint: JointSystem,
     *,
     coordinate: str,
@@ -626,7 +624,7 @@ def evaluate_episode(  # ruff: ignore[too-many-arguments] - shape triple always 
     return record, metrics
 
 
-def probe_episode(  # ruff: ignore[too-many-arguments] - shape triple always defaults
+def probe_episode(  # ruff: ignore[too-many-arguments]
     joint: JointSystem,
     *,
     coordinate: str,

@@ -23,7 +23,6 @@ Usage:
 from __future__ import annotations
 
 import warnings
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol, TypeVar
@@ -47,23 +46,25 @@ from computronium.core.tile.feature_extractors import (
 from computronium.models.deployments._feature_extractors import tile_model_factory
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from torch import Tensor
 
 __all__ = [
-    "DeploymentDomain",
-    "DeploymentConfig",
     "ConvDeploymentConfig",
-    "TemporalDeploymentConfig",
-    "RLDeploymentConfig",
-    "GraphDeploymentConfig",
+    "DeploymentConfig",
+    "DeploymentDomain",
     "FeatureExtractor",
+    "GraphDeploymentConfig",
+    "RLDeploymentConfig",
+    "TemporalDeploymentConfig",
     "TileDeploymentModel",
     "create_deployment_model",
-    "register_deployment_variants",
-    "create_vision_model",
+    "create_graph_model",
     "create_rl_model",
     "create_timeseries_model",
-    "create_graph_model",
+    "create_vision_model",
+    "register_deployment_variants",
 ]
 
 
@@ -337,7 +338,7 @@ def build_tile_head(
     # TaskHandler expects Literal["classification", "regression", "binary", "multilabel"]
     task_type = (
         config.task_type
-        if config.task_type in ("classification", "regression", "binary", "multilabel")
+        if config.task_type in ("classification", "regression", "binary", "multilabel")  # ruff: ignore[literal-membership]
         else "classification"
     )
     head_config = TileAlgorithmConfig(

@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -41,6 +40,7 @@ __all__ = [
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from pathlib import Path
 
 MIN_SEEDS = 5
 DEFAULT_ALPHA = 0.05
@@ -94,7 +94,7 @@ class ThresholdRegistration:
     @classmethod
     def load(cls, path: Path) -> ThresholdRegistration:
         """Load a registration from a JSON file in the repo."""
-        with path.open() as f:
+        with path.open(encoding="utf-8") as f:
             return cls.from_dict(json.load(f))
 
 

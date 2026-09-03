@@ -108,7 +108,7 @@ def build_transform(
     return transforms.Compose(steps)  # type: ignore[arg-type]
 
 
-def create_dataloader(  # ruff: ignore[too-many-arguments] - canonical DataLoader factory
+def create_dataloader(
     dataset: Dataset,
     *,
     batch_size: int,

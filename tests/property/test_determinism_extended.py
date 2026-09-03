@@ -45,7 +45,7 @@ STEPS = 5
 # ----------------------------------------------------------------------
 
 
-def _make_6d_system(coordinate: dict, device: str = "cpu") -> object:
+def _make_6d_system(coordinate: dict, device: str = "cpu") -> object:  # ruff: ignore[complex-structure, too-many-branches]
     """Create a JointSystem from a 6-D coordinate dict."""
     substrate_type = coordinate.get("substrate", "digital")
     geometry_type = coordinate.get("geometry", "feedforward")
@@ -254,7 +254,7 @@ def _coordinate_id(coord: dict) -> str:
 
 
 @pytest.mark.parametrize("coordinate", VALID_6D_COORDINATES, ids=_coordinate_id)
-def test_l5_determinism_lock_6d(coordinate):
+def test_l5_determinism_lock_6d(coordinate):  # ruff: ignore[complex-structure]
     """Same seed, same device, two runs of train_step: metrics and params bitwise equal for 6-D coordinates."""
     device = select_device()
 
@@ -352,7 +352,7 @@ def _metrics_equal(
 
 
 @pytest.mark.parametrize("coordinate", VALID_6D_COORDINATES[:5], ids=_coordinate_id)
-def test_l5_determinism_multi_step_6d(coordinate):
+def test_l5_determinism_multi_step_6d(coordinate):  # ruff: ignore[complex-structure]
     """Test determinism over multiple training steps for 6-D coordinates."""
     device = select_device()
 

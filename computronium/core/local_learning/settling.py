@@ -9,17 +9,19 @@ Phase 3 (REFACTOR7): Unified SettleProtocol + settle_universal primitive
 for cross-algorithm convergence instrumentation.
 """
 
-from collections.abc import (
-    Callable,  # ruff: ignore[typing-only-standard-library-import]  (used in runtime-evaluated annotations; module has no `from __future__ import annotations`)
-)
 from dataclasses import dataclass
-from typing import Literal, Protocol, cast, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, cast, runtime_checkable
 
 import torch
 from torch import autograd, nn
 from torch.utils.checkpoint import checkpoint as _checkpoint
 
 from computronium.core.logging import get_logger
+
+if TYPE_CHECKING:
+    from collections.abc import (
+        Callable,
+    )
 
 logger = get_logger()
 
@@ -202,7 +204,7 @@ def settle_state(
     return h, steps_taken, converged
 
 
-def settle_universal(
+def settle_universal(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     model: SettleProtocol,
     x: torch.Tensor,
     *,
@@ -423,7 +425,7 @@ def _inf_norm_converged(
 # ---------------------------------------------------------------------------
 
 
-def energy_gradient_descent(
+def energy_gradient_descent(  # ruff: ignore[complex-structure, too-many-branches, too-many-arguments]
     states: list[torch.Tensor],
     energy_fn: Callable[[list[torch.Tensor]], torch.Tensor],
     steps: int,
@@ -476,7 +478,7 @@ def energy_gradient_descent(
 
     states_backup = [s.clone() for s in states] if adaptive else None
 
-    for step in range(steps):
+    for step in range(steps):  # ruff: ignore[too-many-nested-blocks]
         with torch.enable_grad():
             E = energy_fn(states)
 
@@ -544,7 +546,7 @@ def energy_gradient_descent(
 # ---------------------------------------------------------------------------
 
 
-def settle_single_state(
+def settle_single_state(  # ruff: ignore[complex-structure]
     h_0: torch.Tensor,
     forward_step: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     x_transformed: torch.Tensor,
@@ -673,7 +675,7 @@ def settle_single_state(
 # ---------------------------------------------------------------------------
 
 
-def settle_activations_list(
+def settle_activations_list(  # ruff: ignore[complex-structure, too-many-branches, too-many-arguments]
     activations_0: list[torch.Tensor],
     forward_dynamics: Callable[
         [list[torch.Tensor], float, torch.Tensor | None],
@@ -882,7 +884,7 @@ class EquilibriumFunction(autograd.Function):
         return h
 
     @staticmethod
-    def backward(
+    def backward(  # ruff: ignore[too-many-locals]
         ctx: object, grad_output: torch.Tensor
     ) -> tuple[torch.Tensor | None, ...]:
         h_star, x_transformed, *params = ctx.saved_tensors

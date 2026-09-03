@@ -16,7 +16,7 @@ from computronium.ontology._substrate import (
 )
 
 
-def substrate_from_config(config: SubstrateConfig) -> Substrate:
+def substrate_from_config(config: SubstrateConfig) -> Substrate:  # ruff: ignore[complex-structure, too-many-return-statements]
     """Create a Substrate instance from its configuration.
 
     Args:

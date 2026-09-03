@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from torch import Tensor, nn
 
-from computronium.core.joint.transition import PlasticityPrimitive
-from computronium.ontology import (
-    CreditAssignment,
-    Geometry,
-    ParameterUpdate,
-    StateDynamics,
-    Substrate,
-)
-from computronium.state import SystemContext
+if TYPE_CHECKING:
+    from computronium.core.joint.transition import PlasticityPrimitive
+    from computronium.ontology import (
+        CreditAssignment,
+        Geometry,
+        ParameterUpdate,
+        StateDynamics,
+        Substrate,
+    )
+    from computronium.state import SystemContext
 
 
 class ContinualJointSystem(nn.Module):
@@ -120,7 +123,7 @@ class ContinualJointSystem(nn.Module):
 
     def to(self, *args, **kwargs):
         """Override to ensure joint system components are moved to device."""
-        self = super().to(*args, **kwargs)
+        self = super().to(*args, **kwargs)  # ruff: ignore[self-or-cls-assignment]
         device = args[0] if args else kwargs.get("device")
         if device is not None:
             if hasattr(self.substrate, "to"):
@@ -216,7 +219,7 @@ class ContinualJointSystem(nn.Module):
         substrate = self.substrate
         geometry = self.geometry
         acts = geometry.forward_with_intermediates(x, substrate)
-        # acts: [input, hidden1, hidden2, ..., output]
+        # acts: [input, hidden1, hidden2, ..., output]  # ruff: ignore[commented-out-code]
 
         # Modulate last hidden layer with fast weights
         # Last hidden is acts[-2] (before output layer)

@@ -12,13 +12,15 @@ Key features:
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import torch
 from torch import Tensor, nn
 
 from computronium.ontology import DigitalSubstrate, SubstrateConfig
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class TernaryQuantize(torch.autograd.Function):
@@ -45,7 +47,7 @@ class TernaryQuantize(torch.autograd.Function):
     def backward(
         ctx: torch.autograd.function.FunctionCtx, grad_output: Tensor
     ) -> tuple[Tensor, None, Tensor]:
-        w, alpha = ctx.saved_tensors
+        w, _alpha = ctx.saved_tensors
         threshold = ctx.threshold
         # STE: gradient passes through for |w| < threshold, zero elsewhere
         # This encourages weights to move toward ternary values
@@ -216,10 +218,10 @@ class TernarySubstrate(DigitalSubstrate):
                 latent_w = self._latent_weights[name]
                 # Apply weight decay
                 if self.weight_decay > 0:
-                    latent_w = latent_w * (1 - self.weight_decay)
+                    latent_w = latent_w * (1 - self.weight_decay)  # ruff: ignore[non-augmented-assignment]
                 # Apply pseudo-gradient (SGD step)
                 step_size = getattr(self.config, "step_size", 0.01)
-                latent_w = latent_w - step_size * pseudo_grad
+                latent_w = latent_w - step_size * pseudo_grad  # ruff: ignore[non-augmented-assignment]
                 self._latent_weights[name] = latent_w
                 # Return quantized weights for next forward pass
                 return self.quantize_weights(latent_w)
@@ -263,7 +265,7 @@ class TernarySubstrate(DigitalSubstrate):
         """Return sparsity statistics (fraction of zero weights)."""
         stats = {}
         for name in self._latent_weights:
-            alpha, alpha_neg, threshold = self._get_or_create_params(
+            _alpha, _alpha_neg, _threshold = self._get_or_create_params(
                 self._latent_weights[name], name
             )
             w_q = self.quantize_weights(self._latent_weights[name])

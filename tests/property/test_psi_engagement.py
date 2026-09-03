@@ -46,8 +46,8 @@ class FrozenPsi:
     def step(
         self,
         psi: dict[str, Tensor],
-        z: CompositeState,  # ruff: ignore[unused-method-argument] - frozen control ignores the joint state
-        context: object,  # ruff: ignore[unused-method-argument] - frozen control ignores the joint state
+        z: CompositeState,
+        context: object,
     ) -> dict[str, Tensor]:
         return psi
 

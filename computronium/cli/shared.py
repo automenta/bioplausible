@@ -4,8 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import optuna
-
 from computronium.core._paths import db_path
 from computronium.core.logging import get_logger
 from computronium.core.registry import ComponentCategory, Registry
@@ -15,22 +13,22 @@ from computronium.hyperopt.eval_tiers import (
 )
 
 if TYPE_CHECKING:
-    pass
+    import optuna
 
 __all__ = [
     "FAMILY_MAP",
     "_BASELINE_MODELS",
     "_DB_PATH",
     "_STORAGE_URL",
-    "_set_storage",
+    "_TrialContext",
+    "_family_target",
+    "_make_objective",
     "_query_registry_models",
     "_resolve_family_models",
-    "_resolve_targets",
-    "_family_target",
     "_resolve_survivors",
+    "_resolve_targets",
+    "_set_storage",
     "_tier_for_args",
-    "_TrialContext",
-    "_make_objective",
 ]
 
 logger = get_logger()
@@ -220,8 +218,8 @@ class _TrialContext:
 
 def _make_objective(
     ctx: _TrialContext,
-    objectives: list[str] = None,
-    directions: list[str] = None,
+    objectives: list[str] | None = None,
+    directions: list[str] | None = None,
     max_params: int | None = None,
     search_space: dict[str, object] | None = None,
 ):

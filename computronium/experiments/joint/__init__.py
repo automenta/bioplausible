@@ -29,9 +29,9 @@ __all__ = [
     "CLAIMS_SCOPE_PLUMBING_ONLY",
     "CLAIMS_SCOPE_PSI_ENGAGED",
     "CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED",
-    "adaptation_efficiency",
-    "algorithm_migration",
-    "compute_efficiency",
-    "structural_robustness",
-    "z3_fixed_weights",
+    "adaptation_efficiency",  # ruff: ignore[undefined-export]
+    "algorithm_migration",  # ruff: ignore[undefined-export]
+    "compute_efficiency",  # ruff: ignore[undefined-export]
+    "structural_robustness",  # ruff: ignore[undefined-export]
+    "z3_fixed_weights",  # ruff: ignore[undefined-export]
 ]

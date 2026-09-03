@@ -7,12 +7,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 
 from computronium.core.logging import get_logger
 from computronium.core.utils.device import get_device
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
-from computronium.models.native.backprop_native import create_native_backprop_mlp
 
 from ..utils import create_synthetic_dataset, evaluate_accuracy, train_model
 from ._base import build_track_result, track_header
@@ -321,7 +320,7 @@ every layer's input activation for the backward pass, growing linearly.
     )
 
 
-def track_11_deep_network(verifier) -> TrackResult:
+def track_11_deep_network(verifier) -> TrackResult:  # ruff: ignore[too-many-locals]
     """Scaling: 100-layer network with gradient flow."""
     start = track_header(11, "Deep Network (100 layers)")
 

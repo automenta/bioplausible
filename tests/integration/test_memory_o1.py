@@ -3,7 +3,7 @@ import numpy as np
 from computronium.acceleration.kernels import EqPropKernel
 
 
-def test_eqprop_kernel_memory_o1():
+def test_eqprop_kernel_memory_o1():  # ruff: ignore[too-many-locals]
     """
     Verify that EqPropKernel does not store the full trajectory by default,
     confirming O(1) memory usage with respect to time steps.
@@ -26,13 +26,13 @@ def test_eqprop_kernel_memory_o1():
 
     # 1. Default (O(1) Memory Mode)
     # store_trajectory defaults to False
-    h_star, act_log, info = kernel.solve_equilibrium(x)
+    _h_star, act_log, info = kernel.solve_equilibrium(x)
 
     assert len(act_log) == 1, "O(1) memory mode should only return the final state"
     assert info["steps"] <= max_steps
 
     # 2. Trajectory Mode (O(T) Memory Mode)
-    h_star_traj, act_log_traj, info_traj = kernel.solve_equilibrium(
+    _h_star_traj, act_log_traj, info_traj = kernel.solve_equilibrium(
         x, store_trajectory=True
     )
 

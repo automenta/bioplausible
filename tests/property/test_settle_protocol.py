@@ -9,14 +9,10 @@ Migrated to native TileAlgorithm after legacy zoo removal.
 
 import pytest
 import torch
-from hypothesis import given, settings
-from hypothesis import strategies as st
 
 from computronium.core.local_learning.builder import TileAlgorithm, TileAlgorithmConfig
 from computronium.core.local_learning.settling import (
-    SettleConfig,
     SettleProtocol,
-    settle_universal,
 )
 
 

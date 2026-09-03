@@ -10,10 +10,10 @@ from pathlib import Path
 
 def extract_lock_tests(filepath: Path) -> dict[str, list[str]]:
     """Extract test functions and their lock labels from test file."""
-    content = filepath.read_text()
+    content = filepath.read_text(encoding="utf-8")
 
     # Pattern to match test functions and classes
-    test_pattern = r"(?:^    def (test_\w+)\(.*\):|^class (Test\w+):)"
+    test_pattern = r"(?:^    def (test_\w+)\(.*\):|^class (Test\w+):)"  # ruff: ignore[unused-variable]
     lock_labels = {
         "test_l1": "L1",
         "test_l2": "L2",
@@ -27,7 +27,7 @@ def extract_lock_tests(filepath: Path) -> dict[str, list[str]]:
         "test_d_": "D",
         "test_c_": "C",
         "test_u_": "U",
-        "test_u_": "U",
+        "test_u_": "U",  # ruff: ignore[multi-value-repeated-key-literal]
     }
 
     # Also check for class-based tests
@@ -162,7 +162,7 @@ def main():
 
     output_file = Path("docs/CORRECTNESS_LOCK_MATRIX.md")
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    output_file.write_text(matrix)
+    output_file.write_text(matrix, encoding="utf-8")
     print(f"Generated lock matrix: {output_file}")
     print(f"Total tests: {sum(len(v) for v in locks.values())}")
 

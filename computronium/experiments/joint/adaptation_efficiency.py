@@ -18,11 +18,10 @@ import time
 from pathlib import Path
 
 import torch
-
-from computronium.core.utils.device import get_device
 from torch import Tensor, nn
 
 from computronium.core.profiling import measure_suite_resources
+from computronium.core.utils.device import get_device
 from computronium.experiments.joint import CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED
 
 
@@ -88,7 +87,7 @@ class PlasticityModulatedModel(nn.Module):
             self.operator_proj = nn.Linear(plasticity.operator_dim, hidden_dim)
 
     def forward(self, x: Tensor) -> Tensor:
-        # x: [batch, input_dim]
+        # x: [batch, input_dim]  # ruff: ignore[commented-out-code]
         batch_size = x.shape[0]
         device = x.device
 
@@ -140,7 +139,7 @@ class PlasticityModulatedModel(nn.Module):
                         dim=1,
                     )
                 )
-                h = h * gate
+                h = h * gate  # ruff: ignore[non-augmented-assignment]
             elif hasattr(self.plasticity, "fast_weight_dim"):
                 # Fast weights: additive modulation
                 fast_weights = self.psi.get(
@@ -150,7 +149,7 @@ class PlasticityModulatedModel(nn.Module):
                     ),
                 )
                 modulation = self.fast_weight_proj(fast_weights)
-                h = h + modulation
+                h = h + modulation  # ruff: ignore[non-augmented-assignment]
             elif hasattr(self.plasticity, "num_operators"):
                 # Rule state: operator application
                 operator_logits = self.psi.get(
@@ -167,12 +166,12 @@ class PlasticityModulatedModel(nn.Module):
                 combined_op = active_operator @ op_emb  # [batch, op_dim]
                 if combined_op.shape[1] == self.plasticity.operator_dim:
                     modulation = self.operator_proj(combined_op)
-                    h = h + modulation
+                    h = h + modulation  # ruff: ignore[non-augmented-assignment]
 
         return self.fc2(h)
 
 
-def evaluate_adaptation(
+def evaluate_adaptation(  # ruff: ignore[complex-structure, too-many-locals, too-many-statements]
     coordinate: str,
     epochs_per_phase: int = 50,
     batch_size: int = 64,

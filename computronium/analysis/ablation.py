@@ -14,6 +14,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from itertools import product
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -21,8 +22,10 @@ import pandas as pd
 import seaborn as sns
 from tqdm import tqdm
 
-from computronium.config.omegaconf import RunConfig
 from computronium.core.trainer import run_from_runconfig as run_from_config
+
+if TYPE_CHECKING:
+    from computronium.config.omegaconf import RunConfig
 
 __all__ = [
     "AblationResult",
@@ -447,7 +450,7 @@ class AblationStudy:
             raise ValueError("No results to analyze. Call run() first.")
 
         variances = []
-        for col in self.dimensions.keys():
+        for col in self.dimensions.keys():  # ruff: ignore[in-dict-keys]
             if col in df.columns:
                 mean_per_val = df.groupby(col)["val_accuracy"].mean()
                 if not mean_per_val.empty:
@@ -457,7 +460,7 @@ class AblationStudy:
         variances.sort(key=lambda x: x[1] if pd.notna(x[1]) else 0.0, reverse=True)
         return [col for col, var in variances]
 
-    def generate_report(
+    def generate_report(  # ruff: ignore[complex-structure]
         self,
         output_dir: str | Path = "results/ablation",
         include_plots: bool = True,
@@ -516,7 +519,7 @@ class AblationStudy:
             }
 
         json_path = output_dir / "ablation_summary.json"
-        with Path(json_path).open("w") as f:
+        with Path(json_path).open("w", encoding="utf-8") as f:
             json.dump(summary, f, indent=2, default=str)
         report_paths["json"] = json_path
 
@@ -551,13 +554,13 @@ class AblationStudy:
                 report_paths["sobol_plot"] = output_dir / "sobol_indices.png"
 
         # Generate formatted report
-        if format in ("html", "all"):
+        if format in ("html", "all"):  # ruff: ignore[literal-membership]
             html_path = self._generate_html_report(
                 output_dir, summary, df, loo_results, sobol
             )
             report_paths["html"] = html_path
 
-        if format in ("markdown", "all"):
+        if format in ("markdown", "all"):  # ruff: ignore[literal-membership]
             md_path = self._generate_markdown_report(
                 output_dir, summary, loo_results, sobol
             )
@@ -704,7 +707,7 @@ class AblationStudy:
 </html>
 """
 
-        with Path(html_path).open("w") as f:
+        with Path(html_path).open("w", encoding="utf-8") as f:
             f.write(html_content)
 
         return html_path
@@ -719,7 +722,7 @@ class AblationStudy:
         """Generate Markdown report."""
         md_path = output_dir / "ablation_report.md"
 
-        with Path(md_path).open("w") as f:
+        with Path(md_path).open("w", encoding="utf-8") as f:
             f.write("# Ablation Study Report\n\n")
 
             f.write("## Summary\n\n")
@@ -805,7 +808,7 @@ def create_ablation_report(
     study.run(parallel_workers=parallel_workers)
 
     if run_sobol:
-        try:
+        try:  # ruff: ignore[suppressible-exception]
             study.compute_sobol_indices(
                 n_samples=500, parallel_workers=parallel_workers
             )

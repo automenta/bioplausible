@@ -1,8 +1,11 @@
 """Shared parameter utilities for ontology modules."""
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from torch import Tensor
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from torch import Tensor
 
 
 def _learnable_weight_names(params: dict[str, Tensor]) -> list[str]:

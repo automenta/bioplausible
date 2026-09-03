@@ -5,7 +5,7 @@ Classes: Backprop
 """
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
 
 from computronium.core.registry import LocalityLevel, register_credit_assignment

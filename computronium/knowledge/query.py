@@ -88,9 +88,9 @@ class QueryEngine:
         with sqlite3.connect(self.config.db_path) as conn:
             conn.row_factory = sqlite3.Row
             sql = (
-                f"SELECT * FROM knowledge{where_clause} ORDER BY timestamp DESC LIMIT ?"
+                f"SELECT * FROM knowledge{where_clause} ORDER BY timestamp DESC LIMIT ?"  # ruff: ignore[hardcoded-sql-expression]
             )
-            cursor = conn.execute(sql, params + [limit])
+            cursor = conn.execute(sql, params + [limit])  # ruff: ignore[collection-literal-concatenation]
             rows = cursor.fetchall()
 
         return [self._row_to_entry(row) for row in rows]
@@ -312,10 +312,10 @@ class QueryEngine:
         with sqlite3.connect(self.config.db_path) as conn:
             conn.row_factory = sqlite3.Row
             sql = (
-                "SELECT * FROM experiments"
+                "SELECT * FROM experiments"  # ruff: ignore[hardcoded-sql-expression]
                 f"{where_clause} ORDER BY timestamp DESC LIMIT ?"
             )
-            cursor = conn.execute(sql, params + [limit])
+            cursor = conn.execute(sql, params + [limit])  # ruff: ignore[collection-literal-concatenation]
             return [dict(row) for row in cursor]
 
 

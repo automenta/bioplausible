@@ -13,8 +13,8 @@ from computronium.knowledge import KnowledgeBase, KnowledgeEntry, create_knowled
 def tmp_db_path():
     """Create a temporary database path."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = os.path.join(tmpdir, "test_kb.db")
-        yield db_path
+        db_path = os.path.join(tmpdir, "test_kb.db")  # ruff: ignore[os-path-join]
+        yield db_path  # ruff: ignore[unnecessary-assign-before-yield]
 
 
 def test_knowledge_base_creation(tmp_db_path):
@@ -232,13 +232,13 @@ def test_export_json(tmp_db_path):
     kb.add_entry(entry)
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        json_path = os.path.join(tmpdir, "export.json")
+        json_path = os.path.join(tmpdir, "export.json")  # ruff: ignore[os-path-join]
         kb.export_json(json_path)
         assert pathlib.Path(json_path).exists()
 
         import json
 
-        with pathlib.Path(json_path).open() as f:
+        with pathlib.Path(json_path).open(encoding="utf-8") as f:
             data = json.load(f)
         assert len(data) >= 1
 
@@ -337,7 +337,7 @@ def test_register_and_get_surrogate(tmp_db_path):
         target_metric="val_accuracy",
         features=["lr", "batch_size"],
         performance={"r2": 0.85, "n_samples": 50},
-        model_path="/tmp/test_model.pkl",
+        model_path="/tmp/test_model.pkl",  # ruff: ignore[hardcoded-temp-file]
     )
     assert sid is not None
     assert len(sid) == 8

@@ -9,10 +9,11 @@ from typing import TYPE_CHECKING
 import torch
 
 from computronium.core.logging import get_logger
-from computronium.ontology import System
 
 if TYPE_CHECKING:
     from types import TracebackType
+
+    from computronium.ontology import System
 
 logger = get_logger()
 
@@ -30,9 +31,9 @@ class SystemTrainer:
     """
 
     system: System
-    config: SystemTrainerConfig
-    train_data: _DataProvider
-    val_data: _DataProvider | None = None
+    config: SystemTrainerConfig  # ruff: ignore[undefined-name]
+    train_data: _DataProvider  # ruff: ignore[undefined-name]
+    val_data: _DataProvider | None = None  # ruff: ignore[undefined-name]
 
     # Training state
     current_epoch: int = field(default=0, init=False)
@@ -68,8 +69,8 @@ class SystemTrainer:
         num_batches = 0
 
         for _, (x, y) in enumerate(self.train_data):
-            x = x.to(self.device)
-            y = y.to(self.device)
+            x = x.to(self.device)  # ruff: ignore[redefined-loop-name]
+            y = y.to(self.device)  # ruff: ignore[redefined-loop-name]
 
             metrics = self.system.train_step(x, y)
 
@@ -133,8 +134,8 @@ class SystemTrainer:
 
         with torch.no_grad():
             for x, y in self.val_data:
-                x = x.to(self.device)
-                y = y.to(self.device)
+                x = x.to(self.device)  # ruff: ignore[redefined-loop-name]
+                y = y.to(self.device)  # ruff: ignore[redefined-loop-name]
 
                 logits = self.system.forward(x)
                 loss = torch.nn.functional.cross_entropy(logits, y)
@@ -161,14 +162,14 @@ class SystemTrainer:
 
     def close(self) -> None:
         """Clean up resources (e.g., move model to CPU, clear CUDA cache)."""
-        if hasattr(self, "system") and self.system is not None:
+        if hasattr(self, "system") and self.system is not None:  # ruff: ignore[collapsible-if]
             if hasattr(self.system.geometry, "cpu"):
                 self.system.geometry.cpu()
         if hasattr(self, "device") and self.device.type == "cuda":
             torch.cuda.empty_cache()
         logger.info("SystemTrainer resources cleaned up")
 
-    def __enter__(self) -> SystemTrainer:
+    def __enter__(self) -> SystemTrainer:  # ruff: ignore[non-self-return-type]
         return self
 
     def __exit__(

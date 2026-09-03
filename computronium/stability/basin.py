@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -11,10 +10,12 @@ import torch
 from computronium.state import CompositeState
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.state import SystemContext
 
 
-def estimate_basin_stability(
+def estimate_basin_stability(  # ruff: ignore[too-many-locals]
     transition_fn: Callable[[CompositeState, SystemContext], CompositeState],
     z_attractor: CompositeState,
     context: SystemContext,
@@ -59,7 +60,7 @@ def estimate_basin_stability(
     for _ in range(num_samples):
         # Sample random perturbation on sphere of radius perturbation_radius
         direction = torch.randn_like(x_attractor)
-        direction = direction / (direction.norm(dim=-1, keepdim=True) + 1e-8)
+        direction = direction / (direction.norm(dim=-1, keepdim=True) + 1e-8)  # ruff: ignore[non-augmented-assignment]
 
         # Scale by random radius in [0, perturbation_radius]
         radius = (
@@ -153,7 +154,7 @@ class BasinStabilityEstimator:
         J_norms = []
         for _ in range(min(5, x.shape[-1])):  # Sample a few directions
             v = torch.randn_like(x)
-            v = v / (v.norm(dim=-1, keepdim=True) + 1e-8)
+            v = v / (v.norm(dim=-1, keepdim=True) + 1e-8)  # ruff: ignore[non-augmented-assignment]
 
             x_perturbed = x + eps * v
             z_perturbed = CompositeState(

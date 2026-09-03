@@ -52,7 +52,7 @@ def debug_energy_grads(steps: int = 10, lr: float = 0.01, beta: float = 2.0):
     model.eval()  # type: ignore[attr-defined]
     with torch.no_grad():
         acts = model.geometry.forward_with_intermediates(x, model.substrate)
-        h_fixed = acts[-2] if len(acts) > 1 else acts[0]
+        h_fixed = acts[-2] if len(acts) > 1 else acts[0]  # ruff: ignore[unused-variable]
 
     # Compute energy
     energy = model.dynamics.compute_energy(

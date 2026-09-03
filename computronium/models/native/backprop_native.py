@@ -6,7 +6,7 @@ composition of the 5 Protocols, bypassing ModelAdapter.
 
 from __future__ import annotations
 
-import torch
+from typing import TYPE_CHECKING
 
 from computronium.core.system_trainer import compose_system
 from computronium.ontology import (
@@ -21,6 +21,9 @@ from computronium.ontology import (
     StateDynamicsConfig,
     System,
 )
+
+if TYPE_CHECKING:
+    import torch
 
 
 def create_native_backprop_mlp(
@@ -64,9 +67,7 @@ def create_native_backprop_mlp(
     credit = BackpropCredit(CreditAssignmentConfig.gradient())
     update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=lr))
 
-    return compose_system(
-        substrate, geometry, dynamics, credit, update, device=device
-    )
+    return compose_system(substrate, geometry, dynamics, credit, update, device=device)
 
 
 # Alias for registry registration

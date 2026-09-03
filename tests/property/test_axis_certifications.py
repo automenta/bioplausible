@@ -366,7 +366,7 @@ class TestCAxisLocalGoodnessCredit:
     """C-Axis: LocalGoodnessCredit (FF/PEPITA) surrogate alignment."""
 
     @pytest.mark.parametrize("seed", [42, 123, 456, 789, 1000])
-    def test_local_goodness_surrogate_alignment(self, seed: int) -> None:
+    def test_local_goodness_surrogate_alignment(self, seed: int) -> None:  # ruff: ignore[too-many-locals]
         """Layer-local surrogate FD gradient cosine >= 0.90.
 
         The FD objective re-runs the phase settling per perturbation
@@ -432,7 +432,7 @@ class TestCAxisTargetInversionCredit:
     """C-Axis: TargetInversionCredit global surrogate alignment."""
 
     @pytest.mark.parametrize("seed", [42, 123, 456, 789, 1000])
-    def test_target_inversion_surrogate_alignment(self, seed: int) -> None:
+    def test_target_inversion_surrogate_alignment(self, seed: int) -> None:  # ruff: ignore[too-many-locals]
         """Global surrogate alignment: FD gradient cosine >= 0.90.
 
         Pipeline-mediated FD (re-settling per perturbation, shared grad
@@ -617,7 +617,7 @@ class TestUAxisSpectralConstrainedUpdate:
             enable_deterministic_cuda()
 
         with seeded(seed):
-            update = SpectralConstrainedUpdate(
+            update = SpectralConstrainedUpdate(  # ruff: ignore[unused-variable]
                 ParameterUpdateConfig.spectral_constrained(spectral_norm=1.0)
             )
             # Create a random gradient
@@ -654,7 +654,7 @@ class TestUAxisNaturalGradientUpdate:
         # Diagonal Fisher: F = diag(g^2) + damping
         damping = update.config.fisher_damping
         fisher = grad**2 + damping
-        # Whitening: g / sqrt(F)
+        # Whitening: g / sqrt(F)  # ruff: ignore[commented-out-code]
         nat_grad = grad / fisher.sqrt()
 
         # Direction should be preserved (sign matches)
@@ -717,7 +717,7 @@ class TestUAxisElasticConsolidationUpdate:
 
         # Unprotected params should move more freely (no strong EWC pull)
         unprotected_movement = (new_params["w"] - params["w"]) * unprotected_mask
-        unprotected_mag = unprotected_movement.abs().mean().item()
+        unprotected_mag = unprotected_movement.abs().mean().item()  # ruff: ignore[unused-variable]
         protected_mag = protected_movement.abs().mean().item()
 
         # Protected movement should be dominated by EWC pull toward old_params
@@ -743,7 +743,7 @@ class TestDAxisSpikeIntegration:
         dynamics = SpikeIntegrationDynamics(
             StateDynamicsConfig.spike_integration(max_steps=50)
         )
-        sys, geometry, substrate, dynamics, _ = _make_system_for_dynamics(
+        sys, _geometry, _substrate, dynamics, _ = _make_system_for_dynamics(
             dynamics, device=device
         )
 
@@ -784,7 +784,7 @@ class TestDAxisSpikeIntegration:
                 max_steps=50, convergence_threshold=1e-6
             )
         )
-        sys, geometry, substrate, dynamics, _ = _make_system_for_dynamics(
+        sys, _geometry, _substrate, dynamics, _ = _make_system_for_dynamics(
             dynamics, device=device
         )
 
@@ -847,7 +847,7 @@ class TestSAxisSubstrateCertification:
         credit = ThermodynamicContrast(
             CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
         )
-        sys, geometry, substrate, dynamics, _ = _make_system_for_credit(
+        sys, geometry, _substrate, _dynamics, _ = _make_system_for_credit(
             credit,
             dynamics_type="energy_minimization",
             device=device,
@@ -885,7 +885,7 @@ class TestSAxisSubstrateCertification:
         from computronium.ontology import BackpropCredit
 
         credit = BackpropCredit(CreditAssignmentConfig.gradient())
-        sys, geometry, substrate, dynamics, _ = _make_system_for_credit(
+        sys, geometry, _substrate, _dynamics, _ = _make_system_for_credit(
             credit,
             dynamics_type="instantaneous",
             device=device,
@@ -921,7 +921,7 @@ class TestSAxisSubstrateCertification:
             enable_deterministic_cuda()
 
         credit = RandomProjectionsCredit(CreditAssignmentConfig.random_projections())
-        sys, geometry, substrate, dynamics, _ = _make_system_for_credit(
+        sys, geometry, _substrate, _dynamics, _ = _make_system_for_credit(
             credit,
             dynamics_type="instantaneous",
             device=device,
@@ -957,7 +957,7 @@ class TestSAxisSubstrateCertification:
             enable_deterministic_cuda()
 
         update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01))
-        sys, geometry, substrate, dynamics, _ = _make_system_for_update(
+        sys, _geometry, _substrate, _dynamics, _ = _make_system_for_update(
             update, device=device, substrate_factory=substrate_factory
         )
 
@@ -986,7 +986,7 @@ class TestSAxisSubstrateCertification:
         update = RiemannianOrthogonalUpdate(
             ParameterUpdateConfig.riemannian_orthogonal(step_size=0.01)
         )
-        sys, geometry, substrate, dynamics, _ = _make_system_for_update(
+        sys, _geometry, _substrate, _dynamics, _ = _make_system_for_update(
             update, device=device, substrate_factory=substrate_factory
         )
 
@@ -1014,7 +1014,7 @@ class TestSAxisSubstrateCertification:
         dynamics = EnergyMinimizationDynamics(
             StateDynamicsConfig.energy_minimization(max_steps=SETTLE_ITERS, beta=0.5)
         )
-        sys, geometry, substrate, dynamics, _ = _make_system_for_dynamics(
+        sys, _geometry, _substrate, dynamics, _ = _make_system_for_dynamics(
             dynamics, device=device, substrate_factory=substrate_factory
         )
 
@@ -1045,7 +1045,7 @@ class TestSAxisSubstrateCertification:
             enable_deterministic_cuda()
 
         dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
-        sys, geometry, substrate, dynamics, _ = _make_system_for_dynamics(
+        sys, _geometry, _substrate, dynamics, _ = _make_system_for_dynamics(
             dynamics, device=device, substrate_factory=substrate_factory
         )
 

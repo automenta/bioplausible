@@ -2,7 +2,10 @@
 Task weights, groups, and curriculum tracks for prioritization.
 """
 
-from computronium.execution._lifecycle import CurriculumManager
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from computronium.execution._lifecycle import CurriculumManager
 
 # Task weights for prioritization (higher = more important)
 TASK_WEIGHTS = {
@@ -87,8 +90,8 @@ def calculate_complexity_penalty(model_name: str) -> float:
 
 
 __all__ = [
-    "TASK_WEIGHTS",
     "TASK_GROUPS",
+    "TASK_WEIGHTS",
     "TIER_ORDER",
     "calculate_complexity_penalty",
     "calculate_future_boost",

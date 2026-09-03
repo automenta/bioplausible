@@ -123,7 +123,7 @@ def field_to_dict(result: ProbeResult) -> dict[str, object]:
 class ProbeDriver(Protocol):
     """Narrow adapter over the existing training path (architecture §6.4)."""
 
-    def train(  # ruff: ignore[too-many-arguments]  (probe driver signature is the public protocol contract)
+    def train(
         self,
         *,
         model: str,
@@ -145,7 +145,7 @@ class CoreTrainerDriver:
     on a bulk overnight run spawns no DataLoader worker processes per probe.
     """
 
-    def __init__(  # ruff: ignore[too-many-arguments]  # driver constructor captures all campaign compute settings at once
+    def __init__(  # driver constructor captures all campaign compute settings at once  # ruff: ignore[too-many-arguments]
         self,
         *,
         num_workers: int = 0,
@@ -174,7 +174,7 @@ class CoreTrainerDriver:
         self._dataset_cache = dataset_cache or DatasetCache()
         self._model_cache = model_cache or ModelCache()
 
-    def train(  # ruff: ignore[too-many-arguments]  (probe driver signature is the public protocol contract)
+    def train(  # ruff: ignore[too-many-locals]
         self,
         *,
         model: str,
@@ -445,7 +445,7 @@ class CoreTrainerDriver:
             )
 
 
-def run_probe(  # ruff: ignore[too-many-arguments]  (one normalization entrypoint carries all probe identity + parameters)
+def run_probe(
     driver: ProbeDriver,
     *,
     model: str,

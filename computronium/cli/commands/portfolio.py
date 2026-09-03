@@ -1,12 +1,15 @@
 """Portfolio CLI command."""
 
-import argparse
 import csv
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from computronium.cli.shared import _set_storage, _STORAGE_URL
+from computronium.cli.shared import _STORAGE_URL, _set_storage
 from computronium.hyperopt.storage import list_studies
+
+if TYPE_CHECKING:
+    import argparse
 
 
 def add_portfolio_subparsers(subparsers: argparse._SubParsersAction) -> None:
@@ -45,7 +48,7 @@ def run_portfolio(args: argparse.Namespace) -> None:
 
     # Simple output - just list studies
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)
-    with open(args.output, "w", newline="") as f:
+    with Path(args.output).open("w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["study", "tasks"])
         for s in filtered:

@@ -97,10 +97,10 @@ def test_backprop_runs_autograd_path() -> None:
     for _ in range(5):
         x, y = _batch(16)
         losses.append(system.train_step(x, y)["loss"])
-    assert all(loss == loss for loss in losses)  # no NaN
+    assert all(loss == loss for loss in losses)  # no NaN  # ruff: ignore[comparison-with-itself]
     # Weights should update under autograd; but this can be flaky with small LR/batch
     # Just verify the system runs and produces valid losses
-    assert all(l >= 0.0 for l in losses)
+    assert all(l >= 0.0 for l in losses)  # ruff: ignore[ambiguous-variable-name]
 
 
 def test_autograd_credits_declared() -> None:

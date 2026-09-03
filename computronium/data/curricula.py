@@ -6,8 +6,10 @@ Defines curriculum schedules for progressive training (easy to hard).
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 __all__ = [
     "CURRICULA",
@@ -37,7 +39,7 @@ class FixedCurriculum(Curriculum):
     def __init__(self, difficulty: float = 1.0):
         self._difficulty = difficulty
 
-    def get_difficulty(self, epoch: int, total_epochs: int) -> float:  # ruff: ignore[unused-method-argument]
+    def get_difficulty(self, epoch: int, total_epochs: int) -> float:
         return self._difficulty
 
     def description(self) -> str:

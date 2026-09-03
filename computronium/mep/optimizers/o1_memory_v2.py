@@ -16,12 +16,14 @@ Created: 2026-02-18 (v2: 2026-02-25)
 Refactored: 2026-07-28 to use TransitionGraph protocol (transition_modules())
 """
 
-from collections.abc import Callable
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 __all__ = [
     "O1MemoryEPv2",
@@ -127,7 +129,7 @@ def analytic_state_gradients(
                 grad = state - h
 
             # Normalize by batch size (matching energy formula)
-            grad = grad / batch_size
+            grad = grad / batch_size  # ruff: ignore[non-augmented-assignment]
 
             grads.append(grad)
 
@@ -162,12 +164,12 @@ def analytic_state_gradients(
                 nudge_grad = beta * (last_state - target_vec) / batch_size
 
             # Add nudge gradient to last state gradient
-            grads[-1] = grads[-1] + nudge_grad
+            grads[-1] = grads[-1] + nudge_grad  # ruff: ignore[non-augmented-assignment]
 
     return grads
 
 
-def settle_manual_o1(
+def settle_manual_o1(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     model: nn.Module,
     x: torch.Tensor,
     target: torch.Tensor | None,
@@ -340,15 +342,15 @@ def manual_energy_compute_o1(
 
             # Compute energy
             if use_classification and is_last_state:
-                E = E + _kl_energy_no_grad(state, h, batch_size, softmax_temperature)
+                E = E + _kl_energy_no_grad(state, h, batch_size, softmax_temperature)  # ruff: ignore[non-augmented-assignment]
             else:
-                E = E + 0.5 * _mse_no_grad(h, state) / batch_size
+                E = E + 0.5 * _mse_no_grad(h, state) / batch_size  # ruff: ignore[non-augmented-assignment]
 
             prev = state.to(x.dtype)
 
         # Nudge term
         if target_vec is not None and beta > 0:
-            E = E + _nudge_term_no_grad(prev, target_vec, beta, batch_size, loss_type)
+            E = E + _nudge_term_no_grad(prev, target_vec, beta, batch_size, loss_type)  # ruff: ignore[non-augmented-assignment]
 
     return E
 
@@ -439,15 +441,15 @@ def energy_from_states_minimal(
             h = module(prev)
 
         if use_classification and is_last_state:
-            E = E + _kl_energy_autograd(state.float(), h.float(), batch_size)
+            E = E + _kl_energy_autograd(state.float(), h.float(), batch_size)  # ruff: ignore[non-augmented-assignment]
         else:
-            E = E + 0.5 * _mse_autograd(h.float(), state.float()) / batch_size
+            E = E + 0.5 * _mse_autograd(h.float(), state.float()) / batch_size  # ruff: ignore[non-augmented-assignment]
 
         prev = state.to(x.dtype)
 
     # Nudge term
     if target_vec is not None and beta > 0:
-        E = E + _nudge_term_autograd(
+        E = E + _nudge_term_autograd(  # ruff: ignore[non-augmented-assignment]
             prev.float(), target_vec, beta, batch_size, loss_type
         )
 
@@ -466,7 +468,7 @@ class O1MemoryEPv2:
         optimizer.step(x=x, target=y)
     """
 
-    def __init__(
+    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         self,
         params,
         model: nn.Module,

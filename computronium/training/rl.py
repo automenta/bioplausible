@@ -1,4 +1,5 @@
 import time
+from typing import TYPE_CHECKING
 
 import gymnasium as gym
 import numpy as np
@@ -6,8 +7,10 @@ import torch
 from gymnasium.spaces import Box
 from torch import nn, optim
 
-from computronium.tracking import ExperimentTracker
 from computronium.utils import seed_everything
+
+if TYPE_CHECKING:
+    from computronium.tracking import ExperimentTracker
 
 # Constants
 
@@ -62,7 +65,7 @@ class RLTrainer:
     def _setup_action_space(self, device: str, lr: float) -> None:
         """Initialize action space specific parameters."""
         if self.is_continuous:
-            assert isinstance(self.env.action_space, Box)
+            assert isinstance(self.env.action_space, Box)  # ruff: ignore[assert]
             high = self.env.action_space.high
             low = self.env.action_space.low
 
@@ -78,7 +81,8 @@ class RLTrainer:
             )
             # Add log_std to optimizer
             self.optimizer = optim.Adam(
-                list(self.model.parameters()) + [self.log_std], lr=lr
+                [*list(self.model.parameters()), self.log_std],
+                lr=lr,
             )
         else:
             self.action_scale = None
@@ -274,8 +278,8 @@ class RLTrainer:
 
                     if self.is_continuous:
                         # Deterministic policy for eval (mean)
-                        assert self.action_scale is not None
-                        assert self.action_bias is not None
+                        assert self.action_scale is not None  # ruff: ignore[assert]
+                        assert self.action_bias is not None  # ruff: ignore[assert]
                         action_tensor = (
                             torch.tanh(logits) * self.action_scale + self.action_bias
                         )

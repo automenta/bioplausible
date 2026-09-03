@@ -2,7 +2,6 @@
 
 import unittest
 
-import pytest
 import torch
 
 from computronium.models.native.diffusion_eqprop_native import (
@@ -29,7 +28,7 @@ class TestDiffusionIntegration(unittest.TestCase):
         model = create_native_diffusion_eqprop(
             input_dim=10, hidden_dim=8, output_dim=10, num_layers=1, diffusion_coeff=1.0
         )
-        # Input: [B, input_dim]
+        # Input: [B, input_dim]  # ruff: ignore[commented-out-code]
         x = torch.randn(2, 10)
         y = torch.randint(0, 10, (2,))
 
@@ -37,7 +36,7 @@ class TestDiffusionIntegration(unittest.TestCase):
         self.assertIn("loss", metrics)
         # Loss should be float or tensor
         self.assertTrue(
-            isinstance(metrics["loss"], float)
+            isinstance(metrics["loss"], float)  # ruff: ignore[duplicate-isinstance-call]
             or isinstance(metrics["loss"], torch.Tensor)
         )
 

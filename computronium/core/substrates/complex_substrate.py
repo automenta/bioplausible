@@ -6,12 +6,15 @@ Provides efficient complex64 arithmetic on GPU via real/imag channel emulation
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import torch
 from torch import Tensor
 
 from computronium.ontology import DigitalSubstrate, SubstrateConfig
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class ComplexSubstrate(DigitalSubstrate):
@@ -136,8 +139,8 @@ class ComplexSubstrate(DigitalSubstrate):
         out_i = x_r @ (-w_i).transpose(-2, -1) + x_i @ w_r.transpose(-2, -1)
         if bias is not None:
             b = self.to_real(bias)
-            out_r = out_r + b[..., ::2]
-            out_i = out_i + b[..., 1::2]
+            out_r = out_r + b[..., ::2]  # ruff: ignore[non-augmented-assignment]
+            out_i = out_i + b[..., 1::2]  # ruff: ignore[non-augmented-assignment]
         return torch.stack([out_r, out_i], dim=-1).flatten(-2)
 
     # =========================================================================
@@ -180,7 +183,7 @@ class ComplexSubstrate(DigitalSubstrate):
 # Triton kernels for hot paths (if available)
 # =========================================================================
 
-try:
+try:  # ruff: ignore[too-many-statements-in-try-clause]
     import triton
     import triton.language as tl
 
@@ -212,7 +215,7 @@ try:
         tl.store(out_imag_ptr + offs, out_i, mask=mask)
 
     @triton.jit
-    def _complex_matmul_kernel(
+    def _complex_matmul_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         a_real_ptr,
         a_imag_ptr,
         b_real_ptr,

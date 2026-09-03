@@ -5,13 +5,13 @@ Outputs to a separate directory tree so null-arm runs don't mix with
 regular directed_ep runs. This gives a clean comparison.
 """
 
-import subprocess
+import subprocess  # ruff: ignore[suspicious-subprocess-import]
 import sys
 from itertools import product
 from pathlib import Path
 
 
-def run_profile(
+def run_profile(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     model: str,
     task: str,
     num_layers: int,
@@ -57,7 +57,7 @@ def run_profile(
     if feedback_gain is not None:
         cmd.extend(["--feedback-gain", str(feedback_gain)])
     print(f"Running: {' '.join(cmd)}", flush=True)
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=300)  # ruff: ignore[subprocess-run-without-check, subprocess-without-shell-equals-true]
 
 
 def main():

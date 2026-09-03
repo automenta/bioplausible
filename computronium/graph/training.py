@@ -9,14 +9,18 @@ enabling fair comparison on identical architectures.
 """
 
 import time
+from typing import TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F
-from torch.utils.data import DataLoader
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 
 from computronium.core.losses import compute_accuracy
 from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
-from computronium.graph.topology import GraphStructure
+
+if TYPE_CHECKING:
+    from torch.utils.data import DataLoader
+
+    from computronium.graph.topology import GraphStructure
 
 __all__ = [
     "train_backprop",
@@ -51,7 +55,7 @@ def _feedforward(
             for src_node, target_slot in preds:
                 val = activities[src_node.name]
                 if target_slot.name in slot_inputs:
-                    slot_inputs[target_slot.name] = slot_inputs[target_slot.name] + val
+                    slot_inputs[target_slot.name] = slot_inputs[target_slot.name] + val  # ruff: ignore[non-augmented-assignment]
                 else:
                     slot_inputs[target_slot.name] = val
         slot_inputs.update(params.get(node.name, {}))
@@ -88,8 +92,8 @@ def _train_loop(
         n_batches = 0
 
         for batch_x, batch_y in train_loader:
-            batch_x = batch_x.to(device).float()
-            batch_y = batch_y.to(device)
+            batch_x = batch_x.to(device).float()  # ruff: ignore[redefined-loop-name]
+            batch_y = batch_y.to(device)  # ruff: ignore[redefined-loop-name]
 
             optimizer.zero_grad()
             output, loss = step_fn(optimizer, structure, params, batch_x, batch_y)
@@ -110,8 +114,8 @@ def _train_loop(
         total = 0
         with torch.no_grad():
             for batch_x, batch_y in test_loader:
-                batch_x = batch_x.to(device).float()
-                batch_y = batch_y.to(device)
+                batch_x = batch_x.to(device).float()  # ruff: ignore[redefined-loop-name]
+                batch_y = batch_y.to(device)  # ruff: ignore[redefined-loop-name]
                 output = eval_fn(structure, params, batch_x, batch_y)
                 correct += (output.argmax(dim=-1) == batch_y).sum().item()
                 total += batch_y.shape[0]
@@ -194,7 +198,7 @@ def train_backprop(
     )
 
 
-def _compute_pc_weight_gradients(
+def _compute_pc_weight_gradients(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     structure: GraphStructure,
     params: dict[str, dict[str, torch.Tensor]],
     activities: dict[str, torch.Tensor],
@@ -284,12 +288,12 @@ def _compute_pc_weight_gradients(
                 g = torch.mm(error.detach().T, node_input.detach())
                 if node_p[k].grad is None:
                     node_p[k].grad = torch.zeros_like(node_p[k])
-                node_p[k].grad = node_p[k].grad + g
+                node_p[k].grad = node_p[k].grad + g  # ruff: ignore[non-augmented-assignment]
             elif k == "bias":
                 g = error.detach().sum(dim=0)
                 if node_p[k].grad is None:
                     node_p[k].grad = torch.zeros_like(node_p[k])
-                node_p[k].grad = node_p[k].grad + g
+                node_p[k].grad = node_p[k].grad + g  # ruff: ignore[non-augmented-assignment]
 
 
 def train_pcn(

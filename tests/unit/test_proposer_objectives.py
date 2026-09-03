@@ -3,7 +3,7 @@ PLASTICITY_CAPACITY ranking proxies over registry metadata."""
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -18,6 +18,9 @@ from computronium.core.registry import (
     ComputeProfile,
     LocalityLevel,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def meta(

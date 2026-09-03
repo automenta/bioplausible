@@ -6,7 +6,7 @@ composition of the 5 Protocols, bypassing ModelAdapter.
 
 from __future__ import annotations
 
-import torch
+from typing import TYPE_CHECKING
 
 from computronium.core.system_trainer import compose_system
 from computronium.ontology import (
@@ -28,8 +28,11 @@ from computronium.ontology import (
     TileGeometry,
 )
 
+if TYPE_CHECKING:
+    import torch
 
-def create_native_tile_ep(
+
+def create_native_tile_ep(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     input_dim: int,
     hidden_dim: int,
     output_dim: int,
@@ -90,9 +93,7 @@ def create_native_tile_ep(
         )
     )
 
-    return compose_system(
-        substrate, geometry, dynamics, credit, update, device=device
-    )
+    return compose_system(substrate, geometry, dynamics, credit, update, device=device)
 
 
 def create_native_tile_fa(
@@ -148,12 +149,10 @@ def create_native_tile_fa(
         )
     )
 
-    return compose_system(
-        substrate, geometry, dynamics, credit, update, device=device
-    )
+    return compose_system(substrate, geometry, dynamics, credit, update, device=device)
 
 
-def create_native_tile_tp(
+def create_native_tile_tp(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     input_dim: int,
     hidden_dim: int,
     output_dim: int,
@@ -215,9 +214,7 @@ def create_native_tile_tp(
         )
     )
 
-    return compose_system(
-        substrate, geometry, dynamics, credit, update, device=device
-    )
+    return compose_system(substrate, geometry, dynamics, credit, update, device=device)
 
 
 def create_native_tile_snn(
@@ -277,9 +274,7 @@ def create_native_tile_snn(
         )
     )
 
-    return compose_system(
-        substrate, geometry, dynamics, credit, update, device=device
-    )
+    return compose_system(substrate, geometry, dynamics, credit, update, device=device)
 
 
 def create_native_tile_hebbian(
@@ -334,12 +329,10 @@ def create_native_tile_hebbian(
         )
     )
 
-    return compose_system(
-        substrate, geometry, dynamics, credit, update, device=device
-    )
+    return compose_system(substrate, geometry, dynamics, credit, update, device=device)
 
 
-def create_native_tile_pc(
+def create_native_tile_pc(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     input_dim: int,
     hidden_dim: int,
     output_dim: int,
@@ -400,12 +393,10 @@ def create_native_tile_pc(
         )
     )
 
-    return compose_system(
-        substrate, geometry, dynamics, credit, update, device=device
-    )
+    return compose_system(substrate, geometry, dynamics, credit, update, device=device)
 
 
-def create_native_tile_gnn(
+def create_native_tile_gnn(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     input_dim: int,
     hidden_dim: int,
     output_dim: int,
@@ -466,9 +457,7 @@ def create_native_tile_gnn(
         )
     )
 
-    return compose_system(
-        substrate, geometry, dynamics, credit, update, device=device
-    )
+    return compose_system(substrate, geometry, dynamics, credit, update, device=device)
 
 
 # Aliases for registry registration

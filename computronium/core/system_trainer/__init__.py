@@ -72,7 +72,7 @@ from computronium.core.system_trainer.spec import (
 )
 from computronium.core.system_trainer.trainer import SystemTrainer
 
-__all__ = [
+__all__ = [  # ruff: ignore[unsorted-dunder-all]
     "SystemTrainer",
     "SystemTrainerConfig",
     "JointSystem",

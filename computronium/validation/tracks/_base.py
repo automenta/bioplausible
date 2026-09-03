@@ -29,7 +29,7 @@ def track_header(track_id: int, name: str, width: int = 60) -> float:
     return time.time()
 
 
-def build_track_result(  # ruff: ignore[too-many-arguments] (mirrors TrackResult fields)
+def build_track_result(  # ruff: ignore[too-many-arguments]
     *,
     track_id: int,
     name: str,

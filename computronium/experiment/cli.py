@@ -87,7 +87,7 @@ def _rep_models(models: list[str]) -> list[str]:
         if m not in reps and any(k in m for k in ("eqprop", "pepita", "fa", "hebbian")):
             reps.append(m)
             break
-    if len(reps) < 2:  # ruff: ignore[magic-value-comparison]  # reps is a fixed 2-model calibration subset
+    if len(reps) < 2:  # reps is a fixed 2-model calibration subset
         for m in models:
             if m not in reps:
                 reps.append(m)
@@ -113,7 +113,7 @@ def _calib_batches(target_seconds: float | None) -> int:
 _CALIB_EPOCHS = 3  # amortize the first-epoch warmup (kernel compile / allocator)
 
 
-def _measure_epoch(  # ruff: ignore[too-many-arguments,too-many-positional-arguments]  # passes the full probe identity + calibration knobs
+def _measure_epoch(  # passes the full probe identity + calibration knobs
     driver: CoreTrainerDriver,
     model: str,
     task: str,
@@ -143,7 +143,7 @@ def _measure_epoch(  # ruff: ignore[too-many-arguments,too-many-positional-argum
             param_count=0,
         )
     except Exception as exc:  # broad: a broken calibration probe is a 0.0, not an abort
-        logger.error("Model %s: ERROR %s", model, exc)
+        logger.error("Model %s: ERROR %s", model, exc)  # ruff: ignore[error-instead-of-exception]
         return 0.0
     if result.status != "ok":
         logger.error(t"    {model}: FAILED ({result.error})")
@@ -628,7 +628,7 @@ def _cmd_plan(
     return 0
 
 
-def _cmd_run(  # ruff: ignore[too-many-arguments,too-many-locals,too-many-positional-arguments]  # run threads every operator knob; grouped by the parser, not the signature
+def _cmd_run(  # run threads every operator knob; grouped by the parser, not the signature  # ruff: ignore[too-many-locals]
     config: str,
     report_override: str | None,
     device: str | None,
@@ -681,7 +681,7 @@ def _cmd_run(  # ruff: ignore[too-many-arguments,too-many-locals,too-many-positi
     try:
         outcomes = runner.run()
     except KeyboardInterrupt:
-        logger.info(
+        logger.info(  # ruff: ignore[logging-too-few-args]
             "#'--report' path is the resume contract; a partial run must be re-runnable; interrupted: %s holds %d finished probes; rerun to resume",
             f"{report_path} holds {len(report.finished_keys())} finished probes; rerun to resume",
         )
@@ -693,7 +693,7 @@ def _cmd_run(  # ruff: ignore[too-many-arguments,too-many-locals,too-many-positi
             exc,
             exc_info=True,
         )
-        logger.error(
+        logger.error(  # ruff: ignore[error-instead-of-exception]
             t"run aborted: {report_path} holds {len(report.finished_keys())} finished probes and is resumable (rerun to continue)"
         )
         return 1
@@ -730,8 +730,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             case _:
                 return 2
-    except (yaml.YAMLError, ValueError, FileNotFoundError) as exc:
-        logger.error("experiment error: %s", exc)  # ruff: ignore[error-instead-of-exception]  # user-facing CLI: a traceback is noise
+    except yaml.YAMLError, ValueError, FileNotFoundError:
+        logger.exception("experiment error")  # user-facing CLI: a traceback is noise
         return 1
 
 
@@ -749,7 +749,7 @@ def main_report(argv: Sequence[str] | None = None) -> int:
     try:
         print(render_report(args.report, baseline=args.baseline))
     except (FileNotFoundError, ValueError, KeyError) as exc:
-        logger.error("report error: %s", exc)  # ruff: ignore[error-instead-of-exception]  # user-facing CLI: a traceback is noise
+        logger.error("report error: %s", exc)  # user-facing CLI: a traceback is noise  # ruff: ignore[error-instead-of-exception]
         return 1
     return 0
 

@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import torch
 from torch import Tensor
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # ============================================================
 # Substrate Type and Configuration
@@ -111,13 +113,14 @@ class SubstrateConfig:
         cls,
         *,
         noise_level: float = 0.01,
+        sparsity: float = 0.95,
         device: str = "cpu",
     ) -> SubstrateConfig:
         return cls(
             substrate_type=SubstrateType.NEUROMORPHIC,
             precision="float16",
             noise_level=noise_level,
-            sparsity=0.95,
+            sparsity=sparsity,
             weight_bounds=None,
             device=device,
         )
@@ -291,7 +294,7 @@ class DigitalSubstrate:
     def __init__(self, config: SubstrateConfig | None = None):
         self.config = config or SubstrateConfig.digital()
 
-    def _to_precision(self, tensor: Tensor) -> Tensor:
+    def _to_precision(self, tensor: Tensor) -> Tensor:  # ruff: ignore[too-many-return-statements]
         """Convert tensor to the configured precision."""
         precision = self.config.precision
         if precision == "float32":
@@ -380,7 +383,7 @@ class MemristiveSubstrate:
     range is symmetric while every physical device stays positive-bounded.
     """
 
-    _CONDUCTANCE_LEVELS = {"int4": 15, "int8": 255}
+    _CONDUCTANCE_LEVELS = {"int4": 15, "int8": 255}  # ruff: ignore[mutable-class-default]
 
     def __init__(self, config: SubstrateConfig | None = None):
         self.config = config or SubstrateConfig.memristive()
@@ -435,7 +438,10 @@ class MemristiveSubstrate:
 
 
 class NeuromorphicSubstrate:
-    """Neuromorphic substrate with high sparsity and low precision."""
+    """Neuromorphic substrate: low precision, additive state noise, and
+    functional spike dropout — the state is thinned to the active spike set
+    (each element survives with probability ``1 - sparsity``), keyed off the
+    ambient seeded stream so paired draws cancel in diffs (C9 passivity)."""
 
     def __init__(self, config: SubstrateConfig | None = None):
         self.config = config or SubstrateConfig.neuromorphic()
@@ -447,8 +453,9 @@ class NeuromorphicSubstrate:
 
     def inject_state_noise(self, s: Tensor) -> Tensor:
         if self.config.noise_level > 0:
-            noise = torch.randn_like(s) * self.config.noise_level
-            return s + noise
+            s = s + torch.randn_like(s) * self.config.noise_level  # ruff: ignore[non-augmented-assignment]
+        if self.config.sparsity > 0:
+            s = s * (torch.rand_like(s) >= self.config.sparsity)  # ruff: ignore[non-augmented-assignment]
         return s
 
     def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
@@ -668,7 +675,7 @@ class TernarySubstrate:
         return self.inject_state_noise(x)
 
 
-def substrate_from_config(config: SubstrateConfig) -> Substrate:
+def substrate_from_config(config: SubstrateConfig) -> Substrate:  # ruff: ignore[too-many-return-statements]
     """Factory function to instantiate substrate from config."""
     match config.substrate_type:
         case SubstrateType.DIGITAL:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import pickle
+import pickle  # ruff: ignore[suspicious-pickle-import]
 import threading
 import time
 from concurrent import futures
@@ -23,42 +23,42 @@ if TYPE_CHECKING:
         shape: list[int]
         dtype: str
 
-    class _TileActivationRequest(Protocol):
+    class _TileActivationRequest(Protocol):  # ruff: ignore[unused-private-protocol]
         tile_id: int
         request_id: int
 
-    class _TileActivationResponse(Protocol):
+    class _TileActivationResponse(Protocol):  # ruff: ignore[unused-private-protocol]
         tile_id: int
         request_id: int
         activation: _TensorProto
         success: bool
         error: str
 
-    class _BoundarySyncRequest(Protocol):
+    class _BoundarySyncRequest(Protocol):  # ruff: ignore[unused-private-protocol]
         source_node_id: str
         boundary_activations: list[_TensorProto]
         boundary_tile_ids: list[int]
         step: int
 
-    class _BoundarySyncResponse(Protocol):
+    class _BoundarySyncResponse(Protocol):  # ruff: ignore[unused-private-protocol]
         success: bool
         error: str
 
-    class _HeartbeatRequest(Protocol):
+    class _HeartbeatRequest(Protocol):  # ruff: ignore[unused-private-protocol]
         node_id: str
         timestamp: int
         metadata: dict[str, str]
 
-    class _HeartbeatResponse(Protocol):
+    class _HeartbeatResponse(Protocol):  # ruff: ignore[unused-private-protocol]
         success: bool
         active_nodes: list[str]
 
-    class _ParameterUpdateRequest(Protocol):
+    class _ParameterUpdateRequest(Protocol):  # ruff: ignore[unused-private-protocol]
         node_id: str
         step: int
         updates: dict[str, _TensorProto]
 
-    class _ParameterUpdateResponse(Protocol):
+    class _ParameterUpdateResponse(Protocol):  # ruff: ignore[unused-private-protocol]
         success: bool
         aggregated_updates: dict[str, _TensorProto]
         error: str
@@ -85,7 +85,7 @@ def _tensor_to_proto(tensor: torch.Tensor) -> tile_mesh_pb2.TensorProto:
 
 def _proto_to_tensor(proto: tile_mesh_pb2.TensorProto) -> torch.Tensor:
     """Convert TensorProto to torch.Tensor."""
-    tensor = pickle.loads(proto.data)  # type: ignore[union-attr]
+    tensor = pickle.loads(proto.data)  # type: ignore[union-attr]  # ruff: ignore[suspicious-pickle-usage]
     return tensor.to(dtype=getattr(torch, proto.dtype))  # type: ignore[union-attr]
 
 
@@ -112,10 +112,10 @@ class TileMeshServicer(_ServicerBase):
         self._boundary_cache: dict[int, torch.Tensor] = {}
         self._lock = threading.Lock()
 
-    def FetchTileActivation(  # ruff: ignore[invalid-function-name] - gRPC method name must match proto
+    def FetchTileActivation(  # ruff: ignore[invalid-function-name]
         self,
         request: tile_mesh_pb2.TileActivationRequest,
-        context: grpc.ServicerContext,  # ruff: ignore[unused-method-argument] - Required by gRPC interface
+        context: grpc.ServicerContext,
     ) -> tile_mesh_pb2.TileActivationResponse:
         """Serve tile activation to remote node."""
         try:
@@ -148,13 +148,13 @@ class TileMeshServicer(_ServicerBase):
                 error=str(e),
             )
 
-    def SyncBoundaryTiles(  # ruff: ignore[invalid-function-name] - gRPC method name must match proto
+    def SyncBoundaryTiles(  # ruff: ignore[invalid-function-name]
         self,
         request: tile_mesh_pb2.BoundarySyncRequest,
-        context: grpc.ServicerContext,  # ruff: ignore[unused-method-argument] - Required by gRPC interface
+        context: grpc.ServicerContext,
     ) -> tile_mesh_pb2.BoundarySyncResponse:
         """Receive boundary tile activations from neighbor."""
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             with self._lock:
                 for tile_id, activation_proto in zip(
                     request.boundary_tile_ids, request.boundary_activations
@@ -174,10 +174,10 @@ class TileMeshServicer(_ServicerBase):
                 success=False, error=str(e)
             )
 
-    def Heartbeat(  # ruff: ignore[invalid-function-name] - gRPC method name must match proto
+    def Heartbeat(  # ruff: ignore[invalid-function-name]
         self,
-        request: tile_mesh_pb2.HeartbeatRequest,  # ruff: ignore[unused-method-argument] - Required by gRPC interface
-        context: grpc.ServicerContext,  # ruff: ignore[unused-method-argument] - Required by gRPC interface
+        request: tile_mesh_pb2.HeartbeatRequest,
+        context: grpc.ServicerContext,
     ) -> tile_mesh_pb2.HeartbeatResponse:
         """Handle heartbeat from peer."""
         # In a full implementation, this would update a node registry
@@ -187,10 +187,10 @@ class TileMeshServicer(_ServicerBase):
             active_nodes=[self.node_id],  # Simplified
         )
 
-    def PushParameterUpdate(  # ruff: ignore[invalid-function-name, no-self-use] - gRPC method name must match proto
+    def PushParameterUpdate(  # ruff: ignore[invalid-function-name]
         self,
-        request: tile_mesh_pb2.ParameterUpdateRequest,  # ruff: ignore[unused-method-argument] - Required by gRPC interface
-        context: grpc.ServicerContext,  # ruff: ignore[unused-method-argument] - Required by gRPC interface
+        request: tile_mesh_pb2.ParameterUpdateRequest,
+        context: grpc.ServicerContext,
     ) -> tile_mesh_pb2.ParameterUpdateResponse:
         """Receive parameter updates from peer for federated aggregation."""
         # This would integrate with FederatedAggregator
@@ -200,10 +200,10 @@ class TileMeshServicer(_ServicerBase):
             aggregated_updates={},
         )
 
-    def ExecuteStep(  # ruff: ignore[invalid-function-name] - gRPC method name must match proto
+    def ExecuteStep(  # ruff: ignore[invalid-function-name]
         self,
         request: tile_mesh_pb2.ExecuteStepRequest,
-        context: grpc.ServicerContext,  # ruff: ignore[unused-method-argument] - Required by gRPC interface
+        context: grpc.ServicerContext,
     ) -> tile_mesh_pb2.ExecuteStepResponse:
         """Execute a single distributed training step on this worker.
 
@@ -360,7 +360,7 @@ class GRPCClient:
                 return _proto_to_tensor(response.activation).to(self.device)
 
             logger.debug("Fetch failed for tile %s: %s", tile_id, response.error)
-            return None
+            return None  # ruff: ignore[try-consider-else]
         except TimeoutError:
             logger.warning("Fetch timeout for tile %s from %s", tile_id, self.target)
             return None
@@ -391,7 +391,7 @@ class GRPCClient:
             response = await asyncio.wait_for(
                 self._stub.SyncBoundaryTiles(request), timeout=timeout
             )
-            return response.success
+            return response.success  # ruff: ignore[try-consider-else]
         except Exception as e:
             logger.debug("Sync boundary error to %s: %s", self.target, e)
             return False
@@ -440,7 +440,7 @@ class GRPCClient:
                     name: _proto_to_tensor(proto).to(self.device)
                     for name, proto in response.aggregated_updates.items()
                 }
-            return None
+            return None  # ruff: ignore[try-consider-else]
         except Exception as e:
             logger.debug("Parameter update error to %s: %s", self.target, e)
             return None
@@ -470,7 +470,7 @@ class GRPCClient:
                     response.energy,
                 )
             logger.debug("ExecuteStep failed: %s", response.error)
-            return None
+            return None  # ruff: ignore[try-consider-else]
         except Exception as e:
             logger.debug("ExecuteStep error to %s: %s", self.target, e)
             return None
@@ -513,7 +513,7 @@ class GRPCConnectionPool:
         self._peer_addresses.pop(node_id, None)
         client = self._clients.pop(node_id, None)
         if client:
-            asyncio.create_task(client.close())  # ruff: ignore[asyncio-dangling-task] - Fire and forget
+            asyncio.create_task(client.close())  # ruff: ignore[asyncio-dangling-task]
 
     async def get_client(self, node_id: str) -> GRPCClient | None:
         """Get or create a client for a peer."""

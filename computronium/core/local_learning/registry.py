@@ -6,8 +6,11 @@ with metadata, enabling config-driven composition via TileAlgorithm.from_config(
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,7 +34,7 @@ _TILE_ALGORITHM_REGISTRY: dict[str, TileAlgorithmMetadata] = {}
 _TILE_ALGORITHM_FACTORIES: dict[str, Callable] = {}
 
 
-def tile_algorithm(
+def tile_algorithm(  # ruff: ignore[too-many-arguments]
     name: str,
     *,
     algorithm: str,
@@ -114,9 +117,9 @@ def list_tile_algorithms_with_metadata() -> dict[str, TileAlgorithmMetadata]:
 
 __all__ = [
     "TileAlgorithmMetadata",
-    "tile_algorithm",
-    "get_tile_algorithm_metadata",
     "get_tile_algorithm_factory",
+    "get_tile_algorithm_metadata",
     "list_tile_algorithms",
     "list_tile_algorithms_with_metadata",
+    "tile_algorithm",
 ]

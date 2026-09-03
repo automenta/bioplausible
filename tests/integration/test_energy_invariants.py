@@ -15,16 +15,19 @@ from computronium.core.system_trainer import compose_system
 from computronium.ontology import (
     DigitalSubstrate,
     EnergyMinimizationDynamics,
+    EuclideanUpdate,
     FeedforwardGeometry,
     GeometryConfig,
     MemristiveSubstrate,
     NeuromorphicSubstrate,
     OpticalSubstrate,
+    ParameterUpdateConfig,
     PredictiveSettlingDynamics,
     RecurrentGeometry,
     StateDynamicsConfig,
     SubstrateConfig,
     SystemState,
+    ThermodynamicContrast,
 )
 
 
@@ -410,12 +413,8 @@ class TestSubstratePassivity:
         assert not torch.isnan(y).any()
         assert not torch.isinf(y).any()
 
-    @pytest.mark.xfail(
-        reason="NeuromorphicSubstrate implements only Gaussian noise, "
-        "not spike dropout sparsity"
-    )
     def test_neuromorphic_substrate_sparsity(self):
-        """NeuromorphicSubstrate maintains sparsity."""
+        """NeuromorphicSubstrate thins the state to the active spike set."""
         # Use zero noise to test pure spike dropout sparsity
         substrate = NeuromorphicSubstrate(
             SubstrateConfig.neuromorphic(noise_level=0.0, device="cpu")
@@ -424,9 +423,8 @@ class TestSubstratePassivity:
         s = torch.ones(100, 100)
         noisy = substrate.inject_state_noise(s)
 
-        # Sparsity should be approximately maintained by spike dropout
+        # Sparsity is functional spike dropout: with sparsity=0.95, ~95% zeros
         sparsity = (noisy == 0).float().mean().item()
-        # With sparsity=0.95, expect ~95% zeros
         assert sparsity > 0.5  # Relaxed due to randomness
 
 
@@ -603,11 +601,6 @@ class TestEnergyInvariantComposition:
 
 
 # Import needed classes
-from computronium.ontology import (
-    EuclideanUpdate,
-    ParameterUpdateConfig,
-    ThermodynamicContrast,
-)
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -7,7 +7,7 @@ MEP-specific EP strategies live in ``zoo.mep.optimizers.strategies.gradient``.
 from typing import Protocol, cast
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
 
 from .base import GradientStrategy
@@ -55,7 +55,7 @@ class BackpropGradient(GradientStrategy):
         x: torch.Tensor,
         target: torch.Tensor | None,
         loss_fn: nn.Module | None = None,
-        **kwargs: object,  # ruff: ignore[unused-method-argument]
+        **kwargs: object,
     ) -> None:
         """Compute gradients via backpropagation."""
         fn = loss_fn or self.loss_fn
@@ -197,7 +197,7 @@ class TargetPropGradient(GradientStrategy):
         x: torch.Tensor,
         target: torch.Tensor | None,
         loss_fn: nn.Module | None = None,
-        **kwargs: object,  # ruff: ignore[unused-method-argument]
+        **kwargs: object,
     ) -> None:
         """Compute target propagation gradients."""
         fn = loss_fn or self.loss_fn
@@ -301,8 +301,8 @@ class HebbianGradient(GradientStrategy):
         model: nn.Module,
         x: torch.Tensor,
         target: torch.Tensor | None,
-        loss_fn: nn.Module | None = None,  # ruff: ignore[unused-method-argument]
-        **kwargs: object,  # ruff: ignore[unused-method-argument]
+        loss_fn: nn.Module | None = None,
+        **kwargs: object,
     ) -> None:
         """Compute local Hebbian gradients."""
         if target is None:
@@ -391,7 +391,7 @@ class PCGradient(GradientStrategy):
         x: torch.Tensor,
         target: torch.Tensor | None,
         loss_fn: nn.Module | None = None,
-        **kwargs: object,  # ruff: ignore[unused-method-argument]
+        **kwargs: object,
     ) -> None:
         """Compute Predictive Coding composite gradients."""
         fn = loss_fn or self.loss_fn
@@ -419,7 +419,7 @@ class PCGradient(GradientStrategy):
             upper = activations[i + 1].detach()
             lower_target = activations[i].detach()
             prediction = pc_model.top_down[i](upper)
-            pc_loss = pc_loss + F.mse_loss(prediction, lower_target)
+            pc_loss = pc_loss + F.mse_loss(prediction, lower_target)  # ruff: ignore[non-augmented-assignment]
 
         # Composite loss
         loss = cls_loss + self.pc_weight * pc_loss

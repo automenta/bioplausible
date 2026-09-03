@@ -147,15 +147,15 @@ UPDATE_FACTORIES = {
 }
 
 PLASTICITY_FACTORIES = {
-    "null": lambda: PlasticityConfig.null(),
+    "null": lambda: PlasticityConfig.null(),  # ruff: ignore[unnecessary-lambda]
     "routing": lambda: PlasticityConfig.routing(gate_dim=32),
     "fast_weights": lambda: PlasticityConfig.fast_weights(fast_weight_dim=64),
-    "substrate_coupled": lambda: PlasticityConfig.substrate_coupled(),
+    "substrate_coupled": lambda: PlasticityConfig.substrate_coupled(),  # ruff: ignore[unnecessary-lambda]
     "rule_state": lambda: PlasticityConfig.rule_state(num_operators=4),
 }
 
 
-def create_random_system_config() -> SystemConfig:
+def create_random_system_config() -> SystemConfig:  # ruff: ignore[too-many-locals]
     """Create a random valid 6-D SystemConfig."""
     # Use only compatible combinations to avoid validation errors
     compatible_combinations = [
@@ -253,7 +253,7 @@ def test_random_6d_coordinate_constructs_system():
     for _ in range(10):
         config = create_random_system_config()
 
-        substrate, geometry, dynamics, credit, update = create_system_from_config(
+        substrate, geometry, _dynamics, _credit, _update = create_system_from_config(
             config
         )
         registry = create_registry_from_geometry(geometry, config.plasticity)
@@ -294,7 +294,7 @@ def test_random_6d_coordinate_constructs_system():
         assert context.theta == geometry.params
 
 
-def test_null_plasticity_reproduces_5d_behavior():
+def test_null_plasticity_reproduces_5d_behavior():  # ruff: ignore[too-many-locals]
     """M=Null coordinates should reproduce 5-D behavior (Zero-Extension)."""
     # Create config with Null plasticity
     config = SystemConfig(

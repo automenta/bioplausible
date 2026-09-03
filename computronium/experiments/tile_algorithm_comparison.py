@@ -121,7 +121,7 @@ def _create_trainer_config(
     base_kwargs.update(algo_kwargs)
 
     # Task-specific dims
-    if task in ("mnist", "fashion_mnist"):
+    if task in ("mnist", "fashion_mnist"):  # ruff: ignore[literal-membership]
         base_kwargs.update({
             "input_channels": 1,
             "input_size": 28,
@@ -384,7 +384,7 @@ def _save_results(results: list[dict], output_dir: str) -> None:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    with Path(output_path / "raw_results.jsonl").open("w") as f:
+    with Path(output_path / "raw_results.jsonl").open("w", encoding="utf-8") as f:
         for r in results:
             f.write(json.dumps(r, default=str) + "\n")
 
@@ -396,7 +396,7 @@ def _save_results(results: list[dict], output_dir: str) -> None:
     logger.info("Saved results to %s", output_path)
 
 
-def _generate_report(
+def _generate_report(  # ruff: ignore[complex-structure]
     analysis: dict,
     bio_scores: dict,
     output_dir: str,
@@ -404,7 +404,9 @@ def _generate_report(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    with Path(output_path / "algorithm_comparison_report.md").open("w") as f:
+    with Path(output_path / "algorithm_comparison_report.md").open(
+        "w", encoding="utf-8"
+    ) as f:
         f.write("# Tile Algorithm Family Comparison Report\n\n")
 
         f.write("## Performance Ranking (by Accuracy)\n\n")
@@ -553,12 +555,16 @@ def main():
 
     # Analyze performance
     analysis = _analyze_algorithm_performance(results)
-    with Path(Path(config.output_dir) / "performance_analysis.json").open("w") as f:
+    with Path(Path(config.output_dir) / "performance_analysis.json").open(
+        "w", encoding="utf-8"
+    ) as f:
         json.dump(analysis, f, indent=2, default=str)
 
     # Compute bio-plausibility scores
     bio_scores = _compute_bio_plausibility_scores(results)
-    with Path(Path(config.output_dir) / "bio_plausibility_scores.json").open("w") as f:
+    with Path(Path(config.output_dir) / "bio_plausibility_scores.json").open(
+        "w", encoding="utf-8"
+    ) as f:
         json.dump(bio_scores, f, indent=2, default=str)
 
     # Generate report

@@ -68,7 +68,7 @@ class TestTransferLoading(unittest.TestCase):
         mock_exists.return_value = True
 
         # Setup temp dir context manager
-        temp_dir_path = "/tmp/test_ctx"
+        temp_dir_path = "/tmp/test_ctx"  # ruff: ignore[hardcoded-temp-file]
         mock_temp_dir.return_value.__enter__.return_value = temp_dir_path
 
         artifact_path = MagicMock(spec=Path)

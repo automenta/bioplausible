@@ -172,7 +172,7 @@ def _records_from_dicts(records: list[dict]) -> list:
     return [FrontierRecord.from_dict(r) for r in records]
 
 
-def _render_report(  # ruff: ignore[too-many-arguments, too-many-positional-arguments] - report context bundle
+def _render_report(
     campaign: Path,
     manifest: dict,
     leakage: dict[str, dict[str, float]],

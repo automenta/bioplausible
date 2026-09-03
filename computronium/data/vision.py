@@ -124,9 +124,9 @@ def get_vision_dataset(
     """
     if name == "digits":
         return _load_sklearn_digits(train, flatten)
-    if name in ("xor", "spiral", "circles"):
+    if name in ("xor", "spiral", "circles"):  # ruff: ignore[literal-membership]
         return _load_toy_dataset(name, train)
-    if name in ("iris", "wine", "breast_cancer"):
+    if name in ("iris", "wine", "breast_cancer"):  # ruff: ignore[literal-membership]
         return _load_sklearn_tabular(name, train)
     # For the offline, deterministic image sets, pre-transform the whole dataset
     # into a float TensorDataset once and reuse it across epochs and probes.
@@ -215,7 +215,7 @@ def generate_toy_points(
             torch.full((n,), 0.2, device=device),
             torch.full((n,), 0.8, device=device),
         )
-        r = r + torch.randn(n, device=device, generator=generator) * 0.03
+        r = r + torch.randn(n, device=device, generator=generator) * 0.03  # ruff: ignore[non-augmented-assignment]
         th = 2 * math.pi * b
         x = torch.stack([r * torch.cos(th), r * torch.sin(th)], dim=1).to(dtype)
         y = (r > 0.5).long()
@@ -323,7 +323,7 @@ class CharDataset(Dataset):
         return "".join(self.idx_to_char[i.item()] for i in indices)
 
 
-def create_data_loaders(  # ruff: ignore[too-many-arguments,too-many-positional-arguments] - pin/persistent flags are plan §10 data-path knobs
+def create_data_loaders(
     dataset_name: str = "mnist",
     batch_size: int = 64,
     num_workers: int = 0,

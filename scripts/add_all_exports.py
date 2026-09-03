@@ -21,7 +21,7 @@ SKIP_HAS_ALL = re.compile(r"^\s*__all__\s*=", re.MULTILINE)
 
 def _is_public(path: pathlib.Path) -> bool:
     for part in path.parts:
-        if part.startswith("_") and part not in ("__init__", "__main__"):
+        if part.startswith("_") and part not in ("__init__", "__main__"):  # ruff: ignore[literal-membership]
             return False
         if part in EXCLUDE_DIRS:
             return False
@@ -38,15 +38,15 @@ def _module_public_names(source: str) -> list[str]:
     for node in tree.body:
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             continue
-        if isinstance(node, ast.ClassDef) and not node.name.startswith("_"):
-            names.append(node.name)
-        elif isinstance(node, ast.FunctionDef) and not node.name.startswith("_"):
+        if (isinstance(node, ast.ClassDef) and not node.name.startswith("_")) or (
+            isinstance(node, ast.FunctionDef) and not node.name.startswith("_")
+        ):
             names.append(node.name)
         elif isinstance(node, ast.Assign):
             for target in node.targets:
                 if isinstance(target, ast.Name) and not target.id.startswith("_"):
                     names.append(target.id)
-        elif isinstance(node, ast.AnnAssign):
+        elif isinstance(node, ast.AnnAssign):  # ruff: ignore[collapsible-if]
             if isinstance(node.target, ast.Name) and not node.target.id.startswith("_"):
                 names.append(node.target.id)
     return names

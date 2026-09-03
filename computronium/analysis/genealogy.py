@@ -374,7 +374,7 @@ def generate_algorithm_map(
 # =============================================================================
 
 
-def plot_algorithm_map(
+def plot_algorithm_map(  # ruff: ignore[complex-structure, too-many-branches]
     embeddings: np.ndarray,
     labels: list[str],
     metadatas: list[dict] | None = None,
@@ -449,7 +449,7 @@ def plot_algorithm_map(
     )
 
     # Phylogeny tree overlay (simplified: connect nearest neighbors)
-    if linkage_matrix is not None:
+    if linkage_matrix is not None:  # ruff: ignore[too-many-nested-blocks]
         from scipy.cluster.hierarchy import fcluster
 
         # Get cluster assignments at various thresholds

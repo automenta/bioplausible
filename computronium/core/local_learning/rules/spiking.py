@@ -57,7 +57,7 @@ class STDPLearningRule(LearningRuleOptimizer):
     curve (net LTP for strongly correlated pre/post).
     """
 
-    def __init__(
+    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         self,
         params,
         model: nn.Module,

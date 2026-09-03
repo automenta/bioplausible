@@ -299,9 +299,7 @@ class PowerPreregistration:
         unmet = self.unmet_requirements()
         if unmet:
             reasons = "; ".join(unmet)
-            raise ValueError(  # ruff: ignore[raise-vanilla-args] - the gate failure must name every unmet requirement
-                f"commission is not claim-grade: {reasons}"
-            )
+            raise ValueError(f"commission is not claim-grade: {reasons}")
 
     def to_dict(self) -> dict[str, object]:
         data: dict[str, object] = asdict(self)

@@ -150,7 +150,7 @@ class TimeSeriesTileNet(BioModel):
     algorithm_name = "TimeSeriesTileNet"
 
     @classmethod
-    def build(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def build(
         cls,
         spec,
         input_dim,
@@ -329,7 +329,7 @@ class TimeSeriesTileNet(BioModel):
                 for _ in range(steps):
                     pred = self.forward(current_input)
                     # pred is (batch, pred_len, output_dim) -> 3D
-                    if pred.dim() == 3:  # ruff: ignore[magic-value-comparison]
+                    if pred.dim() == 3:
                         pred = pred[:, -1:, :]
                     predictions.append(pred)
 

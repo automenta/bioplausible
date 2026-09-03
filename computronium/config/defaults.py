@@ -49,7 +49,7 @@ def register_default_config(name: str, overrides: dict) -> None:
             invalid ``ExperimentConfig`` (e.g., unknown field).
     """
     if not isinstance(overrides, dict):
-        raise ValueError(f"overrides must be a dict, got {type(overrides).__name__}")
+        raise ValueError(f"overrides must be a dict, got {type(overrides).__name__}")  # ruff: ignore[type-check-without-type-error]
     if name in DEFAULT_CONFIGS:
         _logger.warning("Overwriting default config preset %r", name)
     base = OmegaConf.structured(ExperimentSchemaConfig)

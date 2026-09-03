@@ -125,14 +125,14 @@ class LeaderboardGenerator:
             }
             for e in sorted(self._entries, key=lambda e: e.accuracy, reverse=True)
         ]
-        with Path(save_path).open("w") as f:
+        with Path(save_path).open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, default=str)
         logger.info("Leaderboard saved: %s", save_path)
         return str(save_path)
 
     def load(self, path: str) -> None:
         """Load leaderboard from JSON."""
-        with Path(path).open() as f:
+        with Path(path).open(encoding="utf-8") as f:
             data = json.load(f)
         for item in data:
             self._entries.append(LeaderboardEntry(**item))
@@ -144,8 +144,8 @@ class LeaderboardGenerator:
             return {"total": 0}
         return {
             "total": len(self._entries),
-            "tasks": list(set(e.task for e in self._entries)),
-            "models": list(set(e.model for e in self._entries)),
+            "tasks": list(set(e.task for e in self._entries)),  # ruff: ignore[unnecessary-generator-set]
+            "models": list(set(e.model for e in self._entries)),  # ruff: ignore[unnecessary-generator-set]
             "best_accuracy": max(e.accuracy for e in self._entries),
             "avg_accuracy": sum(e.accuracy for e in self._entries) / len(self._entries),
         }

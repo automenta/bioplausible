@@ -15,9 +15,7 @@ Usage::
 import argparse
 import json
 import logging
-from typing import Protocol
-
-from torch.utils.data import DataLoader
+from typing import TYPE_CHECKING, Protocol
 
 # Import zoo models to trigger registration
 from computronium.core.logging import get_logger
@@ -32,6 +30,9 @@ from computronium.domains.factory import create_task
 from computronium.domains.registry import SUPPORTED_TASKS, resolve_task
 from computronium.utils import seed_everything
 
+if TYPE_CHECKING:
+    from torch.utils.data import DataLoader
+
 logger = get_logger()
 
 _DEFAULT_TASK = "mnist"
@@ -44,7 +45,7 @@ _CONFIG_FACTORIES = {
 }
 
 
-class _DataProvider(Protocol):
+class _DataProvider(Protocol):  # ruff: ignore[unused-private-protocol]
     """Protocol for data providers (DataLoader, etc.)."""
 
     def __iter__(self): ...
@@ -85,7 +86,7 @@ class _FlattenLoader:
     def __iter__(self):
         for x, y in self.loader:
             if x.dim() > 2:
-                x = x.view(x.size(0), -1)
+                x = x.view(x.size(0), -1)  # ruff: ignore[redefined-loop-name]
             yield x, y
 
     def __len__(self) -> int:
@@ -198,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
             args.device,
         )
     except Exception as e:
-        logger.error("comp parity failed: %s", e)
+        logger.error("comp parity failed: %s", e)  # ruff: ignore[error-instead-of-exception]
         return 2
 
     if args.json:

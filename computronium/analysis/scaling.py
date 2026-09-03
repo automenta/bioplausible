@@ -80,7 +80,7 @@ class PowerLawFit:
 # =============================================================================
 
 
-def fit_power_law(
+def fit_power_law(  # ruff: ignore[complex-structure, too-many-locals, too-many-statements]
     x: np.ndarray,
     y: np.ndarray,
     n_bootstrap: int = 1000,
@@ -136,7 +136,7 @@ def fit_power_law(
             log_x_v = np.log(x[valid])
             log_y_v = np.log(y_shifted[valid])
             A = np.vstack([log_x_v, np.ones_like(log_x_v)]).T
-            try:
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 b_log_v, log_a_v = np.linalg.lstsq(A, log_y_v, rcond=None)[0]
                 a_v = np.exp(log_a_v)
                 b_v = b_log_v
@@ -161,7 +161,7 @@ def fit_power_law(
         def power_law(x, a, b, c):
             return a * np.power(x, b) + c
 
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             popt, _ = curve_fit(power_law, x, y, p0=[1.0, -0.5, 0.0], maxfev=5000)
             a, b, c = popt
             y_pred = power_law(x, a, b, c)
@@ -317,12 +317,12 @@ class ScalingLawFitter:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         data = {name: fit.to_dict() for name, fit in self.fits.items()}
-        with Path(path).open("w") as f:
+        with Path(path).open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
     def load(self, path: Path) -> None:
         """Load fits from JSON."""
-        with Path(path).open() as f:
+        with Path(path).open(encoding="utf-8") as f:
             data = json.load(f)
         self.fits = {name: PowerLawFit.from_dict(d) for name, d in data.items()}
 

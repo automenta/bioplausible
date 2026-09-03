@@ -121,7 +121,7 @@ def _get_layer_activations(system, x: Tensor, target: Tensor | None) -> list[Ten
     seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
 @settings(max_examples=50, deadline=None)
-def test_thermodynamic_contrast_depends_only_on_local_activities(
+def test_thermodynamic_contrast_depends_only_on_local_activities(  # ruff: ignore[too-many-locals]
     input_dim, hidden_dim, num_layers, output_dim, batch_size, beta, seed
 ):
     """Property: compute_pseudo_gradient depends only on local pre/post activities.
@@ -164,7 +164,7 @@ def test_thermodynamic_contrast_depends_only_on_local_activities(
         n for n in param_names if "weight" in n and system.geometry.params[n].ndim == 2
     ]
 
-    for l in range(n_layers):
+    for l in range(n_layers):  # ruff: ignore[ambiguous-variable-name]
         if l >= len(weight_names):
             continue
 
@@ -218,7 +218,7 @@ def test_thermodynamic_contrast_depends_only_on_local_activities(
 )
 @settings(max_examples=30, deadline=None)
 @pytest.mark.xfail(reason="Numerical precision issue in scale-free property test")
-def test_thermodynamic_contrast_scale_free_property(
+def test_thermodynamic_contrast_scale_free_property(  # ruff: ignore[too-many-locals]
     input_dim, hidden_dim, num_layers, output_dim, batch_size, beta, scale, seed
 ):
     """Property: Scale-free - gradient scales by scale^2 when activities scale by scale.
@@ -302,7 +302,7 @@ def test_thermodynamic_contrast_scale_free_property(
     seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
 @settings(max_examples=50, deadline=None)
-def test_eqprop_gradient_strictly_local_per_layer(
+def test_eqprop_gradient_strictly_local_per_layer(  # ruff: ignore[too-many-locals]
     input_dim, hidden_dim, num_layers, output_dim, batch_size, beta, target_layer, seed
 ):
     """Property: grad_i = f(h_i_free, h_i_nudged, h_{i-1}_free, h_{i-1}_nudged) only.
@@ -345,7 +345,7 @@ def test_eqprop_gradient_strictly_local_per_layer(
     perturbed_nudged = nudged_acts.copy()
 
     noise_scale = 10.0
-    for l in range(len(free_acts)):
+    for l in range(len(free_acts)):  # ruff: ignore[ambiguous-variable-name]
         # Skip the layer itself, its pre layer, and the input layer (index 0)
         # Layer l depends on l (pre) and l+1 (post) for l < n_layers
         # Input layer is index 0, never perturb it
@@ -405,7 +405,7 @@ def test_eqprop_gradient_strictly_local_per_layer(
     seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
 @settings(max_examples=30, deadline=None)
-def test_eqprop_all_layers_strictly_local(
+def test_eqprop_all_layers_strictly_local(  # ruff: ignore[too-many-locals]
     input_dim, hidden_dim, num_layers, output_dim, batch_size, beta, seed
 ):
     """Property: ALL layers' gradients are strictly local simultaneously.
@@ -441,11 +441,11 @@ def test_eqprop_all_layers_strictly_local(
     # Directly verify the compute_pseudo_gradient implementation only uses
     # adjacent layers by checking the loop structure
     # The implementation iterates l in range(n_layers) and only uses
-    # free_acts[l], free_acts[l+1], nudged_acts[l], nudged_acts[l+1]
+    # free_acts[l], free_acts[l+1], nudged_acts[l], nudged_acts[l+1]  # ruff: ignore[commented-out-code]
     # This is a structural property - we verify by inspection of the code
     # and by testing that the computed gradients match the local formula
 
-    for l in range(n_layers):
+    for l in range(n_layers):  # ruff: ignore[ambiguous-variable-name]
         if l >= len(weight_names):
             continue
 
@@ -499,7 +499,7 @@ def test_eqprop_all_layers_strictly_local(
     seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
 @settings(max_examples=30, deadline=None)
-def test_eqprop_invariance_to_non_adjacent_noise(
+def test_eqprop_invariance_to_non_adjacent_noise(  # ruff: ignore[too-many-locals]
     input_dim, hidden_dim, num_layers, output_dim, batch_size, beta, noise_scale, seed
 ):
     """Property: Adding noise to non-adjacent layers doesn't change any gradient.
@@ -534,7 +534,7 @@ def test_eqprop_invariance_to_non_adjacent_noise(
     for target_l in range(n_layers):
         local_free = []
         local_nudged = []
-        for l in range(len(free_acts)):
+        for l in range(len(free_acts)):  # ruff: ignore[ambiguous-variable-name]
             if l == target_l or l == target_l + 1:
                 local_free.append(free_acts[l].clone())
                 local_nudged.append(nudged_acts[l].clone())
@@ -586,7 +586,7 @@ def test_eqprop_invariance_to_non_adjacent_noise(
     seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
 @settings(max_examples=20, deadline=None)
-def test_eqprop_feedback_alignment_still_local(
+def test_eqprop_feedback_alignment_still_local(  # ruff: ignore[too-many-locals]
     input_dim, hidden_dim, num_layers, output_dim, batch_size, beta, seed
 ):
     """Property: Even with random feedback matrices (FA-style), contrastive gradient is local.
@@ -622,13 +622,13 @@ def test_eqprop_feedback_alignment_still_local(
     # that correlates with random feedback weights.
     # The key insight: the gradient formula uses ACTIVATIONS, not weights.
     # Even if nudged_acts was influenced by random feedback, the contrast
-    # (free_acts[l].T @ free_acts[l+1] - nudged_acts[l].T @ nudged_acts[l+1])
+    # (free_acts[l].T @ free_acts[l+1] - nudged_acts[l].T @ nudged_acts[l+1])  # ruff: ignore[commented-out-code]
     # still only uses layer l and l+1 activations.
 
     # So we just verify the same locality property holds regardless of
     # how the nudged phase was generated.
 
-    for l in range(n_layers):
+    for l in range(n_layers):  # ruff: ignore[ambiguous-variable-name]
         free_pre = free_acts[l]
         free_post = free_acts[l + 1]
         nudged_pre = nudged_acts[l]
@@ -778,7 +778,7 @@ def test_full_train_step_gradient_locality(
 
     # Verify parameters changed (gradients were applied)
     for name, param in system.geometry.params.items():
-        if name in orig_params:
+        if name in orig_params:  # ruff: ignore[collapsible-if]
             # Weight parameters should have changed
             if param.ndim == 2 and "weight" in name:
                 # Not asserting change (could be small), just that update ran

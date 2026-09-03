@@ -19,7 +19,7 @@ Supports multiple FA variants via the unified RandomProjectionsCredit:
 
 from __future__ import annotations
 
-import torch
+from typing import TYPE_CHECKING
 
 from computronium.core.system_trainer import compose_system
 from computronium.ontology import (
@@ -34,6 +34,9 @@ from computronium.ontology import (
     StateDynamicsConfig,
     System,
 )
+
+if TYPE_CHECKING:
+    import torch
 
 
 def create_native_fa_mlp(

@@ -74,7 +74,7 @@ def _resolve_task_loss(task: TaskProtocol) -> nn.Module:
 
 def _accuracy(logits: torch.Tensor, y: torch.Tensor) -> float:
     """Classification accuracy; 0.0 for non-index targets (regression)."""
-    if y.dtype not in (torch.long, torch.int, torch.int32, torch.int64):
+    if y.dtype not in (torch.long, torch.int, torch.int32, torch.int64):  # ruff: ignore[literal-membership]
         return 0.0
     preds = logits[:, -1, :] if logits.dim() == 3 else logits
     return (preds.argmax(-1) == y).float().mean().item()
@@ -88,7 +88,7 @@ class _TaskTrainer:
     expected by hyperopt callers.
     """
 
-    def __init__(
+    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         self,
         model: nn.Module,
         task: TaskProtocol,

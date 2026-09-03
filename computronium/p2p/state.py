@@ -27,7 +27,7 @@ def load_state():
         return {"points": 0, "jobs_done": 0}
 
     try:
-        with Path(STATE_FILE).open("r") as f:
+        with Path(STATE_FILE).open("r", encoding="utf-8") as f:
             return json.load(f)
     except OSError, ValueError, TypeError:
         logger.warning("Failed to load P2P state, returning defaults")
@@ -37,7 +37,7 @@ def load_state():
 def save_state(points, jobs_done):
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with Path(STATE_FILE).open("w") as f:
+        with Path(STATE_FILE).open("w", encoding="utf-8") as f:
             json.dump({"points": points, "jobs_done": jobs_done}, f)
     except OSError, ValueError, TypeError:
         logger.exception("Failed to save P2P state")

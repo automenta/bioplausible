@@ -5,20 +5,19 @@ Helper functions for ONNX export, model verification, and training utilities.
 """
 
 import os
+import pathlib
 import random
 import sys
 import time
 from contextlib import contextmanager
 
-from computronium.core.logging import get_logger
-
-logger = get_logger()
-
-import pathlib
-
 import numpy as np
 import torch
 from torch import nn
+
+from computronium.core.logging import get_logger
+
+logger = get_logger()
 
 
 def seed_everything(
@@ -50,7 +49,7 @@ def seed_everything(
             unavailable — a silent CPU fallback would silently defeat the
             bitwise-identical guarantee the caller is relying on.
     """
-    want_cuda = device in ("cuda", "gpu") or device.startswith("cuda:")
+    want_cuda = device in ("cuda", "gpu") or device.startswith("cuda:")  # ruff: ignore[literal-membership]
     if want_cuda and not torch.cuda.is_available():
         raise RuntimeError(f"seed_everything device={device!r} but CUDA is unavailable")
 
@@ -80,11 +79,11 @@ def capture_environment() -> dict[str, str]:
     """
     git_commit = "unknown"
     try:
-        import subprocess
+        import subprocess  # ruff: ignore[suspicious-subprocess-import]
 
         git_commit = (
             subprocess
-            .check_output(["git", "rev-parse", "HEAD"])
+            .check_output(["git", "rev-parse", "HEAD"])  # ruff: ignore[start-process-with-partial-path]
             .decode("ascii")
             .strip()
         )
@@ -136,7 +135,7 @@ def export_to_onnx(
     # Handle compiled models
     model = _get_model_for_processing(model)
 
-    parent = os.path.dirname(output_path)
+    parent = os.path.dirname(output_path)  # ruff: ignore[os-path-dirname]
     if parent:
         pathlib.Path(parent).mkdir(exist_ok=True, parents=True)
 
@@ -148,7 +147,7 @@ def export_to_onnx(
 
     was_training = model.training
     model.eval()
-    try:
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
         model = model.to(device)
         dummy_input = torch.randn(*input_shape, device=device)
 

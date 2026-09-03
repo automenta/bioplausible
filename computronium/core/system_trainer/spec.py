@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from computronium.core.joint.transition import PlasticityConfig, PlasticityPrimitive
 from computronium.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
@@ -37,6 +36,7 @@ from computronium.ontology import (
 )
 
 if TYPE_CHECKING:
+    from computronium.core.joint.transition import PlasticityConfig, PlasticityPrimitive
     from computronium.core.system_trainer.protocol import JointSystem
     from computronium.ontology import (
         CreditAssignment,
@@ -72,7 +72,7 @@ def extract_config(system: System) -> dict[str, object]:
 def _geometry_from_config(geometry: GeometryConfig) -> Geometry:
     """Instantiate geometry from config."""
     topology_type = geometry.topology_type.lower()
-    if topology_type in ("recurrent", "recurrent_attractor"):
+    if topology_type in ("recurrent", "recurrent_attractor"):  # ruff: ignore[literal-membership]
         hidden_dim = geometry.hidden_dims[-1] if geometry.hidden_dims else None
         recurrent_weight = None
         if geometry.recurrent_weight is not None:
@@ -80,7 +80,7 @@ def _geometry_from_config(geometry: GeometryConfig) -> Geometry:
         return RecurrentGeometry(
             geometry, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight
         )
-    elif topology_type in ("tile_mesh", "tile"):
+    elif topology_type in ("tile_mesh", "tile"):  # ruff: ignore[literal-membership]
         return TileGeometry(
             geometry,
             neurons_per_tile=8,
@@ -109,7 +109,7 @@ def _dynamics_from_config(dynamics: StateDynamicsConfig) -> StateDynamics:
         raise ValueError(f"Unknown dynamics_type: {dynamics_type!r}")
 
 
-def _credit_from_config(config: CreditAssignmentConfig):
+def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-many-return-statements]
     """Instantiate the credit implementation named by ``config.credit_type``."""
     match config.credit_type.lower():
         case "thermodynamic_contrast" | "equilibrium":
@@ -135,13 +135,13 @@ def _credit_from_config(config: CreditAssignmentConfig):
 def _update_from_config(update: ParameterUpdateConfig):
     """Instantiate update from config."""
     update_type = update.update_type.lower()
-    if update_type in ("riemannian_orthogonal", "muon"):
+    if update_type in ("riemannian_orthogonal", "muon"):  # ruff: ignore[literal-membership]
         return RiemannianOrthogonalUpdate(update)
-    elif update_type in ("spectral_constrained", "spectral"):
+    elif update_type in ("spectral_constrained", "spectral"):  # ruff: ignore[literal-membership]
         return SpectralConstrainedUpdate(update)
-    elif update_type in ("natural_gradient", "fisher"):
+    elif update_type in ("natural_gradient", "fisher"):  # ruff: ignore[literal-membership]
         return NaturalGradientUpdate(update)
-    elif update_type in ("elastic_consolidation", "ewc"):
+    elif update_type in ("elastic_consolidation", "ewc"):  # ruff: ignore[literal-membership]
         return ElasticConsolidationUpdate(update)
     elif update_type == "euclidean":
         return EuclideanUpdate(update)
@@ -284,7 +284,7 @@ def compose_joint_system_from_configs(
 
 
 __all__ = [
-    "compose_system_from_configs",
     "compose_joint_system_from_configs",
+    "compose_system_from_configs",
     "extract_config",
 ]

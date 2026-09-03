@@ -23,7 +23,7 @@ class TritonEqPropOps:
 
     # Cache of converted torch weight tensors keyed by source cupy array id
     # (see ``step_layered_cupy_torch``). Cleared when weights change.
-    _torch_cache: dict[int, object] = {}
+    _torch_cache: dict[int, object] = {}  # ruff: ignore[mutable-class-default]
 
     @classmethod
     def is_available(cls) -> bool:
@@ -32,7 +32,7 @@ class TritonEqPropOps:
     @classmethod
     def _init_triton(cls):
         if cls._triton_kernel is None and HAS_TRITON:
-            try:
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 import triton
                 import triton.language as tl
                 from triton.language.extra import libdevice
@@ -116,7 +116,7 @@ class TritonEqPropOps:
         return cls.step_linear(h, h_target, alpha)
 
     @classmethod
-    def step_layered_cupy_torch(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # mirrors the cupy forward-step signature
+    def step_layered_cupy_torch(  # mirrors the cupy forward-step signature  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         cls, h, x_emb, w1, b1, w2, b2, gamma, out=None, hnorm_out=None, ffnhid_out=None
     ) -> tuple[object, object, object] | None:
         """Torch-native layered MLP-block forward step on CuPy arrays.
@@ -190,7 +190,7 @@ class TritonEqPropOps:
             from triton.language.extra import libdevice
 
             @triton.jit
-            def _layered_step_kernel(
+            def _layered_step_kernel(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-positional-arguments]
                 h_ptr,
                 x_emb_ptr,
                 w1_ptr,
@@ -233,7 +233,7 @@ class TritonEqPropOps:
                     mask=mask_m[:, None],
                 )
 
-                # ffn_hidden = tanh(h_norm @ W1^T + b1); W1 is (H, K)
+                # ffn_hidden = tanh(h_norm @ W1^T + b1); W1 is (H, K)  # ruff: ignore[commented-out-code]
                 offs_h = tl.arange(0, H)
                 w1 = tl.load(w1_ptr + offs_h[:, None] * K + offs_k[None, :])
                 b1 = tl.load(b1_ptr + offs_h)
@@ -245,13 +245,13 @@ class TritonEqPropOps:
                     mask=mask_m[:, None],
                 )
 
-                # ffn_out = ffn @ W2^T + b2; W2 is (K, H)
+                # ffn_out = ffn @ W2^T + b2; W2 is (K, H)  # ruff: ignore[commented-out-code]
                 w2 = tl.load(w2_ptr + offs_k[:, None] * H + offs_h[None, :])
                 b2 = tl.load(b2_ptr + offs_k)
                 ffn_out = tl.dot(ffn, tl.trans(w2))  # (BLOCK_M, K)
-                ffn_out = ffn_out + b2[None, :]
+                ffn_out = ffn_out + b2[None, :]  # ruff: ignore[non-augmented-assignment]
 
-                # h_next = (1-gamma)*h + gamma*(ffn_out + x_emb)
+                # h_next = (1-gamma)*h + gamma*(ffn_out + x_emb)  # ruff: ignore[commented-out-code]
                 h_next = (1.0 - gamma) * h + gamma * (ffn_out + x_emb)
                 tl.store(
                     out_ptr + offs_m[:, None] * K + offs_k[None, :],
@@ -262,7 +262,7 @@ class TritonEqPropOps:
             cls._layered_kernel = _layered_step_kernel
 
     @classmethod
-    def step_layered_cupy(
+    def step_layered_cupy(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-positional-arguments]
         cls,
         h,
         x_emb,
@@ -342,7 +342,7 @@ class TritonEqPropOps:
 # ============================================================
 
 
-class MEP_TritonOps:
+class MEP_TritonOps:  # ruff: ignore[invalid-class-name]
     """MEP operations with Triton acceleration.
 
     Provides fused kernels for Muon orthogonalization, Dion low-rank update,
@@ -358,7 +358,7 @@ class MEP_TritonOps:
     @classmethod
     def _init_muon(cls):
         if cls._muon_gram_kernel is None and HAS_TRITON:
-            try:
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 import triton
                 import triton.language as tl
 
@@ -464,10 +464,10 @@ class MEP_TritonOps:
 
         out = base.clone()
         norm = out.norm().clamp(min=1e-4, max=1e4)
-        out = out / norm
+        out = out / norm  # ruff: ignore[non-augmented-assignment]
 
         if HAS_TRITON and out.is_cuda and M >= 16 and N >= 16:
-            try:
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 import triton
 
                 cls._init_muon()
@@ -475,7 +475,7 @@ class MEP_TritonOps:
                 update_kernel = cls._muon_update_kernel
                 if gram_kernel and update_kernel:
                     A = torch.empty(N, N, device=out.device, dtype=torch.float32)
-                    O = torch.empty_like(out)
+                    O = torch.empty_like(out)  # ruff: ignore[ambiguous-variable-name]
                     grid_g = (triton.cdiv(N, 32), triton.cdiv(N, 32))
                     grid_u = (triton.cdiv(M, 32), triton.cdiv(N, 32))
                     for _ in range(ns_steps):
@@ -488,7 +488,7 @@ class MEP_TritonOps:
 
         for _ in range(ns_steps):
             WT_W = out.T @ out
-            out = out @ (
+            out = out @ (  # ruff: ignore[non-augmented-assignment]
                 1.5 * torch.eye(N, device=out.device, dtype=out.dtype) - 0.5 * WT_W
             )
 
@@ -527,7 +527,7 @@ class MEP_TritonOps:
     @classmethod
     def _init_fisher(cls):
         if cls._fisher_kernel is None and HAS_TRITON:
-            try:
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 import triton
                 import triton.language as tl
 
@@ -584,13 +584,13 @@ class MEP_TritonOps:
     @classmethod
     def _init_ep_settle(cls):
         if cls._ep_settle_kernel is None and HAS_TRITON:
-            try:
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 import triton
                 import triton.language as tl
                 from triton.language.extra import libdevice
 
                 @triton.jit
-                def _ep_settle_kernel(
+                def _ep_settle_kernel(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-positional-arguments]
                     h_ptr,
                     x_emb_ptr,
                     W1_ptr,
@@ -640,7 +640,7 @@ class MEP_TritonOps:
                         ffn = tl.dot(h_norm, tl.trans(W1))
                         ffn = libdevice.tanh(ffn + b1[None, :])
                         ffn_out = tl.dot(ffn, tl.trans(W2))
-                        ffn_out = ffn_out + b2[None, :]
+                        ffn_out = ffn_out + b2[None, :]  # ruff: ignore[non-augmented-assignment]
 
                         # Residual update
                         h = (1.0 - gamma) * h + gamma * (ffn_out + x_emb)

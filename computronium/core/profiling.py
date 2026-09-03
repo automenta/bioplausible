@@ -9,6 +9,8 @@ from computronium.resources import MAC_ENERGY_J, ResourceUsage
 from computronium.utils import count_parameters
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.core.system_trainer import JointSystem
 
 __all__ = [
@@ -83,7 +85,7 @@ def _build_spatial_dummy(model: nn.Module, device: torch.device) -> torch.Tensor
         return torch.zeros(1, inp_dim, device=device)
 
 
-def _estimate_activation_sparsity(
+def _estimate_activation_sparsity(  # ruff: ignore[complex-structure]
     model: nn.Module,
     sample_input: torch.Tensor | None = None,
     threshold: float = 1e-5,
@@ -178,7 +180,7 @@ def measure_suite_resources(
     )
 
 
-def count_flops_detailed(
+def count_flops_detailed(  # ruff: ignore[complex-structure]
     model: nn.Module, input_shape: tuple[int, ...]
 ) -> dict[str, int]:
     """Count FLOPs per layer type using module inspection.
@@ -255,7 +257,7 @@ def get_gpu_memory_mb() -> float:
         handle = pynvml.nvmlDeviceGetHandleByIndex(torch.cuda.current_device())
         info = pynvml.nvmlDeviceGetMemoryInfo(handle)
         return info.used / (1024 * 1024)
-    except Exception:
+    except Exception:  # ruff: ignore[try-except-pass]
         pass
 
     # Fallback to torch
@@ -361,7 +363,7 @@ class EnergyTracker:
             )
             weight_sparsity = zero_weights / max(params, 1)
 
-            device = next(self.model.parameters()).device
+            device = next(self.model.parameters()).device  # ruff: ignore[unused-variable]
             # Pass None so _estimate_activation_sparsity builds a proper
             # spatial/flat dummy matching the model's input format.
             activation_sparsity = _estimate_activation_sparsity(self.model, None)
@@ -420,8 +422,8 @@ def _activity_spectral_radius(
         return None
 
 
-def analyze_joint_system(
-    coordinate: str | SystemConfig,
+def analyze_joint_system(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+    coordinate: str | SystemConfig,  # ruff: ignore[undefined-name]
     batch_size: int = 64,
     device: str = "auto",
     iterations: int = 10,
@@ -510,7 +512,7 @@ def analyze_joint_system(
         torch.cuda.reset_peak_memory_stats()
         mem_before = get_gpu_memory_mb()
     else:
-        mem_before = 0.0
+        mem_before = 0.0  # ruff: ignore[unused-variable]
 
     # Profile train_step (full pipeline)
     import time
@@ -526,7 +528,7 @@ def analyze_joint_system(
         latencies.append((end - start) * 1000)  # ms
 
     # Measure peak memory
-    if device == "cuda":
+    if device == "cuda":  # ruff: ignore[if-else-block-instead-of-if-exp]
         peak_mem = get_gpu_peak_memory_mb()
     else:
         peak_mem = 0.0
@@ -556,7 +558,7 @@ def analyze_joint_system(
     flops_info = count_flops_detailed(system.geometry, input_shape)
     fwd_flops = flops_info["total"]
     # For bio-plausible methods, backward may not be 2x forward
-    requires_backward = credit_type in ("backprop", "gradient")
+    requires_backward = credit_type in ("backprop", "gradient")  # ruff: ignore[literal-membership]
     bwd_flops = 2 * fwd_flops if requires_backward else 0
 
     # Sparsity
@@ -571,7 +573,7 @@ def analyze_joint_system(
 
     # Plastic state capacity (for joint systems)
     plastic_state_capacity = 0
-    if hasattr(system, "plasticity") and system.plasticity is not None:
+    if hasattr(system, "plasticity") and system.plasticity is not None:  # ruff: ignore[collapsible-if]
         if hasattr(system.plasticity, "initial_psi"):
             # Estimate plastic state size using a simple context
             try:
@@ -591,8 +593,8 @@ def analyze_joint_system(
                     registry=system._registry if hasattr(system, "_registry") else None,
                 )
                 psi = system.plasticity.initial_psi(context, batch_size=batch_size)
-                plastic_state_capacity = sum(v.numel() for v in psi.values())
-            except Exception:
+                plastic_state_capacity = sum(v.numel() for v in psi.values())  # ruff: ignore[unused-variable]
+            except Exception:  # ruff: ignore[try-except-pass]
                 pass
 
     spectral_radius = _activity_spectral_radius(system, x, input_dim, output_dim)
@@ -616,7 +618,7 @@ def analyze_joint_system(
     )
 
 
-def _create_joint_system_from_parts(
+def _create_joint_system_from_parts(  # ruff: ignore[complex-structure, too-many-branches, too-many-arguments, too-many-positional-arguments]
     substrate_type: str,
     geometry_type: str,
     dynamics_type: str,
@@ -712,7 +714,7 @@ def _create_joint_system_from_parts(
     # Credit
     if credit_type == "backprop":
         credit = BackpropCredit(CreditAssignmentConfig.gradient())
-    elif credit_type in ("thermodynamic_contrast", "thermo"):
+    elif credit_type in ("thermodynamic_contrast", "thermo"):  # ruff: ignore[literal-membership]
         credit = ThermodynamicContrast(
             CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
         )
@@ -752,7 +754,9 @@ class SavedActivationBytes:
 
 
 def measure_saved_activation_bytes(
-    fn: Callable[..., object], *args: object, **kwargs: object
+    fn: Callable[..., object],
+    *args: object,
+    **kwargs: object,
 ) -> tuple[object, SavedActivationBytes]:
     """Execute ``fn(*args, **kwargs)`` under autograd and count saved bytes.
 

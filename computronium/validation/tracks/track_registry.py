@@ -37,7 +37,7 @@ ALL_TRACKS: dict[int, Callable] = {}
 
 def register_tracks_from_module(module):
     """Register all functions starting with 'track_' or in a TRACKS dict."""
-    try:
+    try:  # ruff: ignore[too-many-nested-blocks, too-many-statements-in-try-clause]
         # Check for explicit registry dict
         found_dict = False
         if hasattr(module, "TRACKS"):

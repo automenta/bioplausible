@@ -3,11 +3,12 @@ from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 
+import numpy as np
+
 from computronium.core.logging import get_logger
 
 logger = get_logger()
 
-import numpy as np
 
 __all__ = [
     "EvidenceLevel",
@@ -22,7 +23,7 @@ __all__ = [
 class TrackStatus(StrEnum):
     """Status of a verification track."""
 
-    PASS = "pass"
+    PASS = "pass"  # ruff: ignore[hardcoded-password-string]
     FAIL = "fail"
     PARTIAL = "partial"
     STUB = "stub"
@@ -209,7 +210,7 @@ class VerificationNotebook:
     def save(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.add_executive_summary()
-        with Path(path).open("w") as f:
+        with Path(path).open("w", encoding="utf-8") as f:
             f.write("\n".join(self.sections))
         logger.info("[LOG]  Notebook saved to: %s", path)
 
@@ -224,7 +225,7 @@ class ValidationTrack:
         description: str,
         category: str = "core",
         priority: str = "medium",
-        tags: list[str] = None,
+        tags: list[str] | None = None,
     ):
         self.name = name
         self.track_id = track_id
@@ -255,7 +256,7 @@ class ValidationTrack:
 
         start_time = time.time()
 
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             # Execute validation
             # Tracks assume self-contained or use global settings.
             # Pass verifier props if needed.

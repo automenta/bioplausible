@@ -206,7 +206,7 @@ def run_scaling_sweep(config: ScalingConfig) -> list[dict]:
     logger.info("Seeds per config: %d", config.seeds)
 
     exp_count = 0
-    for task in config.tasks:
+    for task in config.tasks:  # ruff: ignore[too-many-nested-blocks]
         for algorithm in config.algorithms:
             model_name = _get_model_for_task(algorithm, task)
 
@@ -299,13 +299,13 @@ def _save_results(results: list[dict], output_dir: str) -> None:
     output_path.mkdir(parents=True, exist_ok=True)
 
     # Raw results
-    with Path(output_path / "raw_results.jsonl").open("w") as f:
+    with Path(output_path / "raw_results.jsonl").open("w", encoding="utf-8") as f:
         for r in results:
             f.write(json.dumps(r, default=str) + "\n")
 
     # Aggregated
     aggregated = _aggregate_results(results)
-    with Path(output_path / "aggregated_results.json").open("w") as f:
+    with Path(output_path / "aggregated_results.json").open("w", encoding="utf-8") as f:
         json.dump(aggregated, f, indent=2, default=str)
 
     logger.info("Saved results to %s", output_path)
@@ -333,7 +333,7 @@ def _analyze_scaling_laws(results: list[dict], output_dir: str) -> None:
             median_depth = model_df["depth"].median()
             width_df = model_df[model_df["depth"] == median_depth]
             if len(width_df) >= 3:
-                try:
+                try:  # ruff: ignore[too-many-statements-in-try-clause]
                     params = width_df["params"].values
                     acc = width_df["accuracy_mean"].values
                     valid = (params > 0) & np.isfinite(acc)
@@ -349,7 +349,7 @@ def _analyze_scaling_laws(results: list[dict], output_dir: str) -> None:
             median_width = model_df["width"].median()
             depth_df = model_df[model_df["width"] == median_width]
             if len(depth_df) >= 3:
-                try:
+                try:  # ruff: ignore[too-many-statements-in-try-clause]
                     params = depth_df["params"].values
                     acc = depth_df["accuracy_mean"].values
                     valid = (params > 0) & np.isfinite(acc)

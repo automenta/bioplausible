@@ -29,7 +29,7 @@ print("raw_registered", raw_registered)
 
 
 def _run(script: str) -> dict[str, str]:
-    out = subprocess.run(
+    out = subprocess.run(  # ruff: ignore[subprocess-run-without-check]
         [sys.executable, "-c", script],
         cwd=ROOT,
         capture_output=True,
@@ -37,7 +37,7 @@ def _run(script: str) -> dict[str, str]:
         timeout=120,
     )
     assert out.returncode == 0, out.stderr
-    return {k: v for k, v in (line.split() for line in out.stdout.splitlines())}
+    return {k: v for k, v in (line.split() for line in out.stdout.splitlines())}  # ruff: ignore[unnecessary-comprehension]
 
 
 def test_light_import_does_not_load_torch_or_register():
@@ -54,7 +54,7 @@ assert core.Registry is not None
 assert core.ComponentCategory is not None
 print("ok")
 """
-    out = subprocess.run(
+    out = subprocess.run(  # ruff: ignore[subprocess-run-without-check]
         [sys.executable, "-c", script], cwd=ROOT, capture_output=True, text=True
     )
     assert out.returncode == 0, out.stderr
@@ -69,7 +69,7 @@ _ = computronium.SystemTrainer  # triggers lazy load
 assert "SystemTrainer" in vars(computronium)
 print("ok")
 """
-    out = subprocess.run(
+    out = subprocess.run(  # ruff: ignore[subprocess-run-without-check]
         [sys.executable, "-c", script], cwd=ROOT, capture_output=True, text=True
     )
     assert out.returncode == 0, out.stderr

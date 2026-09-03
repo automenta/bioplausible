@@ -93,7 +93,7 @@ class BioLightningModule(pl.LightningModule):
 
         # Build model using the zoo create_model helper (test-patchable).
         # Filter out optimizer/training kwargs that aren't model ctor args.
-        _OPT_KWARGS = {"lr", "learning_rate", "epochs", "weight_decay", "beta"}
+        _OPT_KWARGS = {"lr", "learning_rate", "epochs", "weight_decay", "beta"}  # ruff: ignore[used-dummy-variable]
         model_kwargs = {k: v for k, v in hparams.items() if k not in _OPT_KWARGS}
         self.model = create_model(model_name, **model_kwargs)
 

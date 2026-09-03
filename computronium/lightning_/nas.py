@@ -5,7 +5,7 @@ Samples model names and optimizer names via Optuna to discover
 Pareto-optimal combinations for each task.
 """
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import optuna
 from pytorch_lightning import Trainer
@@ -13,6 +13,9 @@ from pytorch_lightning import Trainer
 from computronium.core.logging import get_logger
 from computronium.core.registry import ComponentCategory, Registry
 from computronium.lightning_.module import BioLightningModule
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 __all__ = [
     "create_nas_objective",
@@ -87,7 +90,7 @@ def create_nas_objective(
             acc = metrics.get("val_acc", 0.0).item() if "val_acc" in metrics else 0.0
             trial.set_user_attr("model_name", model_name)
             trial.set_user_attr("optimizer_name", optimizer_name)
-            return acc
+            return acc  # ruff: ignore[try-consider-else]
         except Exception:  # broad: best-effort
             logger.warning("Fit failed for trial, returning 0.0")
             return 0.0

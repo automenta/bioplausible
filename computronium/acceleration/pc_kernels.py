@@ -55,7 +55,7 @@ class PCKernelBackend:
         self._config = config
         self._device = torch.device(
             "cuda"
-            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)
+            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
             else "cpu"
         )
         self._dtype = config.dtype
@@ -164,7 +164,7 @@ class PCKernelBackend:
         for i in range(1, len(self._mu)):
             pred = _apply_activation(self._mu[i - 1] @ W[i - 1].T, self._activation)
             if self._layers[i - 1].bias is not None:
-                pred = pred + self._layers[i - 1].bias.data
+                pred = pred + self._layers[i - 1].bias.data  # ruff: ignore[non-augmented-assignment]
             energy += 0.5 * (self._mu[i] - pred).pow(2).sum().item()
 
         return energy
@@ -188,14 +188,14 @@ class PCKernelBackend:
         weight_deltas: dict[str, Tensor] = {}
         L = len(self._layers)
 
-        for l in range(1, L + 1):
+        for l in range(1, L + 1):  # ruff: ignore[ambiguous-variable-name]
             # Error at layer l predicts mu_l from mu_{l-1} via W[l-1].
             free_pre = free_mu[l - 1]
             free_pred = _apply_activation(
                 free_pre @ self._layers[l - 1].weight.data.T, self._activation
             )
             if self._layers[l - 1].bias is not None:
-                free_pred = free_pred + self._layers[l - 1].bias.data
+                free_pred = free_pred + self._layers[l - 1].bias.data  # ruff: ignore[non-augmented-assignment]
             free_error = free_mu[l] - free_pred
 
             nudged_pre = nudged_mu[l - 1]
@@ -203,7 +203,7 @@ class PCKernelBackend:
                 nudged_pre @ self._layers[l - 1].weight.data.T, self._activation
             )
             if self._layers[l - 1].bias is not None:
-                nudged_pred = nudged_pred + self._layers[l - 1].bias.data
+                nudged_pred = nudged_pred + self._layers[l - 1].bias.data  # ruff: ignore[non-augmented-assignment]
             nudged_error = nudged_mu[l] - nudged_pred
 
             # Weight delta for W[l-1] [D_l, D_{l-1}]
@@ -263,13 +263,13 @@ def _apply_activation(x: Tensor, activation: str) -> Tensor:
 
 
 # Triton kernels for fused PC operations
-try:
+try:  # ruff: ignore[too-many-statements-in-try-clause]
     import triton
     import triton.language as tl
     from triton.language.extra import libdevice
 
     @triton.jit
-    def _pc_prediction_kernel(
+    def _pc_prediction_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         mu_ptr,
         W_ptr,
         b_ptr,
@@ -392,7 +392,7 @@ try:
         )
 
     @triton.jit
-    def _pc_contrastive_update_kernel(
+    def _pc_contrastive_update_kernel(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         pre_free_ptr,
         post_free_ptr,
         pre_nudged_ptr,
@@ -444,8 +444,8 @@ try:
             )
             acc_nudged += tl.dot(tl.trans(post_n), pre_n)
 
-        acc_free = acc_free / B
-        acc_nudged = acc_nudged / B
+        acc_free = acc_free / B  # ruff: ignore[non-augmented-assignment]
+        acc_nudged = acc_nudged / B  # ruff: ignore[non-augmented-assignment]
 
         delta = lr * (acc_nudged - acc_free) / beta
 

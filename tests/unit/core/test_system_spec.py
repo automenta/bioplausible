@@ -11,8 +11,9 @@ import json
 import pytest
 import torch
 
-from computronium.core.system_trainer import compose_system
+from computronium.core.system_trainer import compose_joint_system, compose_system
 from computronium.ontology import (
+    BackpropCredit,
     CreditAssignmentConfig,
     DigitalSubstrate,
     ElasticConsolidationUpdate,
@@ -23,6 +24,7 @@ from computronium.ontology import (
     InstantaneousDynamics,
     LocalGoodnessCredit,
     NaturalGradientUpdate,
+    NullPlasticity,
     ParameterUpdateConfig,
     RecurrentGeometry,
     RiemannianOrthogonalUpdate,
@@ -451,6 +453,83 @@ class TestSystemSpecRoundTrip:
         assert sys_recon.dynamics.config == orig_dynamics_cfg
         assert sys_recon.credit.config == orig_credit_cfg
         assert sys_recon.update.config == orig_update_cfg
+
+
+class TestJointSystemSpecRoundTrip:
+    """Joint (6-D, schema 2.0) spec round-trip: params-bearing, both wrappers."""
+
+    @staticmethod
+    def _joint(topology: str, plasticity=NullPlasticity()):
+        geometry = (
+            RecurrentGeometry(
+                GeometryConfig.recurrent(input_dim=16, output_dim=4, hidden_dims=(12,))
+            )
+            if topology == "recurrent"
+            else FeedforwardGeometry(
+                GeometryConfig.feedforward(
+                    input_dim=16, output_dim=4, hidden_dims=(12,)
+                )
+            )
+        )
+        dynamics = (
+            EnergyMinimizationDynamics(
+                StateDynamicsConfig.energy_minimization(max_steps=2, beta=0.5)
+            )
+            if topology == "recurrent"
+            else InstantaneousDynamics(StateDynamicsConfig.instantaneous())
+        )
+        credit = (
+            ThermodynamicContrast()
+            if topology == "recurrent"
+            else BackpropCredit(CreditAssignmentConfig.gradient())
+        )
+        return compose_joint_system(
+            substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
+            geometry=geometry,
+            dynamics=dynamics,
+            plasticity=plasticity,
+            credit=credit,
+            update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.1)),
+        )
+
+    @staticmethod
+    def _assert_params_bitwise(sys, recon) -> None:
+        for name, param in sys.geometry.params.items():
+            assert torch.equal(param, recon.geometry.params[name]), name
+
+    @pytest.mark.parametrize("topology", ["feedforward", "recurrent"])
+    def test_joint_spec_round_trip(self, topology: str) -> None:
+        """to_spec -> json -> from_spec restores trained geometry params bitwise."""
+        sys = self._joint(topology)
+        spec = sys.to_spec()
+        assert spec["schema_version"] == "2.0"
+
+        recon = type(sys).from_spec(json.loads(json.dumps(spec)))
+        assert recon.to_spec() == spec
+        self._assert_params_bitwise(sys, recon)
+
+    def test_joint_null_wrapper_forward_bitwise(self) -> None:
+        """The null wrapper's round-trip reproduces forward outputs bitwise."""
+        sys = self._joint("feedforward")
+        recon = type(sys).from_spec(json.loads(json.dumps(sys.to_spec())))
+        with seeded(42):
+            x = torch.randn(4, 16)
+        assert torch.equal(sys.forward(x), recon.forward(x))
+
+    def test_joint_routing_round_trip(self) -> None:
+        """A non-null M-axis round-trips its config through the joint spec."""
+        from computronium.ontology.plasticity import RoutingPlasticity
+
+        sys = self._joint("feedforward", plasticity=RoutingPlasticity(gate_dim=8))
+        spec = sys.to_spec()
+        recon = type(sys).from_spec(json.loads(json.dumps(spec)))
+        assert recon.to_spec() == spec
+        assert (
+            recon.plasticity.config.plasticity_type
+            == sys.plasticity.config.plasticity_type
+            == "routing"
+        )
+        self._assert_params_bitwise(sys, recon)
 
 
 if __name__ == "__main__":

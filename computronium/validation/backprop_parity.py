@@ -238,7 +238,7 @@ def _task_output_dim(task: str) -> int:
     return int(resolve_task(task).output_dim)
 
 
-def _run_probe(  # ruff: ignore[too-many-arguments]  # probe call mirrors the driver contract
+def _run_probe(  # probe call mirrors the driver contract  # ruff: ignore[too-many-arguments]
     driver: object,
     model: str,
     task: str,
@@ -273,7 +273,7 @@ def _run_probe(  # ruff: ignore[too-many-arguments]  # probe call mirrors the dr
     )
 
 
-def backprop_baseline(  # ruff: ignore[too-many-arguments]  # baseline signature is the report contract
+def backprop_baseline(  # baseline signature is the report contract
     *,
     task: str,
     depth: int,
@@ -332,7 +332,7 @@ def backprop_baseline(  # ruff: ignore[too-many-arguments]  # baseline signature
     return sum(p["acc"] for p in probes) / len(probes), metrics, probes
 
 
-def _collect_probes(  # ruff: ignore[too-many-arguments]  # probe contract
+def _collect_probes(  # probe contract
     driver: object,
     model_name: str,
     task: str,
@@ -379,7 +379,7 @@ def _collect_probes(  # ruff: ignore[too-many-arguments]  # probe contract
     return probes, failures
 
 
-def _aggregate_model_entry(  # ruff: ignore[too-many-arguments]  # report contract
+def _aggregate_model_entry(  # report contract
     *,
     model_name: str,
     family: str,
@@ -463,7 +463,7 @@ def _effect_sizes(
     }
 
 
-def _make_comparison(  # ruff: ignore[too-many-arguments]  # comparison-record contract
+def _make_comparison(  # comparison-record contract  # ruff: ignore[too-many-arguments]
     *,
     contract: Contract,
     model_name: str,
@@ -539,7 +539,7 @@ def _width_search_backprop_for_bio_params(
     )
 
 
-def _run_cell(  # ruff: ignore[too-many-arguments,too-many-locals]  # cell bundles the three §15.4 contract arms; locals track per-arm probes/notes
+def _run_cell(  # cell bundles the three §15.4 contract arms; locals track per-arm probes/notes  # ruff: ignore[too-many-arguments, too-many-locals]
     *,
     driver: object,
     model_name: str,
@@ -727,7 +727,7 @@ def _run_cell(  # ruff: ignore[too-many-arguments,too-many-locals]  # cell bundl
     return entry, comparisons, note
 
 
-def run_parity(  # ruff: ignore[too-many-arguments,too-many-locals]  # campaign signature; per-depth baseline + cells accumulate locals
+def run_parity(  # campaign signature; per-depth baseline + cells accumulate locals  # ruff: ignore[too-many-arguments, too-many-locals]
     *,
     task: str,
     depths: tuple[int, ...],

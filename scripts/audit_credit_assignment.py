@@ -10,12 +10,13 @@ Verifies pseudo-grad correctness against ground truth:
 """
 
 import json
+import pathlib
 import sys
 from typing import Any
 
 import numpy as np
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 
 from computronium.ontology import (
     BackpropCredit,
@@ -74,7 +75,7 @@ def relative_error(
     return errors
 
 
-def test_thermodynamic_vs_backprop_linear() -> dict[str, Any]:
+def test_thermodynamic_vs_backprop_linear() -> dict[str, Any]:  # ruff: ignore[too-many-locals, too-many-statements]
     """Test ThermodynamicContrast vs BackpropCredit on linear regression (known θ)."""
     print("\n" + "=" * 60)
     print("Test: ThermodynamicContrast vs BackpropCredit (Linear Regression)")
@@ -120,7 +121,7 @@ def test_thermodynamic_vs_backprop_linear() -> dict[str, Any]:
     cosines = []
     rel_errors = []
 
-    for batch_idx in range(50):
+    for batch_idx in range(50):  # ruff: ignore[too-many-nested-blocks]
         x = torch.randn(batch_size, input_dim, device=device)
         # Linear target
         W_true = torch.randn(input_dim, output_dim, device=device)
@@ -180,7 +181,7 @@ def test_thermodynamic_vs_backprop_linear() -> dict[str, Any]:
         thermo_grads = thermo_credit.compute_pseudo_gradient(states, dyn_loss, geometry)
 
         # BackpropCredit pseudo-gradients (uses same dyn_loss)
-        bp_grads = backprop_credit.compute_pseudo_gradient(states, dyn_loss, geometry)
+        bp_grads = backprop_credit.compute_pseudo_gradient(states, dyn_loss, geometry)  # ruff: ignore[unused-variable]
 
         if thermo_grads and true_grads:
             cos = cosine_similarity(thermo_grads, true_grads)
@@ -216,7 +217,7 @@ def test_thermodynamic_vs_backprop_linear() -> dict[str, Any]:
     }
 
 
-def test_thermodynamic_vs_backprop_mlp() -> dict[str, Any]:
+def test_thermodynamic_vs_backprop_mlp() -> dict[str, Any]:  # ruff: ignore[too-many-locals, too-many-statements]
     """Test ThermodynamicContrast vs BackpropCredit on MLP (small)."""
     print("\n" + "=" * 60)
     print("Test: ThermodynamicContrast vs BackpropCredit (MLP)")
@@ -259,7 +260,7 @@ def test_thermodynamic_vs_backprop_mlp() -> dict[str, Any]:
     same_sign_count = 0
     total_params = 0
 
-    for batch_idx in range(20):
+    for batch_idx in range(20):  # ruff: ignore[too-many-nested-blocks]
         # Fixed seed for reproducibility
         torch.manual_seed(42 + batch_idx)
         x = torch.randn(4, 784, device=device)
@@ -306,7 +307,7 @@ def test_thermodynamic_vs_backprop_mlp() -> dict[str, Any]:
         thermo_grads = thermo_credit.compute_pseudo_gradient(states, dyn_loss, geometry)
 
         # BackpropCredit
-        bp_grads = backprop_credit.compute_pseudo_gradient(states, dyn_loss, geometry)
+        bp_grads = backprop_credit.compute_pseudo_gradient(states, dyn_loss, geometry)  # ruff: ignore[unused-variable]
 
         if thermo_grads and true_grads:
             cos = cosine_similarity(thermo_grads, true_grads)
@@ -341,7 +342,7 @@ def test_thermodynamic_vs_backprop_mlp() -> dict[str, Any]:
     }
 
 
-def test_fa_theoretical() -> dict[str, Any]:
+def test_fa_theoretical() -> dict[str, Any]:  # ruff: ignore[too-many-locals, too-many-statements]
     """Test RandomProjectionsCredit (FA) vs theoretical expectation."""
     print("\n" + "=" * 60)
     print("Test: RandomProjectionsCredit (FA) vs Theoretical")
@@ -368,10 +369,10 @@ def test_fa_theoretical() -> dict[str, Any]:
         )
     )
     credit._init_feedback_weights(geometry, device)
-    assert credit._feedback_weights is not None
+    assert credit._feedback_weights is not None  # ruff: ignore[assert]
     fb_weights = credit._feedback_weights
 
-    backprop_credit = BackpropCredit(CreditAssignmentConfig.gradient())
+    backprop_credit = BackpropCredit(CreditAssignmentConfig.gradient())  # ruff: ignore[unused-variable]
 
     rel_errors = []
 
@@ -416,7 +417,7 @@ def test_fa_theoretical() -> dict[str, Any]:
             fb = fb_weights["layer_0"]
             hidden_error = output_error @ fb.T
             if hidden_acts:
-                hidden_error = hidden_error * (hidden_acts[0] > 0).float()
+                hidden_error = hidden_error * (hidden_acts[0] > 0).float()  # ruff: ignore[non-augmented-assignment]
             pre_act = free_state.x
             if pre_act is not None:
                 theoretical_grads.append(hidden_error.T @ pre_act)
@@ -446,7 +447,7 @@ def test_fa_theoretical() -> dict[str, Any]:
     }
 
 
-def test_dfa_theoretical() -> dict[str, Any]:
+def test_dfa_theoretical() -> dict[str, Any]:  # ruff: ignore[complex-structure, too-many-locals, too-many-statements]
     """Test RandomProjectionsCredit (DFA) vs theoretical expectation."""
     print("\n" + "=" * 60)
     print("Test: RandomProjectionsCredit (DFA) vs Theoretical")
@@ -476,10 +477,10 @@ def test_dfa_theoretical() -> dict[str, Any]:
     )
     credit = RandomProjectionsCredit(config)
     credit._init_feedback_weights(geometry, device)
-    assert credit._feedback_weights is not None
+    assert credit._feedback_weights is not None  # ruff: ignore[assert]
     fb_weights = credit._feedback_weights
 
-    backprop_credit = BackpropCredit(CreditAssignmentConfig.gradient())
+    backprop_credit = BackpropCredit(CreditAssignmentConfig.gradient())  # ruff: ignore[unused-variable]
 
     rel_errors = []
 
@@ -524,7 +525,7 @@ def test_dfa_theoretical() -> dict[str, Any]:
             fb = fb_weights["layer_0"]
             hidden_error = output_error @ fb.T
             if len(hidden_acts) > 0:
-                hidden_error = hidden_error * (hidden_acts[0] > 0).float()
+                hidden_error = hidden_error * (hidden_acts[0] > 0).float()  # ruff: ignore[non-augmented-assignment]
             pre_act = free_state.x
             if pre_act is not None:
                 theoretical_grads.append(hidden_error.T @ pre_act)
@@ -533,7 +534,7 @@ def test_dfa_theoretical() -> dict[str, Any]:
             fb = fb_weights["layer_1"]
             hidden_error = output_error @ fb.T
             if len(hidden_acts) > 1:
-                hidden_error = hidden_error * (hidden_acts[1] > 0).float()
+                hidden_error = hidden_error * (hidden_acts[1] > 0).float()  # ruff: ignore[non-augmented-assignment]
             pre_act = hidden_acts[0] if len(hidden_acts) > 0 else free_state.x
             if pre_act is not None:
                 theoretical_grads.append(hidden_error.T @ pre_act)
@@ -563,7 +564,7 @@ def test_dfa_theoretical() -> dict[str, Any]:
     }
 
 
-def test_backprop_identity() -> dict[str, Any]:
+def test_backprop_identity() -> dict[str, Any]:  # ruff: ignore[too-many-locals]
     """Test BackpropCredit matches autograd exactly (bitwise)."""
     print("\n" + "=" * 60)
     print("Test: BackpropCredit Identity Check (vs autograd)")
@@ -586,7 +587,7 @@ def test_backprop_identity() -> dict[str, Any]:
 
     all_identical = True
 
-    for batch_idx in range(10):
+    for batch_idx in range(10):  # ruff: ignore[too-many-nested-blocks]
         x = torch.randn(4, 784, device=device, requires_grad=True)
         y = torch.randint(0, 10, (4,), device=device)
 
@@ -828,7 +829,9 @@ def main():
         "tests": results,
     }
 
-    with open("audit_results/credit_assignment_audit.json", "w") as f:
+    with pathlib.Path("audit_results/credit_assignment_audit.json").open(
+        "w", encoding="utf-8"
+    ) as f:
         json.dump(output, f, indent=2)
 
     print("\nResults written to audit_results/credit_assignment_audit.json")

@@ -43,7 +43,7 @@ REPRO_MODELS = [
 ]
 
 
-def _instantiate(model_name: str, input_dim: int, output_dim: int, device: str):
+def _instantiate(model_name: str, input_dim: int, output_dim: int, device: str):  # ruff: ignore[too-many-return-statements]
     """Instantiate a native model; mirrors the benchmark harness instantiation paths."""
     if model_name == "native_backprop_mlp":
         from computronium.models.native.backprop_native import (
@@ -248,7 +248,7 @@ def _report_stages(path: str) -> list[str]:
     return stages
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:  # ruff: ignore[complex-structure]
     parser = argparse.ArgumentParser(
         prog="comp repro",
         description="Verify bitwise reproducibility of every model family "

@@ -11,7 +11,7 @@ from .feedback import ErrorFeedback, NoFeedback
 from .gradient import BackpropGradient, EPGradient, LocalEPGradient, NaturalGradient
 from .update import DionUpdate, FisherUpdate, MuonUpdate, PlainUpdate
 
-__all__ = [
+__all__ = [  # ruff: ignore[unsorted-dunder-all]
     # Interfaces
     "GradientStrategy",
     "UpdateStrategy",

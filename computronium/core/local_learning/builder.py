@@ -21,9 +21,10 @@ loop (free phase -> nudged phase -> contrastive update) without autograd;
 
 import math
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import Tensor, nn
 
 from computronium.core.local_learning.activity import (
@@ -35,11 +36,6 @@ from computronium.core.local_learning.feedback import no_feedback, symmetric_fee
 from computronium.core.local_learning.mixins import (
     LocalLearningConfigProtocol,
     MultiOptimizerMixin,
-)
-from computronium.core.local_learning.protocols import (
-    ActivityUpdateFn,
-    FeedbackFn,
-    WeightUpdateFn,
 )
 from computronium.core.local_learning.registry import tile_algorithm
 from computronium.core.local_learning.settling import (
@@ -56,6 +52,13 @@ from computronium.core.local_learning.weight_update import (
 from computronium.core.losses import compute_accuracy
 from computronium.core.tile import TileGraph, TileState
 from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
+
+if TYPE_CHECKING:
+    from computronium.core.local_learning.protocols import (
+        ActivityUpdateFn,
+        FeedbackFn,
+        WeightUpdateFn,
+    )
 
 __all__ = [
     "TileAlgorithm",
@@ -103,7 +106,7 @@ class TileAlgorithmConfig(LocalLearningConfigProtocol):
     extra: dict[str, object] = field(default_factory=dict)
 
 
-class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
+class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):  # ruff: ignore[too-many-public-methods]
     """Generic tile-based local learning model.
 
     Builds a layered :class:`~computronium.core.tile.TileGraph` with per-edge
@@ -376,7 +379,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
                     if nudged and tid in self.graph.output_tile_ids:
                         continue  # output stays clamped
                     pred = self._predict_tile(tid)
-                    assert tile.activity is not None and pred is not None
+                    assert tile.activity is not None and pred is not None  # ruff: ignore[assert]
                     tile.prediction = pred
                     tile.error = tile.activity - pred
                     feedback = self._feedback(tile, self.graph, self._weight_lookup)
@@ -409,7 +412,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
 
     def _clone_activity(self, tid: int) -> Tensor:
         act = self.graph.tiles[tid].activity
-        assert act is not None  # _settle guarantees activities are set
+        assert act is not None  # _settle guarantees activities are set  # ruff: ignore[assert]
         return act.clone()
 
     def contrastive_update(
@@ -657,7 +660,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
     ) -> Tensor | tuple[Tensor, dict[str, object]]:
         """Feedforward through the tile graph to logits."""
         if return_dynamics:
-            out, steps_taken, converged, telemetry = self._run_settle_universal(
+            out, _steps_taken, _converged, telemetry = self._run_settle_universal(
                 x,
                 beta=beta,
                 target=target,
@@ -910,7 +913,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
     # ──────────────────────────────────────────────
 
     @classmethod
-    def _build_config(  # ruff: ignore[too-many-arguments]  # factory param bundle
+    def _build_config(  # factory param bundle  # ruff: ignore[too-many-arguments]
         cls,
         *,
         algorithm: str,
@@ -955,7 +958,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         bio_plausibility_score=0.9,
         tags=["equilibrium", "energy-based", "contrastive"],
     )
-    def from_ep(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
+    def from_ep(  # zoo build-classmethod contract
         cls,
         input_dim: int,
         output_dim: int,
@@ -998,7 +1001,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         bio_plausibility_score=0.75,
         tags=["feedback-alignment", "random-projections"],
     )
-    def from_fa(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
+    def from_fa(  # zoo build-classmethod contract
         cls,
         input_dim: int,
         output_dim: int,
@@ -1040,7 +1043,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         bio_plausibility_score=0.85,
         tags=["hebbian", "local", "forward-only"],
     )
-    def from_hebbian(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
+    def from_hebbian(  # zoo build-classmethod contract
         cls,
         input_dim: int,
         output_dim: int,
@@ -1082,7 +1085,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         bio_plausibility_score=0.9,
         tags=["predictive-coding", "local", "prediction-error"],
     )
-    def from_pc(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
+    def from_pc(  # zoo build-classmethod contract
         cls,
         input_dim: int,
         output_dim: int,
@@ -1125,7 +1128,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         bio_plausibility_score=0.8,
         tags=["target-prop", "predictive", "layerwise"],
     )
-    def from_tp(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
+    def from_tp(  # zoo build-classmethod contract
         cls,
         input_dim: int,
         output_dim: int,
@@ -1168,7 +1171,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         bio_plausibility_score=0.95,
         tags=["spiking", "neuromorphic", "threshold"],
     )
-    def from_snn(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
+    def from_snn(  # zoo build-classmethod contract
         cls,
         input_dim: int,
         output_dim: int,
@@ -1211,7 +1214,7 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):
         bio_plausibility_score=0.85,
         tags=["gnn", "graph", "message-passing"],
     )
-    def from_gnn(  # ruff: ignore[too-many-arguments]  # zoo build-classmethod contract
+    def from_gnn(  # zoo build-classmethod contract
         cls,
         input_dim: int,
         output_dim: int,

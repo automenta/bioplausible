@@ -6,13 +6,15 @@ and configuration dataclasses for hardware-agnostic kernel acceleration.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import numpy as np
 import torch
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class AlgorithmFamily(StrEnum):
@@ -83,7 +85,7 @@ class KernelConfig:
     # FA: dropout_prob, feedback_mode
     # Hebbian: use_oja, learning_rate
     # FF: threshold, num_layers
-    # PEPITA: feedback_matrix_scale
+    # PEPITA: feedback_matrix_scale  # ruff: ignore[commented-out-code]
     # TP: target_lr, inverse_net_lr
     # PC: infer_steps, eta_infer
     # SNN: num_steps, spike_grad, tau_mem, tau_syn
@@ -97,7 +99,7 @@ class KernelConfig:
         if self.algorithm == AlgorithmFamily.EQPROP and self.settle_steps == 0:
             object.__setattr__(self, "settle_steps", 30)
         if (
-            self.algorithm in (AlgorithmFamily.MEP, AlgorithmFamily.O1MEMORY)
+            self.algorithm in (AlgorithmFamily.MEP, AlgorithmFamily.O1MEMORY)  # ruff: ignore[literal-membership]
             and self.settle_steps == 0
         ):
             object.__setattr__(self, "settle_steps", 30)
@@ -130,17 +132,17 @@ class KernelBackend(Protocol):
 class KernelRegistry:
     """Global registry for kernel backends with auto-selection and auto-tuning logic."""
 
-    _backends: dict[AlgorithmFamily, dict[HardwareTarget, type]] = {}
-    _instances: dict[tuple[AlgorithmFamily, HardwareTarget], object] = {}
+    _backends: dict[AlgorithmFamily, dict[HardwareTarget, type]] = {}  # ruff: ignore[mutable-class-default]
+    _instances: dict[tuple[AlgorithmFamily, HardwareTarget], object] = {}  # ruff: ignore[mutable-class-default]
     # Auto-tuning cache: (algorithm, hardware, op_name, shape) -> best_hardware
     _autotune_cache: dict[
         tuple[AlgorithmFamily, HardwareTarget, str, tuple[int, ...]], HardwareTarget
-    ] = {}
+    ] = {}  # ruff: ignore[mutable-class-default]
     # Benchmark results: (algorithm, hardware, op_name, shape) -> list of (hardware, time_ms)
     _benchmark_cache: dict[
         tuple[AlgorithmFamily, HardwareTarget, str, tuple[int, ...]],
         list[tuple[HardwareTarget, float]],
-    ] = {}
+    ] = {}  # ruff: ignore[mutable-class-default]
 
     @classmethod
     def register(
@@ -276,7 +278,7 @@ class KernelRegistry:
             if backend is None:
                 continue
 
-            try:
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 if benchmark_fn is not None:
                     # Use custom benchmark function
                     time_ms = benchmark_fn(backend, shape)
@@ -288,7 +290,7 @@ class KernelRegistry:
 
                 if time_ms > 0 and not np.isinf(time_ms):
                     results.append((hw, time_ms))
-            except Exception:
+            except Exception:  # ruff: ignore[try-except-continue]
                 # Backend failed, skip
                 continue
 
@@ -332,7 +334,7 @@ class KernelRegistry:
                     extra={"num_layers": 2, "hidden_dim": shape[-1] if shape else 256},
                 )
                 backend.initialize(config)
-            except Exception:
+            except Exception:  # ruff: ignore[try-except-pass]
                 pass
 
         # Get the operation method
@@ -403,7 +405,7 @@ class KernelRegistry:
         cls._instances.clear()
 
 
-def infer_algorithm_family(model_name: str) -> AlgorithmFamily | None:
+def infer_algorithm_family(model_name: str) -> AlgorithmFamily | None:  # ruff: ignore[complex-structure, too-many-return-statements]
     """Infer algorithm family from model registry name."""
     name = model_name.lower()
     if "eqprop" in name or "looped" in name:

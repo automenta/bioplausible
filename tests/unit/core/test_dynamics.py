@@ -299,7 +299,7 @@ class TestDeviceConsistency:
     """Tests for CPU/CUDA consistency."""
 
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-    def test_energy_dynamics_cpu_vs_cuda(self, device):
+    def test_energy_dynamics_cpu_vs_cuda(self, device):  # ruff: ignore[too-many-locals]
         """EnergyMinimizationDynamics consistent across CPU/CUDA."""
         device_cuda = torch.device("cuda")
 

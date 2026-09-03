@@ -9,7 +9,6 @@ than traditional approaches through deep layers.
 import torch
 
 from computronium.core.logging import get_logger
-from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 from computronium.validation.notebook import ValidationTrack
 from computronium.validation.tracks._signal_probe import (
     run_signal_propagation_experiment,
@@ -56,7 +55,7 @@ class SignalPropagationTrack(ValidationTrack):
         # Test with moderate depths first to avoid excessive computation
         depths = [10, 50, 100]
 
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             # Run experiment with PyTorch backend
             results_pytorch = run_signal_propagation_experiment(
                 depths=depths, perturbation_strength=0.1, backend="pytorch"

@@ -31,7 +31,7 @@ class KnowledgebaseMetamodel:
         """
         Pull experiment configurations and outcomes from SQLite DB into a DataFrame.
         """
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             conn = sqlite3.connect(db_path)
 
             # Use failures table as our mock "experiments" table if real ones

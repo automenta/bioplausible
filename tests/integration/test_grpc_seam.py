@@ -18,7 +18,7 @@ def test_grpc_seam_fault_injection():
     """Fault injection: DistributedTrainingError captures the seam state."""
 
     def _raise() -> None:
-        raise DistributedTrainingError(  # ruff: ignore[raise-vanilla-args] - literal test payload
+        raise DistributedTrainingError(
             "test error", lost_workers=["node_1"], step=5, partial_metrics={"loss": 0.5}
         )
 

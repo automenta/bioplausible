@@ -12,8 +12,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
-from torch import nn
-
 from computronium.core.local_learning import (
     TaskHandler,
     TileAlgorithm,
@@ -22,7 +20,7 @@ from computronium.core.local_learning import (
 from computronium.core.model import BioModel
 
 if TYPE_CHECKING:
-    from torch import Tensor
+    from torch import Tensor, nn
 
 __all__ = [
     "ConvDeploymentConfig",

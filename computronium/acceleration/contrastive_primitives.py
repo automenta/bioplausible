@@ -57,13 +57,13 @@ def spectral_norm_power_iteration(
     out_dim = W.shape[0]
     if u is None:
         u = torch.randn(out_dim, device=W.device, dtype=W.dtype)
-        u = u / u.norm()
+        u = u / u.norm()  # ruff: ignore[non-augmented-assignment]
 
     for _ in range(num_iters):
         v = W.T @ u
-        v = v / v.norm()
+        v = v / v.norm()  # ruff: ignore[non-augmented-assignment]
         u = W @ v
-        u = u / u.norm()
+        u = u / u.norm()  # ruff: ignore[non-augmented-assignment]
 
     sigma = (u @ W @ v).item()
     W_normalized = W / sigma
@@ -112,7 +112,7 @@ def lif_step(
     v_new = torch.where(spikes.bool(), torch.zeros_like(v_new), v_new)
 
     # Add spikes to synaptic current
-    i_syn_new = i_syn_new + spikes
+    i_syn_new = i_syn_new + spikes  # ruff: ignore[non-augmented-assignment]
 
     return v_new, i_syn_new, spikes
 
@@ -171,7 +171,7 @@ def conductance_matmul(
 
     # IR drop simulation
     if ir_drop_factor > 0:
-        current = current * (1 - ir_drop_factor)
+        current = current * (1 - ir_drop_factor)  # ruff: ignore[non-augmented-assignment]
 
     return current
 

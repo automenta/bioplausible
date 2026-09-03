@@ -38,7 +38,7 @@ from computronium.core.trainer import CoreTrainer, TrainerConfig
 logger = get_logger()
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:  # ruff: ignore[too-many-locals, too-many-statements]
     """Run the trained-kernel export CLI."""
     parser = argparse.ArgumentParser(
         description="Train a kernel-backed model and export its weights"
@@ -133,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
         "float16": torch.float16,
         "bfloat16": torch.bfloat16,
     }
-    dtype = dtype_map[args.precision]
+    dtype = dtype_map[args.precision]  # ruff: ignore[unused-variable]
 
     # Determine device from target
     device_map = {
@@ -152,12 +152,12 @@ def main(argv: list[str] | None = None) -> int:
 
     # Skip CUDA-only targets on CPU
     if (
-        target in (HardwareTarget.TRITON, HardwareTarget.CUDA)
+        target in (HardwareTarget.TRITON, HardwareTarget.CUDA)  # ruff: ignore[literal-membership]
         and not torch.cuda.is_available()
     ):
         logger.warning("%s requires CUDA; falling back to CPU", target.value)
         target = HardwareTarget.CPU
-        device = torch.device("cpu")
+        device = torch.device("cpu")  # ruff: ignore[unused-variable]
 
     # Map target to kernel_backend string for CoreTrainer
     # Trainer's _wrap_with_kernel expects: "triton", "cupy", "pytorch", "contrastive"

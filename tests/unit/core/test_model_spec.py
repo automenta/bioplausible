@@ -1,10 +1,13 @@
 """Tests for core.model_spec checkpoint-loading helper."""
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 
 from computronium.core.model_spec import load_weights
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_load_weights_noop_on_empty_path():

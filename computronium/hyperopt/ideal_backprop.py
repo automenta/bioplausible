@@ -115,7 +115,7 @@ class IdealBackpropFinder(_FrontierFinder[IdealBackpropDecision]):
     _default_budget: int = _DEFAULT_BUDGET
     _default_epochs: int = _DEFAULT_EPOCHS
 
-    def __init__(  # ruff: ignore[too-many-arguments]  (subclass ctor re-exposes the base knobs + own model)
+    def __init__(
         self,
         driver: FrontierDriver,
         *,
@@ -150,7 +150,9 @@ class IdealBackpropFinder(_FrontierFinder[IdealBackpropDecision]):
     ) -> dict[str, object]:
         return {**super()._cache_identity, "backprop": self.backprop}
 
-    def _sample_config(self, trial: optuna.Trial) -> dict[str, object]:  # ruff: ignore[no-self-use]  # polymorphic template hook; backprop's space is fixed
+    def _sample_config(
+        self, trial: optuna.Trial
+    ) -> dict[str, object]:  # polymorphic template hook; backprop's space is fixed
         return _sample_backprop_config(trial, get_rule_space("backprop"))
 
     def _validate_before_search(self) -> None:
@@ -183,7 +185,7 @@ class IdealBackpropFinder(_FrontierFinder[IdealBackpropDecision]):
         )
 
 
-def find_ideal_backprop(  # ruff: ignore[too-many-arguments]  (convenience wrapper mirrors finder constructor)
+def find_ideal_backprop(  # ruff: ignore[too-many-arguments]
     driver: FrontierDriver,
     *,
     task: str = _DEFAULT_TASK,

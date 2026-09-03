@@ -122,7 +122,7 @@ class CrossDomainBenchmarkSuite:
         try:
             task = task_cls(name=name, **kwargs)
             task.setup()
-            return task
+            return task  # ruff: ignore[try-consider-else]
         except (ValueError, TypeError, KeyError) as e:
             logger.warning("Failed to create task %s/%s: %s", domain, name, e)
             return None
@@ -170,7 +170,7 @@ class CrossDomainBenchmarkSuite:
         """Run a single model on a task and return benchmark result."""
         from computronium.core.trainer import CoreTrainer, TrainerConfig
 
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             config = TrainerConfig(
                 model=model_name,
                 task=task.name,
@@ -312,7 +312,7 @@ class CrossDomainBenchmarkSuite:
     ) -> str:
         """Save benchmark results to JSON."""
         save_path = Path(path or self.output_dir / "suite_results.json")
-        with Path(save_path).open("w") as f:
+        with Path(save_path).open("w", encoding="utf-8") as f:
             json.dump(suite_result.to_dict(), f, indent=2, default=str)
         logger.info("Results saved: %s", save_path)
         return str(save_path)

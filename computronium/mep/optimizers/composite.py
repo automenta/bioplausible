@@ -6,13 +6,16 @@ Subclasses :class:`~computronium.core.optimization.optimizer.StrategyOptimizer`
 re-exports the generic loop. See ``core/optimization`` for the base class.
 """
 
-from collections.abc import Iterable
-
-from torch import nn
+from typing import TYPE_CHECKING
 
 from computronium.core.optimization import StrategyOptimizer
 
 from .energy import EnergyFunction
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from torch import nn
 
 __all__ = [
     "CompositeOptimizer",
@@ -42,7 +45,7 @@ class CompositeOptimizer(StrategyOptimizer):
         feedback: Strategy for error accumulation.
     """
 
-    def __init__(
+    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         self,
         params: Iterable[nn.Parameter],
         gradient,

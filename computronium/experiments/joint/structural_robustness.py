@@ -18,9 +18,8 @@ from pathlib import Path
 
 import torch
 
-from computronium.core.utils.device import get_device
-
 from computronium.core.profiling import measure_suite_resources
+from computronium.core.utils.device import get_device
 from computronium.experiments.joint import CLAIMS_SCOPE_PLUMBING_ONLY
 
 
@@ -89,7 +88,7 @@ def evaluate_recovery(
     total = 0
     with torch.no_grad():
         for x, y in train_loader:
-            x, y = x.to(device), y.to(device)
+            x, y = x.to(device), y.to(device)  # ruff: ignore[redefined-loop-name]
             logits = model(x)
             pred = logits.argmax(dim=-1)
             correct += (pred == y).sum().item()
@@ -107,7 +106,7 @@ def evaluate_recovery(
         epoch_total = 0
 
         for x, y in train_loader:
-            x, y = x.to(device), y.to(device)
+            x, y = x.to(device), y.to(device)  # ruff: ignore[redefined-loop-name]
             optimizer.zero_grad()
             logits = model(x)
             loss = criterion(logits, y)
@@ -139,7 +138,7 @@ def evaluate_recovery(
     }
 
 
-def evaluate_structural_robustness(
+def evaluate_structural_robustness(  # ruff: ignore[complex-structure, too-many-arguments, too-many-locals, too-many-statements, too-many-positional-arguments]
     coordinate: str,
     epochs: int = 10,
     batch_size: int = 64,
@@ -195,7 +194,7 @@ def evaluate_structural_robustness(
     elif plasticity_type == "substrate_coupled":
         plasticity = create_substrate_coupled_plasticity(plasticity_config)
     elif plasticity_type == "rule_state":
-        plasticity = create_rule_state_plasticity(plasticity_config)
+        plasticity = create_rule_state_plasticity(plasticity_config)  # ruff: ignore[unused-variable]
     else:
         raise ValueError(f"Unknown plasticity: {plasticity_type}")
 

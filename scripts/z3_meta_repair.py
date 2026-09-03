@@ -248,7 +248,7 @@ def _seed_curves(row: dict, tasks: tuple[str, ...]) -> dict:
     return curves
 
 
-def _config_row(  # noqa: PLR0913 - summary tuple stays flat
+def _config_row(
     name: str,
     recipe: MetaRecipe,
     seed_rows: list[dict],

@@ -72,7 +72,7 @@ class ProfileResult:
     peak_memory_mb: float
 
 
-def _create_joint_system(
+def _create_joint_system(  # ruff: ignore[complex-structure, too-many-branches]
     coordinate: str, input_dim: int, output_dim: int, hidden_dim: int, device: str
 ):
     """Create a JointSystem from coordinate string."""
@@ -119,7 +119,7 @@ def _create_joint_system(
         raise ValueError(f"Unknown geometry: {geometry_type}")
 
     # Dynamics (support shorthands)
-    if dynamics_type in ("energy_minimization", "energy_min"):
+    if dynamics_type in ("energy_minimization", "energy_min"):  # ruff: ignore[literal-membership]
         dynamics = EnergyMinimizationDynamics(
             StateDynamicsConfig.energy_minimization(
                 max_steps=10, beta=0.5, step_size=0.1
@@ -212,7 +212,7 @@ def _profile_kernel(
     return mean_latency, peak_mem
 
 
-def _profile_coordinate(
+def _profile_coordinate(  # ruff: ignore[complex-structure, too-many-statements]
     coordinate: str,
     batch_sizes: list[int],
     device: str,
@@ -385,7 +385,7 @@ def _save_results(results: list[ProfileResult], output_path: Path):
             "total_kernels_profiled": sum(len(r.kernels) for r in results),
         },
     }
-    output_path.write_text(json.dumps(data, indent=2))
+    output_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     print(f"Results saved to {output_path}")
 
 
@@ -494,7 +494,7 @@ def _generate_html_report(results: list[ProfileResult], output_path: Path):
 </html>
 """
 
-    output_path.write_text(html)
+    output_path.write_text(html, encoding="utf-8")
     print(f"HTML report saved to {output_path}")
 
 

@@ -116,7 +116,7 @@ def test_consolidation_resets_plastic():
     )
 
     # With reset_plastic=True (default)
-    new_context = consolidate(z_final, context, ConsolidationConfig(reset_plastic=True))
+    new_context = consolidate(z_final, context, ConsolidationConfig(reset_plastic=True))  # ruff: ignore[unused-variable]
     assert torch.allclose(z_final.plastic["fast_weights"], torch.zeros(20, 20))
 
     # Without reset
@@ -125,7 +125,7 @@ def test_consolidation_resets_plastic():
         plastic={"fast_weights": torch.ones(20, 20) * 2},
         substrate={},
     )
-    new_context2 = consolidate(
+    new_context2 = consolidate(  # ruff: ignore[unused-variable]
         z_final2, context, ConsolidationConfig(reset_plastic=False)
     )
     assert torch.allclose(z_final2.plastic["fast_weights"], torch.ones(20, 20) * 2)

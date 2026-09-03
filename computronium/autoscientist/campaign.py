@@ -363,7 +363,7 @@ class CampaignCheckpointer:
         self, filepath: str | Path
     ) -> tuple[CampaignState, list[IterationRecord]]:
         """Load campaign state from YAML checkpoint."""
-        with Path(filepath).open() as f:
+        with Path(filepath).open(encoding="utf-8") as f:
             data = yaml.safe_load(f)
 
         campaign = CampaignState(**data["campaign"])
@@ -520,7 +520,7 @@ class AutoScientistCampaign:
 
         # Create new campaign on new branch, inheriting from source
         new_campaign_id = f"camp_{uuid.uuid4().hex[:8]}"
-        new_state = db.create_campaign(
+        new_state = db.create_campaign(  # ruff: ignore[unused-variable]
             campaign_id=new_campaign_id,
             branch_name=new_branch,
             parent_branch=source_branch,
@@ -609,7 +609,7 @@ class AutoScientistCampaign:
             })
             self.db.update_iteration(self.campaign_id, self._iteration, merged_meta)
 
-    def run_iteration(
+    def run_iteration(  # ruff: ignore[complex-structure]
         self,
         domain: str | None = None,
         n_experiments: int = 5,
@@ -723,7 +723,7 @@ class AutoScientistCampaign:
         # Vision tasks expose (C, H, W); factories want flat dims (see
         # construction.construct_model for the same canonicalization).
         input_dim = task.input_dim
-        assert input_dim is not None  # noqa: S101 - task must expose shape
+        assert input_dim is not None  # ruff: ignore[assert]
         if isinstance(input_dim, tuple | list):
             input_dim = int(math.prod(input_dim))
         factory = Registry.get(ComponentCategory.MODEL, proposal.model)
@@ -929,7 +929,7 @@ class AutoScientistCampaign:
 
     def load_checkpoint(self, filepath: str | Path) -> None:
         """Load campaign state from a checkpoint file."""
-        campaign, history = self.checkpointer.load_checkpoint(filepath)
+        campaign, _history = self.checkpointer.load_checkpoint(filepath)
         self._campaign_state = campaign
         self.campaign_id = campaign.campaign_id
         self.branch_name = campaign.branch_name

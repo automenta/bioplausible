@@ -7,14 +7,18 @@ Provides standard activity settling dynamics for the tile algorithm:
 - Spiking activity update: Threshold-and-reset spiking dynamics
 """
 
+from typing import TYPE_CHECKING
+
 import torch
 from torch import Tensor
 
-from computronium.core.local_learning.protocols import TileState
 from computronium.core.tile.kernels import compute_activity_update
 
+if TYPE_CHECKING:
+    from computronium.core.local_learning.protocols import TileState
 
-def ep_activity_update(  # ruff: ignore[too-many-arguments]  # dynamics contract
+
+def ep_activity_update(  # dynamics contract
     tile: TileState,
     *,
     feedback: list[Tensor],
@@ -41,7 +45,7 @@ def ep_activity_update(  # ruff: ignore[too-many-arguments]  # dynamics contract
     )
 
 
-def hebbian_activity_update(  # ruff: ignore[too-many-arguments]  # dynamics contract signature
+def hebbian_activity_update(  # dynamics contract signature
     tile: TileState,
     *,
     feedback: list[Tensor],
@@ -58,7 +62,7 @@ def hebbian_activity_update(  # ruff: ignore[too-many-arguments]  # dynamics con
     return tile.prediction
 
 
-def spiking_activity_update(  # ruff: ignore[too-many-arguments]  # dynamics contract
+def spiking_activity_update(  # dynamics contract
     tile: TileState,
     *,
     feedback: list[Tensor],

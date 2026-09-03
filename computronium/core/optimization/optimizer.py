@@ -10,8 +10,7 @@ context by setting ``requires_energy=True``; the loop then forwards the
 ``compute_gradients``.
 """
 
-from collections.abc import Callable, Iterable
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import torch
 from torch import nn
@@ -25,6 +24,9 @@ from .strategies import (
     NoFeedback,
     UpdateStrategy,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
 
 __all__ = ["StrategyOptimizer"]
 
@@ -58,7 +60,7 @@ class StrategyOptimizer(Optimizer):
         energy_fn: Optional energy / loss callable for EP gradients.
     """
 
-    def __init__(
+    def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         self,
         params: Iterable[nn.Parameter],
         gradient: GradientStrategy,
@@ -79,12 +81,12 @@ class StrategyOptimizer(Optimizer):
         if weight_decay < 0:
             raise ValueError(f"Weight decay must be non-negative, got {weight_decay}")
 
-        defaults: dict[str, object] = dict(
-            lr=lr,
-            momentum=momentum,
-            weight_decay=weight_decay,
-            max_grad_norm=max_grad_norm,
-        )
+        defaults: dict[str, object] = {
+            "lr": lr,
+            "momentum": momentum,
+            "weight_decay": weight_decay,
+            "max_grad_norm": max_grad_norm,
+        }
         super().__init__(params, defaults)
 
         self.model = model
@@ -106,7 +108,7 @@ class StrategyOptimizer(Optimizer):
         self._error_beta = getattr(feedback, "beta", 0.9)
         self._use_error_feedback = not isinstance(feedback, NoFeedback)
 
-    def step(  # type: ignore[override]
+    def step(  # type: ignore[override]  # ruff: ignore[complex-structure]
         self,
         closure: Callable[[], float] | None = None,
         x: torch.Tensor | None = None,

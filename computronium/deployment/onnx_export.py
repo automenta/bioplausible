@@ -3,11 +3,13 @@ ONNX export utilities.
 """
 
 import warnings
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 from torch import nn
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def export_to_onnx(

@@ -3,13 +3,9 @@ from pathlib import Path
 
 import pytest
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
-
-# Add parent to path for in-package testing
-parent_dir = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(parent_dir))
 
 from computronium.models.native.backprop_native import create_native_backprop_mlp
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
@@ -21,6 +17,10 @@ from computronium.models.native.tile_native import (
     create_native_tile_hebbian,
     create_native_tile_tp,
 )
+
+# Add parent to path for in-package testing
+parent_dir = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(parent_dir))
 
 
 class TestValidationAll:
@@ -240,4 +240,4 @@ class TestValidationAll:
 
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main()  # ruff: ignore[undefined-name]

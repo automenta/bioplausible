@@ -11,8 +11,8 @@ Provides:
 import copy
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
+from torch import nn
 from torch.quantization import (
     convert,
     get_default_qat_qconfig,

@@ -145,7 +145,7 @@ class TestGradientEquivalence:
         # Run a training step to generate free/nudged states
         x = torch.randn(4, 10)
         y = torch.randint(0, 2, (4,))
-        result = system.train_step(x, y)
+        result = system.train_step(x, y)  # ruff: ignore[unused-variable]
 
         # Access the credit assignment to inspect gradient computation
         credit = system.credit
@@ -197,7 +197,7 @@ class TestGradientEquivalence:
 
         # Get forward weights
         forward_weights = system.geometry.params
-        weight_shapes = {
+        weight_shapes = {  # ruff: ignore[unused-variable]
             k: v.shape for k, v in forward_weights.items() if "weight" in k
         }
 

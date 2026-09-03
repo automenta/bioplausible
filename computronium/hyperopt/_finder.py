@@ -38,7 +38,7 @@ _OPTUNA_N_STARTUP: int = 10
 class FrontierDriver(Protocol):
     """Minimal training surface a finder depends on."""
 
-    def train(  # ruff: ignore[too-many-arguments]  (mirrors the CoreTrainerDriver contract)
+    def train(
         self,
         *,
         model: str,
@@ -110,7 +110,7 @@ class _FrontierFinder[D]:
     _default_budget: int = 100
     _default_epochs: int = 5
 
-    def __init__(  # ruff: ignore[too-many-arguments]  (finder bundles all search+context config at once)
+    def __init__(
         self,
         driver: FrontierDriver,
         *,

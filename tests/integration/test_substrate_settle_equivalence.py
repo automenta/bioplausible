@@ -7,19 +7,27 @@ reference implementation of the legacy EqProp recurrence.
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
 import pytest
 import torch
 from torch import Tensor
 
-from computronium.ontology._settle_kernel import SubstrateSettleKernel, extract_layered_params
+from computronium.ontology._settle_kernel import (
+    SubstrateSettleKernel,
+    extract_layered_params,
+)
+from computronium.ontology.credit import Phase, ThermodynamicContrast
+from computronium.ontology.dynamics import (
+    EnergyMinimizationDynamics,
+    StateDynamicsConfig,
+)
 from computronium.ontology.geometry import FeedforwardGeometry, GeometryConfig
-from computronium.ontology.substrate import DigitalSubstrate, SubstrateConfig, TernarySubstrate
-from computronium.ontology.dynamics import EnergyMinimizationDynamics, StateDynamicsConfig
-from computronium.ontology.credit import ThermodynamicContrast, Phase
-from computronium.ontology.system import SystemState
+from computronium.ontology.substrate import (
+    DigitalSubstrate,
+    SubstrateConfig,
+    TernarySubstrate,
+)
 
 if TYPE_CHECKING:
     from computronium.ontology.substrate import Substrate
@@ -32,7 +40,7 @@ class _DummyState:
         self.activations = activations
 
 
-def _reference_settle_step(
+def _reference_settle_step(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     all_acts: list[Tensor],
     weights: tuple[Tensor, ...],
     biases: tuple[Tensor | None, ...],
@@ -58,7 +66,7 @@ def _reference_settle_step(
         pre = torch.nn.functional.linear(all_acts[i], weights[i], biases[i])
 
         if recurrent_weight is not None and i == num_hidden - 1:
-            pre = pre + all_acts[i + 1] @ recurrent_weight.T
+            pre = pre + all_acts[i + 1] @ recurrent_weight.T  # ruff: ignore[non-augmented-assignment]
 
         top_down = all_acts[i + 2] @ weights[i + 1]
 
@@ -73,9 +81,7 @@ def _reference_settle_step(
 
         new_acts.append(h_new)
 
-    out = torch.nn.functional.linear(
-        new_acts[-1], weights[-1], biases[-1]
-    )
+    out = torch.nn.functional.linear(new_acts[-1], weights[-1], biases[-1])
 
     if beta > 0 and target is not None:
         if target.dim() == 1:
@@ -83,14 +89,14 @@ def _reference_settle_step(
             target_oh.scatter_(1, target.unsqueeze(1), 1.0)
         else:
             target_oh = target
-        out = out + beta * (target_oh - out)
+        out = out + beta * (target_oh - out)  # ruff: ignore[non-augmented-assignment]
 
     new_acts.append(out)
 
     return new_acts, new_velocity
 
 
-def _reference_settle(
+def _reference_settle(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
     init_acts: list[Tensor],
     weights: tuple[Tensor, ...],
     biases: tuple[Tensor | None, ...],
@@ -148,7 +154,10 @@ def _create_test_geometry(
 
 
 def _build_kernel_from_geometry(
-    geometry: FeedforwardGeometry, substrate: Substrate, step_size: float = 0.1, momentum: float = 0.0
+    geometry: FeedforwardGeometry,
+    substrate: Substrate,
+    step_size: float = 0.1,
+    momentum: float = 0.0,
 ) -> SubstrateSettleKernel:
     """Build kernel from geometry (used by production path)."""
     params = extract_layered_params(geometry)
@@ -261,12 +270,16 @@ class TestSubstrateSettleEquivalence:
 
     def test_momentum_equivalence(self, geometry, digital_substrate):
         """Momentum dynamics match reference."""
-        kernel = _build_kernel_from_geometry(geometry, digital_substrate, step_size=0.1, momentum=0.9)
+        kernel = _build_kernel_from_geometry(
+            geometry, digital_substrate, step_size=0.1, momentum=0.9
+        )
         init_acts = _get_init_acts(geometry, digital_substrate)
         params = extract_layered_params(geometry)
         assert params is not None
 
-        kernel_acts = _run_kernel_settle(kernel, init_acts, beta=0.0, target=None, max_steps=30)
+        kernel_acts = _run_kernel_settle(
+            kernel, init_acts, beta=0.0, target=None, max_steps=30
+        )
 
         ref_acts = _reference_settle(
             init_acts=init_acts,
@@ -329,7 +342,7 @@ class TestSubstrateSettleTernaryRouting:
         kernel = _build_kernel_from_geometry(geometry, substrate)
         init_acts = _get_init_acts(geometry, substrate)
 
-        kernel_acts = kernel.step(init_acts, 0.0, None, None)[0]
+        kernel_acts = kernel.step(init_acts, 0.0, None, None)[0]  # ruff: ignore[unused-variable]
 
         # Verify effective weights are ternary
         eff_weights = kernel.effective_weights()
@@ -338,11 +351,13 @@ class TestSubstrateSettleTernaryRouting:
             max_val = SubstrateConfig.ternary().weight_bounds[1]
             expected_vals = torch.tensor([-max_val, 0.0, max_val])
             for val in unique:
-                assert any(
-                    abs(val - ev) < 0.01 for ev in expected_vals
-                ), f"Weight value {val} not in ternary set {-max_val, 0, +max_val}"
+                assert any(abs(val - ev) < 0.01 for ev in expected_vals), (
+                    f"Weight value {val} not in ternary set {-max_val, 0, +max_val}"
+                )
 
-    @pytest.mark.xfail(reason="Ternary quantization to {-1,0,1} with init_scale=0.1 causes numerical instability; both paths diverge differently")
+    @pytest.mark.xfail(
+        reason="Ternary quantization to {-1,0,1} with init_scale=0.1 causes numerical instability",
+    )
     def test_ternary_equivalence_vs_reference(self):
         """Kernel settle on TernarySubstrate matches reference with same quantization."""
         geometry = _create_test_geometry()
@@ -365,7 +380,9 @@ class TestSubstrateSettleTernaryRouting:
             weights=q_weights,
             biases=params.biases,
             activations=params.activations,
-            recurrent_weight=quantize_ternary(params.recurrent_weight) if params.recurrent_weight is not None else None,
+            recurrent_weight=quantize_ternary(params.recurrent_weight)
+            if params.recurrent_weight is not None
+            else None,
             beta=0.0,
             target=None,
             max_steps=20,
@@ -404,7 +421,9 @@ class TestSubstrateSettleWeightUpdateOperator:
 class TestSubstrateSettlePseudoGradient:
     """Pseudo-gradient matches ThermodynamicContrast."""
 
-    def test_pseudo_gradient_matches_thermodynamic_contrast(self, geometry, digital_substrate):
+    def test_pseudo_gradient_matches_thermodynamic_contrast(
+        self, geometry, digital_substrate
+    ):
         """Kernel pseudo_gradient == ThermodynamicContrast.compute_pseudo_gradient."""
         kernel = _build_kernel_from_geometry(geometry, digital_substrate)
 
@@ -491,10 +510,14 @@ class TestProductionPathEquivalence:
         assert max_diff < 1e-5, f"Production path max diff: {max_diff}"
         assert rel_diff < 1e-4, f"Production path rel diff: {rel_diff}"
 
-    def test_dynamics_settle_nudged_matches_reference(self, geometry, digital_substrate):
+    def test_dynamics_settle_nudged_matches_reference(
+        self, geometry, digital_substrate
+    ):
         """Production nudged phase matches reference."""
         dynamics = EnergyMinimizationDynamics(
-            StateDynamicsConfig.energy_minimization(max_steps=20, step_size=0.1, beta=0.5)
+            StateDynamicsConfig.energy_minimization(
+                max_steps=20, step_size=0.1, beta=0.5
+            )
         )
 
         class DummyState:

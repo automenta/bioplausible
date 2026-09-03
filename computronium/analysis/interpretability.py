@@ -10,7 +10,6 @@ Provides tools for analyzing learned representations:
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -20,6 +19,8 @@ import torch
 from torch import nn
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import plotly.graph_objects as go
     from torch.utils.data import DataLoader
 
@@ -252,7 +253,7 @@ def plot_weight_spectra(
 # =============================================================================
 
 
-def compute_receptive_field(
+def compute_receptive_field(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
     model: nn.Module,
     layer_name: str,
     unit_index: int,
@@ -311,7 +312,7 @@ def compute_receptive_field(
             grad = input_tensor.grad[0].abs().cpu().numpy()
 
             # For conv, grad is (C, H, W) - take max over channels
-            if grad.ndim == 3:
+            if grad.ndim == 3:  # ruff: ignore[if-else-block-instead-of-if-exp]
                 rf_map = grad.max(axis=0)
             else:
                 rf_map = grad
@@ -462,7 +463,7 @@ def compute_mutual_information(
     return mi
 
 
-def analyze_information_flow(
+def analyze_information_flow(  # ruff: ignore[complex-structure, too-many-locals]
     model: nn.Module,
     dataloader: DataLoader,
     layers: list[str],
@@ -504,7 +505,7 @@ def analyze_information_flow(
     sample_count = 0
     with torch.no_grad():
         for batch in dataloader:
-            if isinstance(batch, (list, tuple)):
+            if isinstance(batch, (list, tuple)):  # ruff: ignore[if-else-block-instead-of-if-exp]
                 x = batch[0]
             else:
                 x = batch
@@ -628,7 +629,7 @@ def compute_concept_alignment(
         concept_acts = []
         activations = []
         handle = target_module.register_forward_hook(
-            lambda m, i, o: activations.append(o.detach().cpu())
+            lambda m, i, o: activations.append(o.detach().cpu())  # ruff: ignore[unused-lambda-argument]
         )
 
         with torch.no_grad():
@@ -674,7 +675,7 @@ def compute_concept_alignment(
 # =============================================================================
 
 
-def causal_mediation_analysis(
+def causal_mediation_analysis(  # ruff: ignore[too-many-locals]
     model: nn.Module,
     dataloader: DataLoader,
     mediator_layer: str,
@@ -811,7 +812,7 @@ class InterpretabilityConfig:
     device: str = "cpu"
 
 
-def run_interpretability_analysis(
+def run_interpretability_analysis(  # ruff: ignore[complex-structure, too-many-branches]
     model: nn.Module,
     dataloader: DataLoader,
     config: InterpretabilityConfig,

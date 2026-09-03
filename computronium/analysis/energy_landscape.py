@@ -6,15 +6,18 @@ Supports multiple direction selection methods and curvature analysis.
 """
 
 import pathlib
-from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
 from torch import nn
 
 from computronium.core.ebm import is_energy_model
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 __all__ = [
     "DirectionMethod",
@@ -29,7 +32,7 @@ __all__ = [
 ]
 
 
-class DirectionMethod(str, Enum):
+class DirectionMethod(str, Enum):  # ruff: ignore[replace-str-enum]
     """Method for selecting the 2D slice directions."""
 
     GRADIENT = "gradient"  # Steepest descent direction
@@ -104,7 +107,7 @@ class LandscapeSlice:
     metadata: dict
 
 
-def _orthonormal_directions(
+def _orthonormal_directions(  # ruff: ignore[too-many-statements]
     params: Sequence[torch.Tensor],
     grad: list[torch.Tensor],
     method: DirectionMethod = DirectionMethod.GRADIENT_RANDOM,
@@ -124,12 +127,12 @@ def _orthonormal_directions(
         d1 = torch.from_numpy(rng.standard_normal(g.shape)).to(
             dtype=g.dtype, device=g.device
         )
-        d1 = d1 / (d1.norm() + 1e-8)
+        d1 = d1 / (d1.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
         d2 = torch.from_numpy(rng.standard_normal(g.shape)).to(
             dtype=g.dtype, device=g.device
         )
-        d2 = d2 - (d2 @ d1) * d1
-        d2 = d2 / (d2.norm() + 1e-8)
+        d2 = d2 - (d2 @ d1) * d1  # ruff: ignore[non-augmented-assignment]
+        d2 = d2 / (d2.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
         return d1, d2
 
     d1 = g / g_norm
@@ -140,35 +143,35 @@ def _orthonormal_directions(
             r = rng.standard_normal(d1.shape)
             r = torch.from_numpy(r).to(dtype=g.dtype, device=g.device)
             d2 = r - (r @ d1) * d1
-            d2 = d2 / (d2.norm() + 1e-8)
+            d2 = d2 / (d2.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
 
         case DirectionMethod.GRADIENT_PCA:
             # Use top eigenvector of Hessian if available, else random
             if hessian_evecs is not None and len(hessian_evecs) > 0:
                 d2 = flat([hessian_evecs[0]])
-                d2 = d2 - (d2 @ d1) * d1
-                d2 = d2 / (d2.norm() + 1e-8)
+                d2 = d2 - (d2 @ d1) * d1  # ruff: ignore[non-augmented-assignment]
+                d2 = d2 / (d2.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
             else:
                 rng = np.random.default_rng(seed)
                 r = rng.standard_normal(d1.shape)
                 r = torch.from_numpy(r).to(dtype=g.dtype, device=g.device)
                 d2 = r - (r @ d1) * d1
-                d2 = d2 / (d2.norm() + 1e-8)
+                d2 = d2 / (d2.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
 
         case DirectionMethod.TOP_EIGEN:
             if hessian_evecs is not None and len(hessian_evecs) >= 2:
                 d1 = flat([hessian_evecs[0]])
-                d1 = d1 / (d1.norm() + 1e-8)
+                d1 = d1 / (d1.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
                 d2 = flat([hessian_evecs[1]])
-                d2 = d2 - (d2 @ d1) * d1
-                d2 = d2 / (d2.norm() + 1e-8)
+                d2 = d2 - (d2 @ d1) * d1  # ruff: ignore[non-augmented-assignment]
+                d2 = d2 / (d2.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
             else:
                 # Fallback to gradient + random
                 rng = np.random.default_rng(seed)
                 r = rng.standard_normal(d1.shape)
                 r = torch.from_numpy(r).to(dtype=g.dtype, device=g.device)
                 d2 = r - (r @ d1) * d1
-                d2 = d2 / (d2.norm() + 1e-8)
+                d2 = d2 / (d2.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
 
         case DirectionMethod.PCA:
             # Would need parameter covariance - fallback to gradient + random
@@ -176,14 +179,14 @@ def _orthonormal_directions(
             r = rng.standard_normal(d1.shape)
             r = torch.from_numpy(r).to(dtype=g.dtype, device=g.device)
             d2 = r - (r @ d1) * d1
-            d2 = d2 / (d2.norm() + 1e-8)
+            d2 = d2 / (d2.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
 
         case _:
             rng = np.random.default_rng(seed)
             r = rng.standard_normal(d1.shape)
             r = torch.from_numpy(r).to(dtype=g.dtype, device=g.device)
             d2 = r - (r @ d1) * d1
-            d2 = d2 / (d2.norm() + 1e-8)
+            d2 = d2 / (d2.norm() + 1e-8)  # ruff: ignore[non-augmented-assignment]
 
     return d1, d2
 
@@ -249,7 +252,7 @@ def compute_hessian_spectrum(
         eigenvectors: Corresponding eigenvectors (flattened)
     """
     model.eval()
-    params = list(p for p in model.parameters() if p.requires_grad)
+    params = list(p for p in model.parameters() if p.requires_grad)  # ruff: ignore[unnecessary-generator-list]
     if not params:
         raise ValueError("model has no trainable parameters")
 
@@ -307,7 +310,7 @@ def compute_hessian_spectrum(
         return eigvals, eigvecs_torch
 
 
-def compute_energy_landscape(
+def compute_energy_landscape(  # ruff: ignore[too-many-arguments, too-many-locals, too-many-positional-arguments]
     model: nn.Module,
     x: torch.Tensor,
     y: torch.Tensor,
@@ -336,7 +339,7 @@ def compute_energy_landscape(
         A populated :class:`EnergyLandscape`.
     """
     model.eval()
-    params = list(p for p in model.parameters() if p.requires_grad)
+    params = list(p for p in model.parameters() if p.requires_grad)  # ruff: ignore[unnecessary-generator-list]
     if not params:
         raise ValueError("model has no trainable parameters")
 
@@ -429,7 +432,7 @@ def compute_multiple_slices(
     return landscapes
 
 
-def plot_energy_landscape(
+def plot_energy_landscape(  # ruff: ignore[too-many-locals]
     landscape: EnergyLandscape,
     output_dir: str | pathlib.Path = "results/figures",
     cmap: str = "viridis",
@@ -565,8 +568,8 @@ def plot_energy_landscape_3d(
                 z=Z,
                 colorscale=cmap,
                 showscale=True,
-                colorbar=dict(title="Energy", thickness=20),
-                lighting=dict(ambient=0.6, diffuse=0.8, roughness=0.4),
+                colorbar={"title": "Energy", "thickness": 20},
+                lighting={"ambient": 0.6, "diffuse": 0.8, "roughness": 0.4},
             )
         ]
     )
@@ -578,7 +581,7 @@ def plot_energy_landscape_3d(
             y=[0],
             z=[landscape.energy[len(landscape.alphas) // 2, len(landscape.betas) // 2]],
             mode="markers",
-            marker=dict(size=8, color="cyan", symbol="diamond"),
+            marker={"size": 8, "color": "cyan", "symbol": "diamond"},
             name="Trained weights w*",
         )
     )
@@ -595,19 +598,19 @@ def plot_energy_landscape_3d(
                 y=min_betas,
                 z=min_energies,
                 mode="markers",
-                marker=dict(size=6, color="red", symbol="x"),
+                marker={"size": 6, "color": "red", "symbol": "x"},
                 name="Local Minima",
             )
         )
 
     fig.update_layout(
         title=f"Energy Landscape 3D — {landscape.model_name} ({landscape.task_name})",
-        scene=dict(
-            xaxis_title=r"$\alpha$ (along $d_1$)",
-            yaxis_title=r"$\beta$ (along $d_2$)",
-            zaxis_title="Energy",
-            camera=dict(eye=dict(x=1.5, y=1.5, z=1.2)),
-        ),
+        scene={
+            "xaxis_title": r"$\alpha$ (along $d_1$)",
+            "yaxis_title": r"$\beta$ (along $d_2$)",
+            "zaxis_title": "Energy",
+            "camera": {"eye": {"x": 1.5, "y": 1.5, "z": 1.2}},
+        },
         width=900,
         height=700,
         template="plotly_white",
@@ -645,7 +648,7 @@ def find_minima(energy: np.ndarray, threshold: float = 1e-4) -> list[tuple[int, 
     return minima
 
 
-def analyze_landscape_curvature(
+def analyze_landscape_curvature(  # ruff: ignore[too-many-locals]
     landscape: EnergyLandscape,
 ) -> dict[str, float]:
     """Analyze curvature properties of the energy landscape.

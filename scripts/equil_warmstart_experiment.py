@@ -23,6 +23,7 @@ import argparse
 import time
 
 import torch
+
 from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 
 _DEFAULT_MAX_STEPS = 20

@@ -18,8 +18,8 @@ logger = get_logger()
 
 __all__ = [
     "HyperoptStorage",
-    "logger",
     "list_studies",
+    "logger",
 ]
 
 
@@ -118,13 +118,13 @@ class HyperoptStorage:
     def update_trial(
         self,
         trial_id: int,
-        status: str = None,
-        epochs_completed: int = None,
-        final_loss: float = None,
-        accuracy: float = None,
-        perplexity: float = None,
-        iteration_time: float = None,
-        param_count: float = None,
+        status: str | None = None,
+        epochs_completed: int | None = None,
+        final_loss: float | None = None,
+        accuracy: float | None = None,
+        perplexity: float | None = None,
+        iteration_time: float | None = None,
+        param_count: float | None = None,
     ):
         """Update trial with results."""
         updates = []
@@ -155,11 +155,11 @@ class HyperoptStorage:
         if updates:
             values.append(trial_id)
             set_clause = ", ".join(updates)
-            query = "UPDATE hyperopt_logs SET " + set_clause + " WHERE trial_id = ?"
+            query = "UPDATE hyperopt_logs SET " + set_clause + " WHERE trial_id = ?"  # ruff: ignore[hardcoded-sql-expression]
             self.conn.execute(query, values)
             self.conn.commit()
 
-    def log_epoch(
+    def log_epoch(  # ruff: ignore[too-many-arguments]
         self,
         trial_id: int,
         epoch: int,
@@ -282,7 +282,7 @@ class HyperoptStorage:
         )
 
     def get_all_trials(
-        self, model_name: str = None, status: str = None
+        self, model_name: str | None = None, status: str | None = None
     ) -> list[TrialMetrics]:
         """Retrieve all trials, optionally filtered."""
         query = "SELECT * FROM hyperopt_logs WHERE 1=1"
@@ -327,7 +327,7 @@ class HyperoptStorage:
         if trial_ids:
             placeholders = ",".join("?" * len(trial_ids))
             self.conn.execute(
-                f"UPDATE hyperopt_logs SET is_pareto = 1"
+                f"UPDATE hyperopt_logs SET is_pareto = 1"  # ruff: ignore[hardcoded-sql-expression]
                 f" WHERE trial_id IN ({placeholders})",
                 trial_ids,
             )
@@ -355,7 +355,7 @@ class HyperoptStorage:
             trajectory: TrainingTrajectory object
                 (from computronium.execution.training_dynamics)
         """
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
             cursor = self.conn.cursor()
 
             # Insert Trajectory

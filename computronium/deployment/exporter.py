@@ -3,10 +3,13 @@ Model Exporter - High-level export interface.
 """
 
 from dataclasses import dataclass
-
-from torch import nn
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from computronium.deployment.serialization import ModelExporter, ModelInfo
+
+if TYPE_CHECKING:
+    from torch import nn
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,12 +80,10 @@ def load_model(
     return loader.load_from_config(config_path)
 
 
-from pathlib import Path
-
 __all__ = [
     "ExportConfig",
-    "export_model",
-    "load_model",
     "ModelExporter",
     "ModelInfo",
+    "export_model",
+    "load_model",
 ]

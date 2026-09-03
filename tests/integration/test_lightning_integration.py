@@ -282,7 +282,7 @@ class TestHPOIntegration:
         assert "lr" in hparams
         assert "hidden_dim" in hparams
         # hidden_dim should be constrained to [32, 64, 128] for small task
-        assert hparams["hidden_dim"] in [32, 64, 128]
+        assert hparams["hidden_dim"] in [32, 64, 128]  # ruff: ignore[literal-membership]
 
     def test_ray_tune_search_init(self):
         """Test BioRayTuneSearch initialization."""
@@ -350,7 +350,7 @@ class TestPLTrialIntegration:
 
         # Create mock data loaders
         mock_loader = MagicMock()
-        mock_loader.__iter__ = lambda self: iter([])
+        mock_loader.__iter__ = lambda self: iter([])  # ruff: ignore[unused-lambda-argument]
 
         # Create a real simple model for testing
         class SimpleModel(torch.nn.Module):
@@ -403,13 +403,13 @@ class TestPLTrialIntegration:
 
         # Create mock data loaders
         mock_loader = MagicMock()
-        mock_loader.__iter__ = lambda self: iter([])
+        mock_loader.__iter__ = lambda self: iter([])  # ruff: ignore[unused-lambda-argument]
 
         with patch("pytorch_lightning.Trainer") as MockTrainer:
             mock_trainer_instance = MagicMock()
 
             def mock_fit_failure(module, train_loader, val_loader, *args, **kwargs):
-                raise Exception("Training failed")
+                raise Exception("Training failed")  # ruff: ignore[raise-vanilla-class]
 
             mock_trainer_instance.fit = mock_fit_failure
             MockTrainer.return_value = mock_trainer_instance

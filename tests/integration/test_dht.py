@@ -112,8 +112,8 @@ class TestDHT(unittest.TestCase):
 
             # Verify it is still 0.95
             # Note: The 'publish_best_model' logic:
-            # current = self.get(key)
-            # if current and current >= score: return
+            # current = self.get(key)  # ruff: ignore[commented-out-code]
+            # if current and current >= score: return  # ruff: ignore[commented-out-code]
 
             best_after = node2.get_best_model("test_task")
             self.assertEqual(best_after["score"], 0.95)

@@ -68,6 +68,17 @@ def _energy_tensor(value: ActivityValue) -> Tensor:
             return torch.zeros(1)
 
 
+def _state_energy_vector(state: object) -> Tensor:
+    """The activity field an output-energy reads: the last activation, else
+    the ``output`` activity."""
+    acts = _get_state_activations(state)
+    if acts is not None:
+        acts = acts if isinstance(acts, list) else [acts]
+        return acts[-1] if acts else torch.zeros(1)
+    activity = _get_state_activity(state)
+    return activity.get("output", torch.zeros(1)) if activity else torch.zeros(1)
+
+
 def _create_output_state(
     state: object,
     *,
@@ -360,7 +371,7 @@ class StateDynamics(Protocol):
 # ============================================================
 
 
-def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tensor:
+def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tensor:  # ruff: ignore[complex-structure, too-many-branches, too-many-locals]
     """Compute Hopfield energy for the current state.
 
     E = 0.5 * sum(h_i^2) - sum_{i,j} W_{ij} h_i h_j - sum_i b_i h_i
@@ -399,7 +410,7 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
     for i in range(len(acts)):
         h = acts[i]
         # 0.5 * ||h||^2
-        total_energy = total_energy + 0.5 * (h**2).sum()
+        total_energy = total_energy + 0.5 * (h**2).sum()  # ruff: ignore[non-augmented-assignment]
 
     # Subtract interaction terms: h^T * W * h_prev
     for i in range(len(acts)):
@@ -412,7 +423,7 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
             # Output layer: last feedforward weight (hidden -> output)
             weight_idx = num_ff_weights - 1
             # For linear network (no hidden layers), h_prev should be input
-            if num_hidden == 0:
+            if num_hidden == 0:  # ruff: ignore[if-else-block-instead-of-if-exp]
                 h_prev = all_acts[0]
             else:
                 h_prev = acts[i - 1]  # Last hidden layer
@@ -423,7 +434,7 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
             # h: (batch, dim_i), W: (dim_i, dim_{i-1}), h_prev: (batch, dim_{i-1})
             # h @ W: (batch, dim_{i-1}) @ h_prev.T: (dim_{i-1}, batch) -> (batch, batch)
             interaction = (h @ W @ h_prev.T).trace()
-            total_energy = total_energy - interaction
+            total_energy = total_energy - interaction  # ruff: ignore[non-augmented-assignment]
 
     # Subtract bias terms (exclude recurrent bias if any)
     bias_names = [
@@ -439,13 +450,13 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
     num_ff_biases = len(bias_names)
     for i in range(len(acts)):
         h = acts[i]
-        if i < num_hidden:
+        if i < num_hidden:  # ruff: ignore[if-else-block-instead-of-if-exp]
             bias_idx = i
         else:
             bias_idx = num_ff_biases - 1
         if bias_idx < num_ff_biases:
             b = params[bias_names[bias_idx]]
-            total_energy = total_energy - (h @ b).sum()
+            total_energy = total_energy - (h @ b).sum()  # ruff: ignore[non-augmented-assignment]
 
     # Return mean per sample
     batch_size = acts[0].size(0)
@@ -471,7 +482,7 @@ class EnergyMinimizationDynamics:
         self._velocity: list[Tensor] | None = None
         self._free_energy_history: list[float] | None = None
 
-    def settle(
+    def settle(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
         self,
         state: CompositeState,
         geometry: Geometry,
@@ -501,7 +512,7 @@ class EnergyMinimizationDynamics:
         )
 
         # Number of hidden layers (excluding input and output)
-        # all_acts = [input, hidden1, hidden2, ..., output]
+        # all_acts = [input, hidden1, hidden2, ..., output]  # ruff: ignore[commented-out-code]
         num_hidden = len(all_acts) - 2
 
         # Initialize velocity for momentum (per hidden layer)
@@ -534,7 +545,7 @@ class EnergyMinimizationDynamics:
             use_checkpointing = False
         elif use_checkpointing is False and device.type == "cuda":
             # Auto-enable if model + activations would exceed ~80% of available VRAM
-            try:
+            try:  # ruff: ignore[too-many-statements-in-try-clause]
                 free_vram, _ = torch.cuda.mem_get_info(device)
                 # Estimate: params + optimizer state + activations (max_steps * layers * batch * hidden)
                 total_params = sum(
@@ -557,7 +568,7 @@ class EnergyMinimizationDynamics:
                 ) + est_activation_mem  # params + optimizer + activations
                 if est_total > free_vram * 0.8:
                     use_checkpointing = True
-            except Exception:
+            except Exception:  # ruff: ignore[try-except-pass]
                 pass  # Fall back to config value
 
         # Kernel step function for checkpointing
@@ -573,7 +584,7 @@ class EnergyMinimizationDynamics:
         if use_checkpointing:
             from torch.utils import checkpoint
 
-            for _step in range(self.config.max_steps):
+            for _step in range(self.config.max_steps):  # ruff: ignore[used-dummy-variable]
                 prev_output = all_acts[-1].detach()
                 # Checkpoint the kernel step function
                 all_acts, self._velocity = checkpoint.checkpoint(
@@ -726,7 +737,7 @@ class PredictiveSettlingDynamics:
                         prediction.device
                     )
             error = x - prediction
-            h = h + self.config.step_size * op(
+            h = h + self.config.step_size * op(  # ruff: ignore[non-augmented-assignment]
                 error,
                 geometry.params.get("weight", torch.eye(h.shape[-1], device=h.device)),
             )
@@ -756,14 +767,7 @@ class PredictiveSettlingDynamics:
         return self._free_energy_history
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
-        acts = _get_state_activations(state)
-        if acts is not None:
-            acts = acts if isinstance(acts, list) else [acts]
-            h = acts[-1] if acts else torch.zeros(1)
-        else:
-            activity = _get_state_activity(state)
-            h = activity.get("output", torch.zeros(1)) if activity else torch.zeros(1)
-        return _energy_tensor(h).pow(2).sum()
+        return _energy_tensor(_state_energy_vector(state)).pow(2).sum()
 
 
 class SpikeIntegrationDynamics:
@@ -805,7 +809,7 @@ class SpikeIntegrationDynamics:
         for _step in range(self.config.max_steps):
             # LIF dynamics: tau * dh/dt = -h + I_syn
             I_syn = geometry.route(h)
-            h = h + self.config.step_size * (-h + I_syn)
+            h = h + self.config.step_size * (-h + I_syn)  # ruff: ignore[non-augmented-assignment]
             # Count spikes: neurons where membrane potential crosses threshold
             spikes = (h > threshold).float()
             spike_counts.append(spikes.sum(dim=1))  # [batch]
@@ -852,10 +856,10 @@ class SpikeIntegrationDynamics:
         for weight, bias in zip(layered.weights, layered.biases, strict=True):
             I_syn = op(h, weight)
             if bias is not None:
-                I_syn = I_syn + bias
+                I_syn = I_syn + bias  # ruff: ignore[non-augmented-assignment]
             v = torch.zeros_like(I_syn)
             for _step in range(self.config.max_steps):
-                v = v + self.config.step_size * (-v + I_syn)
+                v = v + self.config.step_size * (-v + I_syn)  # ruff: ignore[non-augmented-assignment]
                 spikes = v > threshold
                 spike_counts.append(spikes.float().sum(dim=1))
                 v = torch.where(spikes, torch.zeros_like(v), v)
@@ -873,14 +877,7 @@ class SpikeIntegrationDynamics:
         )
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
-        acts = _get_state_activations(state)
-        if acts is not None:
-            acts = acts if isinstance(acts, list) else [acts]
-            h = acts[-1] if acts else torch.zeros(1)
-        else:
-            activity = _get_state_activity(state)
-            h = activity.get("output", torch.zeros(1)) if activity else torch.zeros(1)
-        return _energy_tensor(h).pow(2).sum()
+        return _energy_tensor(_state_energy_vector(state)).pow(2).sum()
 
 
 class InstantaneousDynamics:
@@ -964,13 +961,7 @@ class DiffusionDynamics:
         return energy
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
-        acts = _get_state_activations(state)
-        if acts is not None:
-            acts = acts if isinstance(acts, list) else [acts]
-            h = acts[-1] if acts else torch.zeros(1)
-        else:
-            activity = _get_state_activity(state)
-            h = activity.get("output", torch.zeros(1)) if activity else torch.zeros(1)
+        h = _state_energy_vector(state)
         # Use a default substrate for energy computation if not available
         substrate_obj = (
             state.substrate.get("substrate") if _is_composite_state(state) else None

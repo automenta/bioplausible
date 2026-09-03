@@ -1,7 +1,7 @@
 from typing import Literal
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import Tensor
 
 from computronium.core.losses import compute_accuracy
@@ -29,7 +29,7 @@ class TaskHandler:
             if y_target.dim() < logits.dim():
                 y_target = y_target.unsqueeze(-1)
             loss = F.mse_loss(logits, y_target)
-        elif self.task_type == "binary" or self.task_type == "multilabel":
+        elif self.task_type == "binary" or self.task_type == "multilabel":  # ruff: ignore[repeated-equality-comparison]
             loss = F.binary_cross_entropy_with_logits(logits, y.float())
         else:  # classification
             loss = F.cross_entropy(logits, y)
@@ -74,7 +74,7 @@ class TaskHandler:
                 ss_res = ((y_flat - logits_flat) ** 2).sum()
                 ss_tot = ((y_flat - y_flat.mean()) ** 2).sum()
                 accuracy = (1 - (ss_res / (ss_tot + 1e-8))).item()
-            elif self.task_type in ("binary", "multilabel"):
+            elif self.task_type in ("binary", "multilabel"):  # ruff: ignore[literal-membership]
                 # Unified logic for binary/multilabel
                 preds = (logits.sigmoid() > 0.5).long()
                 if self.task_type == "binary":

@@ -52,7 +52,7 @@ class MEPKernelBackend:
         self._config = config
         self._device = torch.device(
             "cuda"
-            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)
+            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
             else "cpu"
         )
         self._dtype = config.dtype
@@ -184,7 +184,7 @@ class MEPKernelBackend:
 
             # Apply activation derivative if needed
             if hasattr(module, "activation"):
-                grad_state = grad_state * _activation_deriv(state, module.activation)
+                grad_state = grad_state * _activation_deriv(state, module.activation)  # ruff: ignore[non-augmented-assignment]
 
             grads.append(grad_state)
 
@@ -290,7 +290,7 @@ class O1MemoryEPv2KernelBackend:
         self._config = config
         self._device = torch.device(
             "cuda"
-            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)
+            if config.hardware in (HardwareTarget.CUDA, HardwareTarget.TRITON)  # ruff: ignore[literal-membership]
             else "cpu"
         )
         self._dtype = config.dtype
@@ -370,7 +370,7 @@ class O1MemoryEPv2KernelBackend:
 
             # Activation derivative
             if hasattr(module, "activation"):
-                grad = grad * _activation_deriv(state, module.activation)
+                grad = grad * _activation_deriv(state, module.activation)  # ruff: ignore[non-augmented-assignment]
 
             grads.append(grad)
 

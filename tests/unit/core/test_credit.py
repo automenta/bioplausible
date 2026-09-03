@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import Tensor
 
 from computronium.ontology import (
@@ -146,7 +146,7 @@ def fa_credit():
 class TestThermodynamicVsBackpropLinear:
     """Test ThermodynamicContrast matches BackpropCredit on linear regression."""
 
-    def test_cosine_similarity_high(
+    def test_cosine_similarity_high(  # ruff: ignore[too-many-locals]
         self,
         linear_geometry,
         substrate,
@@ -198,7 +198,7 @@ class TestThermodynamicVsBackpropLinear:
                         param_key = f"{layer_idx}.weight"
                         if param_key in weight_names:
                             true_grads.append(true_grads_all[param_idx])
-                param_idx += 1
+                param_idx += 1  # ruff: ignore[enumerate-for-loop]
 
             # ThermodynamicContrast
             nudged_logits = (
@@ -237,7 +237,7 @@ class TestThermodynamicVsBackpropLinear:
 class TestThermodynamicVsBackpropMLP:
     """Test ThermodynamicContrast approximates BackpropCredit on MLP."""
 
-    def test_cosine_similarity_reasonable(
+    def test_cosine_similarity_reasonable(  # ruff: ignore[too-many-locals]
         self,
         mlp_geometry,
         substrate,
@@ -289,7 +289,7 @@ class TestThermodynamicVsBackpropMLP:
                         param_key = f"{layer_idx}.weight"
                         if param_key in weight_names:
                             true_grads.append(true_grads_all[param_idx])
-                param_idx += 1
+                param_idx += 1  # ruff: ignore[enumerate-for-loop]
 
             # ThermodynamicContrast
             nudged_logits = (
@@ -327,7 +327,7 @@ class TestThermodynamicVsBackpropMLP:
 class TestFATheoretical:
     """Test FA pseudo-gradients match theoretical expectation."""
 
-    def test_feedback_propagated_error_signal(self, device):
+    def test_feedback_propagated_error_signal(self, device):  # ruff: ignore[too-many-locals]
         """FA routes the autograd top error through fixed feedback matrices:
         one pseudo-gradient per weight, shapes match, weights move, and the
         feedback matrices are fixed across calls."""
@@ -453,7 +453,7 @@ class TestDFATheoretical:
 class TestBackpropIdentity:
     """Test BackpropCredit matches autograd exactly."""
 
-    def test_bitwise_identical(self, device):
+    def test_bitwise_identical(self, device):  # ruff: ignore[too-many-locals]
         """Bitwise identical to autograd on same graph."""
         geometry = FeedforwardGeometry(
             GeometryConfig.feedforward(
@@ -489,7 +489,7 @@ class TestBackpropIdentity:
                         param_key = f"{layer_idx}.weight"
                         if param_key in weight_names:
                             autograd_grads.append(autograd_grads_all[param_idx])
-                param_idx += 1
+                param_idx += 1  # ruff: ignore[enumerate-for-loop]
 
             # BackpropCredit
             initial_acts = get_activations(geometry, substrate, x.detach())

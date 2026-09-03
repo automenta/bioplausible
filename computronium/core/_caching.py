@@ -34,7 +34,7 @@ def _stable_hash(obj: object) -> str:
     return hashlib.sha256(_canonical(obj).encode()).hexdigest()[:16]
 
 
-def _canonical(obj: object) -> str:
+def _canonical(obj: object) -> str:  # ruff: ignore[too-many-return-statements]
     """Return an order-independent string form of ``obj`` for hashing."""
     if isinstance(obj, dict):
         return (
@@ -72,7 +72,7 @@ class DatasetCache:
         self._lock = threading.Lock()
 
     @staticmethod
-    def key(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]  # the key must capture every dataset-affecting dim
+    def key(  # the key must capture every dataset-affecting dim
         task: str,
         data_kwargs: dict[str, object],
         batch_size: int,

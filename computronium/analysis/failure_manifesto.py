@@ -49,7 +49,7 @@ class FailureManifestoGenerator:
 
         Path(output_path).parent.mkdir(exist_ok=True, parents=True)
 
-        with Path(output_path).open("w") as f:
+        with Path(output_path).open("w", encoding="utf-8") as f:
             f.write("# Failure Modes Manifesto\n\n")
             f.write(
                 "This document tracks the explicit failure modes encountered "
@@ -81,7 +81,7 @@ class FailureManifestoGenerator:
         self.generate(output_path, model)
         if not (z3 or continual_learning):
             return output_path
-        with Path(output_path).open("a") as f:
+        with Path(output_path).open("a", encoding="utf-8") as f:
             if z3:
                 f.write("\n\n")
                 f.write(write_z3_boundary_memo())
@@ -273,7 +273,7 @@ def _write_crosstab(f, df: pd.DataFrame) -> None:
     """Write failures-by-model-and-type as a markdown table."""
     f.write("## Failures by Model and Type\n\n")
     cross_tab = pd.crosstab(df["model"], df["type"])
-    cols = ["Model"] + list(cross_tab.columns)
+    cols = ["Model"] + list(cross_tab.columns)  # ruff: ignore[collection-literal-concatenation]
     f.write("| " + " | ".join(cols) + " |\n")
     f.write("|" + "|".join(["---"] * len(cols)) + "|\n")
     for index, row in cross_tab.iterrows():

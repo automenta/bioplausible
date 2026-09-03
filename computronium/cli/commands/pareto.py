@@ -1,11 +1,14 @@
 """Pareto frontier CLI command."""
 
-import argparse
 import json
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from computronium.cli.shared import _set_storage, _STORAGE_URL
+from computronium.cli.shared import _STORAGE_URL, _set_storage
+
+if TYPE_CHECKING:
+    import argparse
 
 
 def add_pareto_subparsers(subparsers: argparse._SubParsersAction) -> None:
@@ -56,11 +59,15 @@ def run_pareto(args: argparse.Namespace) -> None:
 
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     if args.format == "json":
-        with open(Path(args.output_dir) / f"{args.study}_pareto.json", "w") as f:
+        with Path(Path(args.output_dir) / f"{args.study}_pareto.json").open(
+            "w", encoding="utf-8"
+        ) as f:
             json.dump(data, f, indent=2)
     elif args.format == "html":
         # Minimal HTML output
         html = f"<html><body><h1>Pareto: {args.study}</h1><pre>{json.dumps(data, indent=2)}</pre></body></html>"
-        with open(Path(args.output_dir) / f"{args.study}_pareto.html", "w") as f:
+        with Path(Path(args.output_dir) / f"{args.study}_pareto.html").open(
+            "w", encoding="utf-8"
+        ) as f:
             f.write(html)
     logging.info("Pareto data written to %s", args.output_dir)

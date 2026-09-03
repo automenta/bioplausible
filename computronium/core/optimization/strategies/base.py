@@ -5,10 +5,11 @@ Dependency-free interfaces for composable optimizers. Copied from
 core modules must never depend on the MEP package.
 """
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-import torch
-from torch import nn
+if TYPE_CHECKING:
+    import torch
+    from torch import nn
 
 __all__ = [
     "ConstraintStrategy",

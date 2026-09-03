@@ -4,7 +4,7 @@ Flagship experiments for publishable bio-plausible learning results.
 """
 
 # Import joint experiments (new architecture)
-try:
+try:  # ruff: ignore[non-empty-init-module, suppressible-exception]
     from .joint import (
         adaptation_efficiency,
         algorithm_migration,
@@ -16,7 +16,7 @@ except ImportError:
     pass
 
 # Legacy experiments (may have missing dependencies)
-try:
+try:  # ruff: ignore[too-many-statements-in-try-clause, non-empty-init-module]
     from .cross_domain_transfer import TransferConfig, run_transfer_experiment
     from .eqprop_vision_parity import EqPropParityConfig, run_eqprop_parity
     from .fa_depth_scaling import FADepthConfig, run_fa_depth_scaling
@@ -31,7 +31,7 @@ except ImportError:
     # Some legacy experiments have missing dependencies
     pass
 
-__all__ = [
+__all__ = [  # ruff: ignore[unsorted-dunder-all]
     # Joint architecture experiments
     "adaptation_efficiency",
     "compute_efficiency",

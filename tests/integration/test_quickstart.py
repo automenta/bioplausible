@@ -7,7 +7,7 @@ import torch
 @pytest.mark.slow
 @pytest.mark.gpu
 @pytest.mark.timeout(600)
-def test_backprop_vs_eqprop_mnist():
+def test_backprop_vs_eqprop_mnist():  # ruff: ignore[too-many-locals]
     """Both algorithms train on same architecture, achieve >50% on MNIST in 3 epochs."""
     from computronium.core.system_trainer import (
         SystemTrainer,
@@ -30,7 +30,7 @@ def test_backprop_vs_eqprop_mnist():
     output_dim = task.output_dim
     hidden_dim = 256
 
-    substrate = DigitalSubstrate(
+    substrate = DigitalSubstrate(  # ruff: ignore[unused-variable]
         SubstrateConfig(
             precision="float32",
             noise_level=0.0,
@@ -67,7 +67,7 @@ def test_backprop_vs_eqprop_mnist():
         def __iter__(self):
             for x, y in self.loader:
                 if x.dim() > 2:
-                    x = x.view(x.size(0), -1)
+                    x = x.view(x.size(0), -1)  # ruff: ignore[redefined-loop-name]
                 yield x, y
 
         def __len__(self):
