@@ -9,10 +9,13 @@ independent builds seeded identically — one 5-D, one 6-axis with
 ``NullPlasticity`` — produce identical metric dicts and bitwise-equal θ.
 A stranger reads this file and knows how to build anything.
 
-Demonstrated regime (pinned 2026-09-02): MNIST quick-mode, 1 epoch, batch 64,
+Demonstrated regime (re-pinned 2026-09-02 with a 600-batch loader cap for
+suite walltime): MNIST quick-mode, 1 epoch over the capped stream, batch 64,
 hidden ``(32,)``, ``EnergyMinimization(max_steps=5, beta=0.5)`` -> train
-accuracy ≈ 0.9 (chance 0.1).
+accuracy ≈ 0.84 (chance 0.1).
 """
+
+from itertools import islice
 
 import pytest
 import torch
@@ -36,11 +39,12 @@ from computronium import (
     extract_config,
 )
 
+BATCH_CAP = 600  # loader cap (Register C): suite walltime, regime re-pinned 2026-09-02
 EXPECTED_ACCURACY_FLOOR = 0.5  # far above the 0.1 chance, wide guard band
 
 
-def _flatten(loader):
-    for x, y in loader:
+def _flatten(loader, cap=BATCH_CAP):
+    for x, y in islice(loader, cap):
         yield x.view(x.size(0), -1), y
 
 

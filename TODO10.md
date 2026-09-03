@@ -144,6 +144,27 @@
 > joint.py, plasticity/*, parity.py, …) — those gates are aspirational at
 > HEAD and are deliberately not chased this round (Register C).
 >
+> **Demo-suite walltime pulled 2026-09-02 (Register C item closed).**
+> The D1/D2 wall-clock item was pulled under the user's standing directive
+> (tests must show their walltime; waiting is a cost): both train streams now
+> cap at **600 batches** (`BATCH_CAP` via the same `islice` pattern D6
+> already used), regime re-pinned live — D1 ≈ 0.84 (floor 0.5 untouched),
+> D2 ≈ 0.87 / 0.86 / 0.62 (all three arms ≫ the 0.25 floor; the floor was
+> calibrated at the full epoch and gains margin). **Gate: 8/8, 69 s, zero
+> flakes** (was 104 s). **GPU verdict (measured, RTX 3080): CPU stays for the
+> demo suite.** Moving D1/D2/D6 to CUDA with the same regimes ran *slower*
+> (D2 60 s → hit the 60 s timeout; D1 42.6 s vs 27 s) — the tiny Digital
+> builds (784→32→10, batch 64, Python settle loop) are kernel-launch-bound,
+> not FLOP-bound; GPU-first is only worthwhile when models/steps grow.
+> `num_workers=2` also measured faster than 0 for the demo regime (13.2 s vs
+> 20.7 s per epoch) — D7's `num_workers=0` pin stands as the flake
+> mitigation, not a speed rule. README locked blocks + RESULTS.md D-rows
+> re-pinned in lockstep; gallery manifest re-rendered. **Watch:** one
+> transient d6 record emission early in the session hashed differently
+> (6ea65…) and never reproduced (3 subsequent runs identical at 989683…,
+> solo and in-suite) — the figure lock caught it exactly as designed; if it
+> recurs, treat as a real determinism defect, not a re-pin.
+
 > What remains open: **nothing on the R10 critical path** — the acceptance
 > rule's three consecutive green gate runs are banked (99.4 s, 102 s, and
 > 104.2 s, the last at 8/8 with D7 in the gate). The demo table now covers
@@ -587,9 +608,9 @@ blocks on a later one.
 | Item | Pull condition |
 |------|----------------|
 | Root `PlasticityConfig` still resolves to `computronium.state`'s twin, which is a **different class** from `core.joint.transition.PlasticityConfig` (found in the R10.2.1 audit; pyright flags the resulting confusion in `core/system_trainer/joint.py`). Same parallel legacy/new pair as the `state/` vs `core/joint/` split itself | Next merge of `computronium/state/` with `computronium/core/joint/` (R2.2-residual pattern); the root-exports lock test pins what exists today |
-| R10.2 demo flake watch (2026-09-02): the first `pytest -k demo` invocation after the tests landed reported 3 failures in 40 s that never reproduced across four subsequent full runs (75–79 s each). Suspected transient MNIST DataLoader worker crash (`num_workers=2`); no failure signature captured. If it recurs, capture the traceback and consider `create_task(..., num_workers=0)` inside the demo tests. **2026-09-02 re-run: 6/6 green, 99.4 s — still no recurrence.** D7 pins `num_workers=0` explicitly — the standing mitigation precedent for new demos | Any recurrence |
+| R10.2 demo flake watch (2026-09-02): the first `pytest -k demo` invocation after the tests landed reported 3 failures in 40 s that never reproduced across four subsequent full runs (75–79 s each). Suspected transient MNIST DataLoader worker crash (`num_workers=2`); no failure signature captured. If it recurs, capture the traceback and consider `create_task(..., num_workers=0)` inside the demo tests. **2026-09-02 re-run: 6/6 green, 99.4 s — still no recurrence.** D7 pins `num_workers=0` explicitly — the standing mitigation precedent for new demos. **2026-09-02 measurement: num_workers=2 is *faster* at demo scale (13.2 s vs 20.7 s per epoch) — keep workers for D1/D2/D6; the pin is a flake mitigation, not a speed rule** | Any recurrence |
 | Repo-wide ruff/pyright hygiene: `ruff check .` reports ~4.8k pre-existing findings (max-args=5, preview rules, S-rules on subprocess) and pyright-basic flags pipeline.py / core/system_trainer/joint.py / plasticity/{routing,fast_weights}.py / cli/parity.py / tests/property/test_axis_certifications.py — CI's ruff and pyright steps fail at HEAD independent of R10. Pull on a dedicated hygiene pass: either fix forward or scope the CI steps to the gates that are meant to hold (property/demo/lock suites) | Next dedicated hygiene pass |
-| D1/D2 dominate the demo-suite wall clock (~70 s of ~80 s; MNIST quick-mode, 1 epoch each). If slower CI machines push the suite past the 2-minute checkpoint, cap the D1/D2 train loaders (e.g. a `_take(loader, 800)` wrapper) and re-pin the regime assertions (FA floor 0.25 was calibrated at the full epoch) | First slow-CI gate failure, or any D1/D2 regime change |
+| ~~D1/D2 dominate the demo-suite wall clock~~ **Pulled 2026-09-02**: both train streams capped at 600 batches (`BATCH_CAP`), regime re-pinned (D1 ≈ 0.84; D2 ≈ 0.87/0.86/0.62 — the 0.25 floor gained margin), README blocks + RESULTS.md re-pinned in lockstep, gallery re-rendered; gate 8/8 in 69 s (was 104 s). GPU measured slower for the tiny Digital builds (launch-bound, D2 hit the 60 s timeout) — CPU stays for the demo suite | Closed — revisit only if a future demo regime grows models/steps enough to be FLOP-bound |
 | Joint `to_spec`→`from_spec` round-trip broken — `from_spec` calls `GeometryConfig(**spec["geometry"])` but `to_spec` embeds `params`/`recurrent_weight` keys → TypeError; found in the 2026-09-02 pre-flight | Next touch of `core/system_trainer/joint.py` (or when a demo/figure needs joint-spec round-trips) |
 | imp-4 — Pyright full `strict` on ontology (131 findings; torch `Unknown` tracking; annotation work in `_dynamics`/`geometry`/`update`) | Next annotation pass on those modules |
 | imp-8 — `compute_energy` duplication across Energy/Spike/Instantaneous/Diffusion → extract `_energy_from_state(state, geometry)` | Next touch of any dynamics module |

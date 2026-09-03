@@ -6,10 +6,13 @@ wiring; the only difference between arms is the single credit-assignment
 constructor argument. All three credit rules (gradient / ThermodynamicContrast
 / RandomProjections) demonstrably learn. The comparison is one line.
 
-Demonstrated regime (pinned 2026-09-02): MNIST quick-mode, 1 epoch, hidden
+Demonstrated regime (re-pinned 2026-09-02 with a 600-batch loader cap for
+suite walltime): MNIST quick-mode, 1 epoch over the capped stream, hidden
 ``(32,)``, ``EnergyMinimization(max_steps=3, beta=0.5)``, Euclidean step 0.1
--> accuracy ≈ 0.96 / 0.92 / 0.38 (chance 0.1).
+-> accuracy ≈ 0.87 / 0.86 / 0.62 (chance 0.1).
 """
+
+from itertools import islice
 
 import torch
 
@@ -32,6 +35,8 @@ from computronium import (
     create_task,
 )
 
+BATCH_CAP = 600  # loader cap (Register C): suite walltime, regime re-pinned 2026-09-02
+
 CREDIT_ARMS = (
     ("gradient", BackpropCredit()),
     ("thermodynamic_contrast", ThermodynamicContrast()),
@@ -39,8 +44,8 @@ CREDIT_ARMS = (
 )
 
 
-def _flatten(loader):
-    for x, y in loader:
+def _flatten(loader, cap=BATCH_CAP):
+    for x, y in islice(loader, cap):
         yield x.view(x.size(0), -1), y
 
 
