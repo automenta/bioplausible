@@ -728,7 +728,14 @@ class PredictiveSettlingDynamics:
         if hasattr(geometry, "_graph"):
             return self._settle_tile(state, x, geometry, substrate, target)
 
-        # Standard predictive coding settling for recurrent/feedforward geometries
+        # For layered geometries (feedforward, recurrent with layered params),
+        # settle layer-wise to produce per-layer activations for credit assignment.
+        layered = extract_layered_params(geometry)
+        if layered is not None and len(layered.weights) > 0:
+            return self._settle_layered(state, x, geometry, layered, substrate, target)
+
+        # Fallback: standard predictive coding settling for recurrent geometries
+        # (single state vector, no per-layer structure)
         h = substrate.initial_state(x)
         op = substrate.get_forward_operator()
 
@@ -766,6 +773,102 @@ class PredictiveSettlingDynamics:
         )
 
         return new_state
+
+    def _settle_layered(
+        self,
+        state: CompositeState,
+        x: Tensor,
+        geometry: Geometry,
+        layered: LayeredParams,
+        substrate: Substrate,
+        target: Tensor | None,
+    ) -> CompositeState:
+        """Layer-wise predictive coding settle over the geometry's Linear transitions.
+
+        Each layer minimizes its prediction error against the layer below.
+        The input layer is clamped to x; each subsequent layer predicts the
+        previous layer's activity. Returns activations for all layers.
+        """
+        op = substrate.get_forward_operator()
+
+        # Initialize layer states from a feedforward pass
+        # This gives us the correct shapes for each layer
+        init_acts = geometry.forward_with_intermediates(x, substrate) if hasattr(geometry, 'forward_with_intermediates') else None
+        if init_acts is not None and len(init_acts) == len(layered.weights) + 1:
+            # Use feedforward activations as initial states
+            acts = list(init_acts)  # [input, hidden1, hidden2, ..., output]
+        else:
+            # Fallback: initialize with zeros of correct shape
+            h = substrate.initial_state(x)
+            h = h.flatten(1) if h.dim() > 2 else h
+            acts = [h]
+            for weight, bias in zip(layered.weights, layered.biases, strict=True):
+                out_shape = (h.shape[0], weight.shape[0])
+                h = torch.zeros(out_shape, device=h.device, dtype=h.dtype)
+                acts.append(h)
+
+        # Track free energy per iteration across all layers
+        layer_free_energy: list[float] = [] if self.config.track_free_energy_per_iter else None
+
+        # Predictive coding settling: top-down prediction, bottom-up error correction
+        # We settle all layers simultaneously for max_steps iterations
+        for _step in range(self.config.max_steps):
+            # Top-down: each layer predicts the layer below
+            # Bottom-up: errors propagate up to update layer states
+            new_acts = [acts[0]]  # Input layer is clamped
+
+            for i, (weight, bias) in enumerate(zip(layered.weights, layered.biases, strict=True)):
+                # Layer i+1 predicts layer i's activity
+                # acts[i+1] is current state of layer i+1
+                # weight maps from layer i to layer i+1: W_{i+1} @ acts[i] ≈ acts[i+1]
+                # So prediction of layer i from layer i+1 uses weight transpose
+                h_upper = acts[i + 1]
+                
+                # Predict lower layer activity from upper layer
+                # Using transpose of weight for top-down prediction (no bias in top-down)
+                prediction = op(h_upper, weight.T)
+                
+                # Target is the lower layer's current activity
+                target_lower = acts[i]
+                
+                # Compute prediction error
+                error = target_lower - prediction
+                
+                # Update upper layer state based on error (backward pass)
+                # Error propagates up through weight matrix
+                h_upper_new = h_upper + self.config.step_size * op(error, weight)
+                new_acts.append(h_upper_new)
+                
+                if self.config.track_free_energy_per_iter and layer_free_energy is not None:
+                    layer_free_energy.append(error.pow(2).sum().item())
+
+            # Apply recurrent connection if present (for RecurrentGeometry)
+            # The recurrent weight connects the last hidden layer to itself
+            if layered.recurrent_weight is not None and len(new_acts) >= 3:
+                # Recurrent connection is on the last hidden layer (before output)
+                hidden_idx = len(new_acts) - 2  # Second to last (last hidden)
+                h_hidden = new_acts[hidden_idx]
+                # Recurrent update: h = h + step * op(h, W_rec)
+                h_hidden_new = h_hidden + self.config.step_size * op(h_hidden, layered.recurrent_weight)
+                new_acts[hidden_idx] = h_hidden_new
+
+            acts = new_acts
+
+        if target is not None:
+            # Nudge the output layer toward the target
+            acts[-1] = acts[-1] + self.config.beta * (_one_hot(target, acts[-1]) - acts[-1])
+
+        if self.config.track_free_energy_per_iter and layer_free_energy is not None:
+            self._free_energy_history = layer_free_energy
+
+        return _create_output_state(
+            state,
+            x=x,
+            output=acts[-1],
+            free_state=acts if target is None else None,
+            nudged_state=acts if target is not None else None,
+            activations=acts,
+        )
 
     def _settle_tile(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
         self,
@@ -983,7 +1086,8 @@ class InstantaneousDynamics:
     ) -> CompositeState:
         # Single forward pass - no settling. Tile meshes route through the
         # block layout and consume the target in the nudged phase via the
-        # output clamp (R11.1.4).
+        # output clamp (R11.1.4). For standard geometries, nudge the output
+        # layer toward the target when provided.
         if state.x is not None:
             block_builder = getattr(geometry, "settle_blocks", None)
             if callable(block_builder):
@@ -996,6 +1100,13 @@ class InstantaneousDynamics:
                     ]
             else:
                 acts = geometry.forward_with_intermediates(state.x, substrate)
+                if target is not None and acts:
+                    # Nudge the output activation toward the target
+                    acts = [
+                        *acts[:-1],
+                        acts[-1]
+                        + self.config.beta * (_one_hot(target, acts[-1]) - acts[-1]),
+                    ]
         else:
             acts = state.activations if state.activations is not None else []
         if target is None:

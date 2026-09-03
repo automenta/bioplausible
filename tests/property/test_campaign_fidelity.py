@@ -64,30 +64,34 @@ class TestDynamicsFidelity:
         assert "energy" in d[0].detail
         assert d[2].status == "pass"  # nudged ≠ free (target-responsive)
 
-    def test_instantaneous_is_single_pass_and_target_blind(self) -> None:
+    def test_instantaneous_is_single_pass_and_nudges(self) -> None:
+        """Instantaneous dynamics is a single pass but now nudges the output
+        when a target is provided (for contrastive credits)."""
         verdict = check_coordinate_fidelity(
             "digital/recurrent/instantaneous/null/random_projections/euclidean"
         )
         d = [c for c in verdict.checks if c.axis == "dynamics"]
         assert d[0].status == "pass"
-        assert "single pass" in d[0].detail
-        assert "free = nudged" in d[1].detail
+        assert "single pass, idempotent" in d[0].detail
+        assert d[1].status == "pass"
+        assert "nudged phase differs from free phase" in d[1].detail
 
-    def test_predictive_settling_settles_but_nudge_unwired(self) -> None:
-        """Real verdicts for a blocked dynamics: the iterative settle runs
-        deterministically but (a) does not descend its own tracked
-        prediction-error energy and (b) ignores the target (the nudged
-        phase equals free), so PC-style clamped inference is missing."""
+    def test_predictive_settling_settles_and_nudges(self) -> None:
+        """Predictive settling now descends energy and responds to the nudged target."""
         verdict = check_coordinate_fidelity(
             "digital/feedforward/predictive_settling/null/local_goodness/euclidean"
         )
         d = [c for c in verdict.checks if c.axis == "dynamics"]
-        assert d[0].status == "fail"
+        assert d[0].status == "pass"
         assert "prediction-error energy" in d[0].detail
         assert d[1].status == "pass"  # deterministic repeat
-        assert d[2].status == "fail"
-        assert "nudge pathway unwired" in d[2].detail
-        assert not verdict.passed
+        assert d[2].status == "pass"
+        assert "nudged phase differs from free phase" in d[2].detail
+        # Credit and update should also pass now
+        credit_check = _check(verdict, "credit")
+        assert credit_check.status == "pass"
+        update_check = _check(verdict, "update")
+        assert update_check.status == "pass"
 
     def test_spike_integration_membrane_bounded_and_spikes_tracked(self) -> None:
         verdict = check_coordinate_fidelity(
@@ -139,20 +143,14 @@ class TestR39ValidityMatrix:
 class TestCreditFidelity:
     @pytest.mark.parametrize("credit", ["random_projections", "local_goodness"])
     def test_phase_contrast_credit_under_instantaneous(self, credit: str) -> None:
-        """Phase-contrast credits need distinct settled phases. Random-
-        projections no longer extracts its signal from phase contrast (the
-        FA repair routes the top error through autograd + fixed feedback),
-        so it is live under a target-blind single pass; local goodness
-        still needs nudged ≠ free and remains structurally zero."""
+        """Both random_projections and local_goodness now work under instantaneous
+        dynamics since nudging was implemented (R11.2.10 fix)."""
         verdict = check_coordinate_fidelity(
             f"digital/feedforward/instantaneous/null/{credit}/euclidean"
         )
         credit_check = _check(verdict, "credit")
-        assert credit_check.status == (
-            "pass" if credit == "random_projections" else "fail"
-        )
-        if credit == "local_goodness":
-            assert "pseudo-gradient" in credit_check.detail
+        assert credit_check.status == "pass"
+        assert "pseudo-gradient" in credit_check.detail
 
     def test_implemented_credits_signal_under_energy(self) -> None:
         for credit in (
@@ -209,13 +207,15 @@ class TestUpdateFidelity:
         )
         assert _check(verdict, "update").status == "pass"
 
-    def test_update_blocked_without_signal(self) -> None:
+    def test_update_moves_params_given_signal(self) -> None:
+        """Update now moves params for local_goodness under instantaneous since
+        nudging provides the phase contrast signal."""
         verdict = check_coordinate_fidelity(
             "digital/feedforward/instantaneous/null/local_goodness/euclidean"
         )
         update_check = _check(verdict, "update")
-        assert update_check.status == "blocked"
-        assert "no signal" in update_check.detail
+        assert update_check.status == "pass"
+        assert "parameters moved" in update_check.detail
 
 
 class TestPlasticityFidelity:
@@ -267,20 +267,21 @@ class TestCapabilityManifest:
         """The capability manifest of the current grid: all energy_minimization
         coordinates (contrastive/autograd/trace credits now work on both
         geometries incl. surplus recurrent weights) plus instantaneous x
-        random_projections (FA routes the autograd top error through fixed
-        feedback). Instantaneous x thermodynamic_contrast is fenced invalid;
-        instantaneous x local_goodness is structurally zero."""
+        random_projections and instantaneous x local_goodness (nudging now works).
+        Instantaneous x thermodynamic_contrast is fenced invalid."""
         passing = {c for c, v in manifest.items() if v.passed}
         expected = {
             c
             for c in GRID
             if "/energy_minimization/" in c
-            or ("/instantaneous/" in c and "/random_projections/" in c)
+            or ("/instantaneous/" in c and ("/random_projections/" in c or "/local_goodness/" in c))
         }
         assert passing == expected, (
             f"Passing: {sorted(passing)}, Expected: {sorted(expected)}"
         )
-        assert len(passing) == 48
+        # Count: 36 energy_minimization (3 geometries × 4 credits × 3 plasticities) +
+        # 12 instantaneous×random_projections + 12 instantaneous×local_goodness = 60
+        assert len(passing) == 60
 
     def test_defect_filtered_attribution_excludes_and_lists(self, manifest) -> None:
         records = [

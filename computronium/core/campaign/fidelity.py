@@ -203,6 +203,14 @@ def _probe_instantaneous(joint, x, y) -> tuple[AxisCheck, ...]:
     idempotent = bool(settled2) and torch.allclose(
         settled1[-1], settled2[-1], atol=1e-6
     )
+    # Check that nudging works when target is provided (for contrastive credits)
+    _state, free_out = _settled_output(joint.dynamics, joint, x, y, None)
+    _state, nudged_out = _settled_output(joint.dynamics, joint, x, y, y)
+    responds = (
+        bool(free_out)
+        and bool(nudged_out)
+        and not torch.allclose(free_out[-1], nudged_out[-1], atol=1e-6)
+    )
     return (
         AxisCheck(
             "dynamics",
@@ -215,9 +223,10 @@ def _probe_instantaneous(joint, x, y) -> tuple[AxisCheck, ...]:
         AxisCheck(
             "dynamics",
             value,
-            "pass",
-            "target-blind by spec: free = nudged, so contrastive credits "
-            "receive zero phase contrast (surfaced by the credit probe)",
+            "pass" if responds else "fail",
+            "nudged phase differs from free phase (target-responsive nudge)"
+            if responds
+            else "target-blind: free = nudged",
         ),
     )
 
@@ -265,7 +274,7 @@ def _probe_predictive_settling(joint, x, y) -> tuple[AxisCheck, ...]:
             "dynamics",
             value,
             "pass" if responds else "fail",
-            "nudged phase differs from free phase"
+            "nudged phase differs from free phase (target-responsive)"
             if responds
             else "nudge pathway unwired: settle math ignores the target "
             "(target only selects the state slot); predictive coding "

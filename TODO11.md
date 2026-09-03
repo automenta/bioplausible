@@ -294,13 +294,18 @@ sequencing below is the expected order, not a mandate.
   modules.
 - [ ] **R11.1.9 Timing-asymmetric STDP wired to the 5-D pipeline** (from the
   `create_spiking_snn_mlp` Register-C row; the D-axis's remaining depth).
-  The pipeline-facing rate-coded surrogate has no error signal (chance on
-  MNIST); genuine STDP lives unwired in `core/local_learning/rules/spiking.py`.
-  This is also the standing **R10.3.5 refutation candidate**: a visible
-  refutation demo (Hebbian-only plateau) ships with the same pipeline as any
-  success. Pull when the SNN family is next touched or a research paragraph
-  needs it; a learning claim additionally needs the trace-based rule in the
-  pipeline.
+  The pipeline-facing rate-coded surrogate (TemporalTraceCredit) has no error
+  signal (chance on MNIST); genuine STDP lives unwired in
+  `core/local_learning/rules/spiking.py`. This is also the standing
+  **R10.3.5 refutation candidate**: a visible refutation demo (Hebbian-only
+  plateau) ships with the same pipeline as any success. **Note (2026-09-03):**
+  The LocalGoodnessCredit pipeline path (used by `create_hebbian_mlp` and
+  `create_snn_mlp`) now works since nudging was fixed in
+  `InstantaneousDynamics` — params move and learning occurs. The refutation
+  candidate specifically targets `create_spiking_snn_mlp` with
+  SpikeIntegrationDynamics + TemporalTraceCredit. Pull when the SNN family is
+  next touched or a research paragraph needs it; a learning claim additionally
+  needs the trace-based rule in the pipeline.
 - [ ] **R11.1.10 LazyStateDynamics at demo scale** (the D-axis's other
   remaining depth). Research-track/register material until a visible regime
   exists — pull only when a demo regime shows on-demand activation visibly
@@ -429,18 +434,21 @@ which gates every empirical item.
 - [ ] **R11.2.9 imp-23** — `substrate_coupled` plasticity
   engagement-verified only; probe fixed-dim `step` assumptions.
 - [x] **R11.2.10 imp-26** — params-moved learning locks ✅ **LANDED
-  2026-09-03.** New lock `tests/property/test_params_moved.py`,
+  2026-09-03; UPDATED 2026-09-03.** New lock `tests/property/test_params_moved.py`,
   parametrized over all ten README-table factories (tiny dims, 2
   train_steps, probe-measured ground truth, never guessed). **Movers
-  (asserted):** backprop, eqprop, fa, ff, tile. **Pinned non-learners
-  (strict xfail, fix flips xpass):** snn + hebbian (R11.1.9's documented
-  no-error-signal plateau), **and three new findings surfaced by this very
-  lock:** pepita, tp, pc — their `train_step` completes with valid metrics
-  but zero params move (LocalGoodness/TargetInversion pipeline paths yield
-  no pseudo-gradient through `compose_system` wiring). The pc case is the
-  most surprising (ThermodynamicContrast moves for eqprop; pc uses
-  LocalGoodness + PredictiveSettling) — root-causing queued as register
-  material, not guessed at here.
+  (asserted):** backprop, eqprop, fa, ff, tile, pepita, tp, pc, hebbian, snn.
+  All ten factories now demonstrate parameter movement. The three findings
+  (pepita, tp, pc) were resolved by fixing nudging in `InstantaneousDynamics`
+  and adding layered settle to `PredictiveSettlingDynamics`; hebbian and snn
+  (LocalGoodnessCredit path) also now work since they share the same pipeline.
+  The true SNN refutation candidate (`create_spiking_snn_mlp` with
+  SpikeIntegrationDynamics + TemporalTraceCredit) remains in R11.1.9.
+  **Fidelity test updates:** `test_campaign_fidelity.py` updated to reflect
+  the new working state — predictive_settling now descends energy and nudges
+  (pass), instantaneous now nudges for contrastive credits (pass), local_goodness
+  under instantaneous produces signal and moves params (pass), passing set
+  expanded from 48 to 60 coordinates.
 - [ ] **R11.2.11 imp-27** — rename rebuilder-style `settle` implementations
   whose names mislead. **Resolution recorded 2026-09-03:** superseded by the
   canonical mutation contract — the `StateDynamics.settle` protocol docstring

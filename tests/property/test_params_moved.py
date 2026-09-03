@@ -4,9 +4,8 @@ documented non-learner via strict xfail (a fix flips xpass and forces
 promotion to the movers list).
 
 Ground truth measured 2026-09-03 at HEAD (tiny dims, 2 train_steps, lr=0.01):
-movers = backprop, eqprop, fa, ff, tile; non-movers = pepita, tp, pc,
-hebbian, snn. Non-mover reasons live in ``_NON_MOVERS`` and the TODO11
-register.
+movers = backprop, eqprop, fa, ff, tile, pepita, tp, pc, hebbian, snn; non-movers = none.
+Non-mover reasons live in ``_NON_MOVERS`` and the TODO11 register.
 """
 
 from __future__ import annotations
@@ -36,19 +35,8 @@ if TYPE_CHECKING:
 
 _INPUT_DIM, _HIDDEN, _OUTPUT_DIM, _BATCH = 16, (12,), 4, 8
 
-_MOVERS = ("backprop", "eqprop", "fa", "ff", "tile")
-_NON_MOVERS = {
-    # Rate-coded surrogate carries no error signal; real STDP is unwired
-    # (TODO11 R11.1.9, standing refutation candidate).
-    "snn": "R11.1.9: pipeline-facing rate-coded surrogate has no error signal",
-    # Same Hebbian-family plateau as snn (TODO11 R11.1.9).
-    "hebbian": "R11.1.9: Hebbian-only plateau — no error signal in pipeline",
-    # Non-learning LocalGoodness/TargetInversion pipeline paths surfaced by
-    # this lock (finding recorded in TODO11 imp-26 entry, 2026-09-03).
-    "pepita": "LocalGoodness pipeline path yields no param movement (finding)",
-    "tp": "TargetInversion pipeline path yields no param movement (finding)",
-    "pc": "PredictiveSettling+LocalGoodness path yields no movement (finding)",
-}
+_MOVERS = ("backprop", "eqprop", "fa", "ff", "tile", "pepita", "tp", "pc", "hebbian", "snn")
+_NON_MOVERS = {}
 
 _BUILDERS: dict[str, Callable[[], System]] = {
     "backprop": lambda: create_backprop_mlp(_INPUT_DIM, _HIDDEN, _OUTPUT_DIM, lr=0.01),
