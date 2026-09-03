@@ -77,7 +77,12 @@ factory in `computronium/visualization/gallery.py` + `_FACTORIES` entry;
 (3) entry in `EXPECTED` of `tests/integration/test_gallery_lock.py`;
 (4) rows in the Demonstration Table and `docs/RESULTS.md`; (5) optional
 locked README block via `scripts/readme_snippets.json` + `<!-- lock: -->`
-(only when the active-development directive is lifted).
+(only when the active-development directive is lifted). **Walltime budget
+per new demo: ≤ 15 s at pinned scale** — prefer a batch cap + pinned floors
+(D6/D7's `BATCH_CAP` pattern) over a full epoch; if the visible regime
+needs more, the regime is wrong (R10.2.0 visibility rule). The gate budget
+(≤ 90 s) is the sum of its parts; a new demo that busts it re-pins its own
+cap before landing.
 
 ---
 
@@ -234,20 +239,39 @@ which gates every empirical item.
   a real error signal, or correct the row (R10.2.7 rules).
 - [ ] **R11.2.18 `test_scaling_invariants` xpass** —
   `deep_network_accuracy[100]` pre-existing xpass. Next touch of that file.
+- [ ] **R11.2.19 One-command re-pin** (the effort lever for the standing
+  re-pin ceremony). A `scripts/repin.sh` (or `comp gallery --repin`):
+  demo suite → `comp gallery` render → drift locks + snippet lock, one
+  invocation, nonzero on any red. Justified by R11.5.6: it is the tool that
+  lets the suite stay truthful cheaply after every demo touch. Measure
+  first (it is mostly composition, no new logic).
+- [ ] **R11.2.20 Timebox the pass** (E-2 analog): R11.2 as a whole gets
+  three working sessions; a finding class that resists is scoped out
+  explicitly (with the reason recorded) rather than stretched. Infra
+  friction doesn't consume the box.
 
 ## 🔬 R11.3 — Research-Track Pulls (TODO10 Register A; RESEARCH3 spines)
 
 **Front-page rule: outputs feed the corroboration appendix and papers —
 never the front page.** Every pull inherits RESEARCH3's Execution Protocol
 (E-1 three-rung ladder, E-2 timeboxes, E-3 reproducibility, E-10 control
-set, E-11 decision log). Pull-based, never blocking the library workstreams.
+set, E-11 decision log). Two pulls are *scheduled* (not merely condition-
+gated): **R11.3.1 (PR-9) pulls immediately after R11.2.2 lands** — hygiene
+green is PR-0's type/lint half, and PR-0 gates every empirical item; **R11.3.3
+(PR-5) pulls immediately after its calibration harvest exists** — the
+harvest is free (the demo suite's pinned configs and outcomes are exactly
+PR-7's known-good/known-bad set). The rest pull when their research
+consumer exists.
 
 - [ ] **R11.3.1 PR-9 — Campaign commissioning** (Tangible Checkpoint 3;
   the gateway to every unattended result). One tiny AutoScientist campaign
   completing a full **iterate → interrupt → checkpoint → resume** cycle
-  end-to-end, recorded. Machinery is built (`CampaignStack`:
-  deterministic resume, skip-not-duplicate, YAML+SQLite checkpoints) but
-  the commissioned cycle is not yet a recorded run.
+  end-to-end, recorded: the artifact is the campaign directory
+  (`records/episodes.json` + checkpoint + resume event in its manifest)
+  plus a one-paragraph commissioning note in `DECISIONS.md` (E-11) stating
+  what was interrupted and what resume replayed. Machinery is built
+  (`CampaignStack`: deterministic resume, skip-not-duplicate, YAML+SQLite
+  checkpoints) but the commissioned cycle is not yet a recorded run.
 - [ ] **R11.3.2 PR-2 — θ-invariance audit harness.** Snapshot → freeze →
   run → re-snapshot → exact-diff as a reusable context manager with
   per-seed reports (D5 demonstrates the guarantee; the harness makes it a
@@ -429,6 +453,15 @@ one.
 ---
 
 ## 📝 Notes for the Next Editor
+
+- On the first R11 landing, mark TODO10.md's State header **CLOSED →
+  superseded by TODO11.md** (one line; TODO10 stays as history and the
+  Watch record's canonical archive).
+- The README-freeze directive has a sunset condition to *ask* about (never
+  self-lifted — it is a user directive): lift it for the wrapper/GIF work
+  only when R11.2 is closed and the R11.1 core pulls (neuromorphic,
+  geometries, tile) are green in the gate — i.e., the API the README would
+  quote is the API that exists and demonstrates itself.
 
 - R10 closed cleanly at 69 s gate walltime (D1/D2 loader caps pulled,
   Register C item closed); D1 ≈ 0.84, D2 ≈ 0.87/0.86/0.62 are the pinned
