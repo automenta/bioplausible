@@ -103,10 +103,10 @@ class TestDynamicsFidelity:
         assert "spike counts" in d[2].detail
         assert "target-blind by spec" in d[4].detail
 
-    def test_diffusion_langevin_descent_but_target_blind(self) -> None:
-        """Langevin descent runs (post-R3.1) with noise, but the energy
-        functional has no target term: seed-locked free vs nudged settles
-        are identical, so supervision cannot enter the dynamics."""
+    def test_diffusion_langevin_descent_target_responsive(self) -> None:
+        """Langevin descent runs with nudged-Langevin (EP-style) target term:
+        seed-locked free vs nudged settles differ, so supervision enters
+        the dynamics."""
         verdict = check_coordinate_fidelity(
             "digital/feedforward/diffusion/null/temporal_trace/euclidean"
         )
@@ -114,8 +114,8 @@ class TestDynamicsFidelity:
         assert d[0].status == "pass"  # finite
         assert d[1].status == "pass"  # energy descends
         assert d[2].status == "pass"  # Langevin noise present
-        assert d[3].status == "fail"
-        assert "no target term" in d[3].detail
+        assert d[3].status == "pass"  # target-responsive nudge
+        assert "target-responsive" in d[3].detail
 
 
 class TestR39ValidityMatrix:
@@ -207,7 +207,7 @@ class TestUpdateFidelity:
         )
         assert _check(verdict, "update").status == "pass"
 
-    def test_update_moves_params_given_signal(self) -> None:
+    def test_update_moves_params_local_goodness_instantaneous(self) -> None:
         """Update now moves params for local_goodness under instantaneous since
         nudging provides the phase contrast signal."""
         verdict = check_coordinate_fidelity(

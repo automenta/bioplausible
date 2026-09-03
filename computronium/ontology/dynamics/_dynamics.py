@@ -793,7 +793,7 @@ class PredictiveSettlingDynamics:
 
         # Initialize layer states from a feedforward pass
         # This gives us the correct shapes for each layer
-        init_acts = geometry.forward_with_intermediates(x, substrate) if hasattr(geometry, 'forward_with_intermediates') else None
+        init_acts = geometry.forward_with_intermediates(x, substrate) if hasattr(geometry, "forward_with_intermediates") else None
         if init_acts is not None and len(init_acts) == len(layered.weights) + 1:
             # Use feedforward activations as initial states
             acts = list(init_acts)  # [input, hidden1, hidden2, ..., output]
@@ -823,22 +823,22 @@ class PredictiveSettlingDynamics:
                 # weight maps from layer i to layer i+1: W_{i+1} @ acts[i] ≈ acts[i+1]
                 # So prediction of layer i from layer i+1 uses weight transpose
                 h_upper = acts[i + 1]
-                
+
                 # Predict lower layer activity from upper layer
                 # Using transpose of weight for top-down prediction (no bias in top-down)
                 prediction = op(h_upper, weight.T)
-                
+
                 # Target is the lower layer's current activity
                 target_lower = acts[i]
-                
+
                 # Compute prediction error
                 error = target_lower - prediction
-                
+
                 # Update upper layer state based on error (backward pass)
                 # Error propagates up through weight matrix
                 h_upper_new = h_upper + self.config.step_size * op(error, weight)
                 new_acts.append(h_upper_new)
-                
+
                 if self.config.track_free_energy_per_iter and layer_free_energy is not None:
                     layer_free_energy.append(error.pow(2).sum().item())
 
@@ -870,7 +870,7 @@ class PredictiveSettlingDynamics:
             activations=acts,
         )
 
-    def _settle_tile(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    def _settle_tile(
         self,
         state: CompositeState,
         x: Tensor,
@@ -1146,7 +1146,9 @@ class DiffusionDynamics:
             # Langevin dynamics: dh = -∇E dt + sqrt(2*D) dW
             # Internal autograd must run even if pipeline is in no_grad context
             with torch.enable_grad():
-                energy = self.compute_energy_from_state(h, geometry, substrate)
+                energy = self.compute_energy_from_state(
+                    h, geometry, substrate, target=target, beta=self.config.beta
+                )
                 energy_grad = torch.autograd.grad(energy, h)[0]
             noise = torch.randn_like(h) * math.sqrt(2 * self.config.step_size)
             with torch.no_grad():
@@ -1166,9 +1168,18 @@ class DiffusionDynamics:
         return new_state
 
     def compute_energy_from_state(
-        self, h: Tensor, geometry: Geometry, substrate: Substrate
+        self,
+        h: Tensor,
+        geometry: Geometry,
+        substrate: Substrate,
+        target: Tensor | None = None,
+        beta: float = 0.0,
     ) -> Tensor:
         energy = h.pow(2).sum()
+        if target is not None and beta > 0:
+            # Add nudged term: beta * ||h - target_onehot||^2
+            target_onehot = _one_hot(target, h)
+            energy += beta * (h - target_onehot).pow(2).sum()
         return energy
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:

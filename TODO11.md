@@ -31,7 +31,8 @@
 > **R11.1.2d** (SpatialLattice3DGeometry, D11), **R11.3.2** (θ-audit
 > harness), **R11.4.2** (PR-6 fairness contract draft), **R11.2.21** (zoo
 > Registry deleted), **R11.1.6** (_TaskTrainer scheduler/tracker/safety
-> wiring; verified GPU),
+> wiring; verified GPU), **R11.1.7** (diffusion target term — nudged-Langevin
+> energy functional now target-responsive; fidelity probe passes),
 > Registry deleted: `core/registry.py`, `core/audit.py`, `core/model_spec.py`,
 > `mep/_registration.py`, `models/native/registration.py`,
 > `ontology/credit_registration.py` + ~30 consumer files stripped; all
@@ -283,9 +284,15 @@ sequencing below is the expected order, not a mandate.
   with NaN/Inf detection, gradient clipping, LR reduction on failure), energy
   tracking placeholder (`track_energy` flag; no-op for plain modules). Verified
   on GPU with all scheduler types.
-- [ ] **R11.1.7 Nudge-unwired settle paths (imp-29).** predictive_settling
-  target clamp; diffusion target term. Pull when a campaign manifest needs
-  those coordinates fully wired.
+- [x] **R11.1.7 Nudge-unwired settle paths (imp-29)** ✅ **PARTIAL 2026-09-03.**
+  Diffusion target term implemented: `DiffusionDynamics.compute_energy_from_state`
+  now accepts `target` and `beta` parameters, adding a nudged-Langevin (EP-style)
+  term `beta * ||h - target_onehot||^2` to the energy functional. Fidelity probe
+  `test_diffusion_langevin_descent_target_responsive` now passes.
+  PredictiveSettlingDynamics fallback path (recurrent geometries without layered
+  params) remains target-unwired — no current geometry uses this path (all
+  implemented geometries have layered params and use `_settle_layered` which
+  already handles target). Will pull when a campaign manifest needs it.
 - [x] **R11.1.8 Ontology facade merge (R2.2 residual)** ✅ **LANDED
   2026-09-03.** Both parallel pairs merged: `_dynamics.py` → 
   `dynamics/_dynamics.py`, `_substrate.py` → `substrate/_substrate.py`
@@ -800,6 +807,7 @@ one.
   `experiment/param_estimator.py` still lists `("tile_ep",
   create_native_tile_ep)` and will raise the same TypeError if exercised —
   same unlock, as-touch.
+- **Diffusion target term (R11.1.7, 2026-09-03):** `DiffusionDynamics.compute_energy_from_state` now accepts optional `target` and `beta` parameters, implementing nudged-Langevin (EP-style) dynamics. The energy functional gains a term `beta * ||h - target_onehot||^2` when target is provided. Fidelity probe `test_diffusion_langevin_descent_target_responsive` passes. This enables contrastive credit assignments (ThermodynamicContrast, etc.) to work with DiffusionDynamics — previously the dynamics was target-blind. The PredictiveSettlingDynamics fallback path (for geometries without layered params) remains target-unwired; no current geometry uses it.
 - **PR-5 instrument (R11.3.3, 2026-09-03):** `calibrate_demo_harvest`
   (stability/calibration.py) is the single calibration surface; the
   committed artifact is `docs/figures/registered/stability_guard_pr5.json`,
