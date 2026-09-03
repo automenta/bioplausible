@@ -36,9 +36,41 @@
 > `benchmark_results/deep_credit_registered.json` by
 > `scripts/render_registered_figures.py` with a provenance sidecar). All
 > R10.2.0–R10.2.10 and R10.1.1–R10.1.4 are landed. The demo suite re-ran
-> clean at HEAD — **6/6 demo tests, zero flakes** — and the gallery manifest
-> is re-pinned at HEAD. All three CI additions
+> clean at HEAD — **7/7 demo tests (D1–D7), zero flakes** — and the gallery
+> manifest is re-pinned at HEAD. All three CI additions
 > (demo gate, figure lock, drift locks) are wired into `.github/workflows/ci.yml`.
+>
+> **D-axis pull landed 2026-09-02 (the round's last open capability).**
+> `SpikeIntegrationDynamics.settle` now settles **layer-wise** for
+> layer-structured geometries (`_settle_layered` in
+> `ontology/_dynamics.py`, extracting the Linear stack through the existing
+> `extract_layered_params`): each Linear transition integrates its constant
+> drive (once per layer, through the substrate's forward operator) into LIF
+> membranes for `max_steps` steps — spike at threshold 1.0, reset — and the
+> settled membrane carries activity to the next layer. Dim-preserving
+> geometries (recurrent attractors) keep the single-membrane `route` loop;
+> Tile still raises the documented RuntimeError (parity xfail preserved).
+> Before this pull the D-axis could not compose with any input ≠ output
+> feedforward build (shape mismatch at settle step 1 — verified live). Two
+> stacked defects beneath it were found and fixed en route: (a)
+> `TemporalTraceCredit`'s rate-coded pseudo-gradient is **identically zero**
+> when `a_plus == a_minus` (the surrogate correlates one (pre, post) pair in
+> both temporal orders — the same matrix both ways); defaults are now
+> `a_plus=1.0, a_minus=0.5` (potentiation-weighted, documented in the
+> classmethod; the antisymmetry lock now pins symmetric weights
+> explicitly). (b) The D-axis locks' "spike variance non-increasing" was an
+> artifact of the old membrane-seeded trajectory, not a Lyapunov property —
+> re-pinned to what the layered settle guarantees (membrane ≤ threshold by
+> reset; per-step spike totals bounded by the neuron count; finite
+> variance): B1 + `TestDAxisSpikeIntegration` updated, property suite
+> green (1433 passed). D7 follows the standard recipe end-to-end: demo
+> `test_demo_spike_settle.py` (one swapped D-axis argument — instant pass
+> 0.87 / LIF settle 0.85, ≈1.8k counted spikes, membrane max 0.92 ≤ 1.0),
+> gallery figure `_fig_spike_settle` + lock EXPECTED entry, RESULTS.md
+> D-row, Demonstration Table row. **Third consecutive green gate run
+> banked 2026-09-02: 8/8 (7 demos + gallery lock), 104 s, zero flakes**
+> (99.4 s → 102 s → 104.2 s) — the R10.2 acceptance's flake criterion is
+> met.
 >
 > **Evidence layer committed 2026-09-02** (`docs/figures/manifest.json`,
 > `docs/figures/run_records/`, `docs/figures/registered/`,
@@ -112,15 +144,22 @@
 > joint.py, plasticity/*, parity.py, …) — those gates are aspirational at
 > HEAD and are deliberately not chased this round (Register C).
 >
-> What remains open: the acceptance rule's **three consecutive green gate
-> runs** (two banked — 99.4 s and 102 s; let CI accumulate the third); and
-> the next pull candidate (a D-axis SpikeIntegration demo — note
-> `SpikeIntegrationDynamics.settle` only composes with dim-preserving
-> geometries today: the LIF loop routes the initial state through
-> `geometry.route`, so any input≠output Feedforward build mismatches at
-> step 1; the locks confirm the WIDTH→WIDTH regime. A real D-axis demo
-> needs a layer-wise LIF settle first — a core-dynamics pull, budget it as
-> such).
+> What remains open: **nothing on the R10 critical path** — the acceptance
+> rule's three consecutive green gate runs are banked (99.4 s, 102 s, and
+> 104.2 s, the last at 8/8 with D7 in the gate). The demo table now covers
+> all six ontology axes (D1–D7); further capability pulls come from
+> Register B's pull conditions (geometries, substrate fidelity, tile
+> matrix), each landing with its demo test per R10.3.6. Known-weak spots
+> discovered en route, parked in the registers: `FeedforwardGeometry`
+> silently ignores `GeometryConfig.init_scale` (`_build_layers` never
+> applies it); `create_snn_mlp`'s README-table row advertises
+> SpikeIntegration × TemporalTrace while the factory builds Instantaneous ×
+> LocalGoodness for trainer compatibility; `create_spiking_snn_mlp` now
+> runs end-to-end (it crashed at settle step 1 before the pull) but the
+> Hebbian STDP surrogate stays at chance on MNIST — the pipeline-facing
+> rate-coded surrogate has no error signal; genuine timing-asymmetric STDP
+> lives in `core/local_learning/rules/spiking.py` and is not wired to the
+> 5-D pipeline (research-track item, R10.3.5 refutation candidate).
 
 ---
 
@@ -138,6 +177,7 @@ demonstrate itself.
 | D4 | The memory profiler is honest | `test_demo_memory_budget.py` | The backprop-profiled arm simply **cannot run** under a tight budget (walled, deterministically); the O(1)-memory arm runs | Memory-budget registered study |
 | D5 | Frozen θ is a guarantee, bitwise | `test_demo_z3_frozen_theta.py` | θ's hash identical across the whole freeze→adapt→switch→restore run; restored ψ reproduces stage-A accuracy *exactly* | Z3 registered study |
 | D6 | The substrate axis is physical | `test_demo_substrate_swap.py` | One swapped substrate through identical wiring: digital learns, mild IR-drop learns less, severe IR-drop walls at chance — differential-pair conductances (int8 STE) carrying the signed weights | — |
+| D7 | The D-axis settles in time | `test_demo_spike_settle.py` | One swapped D-axis argument through identical wiring: the instantaneous pass and the layer-wise LIF settle both train (≈0.87 / 0.85); the trained LIF network fires visibly (every threshold crossing counted per settle step) and its membranes come back bounded by the spike threshold — the Lyapunov lock, live | — |
 
 **Rules of the round:**
 
@@ -165,14 +205,14 @@ design decision from R10.2.0. R10.1 consumes the run records R10.2.2–.6 emit
 lock with the README, gallery CLI with the gallery module). R10.3 rules bind
 from the first commit.
 
-**Next capability in line (D7).** D6 (substrate) is demonstrated and its
-fidelity is real (differential-pair conductances, pulled 2026-09-02). The
-remaining pull candidate is the **D-axis demo** (SpikeIntegration at demo
-scale) — gated on a layer-wise LIF settle first (see *What remains open*):
-`settle` routes the initial state through `geometry.route`, so only
-dim-preserving geometries compose; a Feedforward classifier build
-mismatches at step 1. Budget that as a core-dynamics pull with the B1
-Lyapunov lock re-verified, then the demo follows the standard recipe.
+**Capability coverage after D7 (2026-09-02).** The Demonstration Table now
+spans all six axes: S (D6), G (D1), D (D1 energy settling + D7 LIF
+settling), M (D3), C (D2), U (D1/D5), plus the two categorical guarantees
+(D4 profiler, D5 frozen θ). No next demo is queued: further pulls follow
+Register B's pull conditions, each landing with its demo test (R10.3.6).
+The D-axis's remaining depth — genuine timing-asymmetric STDP at pipeline
+level, LazyStateDynamics at demo scale — is research-track/register
+material, not a front-page claim until a visible regime exists.
 
 ---
 
@@ -219,7 +259,7 @@ drawn. Nothing frozen, nothing to re-verify.
   section embeds it with the historical label and links it from the
   deep-credit row. The registered PNG is committed (the `docs/figures/*.png`
   gitignore covers only the live gallery's top-level pixels).
-- [ ] **Acceptance:** `comp gallery` on a clean checkout renders all five
+- [x] **Acceptance:** `comp gallery` on a clean checkout renders all five
   figures from a single suite run; the lock test is green; deleting any demo
   test removes its figure from the gallery (no orphaned claims).
   **Progress 2026-09-02:** `comp gallery --run` re-rendered all **six**
@@ -227,7 +267,9 @@ drawn. Nothing frozen, nothing to re-verify.
   (`render_gallery` drops records whose demo test no longer exists).
   **Clean-checkout rendering holds as of 2026-09-02**: manifest + run
   records + registered figure are committed (the lock's data layer is
-  tracked; only the top-level PNGs regenerate).
+  tracked; only the top-level PNGs regenerate). **Closed 2026-09-02:** the
+  gallery now renders **seven** figures (D1–D7) from one suite run; the
+  lock test is green at HEAD after the D7 re-pin.
 
 ## 🧪 R10.2 — Tests Are the Evidence (the demonstration layer)
 
@@ -419,7 +461,7 @@ regresses, *or the demonstration stops being visible*.
   so gallery imports stay out of the CLI's import graph): runs the demo suite
   (or reads its emitted run records from the most recent gate run), renders
   figures + manifest, exits nonzero on any missing/nondeterministic record.
-- [ ] **Acceptance:** a stranger copies the README's first block and runs it;
+- [x] **Acceptance:** a stranger copies the README's first block and runs it;
   runs `pytest tests/integration/ -k demo` and watches all five capabilities
   demonstrate themselves; `comp gallery` renders from those same runs;
   **three consecutive green gate runs with zero demo-test flakes** before the
@@ -427,6 +469,9 @@ regresses, *or the demonstration stops being visible*.
   **Progress 2026-09-02:** full demo gate re-run green — **6/6 (D1–D6),
   zero flakes** — and `comp gallery` rendered from those same runs;
   **two of the three consecutive green runs are banked** (99.4 s and 102 s).
+  **Closed 2026-09-02:** third green gate run banked — **8/8 (7 demos +
+  gallery lock), 104.2 s, zero flakes** (99.4 s → 102 s → 104.2 s), with
+  D7 in the gate.
 
 ## 🔒 R10.3 — The Standing Rules
 
@@ -475,10 +520,10 @@ regresses, *or the demonstration stops being visible*.
 R10 is an investment; these are the returns, each with a materialization
 condition. A sprint that ships none of these is a sprint to question.
 
-1. **Working proofs (R10, sprints 1–2):** `pytest -k demo` green — five
-   capabilities demonstrated in under two minutes, calibration recorded in
-   docstrings. This is also the *feedstock* for checkpoint 3: the demo
-   configs and their outcomes are PR-5's known-good/known-bad calibration
+1. **Working proofs (R10, sprints 1–2):** `pytest -k demo` green — the
+   demonstrated capabilities (now D1–D7, all six axes) in under two
+   minutes, calibration recorded in docstrings. This is also the *feedstock*
+   for checkpoint 3: the demo configs and their outcomes are PR-5's known-good/known-bad calibration
    harvest.
 2. **Truthful front door (R10, sprint 3):** README index corrected (real
    joint-training surface, memristive row resolved), few locked snippets,
@@ -542,12 +587,13 @@ blocks on a later one.
 | Item | Pull condition |
 |------|----------------|
 | Root `PlasticityConfig` still resolves to `computronium.state`'s twin, which is a **different class** from `core.joint.transition.PlasticityConfig` (found in the R10.2.1 audit; pyright flags the resulting confusion in `core/system_trainer/joint.py`). Same parallel legacy/new pair as the `state/` vs `core/joint/` split itself | Next merge of `computronium/state/` with `computronium/core/joint/` (R2.2-residual pattern); the root-exports lock test pins what exists today |
-| R10.2 demo flake watch (2026-09-02): the first `pytest -k demo` invocation after the tests landed reported 3 failures in 40 s that never reproduced across four subsequent full runs (75–79 s each). Suspected transient MNIST DataLoader worker crash (`num_workers=2`); no failure signature captured. If it recurs, capture the traceback and consider `create_task(..., num_workers=0)` inside the demo tests. **2026-09-02 re-run: 6/6 green, 99.4 s — still no recurrence.** | Any recurrence |
+| R10.2 demo flake watch (2026-09-02): the first `pytest -k demo` invocation after the tests landed reported 3 failures in 40 s that never reproduced across four subsequent full runs (75–79 s each). Suspected transient MNIST DataLoader worker crash (`num_workers=2`); no failure signature captured. If it recurs, capture the traceback and consider `create_task(..., num_workers=0)` inside the demo tests. **2026-09-02 re-run: 6/6 green, 99.4 s — still no recurrence.** D7 pins `num_workers=0` explicitly — the standing mitigation precedent for new demos | Any recurrence |
 | Repo-wide ruff/pyright hygiene: `ruff check .` reports ~4.8k pre-existing findings (max-args=5, preview rules, S-rules on subprocess) and pyright-basic flags pipeline.py / core/system_trainer/joint.py / plasticity/{routing,fast_weights}.py / cli/parity.py / tests/property/test_axis_certifications.py — CI's ruff and pyright steps fail at HEAD independent of R10. Pull on a dedicated hygiene pass: either fix forward or scope the CI steps to the gates that are meant to hold (property/demo/lock suites) | Next dedicated hygiene pass |
 | D1/D2 dominate the demo-suite wall clock (~70 s of ~80 s; MNIST quick-mode, 1 epoch each). If slower CI machines push the suite past the 2-minute checkpoint, cap the D1/D2 train loaders (e.g. a `_take(loader, 800)` wrapper) and re-pin the regime assertions (FA floor 0.25 was calibrated at the full epoch) | First slow-CI gate failure, or any D1/D2 regime change |
 | Joint `to_spec`→`from_spec` round-trip broken — `from_spec` calls `GeometryConfig(**spec["geometry"])` but `to_spec` embeds `params`/`recurrent_weight` keys → TypeError; found in the 2026-09-02 pre-flight | Next touch of `core/system_trainer/joint.py` (or when a demo/figure needs joint-spec round-trips) |
 | imp-4 — Pyright full `strict` on ontology (131 findings; torch `Unknown` tracking; annotation work in `_dynamics`/`geometry`/`update`) | Next annotation pass on those modules |
 | imp-8 — `compute_energy` duplication across Energy/Spike/Instantaneous/Diffusion → extract `_energy_from_state(state, geometry)` | Next touch of any dynamics module |
+| `FeedforwardGeometry._build_layers` ignores `GeometryConfig.init_scale` (nn.Linear defaults only; found in the D7 sweep — three init scales gave byte-identical results). Preset `_mlp_geometry`/`create_*_mlp` pass it through, so every factory's `init_scale` argument is currently decorative on feedforward builds | Next touch of geometry construction, or when a demo needs weight-scale control |
 | imp-19 — `FrontierRecord.seed` legacy default 42 → required at next schema break | Schema break |
 | imp-23 — `substrate_coupled` plasticity engagement-verified only; probe fixed-dim `step` assumptions | Next touch of that plasticity |
 | imp-26 — params-moved learning locks for the remaining README-table factories (FA lock exists) | Next touch of each factory |
@@ -557,6 +603,8 @@ blocks on a later one.
 | imp-37 — latency objective is wall-clock noise → repeated-timing methodology or deterministic proxy | Before any task-scale latency claim |
 | imp-41 — `demo/tests/` 28 stale failures → rewrite or delete | Next demo-test touch (or R11, where the demo gets rebuilt) |
 | R3.8 — `natural_language_query` TF-IDF weighting; derive `V_nudged = free energy + β·loss` to strengthen the PC Lyapunov xfail | Next touch of the knowledge base / PC verification |
+| README `create_snn_mlp` row advertises SpikeIntegration × TemporalTrace × Euclidean, but the factory builds Instantaneous × LocalGoodness for trainer compatibility (pre-dates R10; the docstring is honest about it). Either land a true-Spike SNN factory coordinate once STDP carries a real error signal, or correct the row | Next README factual-correction pass (R10.2.7 rules) |
+| `create_spiking_snn_mlp` runs end-to-end post-D7-pull (it crashed at settle step 1 before) but plateaus at chance on MNIST: the pipeline-facing STDP surrogate is a pure Hebbian correlation (no error signal); timing-asymmetric STDP lives in `core/local_learning/rules/spiking.py`, unwired to the 5-D pipeline. R10.3.5 refutation candidate — a visible refutation demo is welcome; a learning claim needs the trace-based rule in the pipeline first | When the SNN family is next touched, or a research paragraph needs it |
 | test_scaling_invariants xpass — `deep_network_accuracy[100]` pre-existing xpass recurred in the full gate | Next touch of that file |
 
 ### D. Carried deferred (from TODO8; unchanged)
@@ -615,11 +663,19 @@ blocks on a later one.
   (fresh-ψ floor ≈ 0.68, restored beats floor+0.1 at 1.0). If `MetaRecipe`
   defaults or the task generators change, the gate items will move —
   re-run the calibration sweep (3/4/5 epochs) before re-pinning.
+- **D7 spike watch:** D7 asserts `total_spikes > 100` (observed ≈ 1.8k) and
+  `membrane_max <= 1.0` (structural: the reset rule guarantees ≤ threshold)
+  at seeds build-0/trainer-42. If `MetaRecipe`-style default drift ever
+  moves the trained weights enough to silence the hidden layer, the spike
+  floor moves — re-run the D7 sweep (the probe in the demo prints the
+  staircase) before re-pinning. Sub-threshold-at-init is expected (spikes
+  emerge from training at the pinned lr).
 - **D6 wall watch:** D6 adds ~24 s to the demo suite. Full-suite re-run at
-  HEAD 2026-09-02: ~100 s for all six demos — under the 2-minute
-  checkpoint with margin. If a slow CI machine pushes past it, `BATCH_CAP` in
-  `test_demo_substrate_swap.py` is the dial (floors were calibrated at 1000
-  batches), and the D1/D2 loader caps are the other dial. Under the
+  HEAD 2026-09-02 (now including D7): **104 s for all seven demos** — under
+  the 2-minute checkpoint with margin. If a slow CI machine pushes past it,
+  `BATCH_CAP` in `test_demo_substrate_swap.py` and `BATCH_CAP` in
+  `test_demo_spike_settle.py` are the dials (floors were calibrated at 1000
+  and 300 batches respectively), and the D1/D2 loader caps are the other dial. Under the
   differential-pair semantics (2026-09-02) the staircase moved: 0.5→0.89,
   1.5→0.78, 3.0→0.56, 4.0→0.42, 6.0→0.22, 8.0→0.12 — the severe arm sits at
   noise 8.0 with ceiling 0.4 (the 4.0-class value 0.42 grazes that ceiling
@@ -649,6 +705,11 @@ blocks on a later one.
 | `_LAZY`↔`__all__` consistency lock | `tests/unit/core/test_root_exports.py` |
 | Demo tests D1–D5 (regimes pinned in module docstrings; each emits its run record **before** asserting) | `tests/integration/test_demo_compose_6axis.py`, `test_demo_swap_credit.py`, `test_demo_swap_plasticity.py`, `test_demo_memory_budget.py`, `test_demo_z3_frozen_theta.py` |
 | Demo test D6 (substrate swap; factory-level S-axis swap, regime + staircase sweep pinned in docstring) | `tests/integration/test_demo_substrate_swap.py` |
+| Demo test D7 (D-axis swap: instant vs layer-wise LIF settle, one swapped dynamics argument; regime + spike observables pinned in docstring) | `tests/integration/test_demo_spike_settle.py` |
+| Layer-wise LIF settle (`_settle_layered`: per-Linear constant drive through the substrate operator, LIF membrane + threshold/reset, membrane carry; dim-preserving `route` loop kept for recurrent geometries) | `computronium/ontology/_dynamics.py` |
+| TemporalTraceCredit degeneracy fix (rate-coded surrogate is identically zero at `a_plus == a_minus`; defaults now `a_plus=1.0, a_minus=0.5`, documented at the classmethod and class) | `computronium/ontology/credit.py` |
+| D-axis lock re-pin (B1 + `TestDAxisSpikeIntegration`: membrane ≤ threshold, per-step spike totals bounded by neuron count, finite variance; STDP antisymmetry lock pins symmetric weights explicitly) | `tests/property/test_ontology_locks.py`, `tests/property/test_axis_certifications.py` |
+| D7 figure factory (`_fig_spike_settle`, entry in `_FACTORIES`) | `computronium/visualization/gallery.py` |
 | Memristive factory (`create_memristive_mlp`; `_instant_backprop_system` dedupes the Digital/Memristive backprop-MLP body) | `computronium/core/presets.py` |
 | Memristive preset YAML | `configs/presets/memristive_mnist.yaml` |
 | D6 figure factory (`_fig_substrate_swap`, entry in `_FACTORIES`) | `computronium/visualization/gallery.py` |
@@ -678,7 +739,11 @@ meta 4 epochs, adapt 4, probe batches 4 → θ sha256 bitwise-equal, restored
 == stage A exactly, gate fully passed (floor 0.68). D6 (re-pinned
 2026-09-02 under differential-pair conductance semantics): MNIST quick,
 1000 batches, hidden (32,), step 0.05 → 0.91 digital / 0.78 mild (noise
-1.5, floor 0.5, < digital) / 0.12 severe (noise 8.0, ceiling 0.4).
+1.5, floor 0.5, < digital) / 0.12 severe (noise 8.0, ceiling 0.4). D7
+(pinned 2026-09-02, live sweep): MNIST quick, 300 batches, hidden (32,),
+step 0.05, LIF max_steps=10 → 0.87 instant / 0.85 spike (floors 0.5; the
+gap is not the claim), probe settle: 20 (layer, step) counts, total spikes
+≈ 1.8k (floor 100), membrane max ≈ 0.92 ≤ threshold 1.0.
 
 **Adding a demo row (e.g. D6, substrate):** (1) demo test
 `tests/integration/test_demo_<name>.py` importing only from the package
@@ -705,9 +770,10 @@ RESULTS.md; README stays a two-locked-block index until the API stabilizes.**
 
 R10 closes when a stranger can, in one sitting: copy the README's first code
 block, run it, and watch a system **they composed** train; then run the demo
-suite and watch all five capabilities demonstrate themselves — compose, swap
+suite and watch the capabilities demonstrate themselves — compose, swap
 credit, swap plasticity, hit the memory wall, freeze θ and see it hold
-bitwise; then look at the gallery and recognize the same demonstrations drawn.
+bitwise, swap substrate physics, watch the LIF settle spike and stay
+bounded; then look at the gallery and recognize the same demonstrations drawn.
 Nothing they read asks them to trust a file they didn't just regenerate;
 nothing is claimed that they didn't just watch happen. **Read, run, change one
 thing, see it matter** — with the proof re-earned on every commit. If that
