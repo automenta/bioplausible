@@ -43,9 +43,14 @@
 > **R11.3.3** (PR-5 calibrated stability guard: demo-harvest ROC over the
 > demo-suite coordinate family — windowed-growth recalibration lands within
 > 0.005% of deployed τ, fast_proxy quantified as calibration-only, overhead
-> bar met via calibrated probe interval; artifact + live lock).
-> Next: R11.1 remainder and R11.4 are pull-based (R11.1.4's tile settle
-> kernel is the standing unlock for the seven tile xfails).
+> bar met via calibrated probe interval; artifact + live lock),
+> **R11.1.4** (tile-mesh settle kernel: target-responsive TileMesh relaxation
+> through the substrate operator, replacing PredictiveSettling's target-free
+> `_graph` branch and giving `extract_layered_params` a tile answer — flips
+> all seven tile strict xfails to xpass, re-opens the full tile × dynamics
+> matrix, new lock `test_tile_settle_kernel.py`; `native_tile_ep` re-added
+> to REPRO_MODELS).
+> Next: R11.1 remainder (R4.1–R4.4 non-tile kernels) and R11.4 are pull-based.
 
 ---
 
@@ -246,21 +251,17 @@ sequencing below is the expected order, not a mandate.
   `accuracy`; both formerly-failing arms now green in the default tier.
   Ruff clean on all touched files; pyright findings pre-existing
   (unchanged count, as-touch debt).
-- [ ] **R11.1.4 Kernels (R4.1–R4.4).** FA feedback projection through the
-  Substrate operator API; `SubstrateSettleKernel` in `KernelRegistry`; MEP
-  Triton kernels (Muon, Fisher whitening) → Substrate update operator;
-  sparse transpose-mask handling, ternary `init_scale` (un-xfail ternary
-  equivalence), per-step `inject_state_noise`. **Plus the tile-mesh settle
-  kernel (user directive 2026-09-03: realize the Tile geometry's potential):
-  a target-responsive TileMesh relaxation in the settle family — per-tile
+- [x] **R11.1.4 Kernels (R4.1–R4.4) — tile-mesh settle kernel ✅ LANDED 2026-09-03.**
+  A target-responsive TileMesh relaxation in the settle family — per-tile
   free/nudged relaxation through the substrate operator, replacing
   PredictiveSettling's target-free `_graph` branch and giving
-  `extract_layered_params` a tile answer — is the single unlock that flips
-  all seven tile strict xfails (R11.1.3) to xpass and re-opens the full
-  tile × dynamics matrix.** Pull when the acceleration/kernel path is next
-  touched, a substrate-axis demo needs them, or the tile realization is
-  scheduled. Kernel-equivalence locks (max_diff < 1e-5) are the acceptance
-  bar.
+  `extract_layered_params` a tile answer — flips all seven tile strict xfails
+  (R11.1.3) to xpass and re-opens the full tile × dynamics matrix.
+  Kernel-equivalence locks (`tests/property/test_tile_settle_kernel.py`,
+  max_diff < 1e-5) are the acceptance bar.
+  The remaining R4.1–R4.4 items (FA feedback projection, MEP Triton kernels,
+  sparse transpose-mask handling, ternary `init_scale`, per-step
+  `inject_state_noise`) remain pull-based.
 - [x] **R11.1.5 Adapter heuristics (R3.5)** ✅ **LANDED 2026-09-03.**
   Recon finding: the deleted `adapter/` package (git 49144879) had *equally*
   hardcoded geometry constants (784→(256,128)→10 / (256,)) — nothing richer
@@ -773,7 +774,7 @@ one.
   `joint.py`, and the profiler all consume it. Never re-inline a dispatch —
   add a branch to the dispatcher. New `GeometryConfig` tuple fields must be
   added to `_geometry_spec_parts`'s JSON tuple-restore list.
-- **Tile × dynamics matrix (R11.1.3, 2026-09-03):** the seven non-learning
+- **Tile × dynamics matrix (R11.1.3, 2026-09-03; resolved by R11.1.4 tile settle kernel 2026-09-03):** the seven tile strict xfails flipped xpass and were promoted to live locks in `tests/property/test_native_smoke.py` and `tests/integration/test_validation_all.py`. The single unlock was a target-responsive TileMesh block relaxation through the substrate operator. `native_tile_ep` re-added to REPRO_MODELS. `tile_native.py` module docstring updated. New lock `tests/property/test_tile_settle_kernel.py` (block≡per-edge equivalence, free≠nudged, all seven move params).
   tile pairings are strict xfails with mechanism-level reasons in
   `test_native_smoke.py` (canonical), `test_validation_all.py`, and
   `tile_native.py`'s module docstring. **User directive: the Tile
