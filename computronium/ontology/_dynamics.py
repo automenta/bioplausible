@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from computronium.state.composite import ActivityValue
 
 from computronium.ontology._settle_kernel import (
+    LayeredParams,
     SubstrateSettleKernel,
     extract_layered_params,
 )
@@ -766,7 +767,17 @@ class PredictiveSettlingDynamics:
 
 
 class SpikeIntegrationDynamics:
-    """Spiking neuron integration (LIF, AdEx)."""
+    """Spiking neuron integration (LIF, AdEx).
+
+    Layer-structured geometries settle layer-wise: each Linear transition
+    integrates a constant input current (through the substrate's forward
+    operator) into LIF membranes for ``max_steps`` steps — spike at
+    threshold, reset — and the settled membrane carries activity to the
+    next layer. Dim-preserving geometries (recurrent attractors) keep the
+    single-membrane loop routed through ``Geometry.route``.
+    """
+
+    _SPIKE_THRESHOLD = 1.0
 
     def __init__(self, config: StateDynamicsConfig | None = None):
         self.config = config or StateDynamicsConfig.spike_integration()
@@ -782,10 +793,14 @@ class SpikeIntegrationDynamics:
         if x is None:
             raise ValueError("State must contain input 'x'")
 
+        layered = extract_layered_params(geometry)
+        if layered is not None and layered.recurrent_weight is None:
+            return self._settle_layered(state, x, layered, substrate, target)
+
         h = substrate.initial_state(x)
 
-        spike_counts = []
-        threshold = 1.0  # Spike threshold
+        spike_counts: list[Tensor] = []
+        threshold = self._SPIKE_THRESHOLD
 
         for _step in range(self.config.max_steps):
             # LIF dynamics: tau * dh/dt = -h + I_syn
@@ -808,6 +823,54 @@ class SpikeIntegrationDynamics:
         )
 
         return new_state
+
+    def _settle_layered(
+        self,
+        state: CompositeState,
+        x: Tensor,
+        layered: LayeredParams,
+        substrate: Substrate,
+        target: Tensor | None,
+    ) -> CompositeState:
+        """Layer-wise LIF settle over the geometry's Linear transitions.
+
+        Drive is fixed within a layer (the previous layer's settled
+        membrane), so the substrate operator runs once per layer;
+        membranes integrate ``max_steps`` LIF steps against it and the
+        post-reset membrane carries activity to the next layer. Bounded
+        membranes and per-(layer, step) spike counts are the settle's own
+        observables.
+        """
+        op = substrate.get_forward_operator()
+        h = substrate.initial_state(x)
+        h = h.flatten(1) if h.dim() > 2 else h
+
+        acts = [h]
+        spike_counts: list[Tensor] = []
+        threshold = self._SPIKE_THRESHOLD
+
+        for weight, bias in zip(layered.weights, layered.biases, strict=True):
+            I_syn = op(h, weight)
+            if bias is not None:
+                I_syn = I_syn + bias
+            v = torch.zeros_like(I_syn)
+            for _step in range(self.config.max_steps):
+                v = v + self.config.step_size * (-v + I_syn)
+                spikes = v > threshold
+                spike_counts.append(spikes.float().sum(dim=1))
+                v = torch.where(spikes, torch.zeros_like(v), v)
+            h = v
+            acts.append(h)
+
+        return _create_output_state(
+            state,
+            x=x,
+            output=h,
+            free_state=acts if target is None else None,
+            nudged_state=acts if target is not None else None,
+            activations=acts,
+            spike_counts=spike_counts,
+        )
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
         acts = _get_state_activations(state)

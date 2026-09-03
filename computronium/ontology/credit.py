@@ -121,9 +121,13 @@ class CreditAssignmentConfig:
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
         a_plus: float = 1.0,
-        a_minus: float = 1.0,
+        a_minus: float = 0.5,
         tau: float = 20.0,
     ) -> CreditAssignmentConfig:
+        """Potentiation/depression weights must differ: the rate-coded
+        surrogate correlates the same (pre, post) activity pair in both
+        directions, so ``a_plus == a_minus`` yields an identically-zero
+        pseudo-gradient."""
         return cls(
             credit_type="temporal_trace",
             beta=beta,
@@ -598,9 +602,12 @@ class LocalGoodnessCredit:
 class TemporalTraceCredit:
     """Spike-timing correlations (STDP).
 
-    Rate-coded surrogate: causal (pre->post) potentiation with a_plus,
-    anti-causal depression with a_minus. Pseudo-gradient descends:
-    -(a_plus * post^T@pre - a_minus * pre^T@post) / batch.
+    Rate-coded surrogate: the settled (pre, post) activity pair enters as a
+    weighted Hebbian correlation —-(a_plus - a_minus) * post^T@pre / batch —
+    since correlating one activity pair in both temporal orders yields the
+    same matrix. Potentiation must outweigh depression (a_plus > a_minus)
+    for a non-zero pseudo-gradient; the trace-based STDP rule with genuine
+    timing asymmetry lives in ``core/local_learning/rules/spiking.py``.
     """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE,)

@@ -211,9 +211,43 @@ def _fig_substrate_swap(record: dict) -> Figure:
     chance = 1 / 10
     chance_line(ax, chance, "chance (0.1)")
     ax.set_ylabel("train accuracy")
-    ax.set_title("D6 — one wiring, one swapped substrate (mild IR-drop learns, severe walls)")
+    ax.set_title(
+        "D6 — one wiring, one swapped substrate (mild IR-drop learns, severe walls)"
+    )
     for i, acc in enumerate(accs):
         ax.text(i, acc, f"{acc:.2f}", ha="center", va="bottom", fontsize=9)
+    apply_style(fig)
+    return fig
+
+
+def _fig_spike_settle(record: dict) -> Figure:
+    import matplotlib.pyplot as plt
+
+    data = record["data"]
+    arms = data["arms"]
+    obs = data["spike_observation"]
+    fig, (ax_acc, ax_spikes) = plt.subplots(1, 2, figsize=(9, 4))
+    names = list(arms)
+    accs = [arms[name]["train_acc"] for name in names]
+    ax_acc.bar(names, accs, color=[COLOR_CONTRAST, COLOR_ARM])
+    ax_acc.set_ylim(0, 1)
+    chance_line(ax_acc, 1 / 10, "chance (0.1)")
+    ax_acc.set_ylabel("train accuracy")
+    ax_acc.set_title("D7 — one wiring, one swapped D-axis")
+    for i, acc in enumerate(accs):
+        ax_acc.text(i, acc, f"{acc:.2f}", ha="center", va="bottom", fontsize=9)
+    totals = obs["spike_totals"]
+    half = len(totals) // 2
+    steps = range(len(totals))
+    ax_spikes.bar(
+        steps, totals, color=[COLOR_ARM] * half + [COLOR_WALLED] * (len(totals) - half)
+    )
+    ax_spikes.set_xlabel("settle step (hidden | output)")
+    ax_spikes.set_ylabel("spikes per step")
+    ax_spikes.set_title(
+        f"LIF settle: {obs['total_spikes']:.0f} spikes, "
+        f"membrane max {obs['membrane_max']:.2f} ≤ {data['threshold']}"
+    )
     apply_style(fig)
     return fig
 
@@ -224,6 +258,7 @@ _FACTORIES: dict[str, Callable[[dict], Figure]] = {
     "swap_plasticity": _fig_plasticity_swap,
     "memory_budget": _fig_memory_wall,
     "substrate_swap": _fig_substrate_swap,
+    "spike_settle": _fig_spike_settle,
     "z3_frozen_theta": _fig_frozen_theta,
 }
 
