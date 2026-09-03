@@ -39,23 +39,26 @@ class LayeredParams:
 def extract_layered_params(geometry: Geometry) -> LayeredParams | None:
     """Extract linear layer stack from a layered geometry.
 
-    Returns None if the geometry is not layer-structured (e.g. TileGeometry).
+    Returns None if the geometry is not layer-structured. TileGeometry
+    answers through its assembled block view (R11.1.4).
     """
     layers = getattr(geometry, "_layers", None)
-    if not isinstance(layers, torch.nn.ModuleList):
-        return None
+    if isinstance(layers, torch.nn.ModuleList):
+        modules = list(layers)
+        linears = [m for m in modules if isinstance(m, torch.nn.Linear)]
+        activations = [m for m in modules if not isinstance(m, torch.nn.Linear)]
+        recurrent = getattr(geometry, "_recurrent_weight", None)
 
-    modules = list(layers)
-    linears = [m for m in modules if isinstance(m, torch.nn.Linear)]
-    activations = [m for m in modules if not isinstance(m, torch.nn.Linear)]
-    recurrent = getattr(geometry, "_recurrent_weight", None)
-
-    return LayeredParams(
-        weights=tuple(layer.weight for layer in linears),
-        biases=tuple(layer.bias for layer in linears),
-        activations=tuple(activations),
-        recurrent_weight=recurrent if isinstance(recurrent, Tensor) else None,
-    )
+        return LayeredParams(
+            weights=tuple(layer.weight for layer in linears),
+            biases=tuple(layer.bias for layer in linears),
+            activations=tuple(activations),
+            recurrent_weight=recurrent if isinstance(recurrent, Tensor) else None,
+        )
+    assembler = getattr(geometry, "layered_params", None)
+    if callable(assembler):
+        return assembler()
+    return None
 
 
 def _one_hot(target: Tensor, like: Tensor) -> Tensor:

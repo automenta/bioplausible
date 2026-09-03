@@ -9,7 +9,19 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 import torch
 from torch import Tensor, nn
 
+import torch
+from torch import Tensor, nn
+
 from computronium.core.tile.topology import TileGraph
+from computronium.ontology._tile_blocks import (
+    TileBlockView,
+    assemble_transition_blocks,
+    build_block_view,
+    scatter_block_grads as _scatter_block_grads,
+    tile_hopfield_energy,
+    tile_layered_params,
+    tile_settle_block_acts as settle_block_acts,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -1043,6 +1055,47 @@ class TileGeometry(nn.Module):
             acts.append(out)
 
         return acts
+
+    # --- Tile block view (R11.1.4 settle-kernel contract) ---
+
+    @property
+    def _block_view(self) -> TileBlockView:
+        view = getattr(self, "_block_view_cache", None)
+        if view is None:
+            view = build_block_view(self._graph)
+            self._block_view_cache = view
+        return view
+
+    @property
+    def block_act_count(self) -> int:
+        """Length of the settled block-act layout [x, z_0..z_{L-1}, output]."""
+        return self._block_view.block_act_count
+
+    def layered_params(self):
+        """Per-transition block weights for the substrate settle kernel."""
+        return tile_layered_params(self._block_view, self.params)
+
+    def settle_blocks(self, x: Tensor, substrate: Substrate) -> list[Tensor]:
+        """Initial block activities for settling: [x, z_0..z_{L-1}, output]."""
+        return settle_block_acts(self._block_view, self, x, substrate)
+
+    def assemble_blocks(
+        self, named: dict[str, Tensor]
+    ) -> tuple[Tensor, ...]:
+        """Per-transition block matrices from a name->tensor mapping."""
+        return assemble_transition_blocks(self._block_view, named)
+
+    def scatter_block_grads(self, block_grads: list[Tensor]) -> list[Tensor]:
+        """Scatter per-transition block pseudo-gradients to per-edge parameters."""
+        from computronium.ontology.utils import _learnable_weight_names
+
+        return _scatter_block_grads(
+            self._block_view, block_grads, _learnable_weight_names(self.params)
+        )
+
+    def hopfield_energy(self, acts: list[Tensor]) -> Tensor:
+        """Hopfield energy over the block layout [x, z_0..z_{L-1}, output]."""
+        return tile_hopfield_energy(self._block_view, acts, self.params)
 
 
 class ConvGeometry(nn.Module):

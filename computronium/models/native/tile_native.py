@@ -3,21 +3,9 @@
 This replaces the legacy TileAlgorithm family with a direct
 composition of the 5 Protocols, bypassing ModelAdapter.
 
-Tile × dynamics coordinate matrix (R11.1.3): only the
-InstantaneousDynamics + BackpropCredit pairing (``create_tile_mlp``
-preset) learns. The remaining pairings are permanent strict xfails
-(tests/property/test_native_smoke.py) with one root cause: the settle
-family has no target-responsive TileMesh kernel (R11.1.4 pointer) —
-
-- EnergyMinimizationDynamics (tile_ep/tile_gnn): raises TypeError —
-  ``extract_layered_params`` needs a layered ``_layers`` stack.
-- SpikeIntegrationDynamics (tile_snn): layered LIF settle applies flat
-  membrane vectors to per-edge tile weights — shape mismatch.
-- RandomProjectionsCredit (tile_fa): layered feedback contract cannot
-  hold for per-edge tile weights — zeros, never fabricated signal.
-- Instantaneous/PredictiveSettling contrast credits (tile_hebbian/
-  tile_pc/tile_tp): no tile settle consumes the target, so free ≡ nudged
-  bitwise and every contrast is structurally zero.
+Tile × dynamics matrix (R11.1.4): the tile-mesh settle kernel
+gives the settle family a target-responsive block relaxation, so
+all seven tile × dynamics coordinates settle and learn.
 """
 
 from __future__ import annotations

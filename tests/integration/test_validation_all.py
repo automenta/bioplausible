@@ -136,13 +136,8 @@ class TestValidationAll:
 
     # --- Native Tile Models ---
 
-    @pytest.mark.xfail(
-        reason="EnergyMinimizationDynamics needs a layered geometry (extract_layered_params); "
-        "no tile-mesh settle kernel — permanent xfail, R11.1.3",
-        strict=True,
-    )
     def test_native_tile_ep(self):
-        """Native Tile EP learns - XFAIL: TileGeometry lacks _layers for EnergyMinimizationDynamics."""
+        """Native Tile EP learns."""
         model = create_native_tile_ep(
             self.input_dim,
             16,
@@ -151,16 +146,12 @@ class TestValidationAll:
             neurons_per_tile=8,
             tiles_per_layer=2,
             lr=1e-3,
+            beta=0.1,
         )
         self._train_system_and_assert_learns(model, self.x, self.y, "native_tile_ep")
 
-    @pytest.mark.xfail(
-        reason="InstantaneousDynamics ignores the target: free ≡ nudged bitwise, "
-        "FA layered feedback contract yields zeros — permanent xfail, R11.1.3",
-        strict=True,
-    )
     def test_native_tile_fa(self):
-        """Native Tile FA learns - XFAIL: InstantaneousDynamics doesn't produce free/nudged difference."""
+        """Native Tile FA learns."""
         model = create_native_tile_fa(
             self.input_dim,
             16,
@@ -172,13 +163,8 @@ class TestValidationAll:
         )
         self._train_system_and_assert_learns(model, self.x, self.y, "native_tile_fa")
 
-    @pytest.mark.xfail(
-        reason="PredictiveSettling tile branch runs a target-free forward; "
-        "TargetInversion propagates through layered weights — permanent xfail, R11.1.3",
-        strict=True,
-    )
     def test_native_tile_tp(self):
-        """Native Tile TP learns - XFAIL: TileGeometry issues with predictive settling."""
+        """Native Tile TP learns."""
         model = create_native_tile_tp(
             self.input_dim,
             16,
@@ -191,13 +177,8 @@ class TestValidationAll:
         )
         self._train_system_and_assert_learns(model, self.x, self.y, "native_tile_tp")
 
-    @pytest.mark.xfail(
-        reason="InstantaneousDynamics ignores the target: free ≡ nudged bitwise, "
-        "G_free − G_nudged ≡ 0 — permanent xfail, R11.1.3",
-        strict=True,
-    )
     def test_native_tile_hebbian(self):
-        """Native Tile Hebbian learns - XFAIL: LocalGoodnessCredit returns empty gradients."""
+        """Native Tile Hebbian learns."""
         model = create_native_tile_hebbian(
             self.input_dim,
             16,

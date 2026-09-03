@@ -288,6 +288,17 @@ def _acts_list(activations: list[Tensor] | Tensor | None) -> list[Tensor]:
     return [activations]
 
 
+def _block_transition_acts(
+    acts: list[Tensor], geometry: Geometry
+) -> list[Tensor] | None:
+    """The settled acts when the geometry declares a block transition table
+    and they align with it (tile meshes, R11.1.4); else None."""
+    count = getattr(geometry, "block_act_count", None)
+    if count is not None and len(acts) == count:
+        return acts
+    return None
+
+
 def _propagate_targets(
     acts: list[Tensor],
     y: Tensor,
@@ -381,6 +392,23 @@ class ThermodynamicContrast:
             if isinstance(nudged_state.activations, list)
             else [nudged_state.activations]
         )
+
+        # Tile meshes: per-transition block contrast scattered to per-edge
+        # weights (R11.1.4).
+        if _block_transition_acts(free_acts, geometry) is not None and (
+            len(nudged_acts) == len(free_acts)
+        ):
+            batch = free_acts[0].shape[0]
+            block_grads = [
+                (
+                    free_acts[i].T @ free_acts[i + 1]
+                    - nudged_acts[i].T @ nudged_acts[i + 1]
+                ).T
+                / self.config.beta
+                / batch
+                for i in range(len(free_acts) - 1)
+            ]
+            return geometry.scatter_block_grads(block_grads)
 
         weight_names = _learnable_weight_names(geometry.params)
 
@@ -486,6 +514,20 @@ class RandomProjectionsCredit:
         delta_out = torch.autograd.grad(loss, logits)[0].detach()
         n_trans = len(acts) - 1
         batch = acts[0].shape[0]
+
+        # Tile meshes: feedback blocks assembled per transition, error
+        # walked back over the block layout, grads scattered to per-edge
+        # weights (R11.1.4). B_e shares its weight's shape, so the layered
+        # contract (B maps act_{k+1} widths down to act_k) holds per edge.
+        if _block_transition_acts(acts, geometry) is not None:
+            blocks = geometry.assemble_blocks(self._feedback_weights)
+            err = delta_out
+            block_grads: list[Tensor] = []
+            for i in range(n_trans - 1, -1, -1):
+                block_grads.append(err.T @ acts[i] / batch)
+                err = err @ blocks[i]  # ruff: ignore[non-augmented-assignment]
+            block_grads.reverse()
+            return geometry.scatter_block_grads(block_grads)
 
         # Layered contract: feedback B_k must map the act-space of layer
         # k+1 down to layer k. Tile/ragged weights (e.g. per-tile matrices
@@ -733,6 +775,27 @@ class TargetInversionCredit:
             return [torch.zeros_like(geometry.params[n]) for n in weight_names]
 
         n_trans = len(acts) - 1
+
+        # Tile meshes: targets propagate over the assembled blocks, grads
+        # scattered to per-edge weights (R11.1.4).
+        if _block_transition_acts(acts, geometry) is not None:
+            blocks = geometry.assemble_blocks(geometry.params)
+            targets: list[Tensor | None] = [None] * len(acts)
+            targets[-1] = torch.nn.functional.one_hot(
+                y, num_classes=acts[-1].shape[-1]
+            ).float()
+            batch = acts[0].shape[0]
+            for i in range(n_trans - 1, -1, -1):
+                nxt = targets[i + 1]
+                targets[i] = nxt @ blocks[i] if nxt is not None else None
+            block_grads = [
+                (acts[i + 1] - targets[i + 1]).T @ acts[i] / batch
+                if targets[i + 1] is not None
+                else torch.zeros(acts[i + 1].shape[-1], acts[i].shape[-1])
+                for i in range(n_trans)
+            ]
+            return geometry.scatter_block_grads(block_grads)
+
         targets = _propagate_targets(acts, y, weight_names[:n_trans], geometry)
         pairs = _weight_acts(weight_names, acts, geometry)
 

@@ -31,15 +31,12 @@ logger = get_logger()
 
 # Native model families exercised by the gate. Keep this aligned with the benchmark
 # harness so one tiny synthetic task covers every learning rule.
-# native_tile_ep is excluded (R11.1.3): EnergyMinimizationDynamics has no
-# tile-mesh settle kernel — the coordinate raises before settling, so
-# bitwise reproducibility is undefined for it. It is a permanent strict
-# xfail in tests/property/test_native_smoke.py.
 REPRO_MODELS = [
     "native_backprop_mlp",
     "native_eqprop_mlp",
     "native_fa_mlp",
     "native_pepita_mlp",
+    "native_tile_ep",
     "native_tile_fa",
     "native_tile_hebbian",
     "native_tile_tp",
@@ -80,6 +77,21 @@ def _instantiate(model_name: str, input_dim: int, output_dim: int, device: str):
 
         return create_native_pepita_mlp(
             input_dim, 64, output_dim, num_layers=2, lr=1e-3
+        )
+
+    if model_name == "native_tile_ep":
+        from computronium.models.native.tile_native import create_native_tile_ep
+
+        return create_native_tile_ep(
+            input_dim=input_dim,
+            hidden_dim=64,
+            output_dim=output_dim,
+            num_layers=2,
+            neurons_per_tile=16,
+            tiles_per_layer=2,
+            lr=1e-3,
+            beta=0.1,
+            settle_steps=20,
         )
 
     if model_name == "native_tile_fa":

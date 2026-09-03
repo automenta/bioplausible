@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 from computronium.ontology._settle_kernel import (
     LayeredParams,
     SubstrateSettleKernel,
+    _one_hot,
     extract_layered_params,
 )
 from computronium.ontology.geometry import layer_stack
@@ -384,7 +385,15 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
 
     E = 0.5 * sum(h_i^2) - sum_{i,j} W_{ij} h_i h_j - sum_i b_i h_i
     For ReLU networks with symmetric weights approximation.
+
+    Tile meshes answer through their block-view energy when the acts carry
+    the settled block layout.
     """
+    tile_energy = getattr(geometry, "hopfield_energy", None)
+    block_count = getattr(geometry, "block_act_count", None)
+    if callable(tile_energy) and block_count is not None and len(all_acts) == block_count:
+        return tile_energy(all_acts)
+
     if not all_acts or len(all_acts) < 2:
         return torch.tensor(0.0, device=all_acts[0].device if all_acts else "cpu")
 
@@ -441,6 +450,8 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
             # h^T * W * h_prev -> sum over batch, then mean
             # h: (batch, dim_i), W: (dim_i, dim_{i-1}), h_prev: (batch, dim_{i-1})
             # h @ W: (batch, dim_{i-1}) @ h_prev.T: (dim_{i-1}, batch) -> (batch, batch)
+            if W.shape[0] != h.shape[-1] or W.shape[1] != h_prev.shape[-1]:
+                continue  # ragged pairing (e.g. per-edge tile weights)
             interaction = (h @ W @ h_prev.T).trace()
             total_energy = total_energy - interaction  # ruff: ignore[non-augmented-assignment]
 
@@ -464,6 +475,8 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
             bias_idx = num_ff_biases - 1
         if bias_idx < num_ff_biases:
             b = params[bias_names[bias_idx]]
+            if b.shape[0] != h.shape[-1]:
+                continue
             total_energy = total_energy - (h @ b).sum()  # ruff: ignore[non-augmented-assignment]
 
     # Return mean per sample
@@ -503,8 +516,15 @@ class EnergyMinimizationDynamics:
         if state.x is None:
             return state
 
-        # Get initial activations with intermediates for credit assignment
-        all_acts = geometry.forward_with_intermediates(state.x, substrate)
+        # Tile meshes seed the relaxation from their block layout
+        # ([x, z0..z_{L-1}, output]); layered geometries from their
+        # forward intermediates. Both align 1:1 with the settle kernel's
+        # extracted weight/bias transitions.
+        block_builder = getattr(geometry, "settle_blocks", None)
+        if callable(block_builder):
+            all_acts = block_builder(state.x, substrate)
+        else:
+            all_acts = geometry.forward_with_intermediates(state.x, substrate)
         if not all_acts:
             return state
 
@@ -702,31 +722,11 @@ class PredictiveSettlingDynamics:
         else:
             self._free_energy_history = None
 
-        # For TileGeometry, the forward pass already does the complete tile mesh
-        # propagation. Use forward_with_intermediates to get all layer activations.
+        # Tile meshes settle through the block-view relaxation kernel —
+        # target-responsive (the nudged phase pulls the output toward the
+        # target with the configured beta); R11.1.4.
         if hasattr(geometry, "_graph"):
-            # TileGeometry or similar mesh-based geometry
-            acts = geometry.forward_with_intermediates(x, substrate)
-            if not acts:
-                return state
-            # Track initial free energy
-            if self.config.track_free_energy_per_iter and (
-                self._free_energy_history is not None
-            ):
-                # Free energy in predictive coding = sum of squared prediction errors
-                fe = sum((a - geometry.route(a)).pow(2).sum().item() for a in acts[:-1])
-                self._free_energy_history.append(fe)
-            # Last activation is the output
-            h = acts[-1]
-            new_state = _create_output_state(
-                state,
-                x=x,
-                output=h,
-                free_state=acts if target is None else None,
-                nudged_state=acts if target is not None else None,
-                activations=acts,
-            )
-            return new_state
+            return self._settle_tile(state, x, geometry, substrate, target)
 
         # Standard predictive coding settling for recurrent/feedforward geometries
         h = substrate.initial_state(x)
@@ -766,6 +766,71 @@ class PredictiveSettlingDynamics:
         )
 
         return new_state
+
+    def _settle_tile(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+        self,
+        state: CompositeState,
+        x: Tensor,
+        geometry: Geometry,
+        substrate: Substrate,
+        target: Tensor | None,
+    ) -> CompositeState:
+        """Block-view relaxation over the tile mesh via the settle kernel."""
+        kernel = SubstrateSettleKernel(
+            substrate=substrate,
+            params=self._tile_layered_params(geometry),
+            step_size=self.config.step_size,
+            momentum=self.config.momentum,
+        )
+        beta = self.config.beta if target is not None else 0.0
+        all_acts = self._tile_block_acts(geometry, x, substrate)
+
+        for step in range(self.config.max_steps):
+            new_acts, _ = kernel.step(all_acts, beta, target, None)
+            if self.config.track_free_energy_per_iter and (
+                self._free_energy_history is not None
+            ):
+                # Free energy in predictive coding = squared prediction errors
+                fe = 0.0
+                for i, (w, b) in enumerate(
+                    zip(kernel.params.weights, kernel.params.biases, strict=True)
+                ):
+                    pred = new_acts[i] @ w.T
+                    if b is not None:
+                        pred = pred + b
+                    fe += (new_acts[i + 1] - pred).pow(2).sum().item()
+                self._free_energy_history.append(fe)
+            if step >= self.config.convergence_start:
+                delta = torch.dist(
+                    new_acts[-1], all_acts[-1], p=float("inf")
+                ).item()
+                if delta < self.config.convergence_threshold:
+                    all_acts = new_acts
+                    break
+            all_acts = new_acts
+
+        return _create_output_state(
+            state,
+            x=x,
+            output=all_acts[-1],
+            free_state=all_acts if target is None else None,
+            nudged_state=all_acts if target is not None else None,
+            activations=all_acts,
+        )
+
+    def _tile_layered_params(self, geometry: Geometry):
+        layered = extract_layered_params(geometry)
+        if layered is None:
+            raise TypeError("Tile settling requires the mesh's block view")
+        return layered
+
+    def _tile_block_acts(
+        self, geometry: Geometry, x: Tensor, substrate: Substrate
+    ) -> list[Tensor]:
+        builder = getattr(geometry, "settle_blocks", None)
+        if not callable(builder):
+            raise TypeError("Tile settling requires settle_blocks")
+        return builder(x, substrate)
 
     def get_free_energy_history(self) -> list[float] | None:
         """Return the free energy history tracked during settling.
@@ -807,7 +872,16 @@ class SpikeIntegrationDynamics:
 
         layered = extract_layered_params(geometry)
         if layered is not None and layered.recurrent_weight is None:
-            return self._settle_layered(state, x, layered, substrate, target)
+            # Tile meshes consume the target in the nudged phase via the
+            # output clamp (R11.1.4); layered LIF stays target-free (imp-29).
+            nudge_beta = (
+                self.config.beta
+                if target is not None and hasattr(geometry, "settle_blocks")
+                else None
+            )
+            return self._settle_layered(
+                state, x, layered, substrate, target, nudge_beta=nudge_beta
+            )
 
         h = substrate.initial_state(x)
 
@@ -843,6 +917,8 @@ class SpikeIntegrationDynamics:
         layered: LayeredParams,
         substrate: Substrate,
         target: Tensor | None,
+        *,
+        nudge_beta: float | None = None,
     ) -> CompositeState:
         """Layer-wise LIF settle over the geometry's Linear transitions.
 
@@ -874,6 +950,10 @@ class SpikeIntegrationDynamics:
             h = v
             acts.append(h)
 
+        if nudge_beta is not None and target is not None:
+            h = h + nudge_beta * (_one_hot(target, h) - h)
+            acts[-1] = h
+
         return _create_output_state(
             state,
             x=x,
@@ -901,9 +981,21 @@ class InstantaneousDynamics:
         substrate: Substrate,
         target: Tensor | None = None,
     ) -> CompositeState:
-        # Single forward pass - no settling
+        # Single forward pass - no settling. Tile meshes route through the
+        # block layout and consume the target in the nudged phase via the
+        # output clamp (R11.1.4).
         if state.x is not None:
-            acts = geometry.forward_with_intermediates(state.x, substrate)
+            block_builder = getattr(geometry, "settle_blocks", None)
+            if callable(block_builder):
+                acts = block_builder(state.x, substrate)
+                if target is not None:
+                    acts = [
+                        *acts[:-1],
+                        acts[-1]
+                        + self.config.beta * (_one_hot(target, acts[-1]) - acts[-1]),
+                    ]
+            else:
+                acts = geometry.forward_with_intermediates(state.x, substrate)
         else:
             acts = state.activations if state.activations is not None else []
         if target is None:

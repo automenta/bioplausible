@@ -242,69 +242,24 @@ def test_native_research_eqprop_smoke(factory):
 # Tile Models (7 variants)
 # =============================================================================
 
+# R11.1.4: the tile-mesh settle kernel gives the settle family a
+# target-responsive block relaxation, so all seven tile × dynamics
+# coordinates settle and learn (the R11.1.3 strict xfails flipped xpass
+# and were promoted to live locks).
 
-_TILE_CRASH_XFAIL = {
-    create_native_tile_ep: (
-        "EnergyMinimizationDynamics.settle requires extract_layered_params "
-        "(TileGeometry has no _layers ModuleList of Linears) — raises TypeError "
-        "before settling; no tile-mesh settle kernel exists (R11.1.4 pointer). "
-        "Permanent xfail, R11.1.3"
-    ),
-    create_native_tile_snn: (
-        "SpikeIntegrationDynamics layered LIF settle applies flat membrane "
-        "vectors to per-edge tile weights — shape mismatch (dim-dependent "
-        "RuntimeError). Permanent xfail, R11.1.3"
-    ),
-    create_native_tile_gnn: (
-        "EnergyMinimizationDynamics.settle requires extract_layered_params "
-        "(TileGeometry has no _layers ModuleList of Linears) — raises TypeError "
-        "before settling; no tile-mesh settle kernel exists (R11.1.4 pointer). "
-        "Permanent xfail, R11.1.3"
-    ),
-}
 
-_TILE_NO_LEARNING_XFAIL = {
-    create_native_tile_fa: (
-        "RandomProjectionsCredit's layered feedback contract (B_k must map "
-        "act_{k+1} widths down to act_k) cannot hold for per-edge tile "
-        "weights — documented zeros, never fabricated signal. Permanent "
-        "xfail, R11.1.3"
-    ),
-    create_native_tile_tp: (
-        "PredictiveSettlingDynamics's tile branch runs a plain target-free "
-        "forward and TargetInversionCredit propagates targets through "
-        "layered weights — nudged phase never engages. Permanent xfail, R11.1.3"
-    ),
-    create_native_tile_hebbian: (
-        "InstantaneousDynamics ignores the target, so free ≡ nudged bitwise "
-        "and G_free − G_nudged ≡ 0 exactly — LocalGoodness grads are "
-        "structural zeros. Permanent xfail, R11.1.3"
-    ),
-    create_native_tile_pc: (
-        "PredictiveSettlingDynamics's tile branch (hasattr _graph) runs a "
-        "target-free forward, so free ≡ nudged bitwise — no contrast signal. "
-        "Permanent xfail, R11.1.3"
-    ),
-}
-
-_TILE_CRASH_FREE = (
+_TILE_FACTORIES = (
+    create_native_tile_ep,
     create_native_tile_fa,
     create_native_tile_tp,
+    create_native_tile_snn,
     create_native_tile_hebbian,
     create_native_tile_pc,
+    create_native_tile_gnn,
 )
 
 
-@pytest.mark.parametrize(
-    "factory",
-    [
-        *_TILE_NO_LEARNING_XFAIL,
-        *(
-            pytest.param(f, marks=pytest.mark.xfail(reason=r, strict=True))
-            for f, r in _TILE_CRASH_XFAIL.items()
-        ),
-    ],
-)
+@pytest.mark.parametrize("factory", _TILE_FACTORIES)
 def test_native_tile_variants_smoke(factory):
     """Crash-free smoke for tile variants: forward + train_step run."""
     model = factory(INPUT_DIM, HIDDEN_DIM, OUTPUT_DIM, lr=0.001)
@@ -317,13 +272,7 @@ def test_native_tile_variants_smoke(factory):
     assert "nudged_fit_accuracy" in result
 
 
-@pytest.mark.parametrize(
-    "factory",
-    [
-        pytest.param(f, marks=pytest.mark.xfail(reason=r, strict=True))
-        for f, r in _TILE_NO_LEARNING_XFAIL.items()
-    ],
-)
+@pytest.mark.parametrize("factory", _TILE_FACTORIES)
 def test_native_tile_learning_capability(factory):
     """Learning-capability lock: train_step must move parameters."""
     model = factory(INPUT_DIM, HIDDEN_DIM, OUTPUT_DIM, lr=0.001)
