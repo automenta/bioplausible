@@ -33,6 +33,18 @@ from computronium.stability.basin import (
     estimate_basin_stability,
     estimate_basin_stability_multistart,
 )
+from computronium.stability.calibration import (
+    DEMO_GOOD_COORDINATES,
+    DISAGREEMENT_COORDINATES,
+    OVERHEAD_BUDGET,
+    PR5Calibration,
+    calibrate_demo_harvest,
+    ginibre_run,
+    harvest_bad_statistics,
+    harvest_good_statistics,
+    probe_interval_for_overhead,
+    unrolled_divergence,
+)
 from computronium.stability.config import (
     BasinConfig,
     GuardConfig,
@@ -129,4 +141,15 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "StepState",
     "ExternalTransitionFn",
     "StatisticKind",
+    # PR-5 demo-harvest calibration
+    "PR5Calibration",
+    "calibrate_demo_harvest",
+    "harvest_good_statistics",
+    "harvest_bad_statistics",
+    "probe_interval_for_overhead",
+    "unrolled_divergence",
+    "ginibre_run",
+    "DEMO_GOOD_COORDINATES",
+    "DISAGREEMENT_COORDINATES",
+    "OVERHEAD_BUDGET",
 ]

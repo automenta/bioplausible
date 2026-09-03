@@ -4,6 +4,21 @@ Append-only. One entry per pre-registration threshold, kill-criterion invocation
 
 ---
 
+## 2026-09-03 — PR-5 Guard Calibration: demo-harvest ROC operating point (E-11)
+
+- **Artifact:** `docs/figures/registered/stability_guard_pr5.json`, rendered at HEAD by `scripts/calibrate_stability_guard.py --family pr5` (~26 s) via `computronium.stability.calibration.calibrate_demo_harvest` — known-good = the 9 demo-suite coordinates (D1/D2 credit arms, D6 substrate arms, D7 spike, D3-family M-axis arms, quickstart instantaneous; 784→(32,)→10, batch 64, 4 episodes each), known-bad = divergence-labeled Ginibre runs (norm > 1e3× initial over 200 unrolled steps; 16 of 18 diverged, 2 marginal runs enter neither set).
+- **Pre-registered bars met with margin:** windowed-growth max-margin calibration lands at τ = 1.02895 — within 0.005% of the deployed `DEFAULT_TAU = 1.029` — at 0% false-kill (good max 1.000) and 100% kill (bad min 1.058) against the <5% / >95% bars.
+- **`fast_proxy` is calibration-only:** the known-good set's one-step Jacobian gain (max ≈ 1454 — memristive/neuromorphic substrate noise) engulfs the diverged range (0.93–1.51); calibration infeasible, deployed-τ operating point fails both bars (22% false-kill, 75% kill). This quantifies the family-sweep "INFEASIBLE on non-normal systems" deferral on real coordinates; the disagreement study (tiny dims) measures substrate-noise inflation (median rel-err ×1964 memristive, ×5e14 neuromorphic vs 0.61 digital) and full-Jacobian cost-infeasibility at demo dims (20.9 s vs 1.3 ms per probe).
+- **Overhead:** per-probe cost is 3.3× (fast_proxy) / 10.2× (windowed) a train step — the <10% bar is met by the calibrated probe interval (34 / 102 episodes between probes). `evaluate_episode`'s per-episode probe stays record-only telemetry; wiring the interval into the unattended AutoScientist loop is the deployment consumer, pulled with it.
+- **Scope honesty (R11.5.4):** instrument calibration, not a stability finding — the good arms are bounded by construction (saturating geometry + imp-60 zero-pad feedback), and the manufactured bad family validates discrimination, not campaign-observed instability.
+
+## 2026-09-03 — PR-9 Campaign Commissioning: smoke lifecycle recorded end-to-end (E-11)
+
+- **Artifact:** `autoscientist_campaigns/smoke_cpu/` re-commissioned at HEAD (`bc83cf17`), ~12 s wall — campaign `smoke_r51a_s0`, seed 0, `joint_smoke` random layout, checkpoint interval 1, 2 experiments/iteration.
+- **What was interrupted:** iteration 1, immediately after episode 1 (`digital/recurrent/instantaneous/fast_weights/local_goodness/euclidean`) was durably recorded and its entering-checkpoint written (`checkpoint_smoke_r51a_s0_ep000001_6864c635.pkl`); SIGKILL of the whole process group at `episodes >= 1` (db_iteration_at_kill=0, episodes_at_kill=1). Full pre-kill trail: `seed_0/records/run_first.txt` — unbuffered (`PYTHONUNBUFFERED=1`) as of this commissioning; the 2026-08-31 run's pre-kill trail was lost to stdout buffering on SIGKILL.
+- **What resume replayed:** the CLI `--resume` path resumed at iteration 0, **skipped** the interrupted (iteration 1, coordinate) slot as already-recorded — skip-not-duplicate, the script asserts zero duplicate (iteration, coordinate, task) keys — then re-checkpointed per episode and continued to iteration 6: 12 episodes, all `synthetic`, zero duplicates. Post-kill trail: `seed_0/records/run_resume.txt`; kill/resume facts pinned in `records/manifest.json` (`seeds_detail.0.kill`, `resume_elapsed_s`); merged records in `records/episodes.json` (12 FrontierRecords, load verified via `load_campaign_records`).
+- **Scope honesty (R11.5.4):** lifecycle commissioning (Tangible Checkpoint 3), not a finding — `replication_summary` shows 0/12 coordinates replicated (single seed vs min 5), episode accuracies are smoke-scale noise. No claim rides on the recorded losses.
+
 ## 2026-08-31 — Pre-registration: Adaptation Efficiency M-Axis on 48-Coordinate Fidelity Manifest (R5b-A / E-1/E-11)
 
 - **Artifact:** `configs/preregistrations/adaptation_efficiency_maxis_48coord.json` (committed before any confirmatory run on the fidelity-filtered grid; R5b-A deliverable per TODO8 Execution Order 10).

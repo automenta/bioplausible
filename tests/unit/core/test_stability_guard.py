@@ -7,7 +7,11 @@ import torch
 
 from computronium.core.joint.transition import PlasticityConfig
 from computronium.stability import (
+    DISAGREEMENT_COORDINATES,
+    OVERHEAD_BUDGET,
+    PR5Calibration,
     StabilityGuard,
+    calibrate_demo_harvest,
     calibrate_threshold,
     measure_guard_overhead,
     quantify_proxy_disagreement,
@@ -66,8 +70,9 @@ def state():
 
 def _scaling_transition(scale: float):
     def transition(z: CompositeState, _context: SystemContext) -> CompositeState:
+        x = z.activity["x"]
         return CompositeState(
-            activity={"x": scale * z.activity["x"]},
+            activity={"x": scale * x if isinstance(x, torch.Tensor) else x},
             plastic=z.plastic,
             substrate=z.substrate,
         )
@@ -156,3 +161,58 @@ class TestDisagreement:
             n_steps=PROBE_COUNT,
         )
         assert ratio > 0.0
+
+
+HARVEST_INPUT_DIM = 8
+HARVEST_HIDDEN_DIMS = (16,)
+HARVEST_BATCH = 16
+HARVEST_EPISODES = (0, 1, 2)
+
+
+@pytest.fixture(scope="module")
+def pr5_harvest() -> PR5Calibration:
+    return calibrate_demo_harvest(
+        input_dim=HARVEST_INPUT_DIM,
+        hidden_dims=HARVEST_HIDDEN_DIMS,
+        output_dim=HARVEST_INPUT_DIM,
+        batch_size=HARVEST_BATCH,
+        episodes=HARVEST_EPISODES,
+        include_demo_cost_probe=False,
+    )
+
+
+class TestPR5DemoHarvest:
+    """The PR-5 acceptance triple, re-demonstrated live at tiny scale."""
+
+    def test_windowed_growth_calibrates_within_bar(self, pr5_harvest):
+        report = pr5_harvest.calibration["windowed_growth"]
+        assert report is not None
+        assert report.false_kill_rate <= 0.05
+        assert report.kill_rate >= 0.95
+
+    def test_deployed_tau_meets_roc_bar_on_windowed(self, pr5_harvest):
+        false_kill, kill_rate = pr5_harvest.deployed_tau["windowed_growth"]
+        assert false_kill <= 0.05
+        assert kill_rate >= 0.95
+
+    def test_fast_proxy_is_calibration_only(self, pr5_harvest):
+        assert pr5_harvest.calibration["fast_proxy"] is None
+        false_kill, _ = pr5_harvest.deployed_tau["fast_proxy"]
+        assert false_kill > 0.05
+
+    def test_substrate_noise_inflates_proxy_disagreement(self, pr5_harvest):
+        reports = pr5_harvest.disagreement
+        digital = reports[DISAGREEMENT_COORDINATES[0]].median_relative_error
+        memristive = reports[DISAGREEMENT_COORDINATES[1]].median_relative_error
+        assert memristive > digital
+
+    def test_full_jacobian_reference_dominates_cost(self, pr5_harvest):
+        report = pr5_harvest.disagreement[DISAGREEMENT_COORDINATES[0]]
+        assert report.full_jacobian_seconds > report.proxy_seconds
+
+    def test_probe_interval_meets_overhead_budget(self, pr5_harvest):
+        for kind, ratio in pr5_harvest.overhead_ratio.items():
+            interval = pr5_harvest.probe_interval[kind]
+            assert ratio >= 1.0
+            assert interval >= 1
+            assert ratio / interval <= OVERHEAD_BUDGET

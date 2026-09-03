@@ -1,9 +1,16 @@
 """PR-5 stability-guard calibration driver.
 
-Generates known-good/known-bad runs from a non-normal linear family
-(Ginibre ensemble), labels them by unrolled divergence, then ROC-calibrates
-guard kill thresholds and quantifies proxy-vs-full-Jacobian disagreement.
-Writes `benchmark_results/stability_guard_calibration/calibration.json`.
+Two families:
+
+- ``ginibre`` (legacy): known-good/known-bad runs both from a non-normal
+  linear family (Ginibre ensemble), labeled by unrolled divergence; ROC-
+  calibrates guard kill thresholds and quantifies proxy-vs-full-Jacobian
+  disagreement. Writes ``calibration.json``.
+- ``pr5``: the demo-harvest calibration — known-good statistics from the
+  demo-suite coordinate family, known-bad from divergence-labeled Ginibre
+  runs, plus deployed-τ operating point, overhead intervals, and the
+  disagreement study (:func:`computronium.stability.calibration
+  .calibrate_demo_harvest`). Writes ``stability_guard_pr5.json``.
 """
 
 from __future__ import annotations
@@ -17,7 +24,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
-import torch
 
 from computronium.core.joint.transition import PlasticityConfig
 from computronium.stability import (
@@ -26,18 +32,25 @@ from computronium.stability import (
     measure_guard_overhead,
     quantify_proxy_disagreement,
 )
+from computronium.stability.calibration import (
+    EXPLOSION_FACTOR,
+    UNROLL_STEPS,
+    calibrate_demo_harvest,
+    ginibre_run,
+    unrolled_divergence,
+)
 from computronium.stability.guard import ProbeSpec
 from computronium.state import CompositeState, SystemContext
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.stability.guard import StatisticKind
 
 logger = logging.getLogger(__name__)
 
 GAINS = (0.7, 0.8, 0.9, 0.95, 1.0, 1.05, 1.1, 1.2, 1.4)
 SEEDS_PER_GAIN = 4
-UNROLL_STEPS = 200
-EXPLOSION_FACTOR = 1e3
 STATISTIC_KINDS: tuple[StatisticKind, ...] = ("fast_proxy", "windowed_growth")
 
 
@@ -76,34 +89,20 @@ def _synthetic_context(dim: int) -> SystemContext:
     )
 
 
-def _make_run(gain: float, seed: int, dim: int, batch: int):
-    generator = torch.Generator().manual_seed(seed)
-    weight = torch.randn(dim, dim, generator=generator) / np.sqrt(dim) * gain
-    state = CompositeState(
-        activity={"x": torch.randn(batch, dim, generator=generator)},
-        plastic={},
-        substrate={},
-    )
-
-    def transition(z: CompositeState, _context: SystemContext) -> CompositeState:
-        return CompositeState(
-            activity={"x": z.activity["x"] @ weight.T},
-            plastic=z.plastic,
-            substrate=z.substrate,
-        )
-
-    return transition, state
+def _make_run(
+    gain: float, seed: int, dim: int, batch: int
+) -> tuple[
+    Callable[[CompositeState, SystemContext | None], CompositeState], CompositeState
+]:
+    return ginibre_run(gain, seed, dim, batch)
 
 
-def _diverges(transition, state, context) -> bool:
-    initial_norm = state.activity["x"].norm().item()
-    z = state
-    for _ in range(UNROLL_STEPS):
-        z = transition(z, context)
-        norm = z.activity["x"].norm().item()
-        if not np.isfinite(norm) or norm > EXPLOSION_FACTOR * initial_norm:
-            return True
-    return False
+def _diverges(
+    transition: Callable[[CompositeState, SystemContext | None], CompositeState],
+    state: CompositeState,
+    _context: SystemContext | None,
+) -> bool:
+    return unrolled_divergence(transition, state, _context)
 
 
 def _probe_statistic(transition, state, context, statistic: StatisticKind) -> float:
@@ -167,6 +166,13 @@ def _summarize(stats: dict[StatisticKind, list[float]], key: str) -> dict[str, o
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--family",
+        choices=("ginibre", "pr5"),
+        default="ginibre",
+        help="ginibre = legacy all-synthetic calibration; pr5 = demo-harvest "
+        "calibration (known-good from the demo-suite coordinate family)",
+    )
     parser.add_argument("--dim", type=int, default=32)
     parser.add_argument("--batch", type=int, default=4)
     parser.add_argument(
@@ -174,6 +180,22 @@ def main() -> None:
     )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.family == "pr5":
+        started = time.perf_counter()
+        calibration = calibrate_demo_harvest()
+        artifact = {"family": "pr5", "calibration": calibration.to_dict()}
+        output_path = output_dir / "stability_guard_pr5.json"
+        output_path.write_text(json.dumps(artifact, indent=2))
+        logger.info(
+            "pr5 artifact written to %s (%.1fs)",
+            output_path,
+            time.perf_counter() - started,
+        )
+        return
 
     context = _synthetic_context(args.dim)
     good, bad = _collect_labeled_stats(args.dim, args.batch, context)

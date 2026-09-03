@@ -1,0 +1,228 @@
+{
+  "family": "pr5",
+  "calibration": {
+    "good_summary": {
+      "fast_proxy": {
+        "n": 36,
+        "min": 0.023303337395191193,
+        "max": 1428.5225830078125,
+        "mean": 205.03598987828525
+      },
+      "windowed_growth": {
+        "n": 36,
+        "min": 1.0,
+        "max": 1.0,
+        "mean": 1.0
+      }
+    },
+    "bad_summary": {
+      "fast_proxy": {
+        "n": 16,
+        "min": 0.9561454057693481,
+        "max": 1.449254035949707,
+        "mean": 1.145145021378994
+      },
+      "windowed_growth": {
+        "n": 16,
+        "min": 1.0579068352141932,
+        "max": 61.6002441175727,
+        "mean": 10.658965612034573
+      }
+    },
+    "calibration": {
+      "fast_proxy": null,
+      "windowed_growth": {
+        "threshold": 1.0289534176070965,
+        "false_kill_rate": 0.0,
+        "kill_rate": 1.0,
+        "n_good": 36,
+        "n_bad": 16,
+        "roc_points": [
+          [
+            0.0,
+            1.0
+          ],
+          [
+            0.0,
+            0.9375
+          ],
+          [
+            0.0,
+            0.875
+          ],
+          [
+            0.0,
+            0.8125
+          ],
+          [
+            0.0,
+            0.75
+          ],
+          [
+            0.0,
+            0.6875
+          ],
+          [
+            0.0,
+            0.625
+          ],
+          [
+            0.0,
+            0.5625
+          ],
+          [
+            0.0,
+            0.5
+          ],
+          [
+            0.0,
+            0.4375
+          ],
+          [
+            0.0,
+            0.375
+          ],
+          [
+            0.0,
+            0.3125
+          ],
+          [
+            0.0,
+            0.25
+          ],
+          [
+            0.0,
+            0.1875
+          ],
+          [
+            0.0,
+            0.125
+          ],
+          [
+            0.0,
+            0.0625
+          ],
+          [
+            0.0,
+            0.0
+          ]
+        ]
+      }
+    },
+    "deployed_tau": {
+      "fast_proxy": {
+        "tau": 1.029,
+        "false_kill_rate": 0.2222222238779068,
+        "kill_rate": 0.6875
+      },
+      "windowed_growth": {
+        "tau": 1.029,
+        "false_kill_rate": 0.0,
+        "kill_rate": 1.0
+      }
+    },
+    "overhead_ratio": {
+      "fast_proxy": 4.074206996993772,
+      "windowed_growth": 10.095211314823496
+    },
+    "probe_interval": {
+      "fast_proxy": 41,
+      "windowed_growth": 101
+    },
+    "disagreement": {
+      "digital/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean": {
+        "n_probes": 10,
+        "mean_relative_error": 0.601540066543682,
+        "median_relative_error": 0.5994567250775198,
+        "p95_relative_error": 0.6302770046154177,
+        "pearson_correlation": 0.0,
+        "mean_absolute_error": 0.34901588708162307,
+        "median_absolute_error": 0.3478071242570877,
+        "median_reference_norm": 0.5802038908004761,
+        "proxy_seconds": 0.0038655009120702744,
+        "full_jacobian_seconds": 0.20999982417561114
+      },
+      "memristive/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean": {
+        "n_probes": 10,
+        "mean_relative_error": 1945.4356792294257,
+        "median_relative_error": 1924.5321770904793,
+        "p95_relative_error": 2191.777670910043,
+        "pearson_correlation": -0.3011105868707424,
+        "mean_absolute_error": 1246.4855465769767,
+        "median_absolute_error": 1234.5362119674683,
+        "median_reference_norm": 0.6402713656425476,
+        "proxy_seconds": 0.012646051356568933,
+        "full_jacobian_seconds": 0.24384062527678907
+      },
+      "neuromorphic/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean": {
+        "n_probes": 10,
+        "mean_relative_error": 416691491703362.1,
+        "median_relative_error": 447759231567382.8,
+        "p95_relative_error": 649015994262695.2,
+        "pearson_correlation": -0.03665734817332304,
+        "mean_absolute_error": 461.33650490632283,
+        "median_absolute_error": 451.8665302689187,
+        "median_reference_norm": 0.0,
+        "proxy_seconds": 0.005887232255190611,
+        "full_jacobian_seconds": 0.26670319912955165
+      },
+      "demo_dims_cost/digital/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean": {
+        "n_probes": 1,
+        "mean_relative_error": 0.9389052071072798,
+        "median_relative_error": 0.9389052071072798,
+        "p95_relative_error": 0.9389052071072798,
+        "pearson_correlation": 0.0,
+        "mean_absolute_error": 0.3870841935276985,
+        "median_absolute_error": 0.3870841935276985,
+        "median_reference_norm": 0.4122718572616577,
+        "proxy_seconds": 0.0011802129447460175,
+        "full_jacobian_seconds": 21.372243992052972
+      }
+    },
+    "family": {
+      "good_coordinates": [
+        "digital/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean",
+        "digital/recurrent/energy_minimization/null/gradient/euclidean",
+        "digital/recurrent/energy_minimization/null/random_projections/euclidean",
+        "memristive/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean",
+        "neuromorphic/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean",
+        "digital/feedforward/spike_integration/null/gradient/euclidean",
+        "digital/feedforward/instantaneous/null/gradient/euclidean",
+        "digital/recurrent/instantaneous/routing/gradient/euclidean",
+        "digital/recurrent/instantaneous/fast_weights/gradient/euclidean"
+      ],
+      "input_dim": 784,
+      "hidden_dims": [
+        32
+      ],
+      "output_dim": 10,
+      "batch_size": 64,
+      "episodes": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "window": 10,
+      "bad_family": {
+        "type": "ginibre_linear",
+        "dim": 32,
+        "batch": 4,
+        "gains": [
+          0.95,
+          1.0,
+          1.05,
+          1.1,
+          1.2,
+          1.4
+        ],
+        "seeds_per_gain": 3,
+        "label_rule": "norm > 1e+03x initial over 200 steps"
+      },
+      "overhead_budget": 0.1,
+      "max_false_kill": 0.05,
+      "min_kill_rate": 0.95,
+      "seed": 0
+    }
+  }
+}

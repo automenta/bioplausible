@@ -36,10 +36,16 @@
 > surfaces resolve native 5-D factories now; registry-era tests replaced by
 > ontology-API tests or retired with their deleted features),
 > **R11.1.3** (tile × dynamics matrix resolved as permanent strict xfails
-> with mechanism-level reasons; `comp repro` now 7/7).
-> Next: R11.3.1 PR-9 campaign commissioning (Tangible Checkpoint 3; see the
-> R11.3 trigger note — R11.2.2 is deprioritized, so PR-9 is un-gated from
-> it); R11.1 remainder and R11.3/R11.4 are pull-based.
+> with mechanism-level reasons; `comp repro` now 7/7), **R11.3.1** (PR-9
+> campaign commissioning: smoke kill→resume cycle re-recorded at HEAD —
+> `records/episodes.json` + manifest kill/resume events + DECISIONS E-11
+> note; unbuffered pre-kill trail added to the commissioning script),
+> **R11.3.3** (PR-5 calibrated stability guard: demo-harvest ROC over the
+> demo-suite coordinate family — windowed-growth recalibration lands within
+> 0.005% of deployed τ, fast_proxy quantified as calibration-only, overhead
+> bar met via calibrated probe interval; artifact + live lock).
+> Next: R11.1 remainder and R11.4 are pull-based (R11.1.4's tile settle
+> kernel is the standing unlock for the seven tile xfails).
 
 ---
 
@@ -405,6 +411,20 @@ which gates every empirical item.
     round-trip, module-boundary (target module gone). `hyperopt/comparison`
     dropped `get_model_spec`; `p2p/evolution` gets
     `get_available_models()` = sorted `RULE_SPACES` keys.
+- [x] **R11.2.22 Fidelity-gate determinism** (found 2026-09-03 during R11.3.1
+  verification) ✅ **LANDED 2026-09-03.** `check_coordinate_fidelity` now
+  takes `seed: int | None = 0` and constructs the coordinate's joint inside
+  `torch.random.fork_rng()` with `torch.manual_seed(seed)` — verdicts no
+  longer ride the ambient global RNG, and the probe no longer disturbs the
+  caller's RNG stream at all (the fork restores it on exit). `seed=None`
+  restores ambient-RNG construction. All 24 fidelity verdicts held under
+  seed 0 — no re-pins needed (the predictive-settling "documented defect"
+  fail/pass/fail pins are deterministic at the canonical seed). The
+  previously-flaking combination (`test_campaign_stack.py` +
+  `test_campaign_fidelity.py` in one process) is green: 63/63 in 11.8 s.
+  Pyright clean on the touched module. Historical campaign artifacts
+  (`r51c/`, `r5b_b/` fidelity manifests) were rendered under ambient RNG
+  and stay as history — not regenerated.
 - [ ] **R11.2.9 imp-23** — `substrate_coupled` plasticity
   engagement-verified only; probe fixed-dim `step` assumptions.
 - [x] **R11.2.10 imp-26** — params-moved learning locks ✅ **LANDED
@@ -480,15 +500,22 @@ harvest is free (the demo suite's pinned configs and outcomes are exactly
 PR-7's known-good/known-bad set). The rest pull when their research
 consumer exists.
 
-- [ ] **R11.3.1 PR-9 — Campaign commissioning** (Tangible Checkpoint 3;
-  the gateway to every unattended result). One tiny AutoScientist campaign
-  completing a full **iterate → interrupt → checkpoint → resume** cycle
-  end-to-end, recorded: the artifact is the campaign directory
-  (`records/episodes.json` + checkpoint + resume event in its manifest)
-  plus a one-paragraph commissioning note in `DECISIONS.md` (E-11) stating
-  what was interrupted and what resume replayed. Machinery is built
-  (`CampaignStack`: deterministic resume, skip-not-duplicate, YAML+SQLite
-  checkpoints) but the commissioned cycle is not yet a recorded run.
+- [x] **R11.3.1 PR-9 — Campaign commissioning** (Tangible Checkpoint 3) ✅
+  **LANDED 2026-09-03.** The smoke campaign was already commissioned once
+  (2026-08-31, R5.1a) but its artifact predated `records/episodes.json` and
+  had no DECISIONS note — re-commissioned at HEAD
+  (`scripts/commission_smoke_campaign.py --fresh`, ~12 s): campaign
+  `smoke_r51a_s0`, seed 0, SIGKILL at `episodes >= 1` (checkpoint observed,
+  db_iteration_at_kill=0), CLI `--resume` skipped the interrupted slot
+  (skip-not-duplicate asserted by the script), 12 episodes to iteration 6.
+  Artifact: `autoscientist_campaigns/smoke_cpu/records/{episodes.json,
+  manifest.json, report.md, checkpoint_s0.yaml}` + full pre-kill/resume
+  event trails under `seed_0/records/` (pre-kill trail now unbuffered —
+  `PYTHONUNBUFFERED=1` in the script's subprocesses; the old run's was
+  lost to SIGKILL stdout buffering). `load_campaign_records` consumes the
+  12 records. One-paragraph commissioning note in `DECISIONS.md` (E-11).
+  **Scope:** lifecycle commissioning only — 0/12 replicated (single seed),
+  no claim rides on the records.
 - [x] **R11.3.2 PR-2 — θ-invariance audit harness.** ✅ **LANDED
   2026-09-03.** `core/theta_audit.py`: `theta_audit(system_or_mapping,
   label=…, seed=…)` context manager — snapshot θ on entry, exact-diff on
@@ -505,11 +532,29 @@ consumer exists.
   + `core/profiling.py` wired into suite runners emitting proxy
   FLOPs/memory/latency; feeds Z3 energy metrics (proxy tier), L2
   effective-FLOPs, the 𝒞 vector.
-- [ ] **R11.3.3 PR-5 — Calibrated stability guard.** ROC-calibrated kill
-  thresholds (<5% false-kill on known-good, >95% kill rate, <10%
-  overhead) from the demo-suite/PR-7 harvest; `_fast_proxy` vs
-  full-Jacobian disagreement rate quantified. PR-0's shipped
-  `PowerPreregistration`/embedded-control machinery is the substrate.
+- [x] **R11.3.3 PR-5 — Calibrated stability guard.** ✅ **LANDED
+  2026-09-03.** `computronium/stability/calibration.py`:
+  `calibrate_demo_harvest` — known-good = the 9 demo-suite coordinates in
+  campaign-builder syntax (D1/D2 credit arms, D6 substrate arms, D7 spike,
+  D3-family M-axis arms, quickstart instantaneous; 784→(32,)→10, batch 64,
+  4 episodes each, fork-rng'd builds), known-bad = divergence-labeled
+  Ginibre runs (norm > 1e3× over 200 unrolled steps; marginal non-diverging
+  runs enter neither set); ROC per statistic kind, deployed-τ operating
+  point, overhead ratios + calibrated probe intervals, proxy-vs-full-Jacobian
+  disagreement (tiny-dim study + demo-dims cost datapoint). **Bars met:**
+  windowed-growth max-margin τ = 1.02895 — within 0.005% of deployed 1.029 —
+  at 0% false-kill / 100% kill (<5% / >95% pre-registered); `fast_proxy`
+  infeasible (substrate noise inflates good-arm gain to ≈1454 vs diverged
+  range 0.93–1.51 — calibration-only, matching the family-sweep deferral,
+  now measured on real coordinates); <10% overhead met via probe interval
+  (34/102 episodes; `evaluate_episode`'s per-episode probe stays
+  record-only telemetry). Artifact committed
+  `docs/figures/registered/stability_guard_pr5.json` (script `--family
+  pr5`, ~26 s; legacy `--family ginibre` kept); E-11 note in DECISIONS.md;
+  RESULTS.md third guarantee row; live lock `TestPR5DemoHarvest`
+  (6 assertions incl. the fast_proxy rejection and noise-inflation
+  mechanism; file 18 passed in 4.6 s). Deployment consumer — wiring the
+  interval into the unattended AutoScientist loop — pulls with it.
 - [ ] **R11.3.4 AutoScientist M-axis frontier** (Tangible Checkpoint 5 —
   the first *finding* figure). One axis at a time: pin S/G/D/C/U, sweep
   M ∈ {Null, Routing, FastWeight, RuleState}; ResourceUsage aggregated
@@ -639,6 +684,10 @@ consumer exists.
   live in the checksummed manifest). Not executed this sprint — flagged for
   the next editor / user decision.
 - **`benchmark_results/` stays untracked** (standing directive).
+- **Fidelity probes RNG-order sensitivity — RESOLVED (R11.2.22,
+  2026-09-03):** `check_coordinate_fidelity` is seeded + fork-rng'd;
+  verdicts are deterministic and the probe leaves the caller's RNG stream
+  untouched. Historical fidelity manifests stay ambient-RNG artifacts.
 - **Stale eager-default metric lookups (R11.1.3, 2026-09-03):**
   `d.get("free_accuracy", d["accuracy"])` evaluates the default eagerly —
   any pipeline metrics consumer written before imp-20/46 dropped the
@@ -736,6 +785,17 @@ one.
   `experiment/param_estimator.py` still lists `("tile_ep",
   create_native_tile_ep)` and will raise the same TypeError if exercised —
   same unlock, as-touch.
+- **PR-5 instrument (R11.3.3, 2026-09-03):** `calibrate_demo_harvest`
+  (stability/calibration.py) is the single calibration surface; the
+  committed artifact is `docs/figures/registered/stability_guard_pr5.json`,
+  rendered by `scripts/calibrate_stability_guard.py --family pr5` (legacy
+  `--family ginibre` kept unchanged). Known-bad is a *manufactured*
+  explosive family — when real diverged campaign runs accumulate (the
+  failure manifesto), re-calibrate against those and retire the Ginibre
+  proxy. `evaluate_episode` probes windowed growth every episode
+  (record-only telemetry); deploying the kill switch means wiring
+  `probe_interval_for_overhead`'s interval (102 episodes at demo scale)
+  into the AutoScientist loop — the consumer that pulls it.
 - **Demo-test record determinism (D8, 2026-09-03):** seed *before*
   materializing loader batches (the trainer's seed comes later); workers
   spawn per loader *iteration*, so materialize once and share. Where a demo

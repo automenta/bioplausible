@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import signal
 import subprocess  # ruff: ignore[suspicious-subprocess-import]
@@ -33,6 +34,8 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RECORDS_DIRNAME = "records"
+# SIGKILL discards buffered stdout — the pre-kill event trail would be lost.
+_SUBPROC_ENV = {**os.environ, "PYTHONUNBUFFERED": "1"}
 
 
 def _parse_args() -> argparse.Namespace:
@@ -190,8 +193,6 @@ def _db_state(seed: int, args: argparse.Namespace) -> tuple[int, int, str]:
 
 def _kill_tree(proc: subprocess.Popen[bytes]) -> None:
     """SIGKILL the whole session — uv alone would orphan the worker python."""
-    import os
-
     os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
     proc.wait()
 
@@ -208,6 +209,7 @@ def _stage_kill(args: argparse.Namespace, seed: int, log_path: Path) -> dict:
             stdout=log,
             stderr=subprocess.STDOUT,
             start_new_session=True,
+            env=_SUBPROC_ENV,
         )
         while time.monotonic() - started < args.kill_timeout:
             if proc.poll() is not None:
@@ -249,6 +251,7 @@ def _stage_run(
             stdout=log,
             stderr=subprocess.STDOUT,
             check=False,
+            env=_SUBPROC_ENV,
         )
     if proc.returncode != 0:
         sys.exit(f"seed {seed} run failed (exit {proc.returncode}); see {log_path}")

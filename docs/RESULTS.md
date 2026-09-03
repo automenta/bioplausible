@@ -24,6 +24,7 @@
 |-----------|------------------------|---------------|--------|
 | **The memory profiler is honest** | Under a 0.015 MiB budget the BPTT-profiled arm is walled at every depth *before training*; the O(1)-memory arm runs and learns | `test_demo_memory_budget.py` — verdicts are profile arithmetic, walled cells produce no walk | [d4](figures/d4_memory_budget.png) |
 | **Frozen θ is bitwise** | θ's SHA-256 identical across freeze → adapt ψ on A → switch to B → restore; the restored ψ-system reproduces stage-A accuracy *exactly* | `test_demo_z3_frozen_theta.py` (J2, demonstrated, not just locked) | [d5](figures/d5_z3_frozen_theta.png) |
+| **The stability guard is calibrated (PR-5)** | Demo-harvest ROC over the demo-suite coordinate family: windowed growth reads 1.0 on every known-good arm (bounded activations) and ≥ 1.06 on every verified-divergent run — the deployed τ = 1.029 is lossless (0% false-kill, 100% kill; the max-margin recalibration lands within 0.005% of it). `fast_proxy` is calibration-only: substrate noise inflates its good-arm gain (max ≈ 1454) past the diverged range (0.93–1.51) — infeasible. Per-probe cost 3.3×/10.2× a train step → the <10% overhead bar is met by the calibrated probe interval (34/102 episodes) | `tests/unit/core/test_stability_guard.py::TestPR5DemoHarvest` re-harvests and re-calibrates live; demo-scale record [stability_guard_pr5.json](figures/registered/stability_guard_pr5.json) (regenerate: `uv run scripts/calibrate_stability_guard.py --family pr5`) | — |
 
 ## Back: historical corroboration
 

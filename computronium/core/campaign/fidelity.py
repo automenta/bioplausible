@@ -562,15 +562,28 @@ def _check_plasticity(joint, parts: list[str]) -> AxisCheck:
     )
 
 
+_FIDELITY_SEED = 0
+
+
 def check_coordinate_fidelity(
     coordinate: str,
     *,
     device: str | torch.device | None = None,
+    seed: int | None = _FIDELITY_SEED,
 ) -> CoordinateFidelity:
-    """Run every fidelity probe against one campaign coordinate."""
+    """Run every fidelity probe against one campaign coordinate.
+
+    Seeded by default: verdicts must not depend on the ambient global RNG
+    state (the predictive-settling error-trajectory check sits near an
+    init-dependent boundary and flipped with test ordering otherwise).
+    ``seed=None`` restores ambient-RNG construction.
+    """
     parts = coordinate.split("/")
     try:
-        joint = build_coordinate_system(coordinate, device=device)
+        with torch.random.fork_rng():
+            if seed is not None:
+                torch.manual_seed(seed)
+            joint = build_coordinate_system(coordinate, device=device)
     except IncompatibleCoordinateError as exc:
         return CoordinateFidelity(
             coordinate=coordinate,
