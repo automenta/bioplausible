@@ -1,0 +1,9 @@
+{
+  "figure": "deep_credit_cliff.png",
+  "source_artifact": "benchmark_results/deep_credit_registered.json",
+  "source_artifact_sha256": "1e579f472b30d8754b1e73dc5f5bf00a1765805fe47e718c8dd00998f6336bf8",
+  "source_run_provenance": "unknown (artifact records no git commit)",
+  "rendered_by": "scripts/render_registered_figures.py",
+  "rendered_at_commit": "26756b785b2da12ba925c1f7eb4ce571f930907c",
+  "scope_label": "registered research scale (historical, not a live claim)"
+}

@@ -4,19 +4,24 @@ The same coordinate — Feedforward × Instantaneous × Null × Backprop ×
 Euclidean — is trained three times on MNIST through identical
 ``SystemTrainer`` wiring; the only difference between arms is the substrate.
 ``create_backprop_mlp`` runs on the digital substrate (native execution);
-``create_memristive_mlp`` swaps the S-axis to memristive physics — weights
-are non-negative bounded conductances clamped at every forward pass and
-activations carry IR-drop noise of ``noise_level`` standard deviations.
-The runner watches the physics, not a metric table: mild IR-drop learns
-within its conductance bounds, severe IR-drop walls learning at chance —
+``create_memristive_mlp`` swaps the S-axis to memristive physics — signed
+weights realized as differential-pair conductances (every device bounded
+in [0, 1] with int8 straight-through quantization, the pair difference
+carrying the sign) and activations carrying IR-drop noise of
+``noise_level`` standard deviations. The runner watches the physics, not a
+metric table: at mild IR-drop the pair's signed range learns nearly as
+well as digital, at severe IR-drop the noise walls learning at chance —
 the physical constraint, not the algorithm, decides.
 
-Demonstrated regime (pinned 2026-09-02): MNIST quick-mode train stream
-capped at 1000 batches (batch 32), 1 epoch, hidden ``(32,)``, Euclidean
-step 0.05, IR-drop noise 0.05 (mild) vs 3.0 (severe) -> accuracy ≈
-0.91 / 0.84 / 0.14 (chance 0.1). Live sweep 2026-09-02: noise 0.5 -> 0.82,
-1.5 -> 0.57 — the staircase is monotone; 3.0 walls the arm, so the severe
-arm's contrast is categorical by regime choice, not by guard band.
+Demonstrated regime (re-pinned 2026-09-02 under differential-pair
+conductance semantics): MNIST quick-mode train stream capped at 1000
+batches (batch 32), 1 epoch, hidden ``(32,)``, Euclidean step 0.05,
+IR-drop noise 1.5 (mild) vs 8.0 (severe) -> accuracy ≈ 0.91 digital /
+0.78 mild / 0.12 severe (chance 0.1). Live sweep 2026-09-02: noise 0.5 ->
+0.89, 3.0 -> 0.56, 6.0 -> 0.22 — the staircase is monotone; 8.0 walls the
+arm, so the severe arm's contrast is categorical by regime choice, not by
+guard band. (Under the pre-pair unsigned-clamp semantics the same dial
+walled at 3.0; the signed pair doubles the signal path and moved the wall.)
 """
 
 from itertools import islice
@@ -49,10 +54,17 @@ def test_demo_substrate_swap(emit_run_record) -> None:
 
     arms = (
         ("digital", lambda: create_backprop_mlp(784, (32,), 10, lr=0.05, device="cpu")),
-        ("memristive_mild", lambda: create_memristive_mlp(784, (32,), 10, lr=0.05, device="cpu")),
+        (
+            "memristive_mild",
+            lambda: create_memristive_mlp(
+                784, (32,), 10, lr=0.05, noise_level=1.5, device="cpu"
+            ),
+        ),
         (
             "memristive_severe",
-            lambda: create_memristive_mlp(784, (32,), 10, lr=0.05, noise_level=3.0, device="cpu"),
+            lambda: create_memristive_mlp(
+                784, (32,), 10, lr=0.05, noise_level=8.0, device="cpu"
+            ),
         ),
     )
 

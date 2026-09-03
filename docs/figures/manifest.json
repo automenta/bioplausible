@@ -1,0 +1,76 @@
+{
+  "figures": [
+    {
+      "capability_id": "D1",
+      "capability_name": "compose_6axis",
+      "data_sha256": "9296e194650129782f787ccbb993b41c2fb43027e40decea2d0c0d2dd4d0ce13",
+      "demo_test": "tests/integration/test_demo_compose_6axis.py",
+      "figure_png": "d1_compose_6axis.png",
+      "provenance": {
+        "config_sha256": "9296e194650129782f787ccbb993b41c2fb43027e40decea2d0c0d2dd4d0ce13",
+        "git_commit": "eef4d3688d8346e34fdcefd0541f16e5c1f92a88"
+      },
+      "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
+    },
+    {
+      "capability_id": "D2",
+      "capability_name": "swap_credit",
+      "data_sha256": "ce82596bfd7c3ae30ee4eb02e647a2663f15a268267ea2ed627e016304da4b18",
+      "demo_test": "tests/integration/test_demo_swap_credit.py",
+      "figure_png": "d2_swap_credit.png",
+      "provenance": {
+        "config_sha256": "ce82596bfd7c3ae30ee4eb02e647a2663f15a268267ea2ed627e016304da4b18",
+        "git_commit": "eef4d3688d8346e34fdcefd0541f16e5c1f92a88"
+      },
+      "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
+    },
+    {
+      "capability_id": "D3",
+      "capability_name": "swap_plasticity",
+      "data_sha256": "623738404540be7334fda66512eabe0f3eb06a203b24d9cdb2912a66efc340d1",
+      "demo_test": "tests/integration/test_demo_swap_plasticity.py",
+      "figure_png": "d3_swap_plasticity.png",
+      "provenance": {
+        "config_sha256": "623738404540be7334fda66512eabe0f3eb06a203b24d9cdb2912a66efc340d1",
+        "git_commit": "eef4d3688d8346e34fdcefd0541f16e5c1f92a88"
+      },
+      "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
+    },
+    {
+      "capability_id": "D4",
+      "capability_name": "memory_budget",
+      "data_sha256": "e1b90bf9efc6080ce7d177331d74896e02395bb762f171a872844b8b1caca746",
+      "demo_test": "tests/integration/test_demo_memory_budget.py",
+      "figure_png": "d4_memory_budget.png",
+      "provenance": {
+        "config_sha256": "e1b90bf9efc6080ce7d177331d74896e02395bb762f171a872844b8b1caca746",
+        "git_commit": "eef4d3688d8346e34fdcefd0541f16e5c1f92a88"
+      },
+      "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
+    },
+    {
+      "capability_id": "D5",
+      "capability_name": "z3_frozen_theta",
+      "data_sha256": "4538685f139762a34709769c01ddb5ea1206419896a4120d2243a475a9d4c2ad",
+      "demo_test": "tests/integration/test_demo_z3_frozen_theta.py",
+      "figure_png": "d5_z3_frozen_theta.png",
+      "provenance": {
+        "config_sha256": "4538685f139762a34709769c01ddb5ea1206419896a4120d2243a475a9d4c2ad",
+        "git_commit": "eef4d3688d8346e34fdcefd0541f16e5c1f92a88"
+      },
+      "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
+    },
+    {
+      "capability_id": "D6",
+      "capability_name": "substrate_swap",
+      "data_sha256": "989683bdd81f756d538b261884c554660960cfd784e198f3527d25ce179866c0",
+      "demo_test": "tests/integration/test_demo_substrate_swap.py",
+      "figure_png": "d6_substrate_swap.png",
+      "provenance": {
+        "config_sha256": "989683bdd81f756d538b261884c554660960cfd784e198f3527d25ce179866c0",
+        "git_commit": "eef4d3688d8346e34fdcefd0541f16e5c1f92a88"
+      },
+      "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
+    }
+  ]
+}

@@ -41,7 +41,8 @@ class SubstrateConfig:
         precision: Numeric precision ("float32", "float16", "bfloat16",
             "int8", "int4", "binary")
         noise_level: Standard deviation of additive state noise
-        weight_bounds: Optional (min, max) tuple for weight clamping
+        weight_bounds: Optional (min, max) bounds applied by the substrate
+            (the per-device conductance range for memristive devices)
         sparsity: Target sparsity ratio [0, 1]
         device: Target device ("cpu", "cuda", "mps", "fpga", "analog",
             "optical")
@@ -369,15 +370,44 @@ class AnalogSubstrate:
 
 
 class MemristiveSubstrate:
-    """Memristive crossbar substrate with conductance constraints."""
+    """Memristive crossbar substrate with differential-pair conductances.
+
+    A signed weight W is realized as a device pair: each device's
+    conductance is non-negative and bounded by the configured range
+    (``weight_bounds``), quantized to the configured precision (int8 ->
+    256 levels, straight-through estimator on the backward pass), and the
+    forward product uses the pair difference, so the effective weight
+    range is symmetric while every physical device stays positive-bounded.
+    """
+
+    _CONDUCTANCE_LEVELS = {"int4": 15, "int8": 255}
 
     def __init__(self, config: SubstrateConfig | None = None):
         self.config = config or SubstrateConfig.memristive()
 
+    def _quantize_conductance(self, g: Tensor) -> Tensor:
+        if self.config.weight_bounds is None:
+            return g
+        g_min, g_max = self.config.weight_bounds
+        levels = self._CONDUCTANCE_LEVELS.get(self.config.precision)
+        if levels is None:
+            return g
+        scale = g_max - g_min
+        g_q = g_min + torch.round((g - g_min) / scale * levels) * scale / levels
+        # STE: forward quantized, backward identity
+        return g_q.detach() + (g - g.detach())
+
     def quantize_weights(self, w: Tensor) -> Tensor:
+        """Map weights to device conductances in the configured range."""
         if self.config.weight_bounds is not None:
-            w = w.clamp(*self.config.weight_bounds)
+            w = self._quantize_conductance(w.clamp(*self.config.weight_bounds))
         return w
+
+    def conductance_pair(self, w: Tensor) -> tuple[Tensor, Tensor]:
+        """Differential pair (g+, g-) realizing the signed weight W."""
+        if self.config.weight_bounds is None:
+            return w, torch.zeros_like(w)
+        return self.quantize_weights(w), self.quantize_weights(-w)
 
     def inject_state_noise(self, s: Tensor) -> Tensor:
         if self.config.noise_level > 0:
@@ -388,8 +418,8 @@ class MemristiveSubstrate:
     def get_forward_operator(self) -> Callable[[Tensor, Tensor], Tensor]:
         def forward(x: Tensor, w: Tensor) -> Tensor:
             x = self.inject_state_noise(x)
-            w = self.quantize_weights(w)
-            return x @ w.T
+            g_plus, g_minus = self.conductance_pair(w)
+            return x @ (g_plus - g_minus).T
 
         return forward
 

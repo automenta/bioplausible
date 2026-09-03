@@ -127,7 +127,9 @@ def _instant_backprop_system(
     """Compose a Digital/Memristive × Feedforward backprop MLP (5-D)."""
     geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
     dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
-    return compose_system(substrate, geometry, dynamics, _default_credit(), _default_update(lr))
+    return compose_system(
+        substrate, geometry, dynamics, _default_credit(), _default_update(lr)
+    )
 
 
 # ============================================================
@@ -173,9 +175,10 @@ def create_memristive_mlp(
     """Create a memristive-substrate Backprop MLP system (5-D coordinate).
 
     Same coordinate as :func:`create_backprop_mlp` with the S-axis swapped:
-    weights are non-negative bounded conductances (clamped at every forward
-    pass) and activations carry IR-drop noise of ``noise_level`` standard
-    deviations.
+    weights are realized as differential-pair conductances — every device
+    non-negative and bounded in [0, 1] with int8 quantization, the pair
+    difference carrying the signed weight — and activations carry IR-drop
+    noise of ``noise_level`` standard deviations.
 
     Args:
         input_dim: Input dimension (e.g., 784 for MNIST)
