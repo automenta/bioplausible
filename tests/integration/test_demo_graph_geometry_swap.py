@@ -30,7 +30,6 @@ from computronium import (
     compose_joint_system,
 )
 
-
 DEVICE = "cpu"
 NUM_NODES = 200
 INPUT_DIM = 16
@@ -64,14 +63,22 @@ def _make_sbm_graph() -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
     if not edge_list:
         # Fallback: fully connected
-        edge_list = [[i, j] for i in range(NUM_NODES) for j in range(NUM_NODES) if i != j]
+        edge_list = [
+            [i, j] for i in range(NUM_NODES) for j in range(NUM_NODES) if i != j
+        ]
 
     edge_index = torch.tensor(edge_list, dtype=torch.long).t().contiguous()
     y = communities
     return x, edge_index, y
 
 
-def _probe_accuracy(system, x: torch.Tensor, edge_index: torch.Tensor, y: torch.Tensor, perturb_p: float = 0.2) -> float:
+def _probe_accuracy(
+    system,
+    x: torch.Tensor,
+    edge_index: torch.Tensor,
+    y: torch.Tensor,
+    perturb_p: float = 0.2,
+) -> float:
     """Accuracy on perturbed graph structure (edge dropout probe).
 
     Only applies to GraphGeometry; for other geometries returns base accuracy.
@@ -126,13 +133,25 @@ def test_demo_graph_geometry_swap(emit_run_record) -> None:
 
     record: dict = {"arms": {}, "probe_perturb": 0.2, "device": DEVICE}
     for name, geometry_fn in (
-        ("feedforward", lambda: FeedforwardGeometry(
-            GeometryConfig.feedforward(input_dim=input_dim, output_dim=output_dim, hidden_dims=(64,))
-        )),
-        ("graph", lambda: GraphGeometry(GeometryConfig.graph(
-            input_dim=input_dim, output_dim=output_dim,
-            edge_index=edge_index.tolist(), hidden_dims=(32, 32)
-        ))),
+        (
+            "feedforward",
+            lambda: FeedforwardGeometry(
+                GeometryConfig.feedforward(
+                    input_dim=input_dim, output_dim=output_dim, hidden_dims=(64,)
+                )
+            ),
+        ),
+        (
+            "graph",
+            lambda: GraphGeometry(
+                GeometryConfig.graph(
+                    input_dim=input_dim,
+                    output_dim=output_dim,
+                    edge_index=edge_index.tolist(),
+                    hidden_dims=(32, 32),
+                )
+            ),
+        ),
     ):
         torch.manual_seed(0)
         system = compose_joint_system(
@@ -167,8 +186,12 @@ def test_demo_graph_geometry_swap(emit_run_record) -> None:
     ff, graph = record["arms"]["feedforward"], record["arms"]["graph"]
     # Allow 2x param difference for capacity matching (graph has more due to extra layer)
     assert ff["param_count"] > 0 and graph["param_count"] > 0
-    ratio = max(ff["param_count"], graph["param_count"]) / min(ff["param_count"], graph["param_count"])
+    ratio = max(ff["param_count"], graph["param_count"]) / min(
+        ff["param_count"], graph["param_count"]
+    )
     assert ratio < 3.0, f"arms must be roughly capacity-matched (ratio={ratio:.1f})"
 
     # Graph should be more robust to edge perturbation (structural generalization)
-    print(f"FF probe: {ff['probe_perturb_02']:.1%}, Graph probe: {graph['probe_perturb_02']:.1%}")
+    print(
+        f"FF probe: {ff['probe_perturb_02']:.1%}, Graph probe: {graph['probe_perturb_02']:.1%}"
+    )

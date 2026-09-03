@@ -18,14 +18,6 @@ Quick Start:
 See NICHES.md for optimizer selection guide.
 """
 
-from computronium.core.registry import (
-    LocalityLevel,
-    register_param_update,
-    register_propagator,
-)
-
-# Trigger registry registration (side-effect import)
-from . import _registration
 from .optimizers import (
     BackpropGradient,
     CompositeOptimizer,
@@ -55,7 +47,6 @@ __all__ = [
     "ErrorFeedback",
     "FisherUpdate",
     "LocalEPGradient",
-    "LocalityLevel",
     "MuonUpdate",
     "NaturalGradient",
     "NoConstraint",
@@ -63,12 +54,9 @@ __all__ = [
     "PlainUpdate",
     "Settler",
     "SpectralConstraint",
-    "_registration",
     "local_ep",
     "muon_backprop",
     "natural_ep",
-    "register_param_update",
-    "register_propagator",
     "sdmep",
     "smep",
     "smep_fast",

@@ -12,7 +12,6 @@ import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowerc
 
 from computronium.core.local_learning.builder import TileAlgorithm
 from computronium.core.logging import get_logger
-from computronium.core.registry import LocalityLevel, register_controller
 
 __all__ = [
     "DynamicTileAlgorithm",
@@ -440,15 +439,6 @@ class TileSplitter:
         return new_ids
 
 
-@register_controller(
-    "dynamic_tile_algorithm",
-    locality_level=LocalityLevel.LOCAL,
-    bio_plausibility_score=0.85,
-    requires_backward=False,
-    credit_assignment_type="hebbian",
-    family="tile",
-    provides=["standard_autograd"],
-)
 class DynamicTileAlgorithm:
     """TileAlgorithm with dynamic tile architecture.
 

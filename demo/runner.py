@@ -31,11 +31,6 @@ from computronium import (
     create_tp_mlp,
 )
 
-# Ensure the full component registry is populated. `import computronium` is
-# lazy, so model registration happens on first Registry access. Trigger it
-# explicitly and up-front so the demo's Registry lookups (and any
-# SystemTrainer instantiations by factory functions) behave deterministically.
-from computronium.core.registry import ComponentCategory, Registry
 from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
 from computronium.domains.registry import resolve_task
 from computronium.utils import seed_everything
@@ -100,29 +95,6 @@ _FACTORY_KWARGS: dict[str, dict[str, float | int]] = {
 }
 
 TRAINABLE_MODELS: tuple[str, ...] = tuple(_FACTORIES)
-
-
-def model_metadata(model: str) -> dict[str, object]:
-    """Return calibrated Sprint 2.5 registry metadata for a demo model name.
-
-    Looks the model up in the ``MODEL`` category registry and returns the
-    compact dict the UI surfaces as tooltips (bio_plausibility_score,
-    locality_level, family, requires_backward). Unknown names degrade to
-    ``{}`` so the UI never crashes on a stale model list.
-    """
-    try:
-        meta = Registry.get_metadata(ComponentCategory.MODEL, model)
-    except ValueError, KeyError:
-        return {}
-    return {
-        "bio_plausibility_score": meta.bio_plausibility_score,
-        "locality_level": meta.locality_level.value,
-        "family": meta.family,
-        "requires_backward": meta.requires_backward,
-        # Absolute accuracy-gap ceiling (0-1) mirroring the hyperparam YAML
-        # `parity_threshold`; absent for backprop-like baselines.
-        "parity_threshold": meta.extra.get("parity_threshold", 0.05),
-    }
 
 
 # Per-model default hidden_dim. The shared 256 default is wasteful/slow for

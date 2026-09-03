@@ -18,8 +18,6 @@ from pathlib import Path
 
 import torch
 
-from computronium.core.registry import ComponentCategory, Registry
-from computronium.core.trainer import CoreTrainer, TrainerConfig
 from computronium.utils import seed_everything
 from computronium.validation.statistics import (
     cohens_d,
@@ -136,12 +134,7 @@ def _run_single_mot_experiment(
     if routing_mode != "dense":
         model_name = f"{model_name}_{routing_mode}"
 
-    # Verify model exists
-    try:
-        Registry.get_metadata(ComponentCategory.MODEL, model_name)
-    except KeyError:
-        # Fall back to base model
-        model_name = "tile_lm" if task == "tiny_shakespeare" else "conv_tile"
+    from computronium.core.trainer import TrainerConfig
 
     trainer_config = TrainerConfig(
         model=model_name,
@@ -153,6 +146,8 @@ def _run_single_mot_experiment(
         device=config.device,
         quick_mode=config.quick_mode,
     )
+
+    from computronium.core.trainer import CoreTrainer
 
     trainer = CoreTrainer(trainer_config)
     start_time = time.time()

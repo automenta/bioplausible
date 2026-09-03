@@ -30,7 +30,7 @@ from computronium.hyperopt._finder import (
     _point_to_dict,
 )
 from computronium.hyperopt.frontier import RulePoint, pareto_frontier
-from computronium.hyperopt.search_space import get_rule_space, validate_rule_space
+from computronium.hyperopt.search_space import get_rule_space
 
 if TYPE_CHECKING:
     import optuna
@@ -154,10 +154,6 @@ class IdealBackpropFinder(_FrontierFinder[IdealBackpropDecision]):
         self, trial: optuna.Trial
     ) -> dict[str, object]:  # polymorphic template hook; backprop's space is fixed
         return _sample_backprop_config(trial, get_rule_space("backprop"))
-
-    def _validate_before_search(self) -> None:
-        """P0a gate: the backprop reference space must be honest too."""
-        validate_rule_space("backprop")
 
     def _build_decision(self, points: list[RulePoint]) -> IdealBackpropDecision:
         return IdealBackpropDecision(

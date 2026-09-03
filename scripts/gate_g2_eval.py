@@ -20,13 +20,17 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 from torch.utils.data import DataLoader
 
-from computronium.config.unified import ModelConfig, compute_hidden_dims
-from computronium.core.registry import ComponentCategory, Registry
+from computronium.core.presets import create_eqprop_mlp
 from computronium.data.vision import get_vision_dataset
+from computronium.models.native.research_native import create_native_directed_ep
+
+if TYPE_CHECKING:
+    from computronium.ontology import System
 
 logger = logging.getLogger(__name__)
 
@@ -61,33 +65,33 @@ def _git_sha() -> str:
         return "unknown"
 
 
-def _build_model(cfg: _G2Config, input_dim: int, output_dim: int) -> torch.nn.Module:
-    hidden_dims = compute_hidden_dims(cfg.depth, cfg.hidden_dim)
-    extra: dict[str, object] = {
-        "gradient_method": "contrastive",
-        "contrastive_diagnostics": True,
-        "convergence_threshold": 1e-3,
-        "convergence_start": 5,
-    }
-    if cfg.feedback_gain is not None:
-        extra["feedback_gain"] = cfg.feedback_gain
-    if cfg.w_rec_init is not None:
-        extra["w_rec_init"] = cfg.w_rec_init
-
-    config = ModelConfig(
-        name=f"g2_{cfg.model_name}",
-        input_dim=input_dim,
-        output_dim=output_dim,
-        hidden_dims=hidden_dims,
-        beta=cfg.beta,
-        learning_rate=cfg.lr,
-        max_steps=20,
-        use_spectral_norm=True,
-        extra=extra,
+def _build_model(cfg: _G2Config, input_dim: int, output_dim: int) -> System:
+    """Build the pre-registered G2 model via the live native factories."""
+    if cfg.model_name == "directed_ep":
+        return create_native_directed_ep(
+            input_dim,
+            cfg.hidden_dim,
+            output_dim,
+            num_layers=cfg.depth,
+            beta=cfg.beta,
+            settle_steps=20,
+            lr=cfg.lr,
+            feedback_scale=cfg.feedback_gain if cfg.feedback_gain is not None else 0.01,
+            device=cfg.device,
+        )
+    if cfg.model_name == "eqprop":
+        return create_eqprop_mlp(
+            input_dim,
+            hidden_dims=(cfg.hidden_dim,) * cfg.depth,
+            output_dim=output_dim,
+            beta=cfg.beta,
+            inference_steps=20,
+            lr=cfg.lr,
+            device=cfg.device,
+        )
+    raise ValueError(
+        f"Unknown G2 model {cfg.model_name!r}; expected 'directed_ep' or 'eqprop'"
     )
-    model_cls = Registry.get(ComponentCategory.MODEL, cfg.model_name)
-    model = model_cls(config=config)
-    return model.to(cfg.device)
 
 
 def _resolve_dims(train_data: object) -> tuple[int, int]:
@@ -99,7 +103,7 @@ def _resolve_dims(train_data: object) -> tuple[int, int]:
 
 def _evaluate(
     train_data: object,
-    model: torch.nn.Module,
+    model: System,
     cfg: _G2Config,
 ) -> dict[str, object]:
     """Train for cfg.epochs and return final accuracy + last-step diagnostics."""

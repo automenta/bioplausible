@@ -21,8 +21,6 @@ import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowerc
 from torch import Tensor, nn
 
 from computronium.core.local_learning import TileAlgorithm, TileAlgorithmConfig
-from computronium.core.model_status import status_tag
-from computronium.core.registry import LocalityLevel, register_model
 from computronium.utils import count_parameters
 
 __all__ = [
@@ -78,15 +76,6 @@ class TileLMExtras:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-@register_model(
-    "tile_lm",
-    family="tile",
-    locality_level=LocalityLevel.LOCAL,
-    bio_plausibility_score=0.5,
-    requires_backward=True,
-    credit_assignment_type="gradient",
-    tags=["language", "lm", "tile", status_tag("experimental")],
-)
 class TileLM(TileAlgorithm):
     """Language Model on the tile substrate.
 

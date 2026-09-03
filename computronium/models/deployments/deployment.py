@@ -36,8 +36,6 @@ from computronium.core.local_learning import (
     TileAlgorithmConfig,
 )
 from computronium.core.model import BioModel
-from computronium.core.model_status import status_tag
-from computronium.core.registry import LocalityLevel, register_model
 from computronium.core.tile.feature_extractors import (
     ConvFeatureExtractor,
     GraphFeatureExtractor,
@@ -606,17 +604,7 @@ def register_deployment_variants(
     }
 
     for algorithm, (credit_type, score) in algorithms.items():
-        name = f"{base_name}_{algorithm}"
 
-        @register_model(
-            name,
-            locality_level=LocalityLevel.LOCAL,
-            bio_plausibility_score=score,
-            requires_backward=False,
-            credit_assignment_type=credit_type,
-            family="tile",
-            tags=[status_tag("experimental")],
-        )
         class _DeploymentVariant(TileDeploymentModel):
             def __init__(self, config=None, **kwargs):
                 if config is None:

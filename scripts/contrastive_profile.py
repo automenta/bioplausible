@@ -37,9 +37,9 @@ from pathlib import Path
 import torch
 from torch.utils.data import DataLoader
 
-from computronium.config.unified import ModelConfig, compute_hidden_dims
-from computronium.core.registry import ComponentCategory, Registry
+from computronium.core.presets import create_eqprop_mlp
 from computronium.data.vision import get_vision_dataset
+from computronium.models.native.research_native import create_native_directed_ep
 
 logger = logging.getLogger(__name__)
 
@@ -71,40 +71,34 @@ def _env_provenance() -> dict[str, str]:
 
 
 def _build_model(args: _ProfileArgs, input_dim: int, output_dim: int) -> object:
-    """Construct an EqProp model with the given parameters."""
-    hidden_dims = compute_hidden_dims(args.num_layers, args.hidden_dim)
-    extra = {
-        "gradient_method": "contrastive",
-        "contrastive_diagnostics": True,
-        "convergence_threshold": 1e-3,
-        "convergence_start": 5,
-    }
-    if args.feedback_gain is not None:
-        extra["feedback_gain"] = args.feedback_gain
-    if args.w_rec_init is not None:
-        extra["w_rec_init"] = args.w_rec_init
-    if args.w_rec_gain is not None:
-        extra["w_rec_gain"] = args.w_rec_gain
-    if args.update_scale is not None:
-        extra["update_scale"] = args.update_scale
-    if args.update_scale_by_depth is not None:
-        extra["update_scale_by_depth"] = args.update_scale_by_depth
-
-    config = ModelConfig(
-        name=f"profile_{args.model_name}",
-        input_dim=input_dim,
-        output_dim=output_dim,
-        hidden_dims=hidden_dims,
-        beta=args.beta,
-        learning_rate=args.learning_rate,
-        max_steps=20,
-        use_spectral_norm=True,
-        extra=extra,
+    """Build the profiled model via the live native factories."""
+    if args.model_name == "directed_ep":
+        return create_native_directed_ep(
+            input_dim,
+            args.hidden_dim,
+            output_dim,
+            num_layers=args.num_layers,
+            beta=args.beta,
+            settle_steps=20,
+            lr=args.learning_rate,
+            feedback_scale=args.feedback_gain
+            if args.feedback_gain is not None
+            else 0.01,
+            device=args.device,
+        )
+    if args.model_name == "eqprop":
+        return create_eqprop_mlp(
+            input_dim,
+            hidden_dims=(args.hidden_dim,) * args.num_layers,
+            output_dim=output_dim,
+            beta=args.beta,
+            inference_steps=20,
+            lr=args.learning_rate,
+            device=args.device,
+        )
+    raise ValueError(
+        f"Unknown profile model {args.model_name!r}; expected 'eqprop' or 'directed_ep'"
     )
-    model_cls = Registry.get(ComponentCategory.MODEL, args.model_name)
-    model = model_cls(config=config)
-    model = model.to(args.device)
-    return model
 
 
 @dataclass(frozen=True, slots=True)

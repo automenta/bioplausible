@@ -1,17 +1,16 @@
 """
 Optuna Bridge for Bioplausible
 
-Maps ModelSpec and SearchSpace definitions to Optuna suggest_* calls.
+Maps model views and SearchSpace definitions to Optuna suggest_* calls.
 Replaces custom evolution code with Optuna's proven algorithms.
 """
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import optuna
 from optuna.pruners import HyperbandPruner, MedianPruner
 from optuna.samplers import NSGAIISampler, TPESampler
-
-from computronium.core.model_spec import get_model_spec
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -24,6 +23,36 @@ __all__ = [
     "scalarize_objectives",
     "trial_to_metrics",
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class _ModelView:
+    """Duck-typed view of a model for the hyperparameter metamodel."""
+
+    name: str
+    family: str
+    model_type: str = ""
+    credit_assignment_type: str = ""
+
+
+_FAMILY_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("eqprop", "eqprop"),
+    ("backprop", "backprop"),
+    ("feedback_alignment", "fa"),
+    ("forward", "mep"),
+    ("hebbian", "hebbian"),
+    ("target_prop", "target_prop"),
+    ("spiking", "spiking"),
+    ("predictive", "predictive_coding"),
+    ("tile", "tile"),
+)
+
+
+def _model_view(model_name: str) -> _ModelView:
+    """Infer the metamodel's model view from the model name."""
+    lowered = model_name.lower()
+    family = next((fam for key, fam in _FAMILY_KEYWORDS if key in lowered), "baseline")
+    return _ModelView(name=model_name, family=family)
 
 
 def scalarize_objectives(
@@ -96,7 +125,7 @@ def create_optuna_space(  # ruff: ignore[complex-structure, too-many-branches, t
 
     from .hyperparameter_metamodel import HYPERPARAM_METAMODEL
 
-    model_spec = get_model_spec(model_name)
+    model_spec = _model_view(model_name)
     space = HYPERPARAM_METAMODEL.get_search_space_for_model(
         model_spec, task_name=task_name
     )

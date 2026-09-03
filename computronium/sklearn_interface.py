@@ -15,7 +15,6 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from computronium.core.losses import compute_accuracy
-from computronium.core.registry import ComponentCategory, Registry
 from computronium.core.trainer import dispatch_train_step
 from computronium.core.utils.device import get_device
 from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
@@ -37,8 +36,8 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
 
     Parameters
     ----------
-    model_name : str, default="EqProp MLP"
-        Name of the model to use (see Registry).
+    model_name : str, default="eqprop_mlp"
+        Name of the native model composition to use.
     hidden_dim : int, default=256
         Number of neurons in the hidden layer.
     steps : int, default=30
@@ -89,10 +88,6 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         self.model_: nn.Module | None = None
         self.optimizer_: torch.optim.Optimizer | None = None
 
-    def _resolve_model_name(self) -> str:
-        """Resolve model name to Registry name."""
-        return self.model_name
-
     def _initialize(
         self, X: np.ndarray, y: np.ndarray | None = None, classes: object = None
     ) -> None:
@@ -118,25 +113,20 @@ class EqPropClassifier(BaseEstimator, ClassifierMixin):
         if self.device is None:
             self.device = str(get_device())
 
-        resolved = self._resolve_model_name()
-        model_cls = Registry.get(ComponentCategory.MODEL, resolved)
-        if model_cls is None:
-            raise ValueError(
-                f"Model '{self.model_name}' (resolved: '{resolved}') not found in Registry. "
-                f"Available: {list(Registry.list(ComponentCategory.MODEL).get('model', []))}"
-            )
+        from computronium.core.construction import construct_model
+        from computronium.experiment.param_estimator import resolve_native_model
+
+        model_cls = resolve_native_model(self.model_name)
 
         factory_kwargs = self.kwargs.copy()
         factory_kwargs.setdefault("hidden_dim", self.hidden_dim)
-
-        from computronium.core.construction import construct_model
 
         self.model_ = construct_model(
             model_cls,
             factory_kwargs,
             input_dim=int(self.n_features_in_),
             output_dim=int(self.n_classes_),
-            model_name=resolved,
+            model_name=self.model_name,
         )
         self.model_ = self.model_.to(self.device)
 

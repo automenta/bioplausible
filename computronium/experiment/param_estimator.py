@@ -29,7 +29,16 @@ from computronium.core.construction import (
 from computronium.core.construction import (
     phantom_knobs as _phantom_knobs,
 )
-from computronium.core.registry import ComponentCategory, Registry
+from computronium.models.native import (
+    create_native_backprop_mlp,
+    create_native_eqprop_mlp,
+    create_native_fa_mlp,
+    create_native_pepita_mlp,
+    create_native_tile_ep,
+    create_native_tile_fa,
+    create_native_tile_hebbian,
+    create_native_tile_tp,
+)
 from computronium.utils import count_parameters
 
 if TYPE_CHECKING:
@@ -39,6 +48,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "KNOBS",
+    "NATIVE_MODEL_NAMES",
     "InstantiateEstimator",
     "ParamEstimateError",
     "ParamEstimator",
@@ -46,6 +56,7 @@ __all__ = [
     "build_model_kwargs",
     "estimate_param_count",
     "phantom_knobs",
+    "resolve_native_model",
 ]
 
 
@@ -57,6 +68,44 @@ class ModuleFactory(Protocol):
     """A registered model constructor: builds an ``nn.Module`` from kwargs."""
 
     def __call__(self, **kwargs: object) -> torch.nn.Module: ...
+
+
+type NativeModelFactory = Callable[..., object]
+
+_NATIVE_MODEL_FACTORIES: tuple[tuple[str, NativeModelFactory], ...] = (
+    ("backprop", create_native_backprop_mlp),
+    ("pepita", create_native_pepita_mlp),
+    ("feedback_alignment", create_native_fa_mlp),
+    ("tile_ep", create_native_tile_ep),
+    ("tile_fa", create_native_tile_fa),
+    ("tile_tp", create_native_tile_tp),
+    ("hebbian", create_native_tile_hebbian),
+    ("fa", create_native_fa_mlp),
+    ("eqprop", create_native_eqprop_mlp),
+)
+
+NATIVE_MODEL_NAMES: tuple[str, ...] = (
+    "backprop_mlp",
+    "eqprop_mlp",
+    "fa_mlp",
+    "pepita_mlp",
+    "tile_ep",
+    "tile_fa",
+    "tile_hebbian",
+    "tile_tp",
+)
+
+
+def resolve_native_model(name: str) -> NativeModelFactory:
+    """Resolve a model name to its native 5-D composition factory.
+
+    Unknown names fall back to the EqProp composition.
+    """
+    key = name.lower()
+    for fragment, factory in _NATIVE_MODEL_FACTORIES:
+        if fragment in key:
+            return factory
+    return create_native_eqprop_mlp
 
 
 class ParamEstimator(Protocol):
@@ -90,9 +139,7 @@ class InstantiateEstimator:
         input_dim: int,
         output_dim: int,
     ) -> int:
-        model_cls = cast(
-            "ModuleFactory", Registry.get(ComponentCategory.MODEL, model_name)
-        )
+        model_cls = cast("ModuleFactory", resolve_native_model(model_name))
         try:
             # Build via the canonical construction layer so the counted model is
             # bit-for-bit the one the trainer builds (same knob routing).

@@ -19,8 +19,6 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from computronium.core.registry import ComponentCategory, Registry
-from computronium.core.trainer import CoreTrainer, TrainerConfig
 from computronium.utils import seed_everything
 from computronium.validation.statistics import (
     bootstrap_ci,
@@ -107,8 +105,10 @@ def _create_trainer_config(
     task: str,
     seed: int,
     config: TileAlgorithmConfig,
-) -> TrainerConfig:
+):
     """Create trainer config with fixed architecture (width/depth)."""
+    from computronium.core.trainer import TrainerConfig
+
     model_name, algo_kwargs = _get_model_for_task(algorithm, task)
 
     # Fixed architecture for fair comparison
@@ -163,25 +163,7 @@ def _run_single_experiment(
 
     trainer_config = _create_trainer_config(algorithm, task, seed, config)
 
-    # Verify model is registered
-    try:
-        Registry.get_metadata(ComponentCategory.MODEL, trainer_config.model)
-    except KeyError:
-        logger.warning("Model %s not registered, skipping", trainer_config.model)
-        return {
-            "algorithm": algorithm,
-            "model": trainer_config.model,
-            "task": task,
-            "seed": seed,
-            "accuracy": 0.0,
-            "loss": float("inf"),
-            "time": 0.0,
-            "params": 0,
-            "flops": 0,
-            "memory_mb": 0,
-            "success": False,
-            "error": f"Model {trainer_config.model} not registered",
-        }
+    from computronium.core.trainer import CoreTrainer
 
     trainer = CoreTrainer(trainer_config)
     start_time = time.time()

@@ -11,8 +11,8 @@ import optuna
 from pytorch_lightning import Trainer
 
 from computronium.core.logging import get_logger
-from computronium.core.registry import ComponentCategory, Registry
-from computronium.lightning_.module import BioLightningModule
+from computronium.experiment.param_estimator import NATIVE_MODEL_NAMES
+from computronium.lightning_.module import STANDARD_OPTIMIZERS, BioLightningModule
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -28,15 +28,13 @@ logger = get_logger()
 
 
 def get_plausible_model_names() -> list[str]:
-    """Return bio-plausible model names."""
-    return Registry.list(ComponentCategory.MODEL).get("model", [])
+    """Return the native model names available for search."""
+    return list(NATIVE_MODEL_NAMES)
 
 
 def get_bio_optimizer_names() -> list[str]:
-    """Return bio-plausible optimizer names."""
-    keywords = ("eqprop", "smep", "hebbian", "fa", "chl")
-    optimizers = Registry.list(ComponentCategory.PARAM_UPDATE).get("param_update", [])
-    return [name for name in optimizers if any(kw in name.lower() for kw in keywords)]
+    """Return the optimizer names available for search."""
+    return sorted(STANDARD_OPTIMIZERS)
 
 
 def create_nas_objective(

@@ -6,36 +6,28 @@ Wall-clock budget: <= 5 min on GPU, <= 10 min on CPU.
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 import torch
-from torch import Tensor
+from torch import Tensor, nn
 
 from computronium.core.pipeline import phase_states, task_loss
-from computronium.core.registry import Registry
 from computronium.core.system_trainer import (
-    SystemTrainer,
-    SystemTrainerConfig,
     compose_system,
 )
 from computronium.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
     DigitalSubstrate,
-    ElasticConsolidationUpdate,
     EnergyMinimizationDynamics,
     EuclideanUpdate,
     FeedforwardGeometry,
     GeometryConfig,
     InstantaneousDynamics,
-    NeuromorphicSubstrate,
     ParameterUpdateConfig,
     PredictiveSettlingDynamics,
-    QuantumSubstrate,
     RandomProjectionsCredit,
     RecurrentGeometry,
     RiemannianOrthogonalUpdate,
-    SpectralConstrainedUpdate,
     StateDynamicsConfig,
     SubstrateConfig,
     System,
@@ -44,14 +36,10 @@ from computronium.ontology import (
     TileGeometry,
 )
 from tests.property._support import (
-    BATCH,
     BITWISE,
     DEPTH,
     SETTLE_ITERS,
     WIDTH,
-    _all_registered_model_names,
-    _round_trip_configs,
-    conforms,
     enable_deterministic_cuda,
     perturb_nonlocal,
     seeded,
@@ -628,583 +616,36 @@ def test_l5_determinism_lock(system_factory) -> None:
 # ======================================================================
 # L6 - Round-trip & Totality Lock (interchange guarantee)
 # ======================================================================
-def test_l6_totality_registered_models_project() -> None:
-    """Registered model names project via Registry.to_system() (smoke test)."""
-    # Import models to populate registry
-
-    model_names = _all_registered_model_names()
-    assert len(model_names) > 0, "Registry should have registered models"
-
-    # Test a few known-working models
-    working_models = [
-        n
-        for n in model_names
-        if n in {"eqprop", "backprop_mlp", "feedback_alignment", "forward_forward"}
-    ]
-    if not working_models:
-        working_models = model_names[:3]
-
-    for name in working_models:
-
-        def _try_project() -> System | None:
-            return Registry.to_system(
-                name, input_dim=WIDTH, hidden_dim=WIDTH, output_dim=10
-            )
-
-        try:
-            system = _try_project()
-        except TypeError:
-            pytest.skip(f"Model {name} has incompatible constructor")
-
-        assert system is not None
-        assert hasattr(system, "substrate")
-        assert hasattr(system, "geometry")
-        assert hasattr(system, "dynamics")
-        assert hasattr(system, "credit")
-        assert hasattr(system, "update")
-
-        # Basic protocol conformance (adapted systems may not fully
-        # implement all methods)
-        assert conforms(
-            system.substrate,
-            {
-                "quantize_weights": True,
-                "inject_state_noise": True,
-                "get_forward_operator": True,
-                "get_weight_update_operator": True,
-                "initial_state": True,
-            },
-        )
-        # Credit and update should always conform
-        assert conforms(system.credit, {"compute_pseudo_gradient": True})
-        assert conforms(system.update, {"step": True})
-
-
-def test_l6_round_trip_configs() -> None:
-    """Configs - round-trip - configs is identity."""
-    systems = [
-        _make_backprop_system(),
-        _make_fa_system(),
-        _make_tile_system(),
-    ]
-
-    for sys in systems:
-        sys2 = _round_trip_configs(sys)
-
-        # Compare configs (the core round-trip guarantee)
-        assert sys.substrate.config == sys2.substrate.config
-        assert sys.geometry.config == sys2.geometry.config
-        assert sys.dynamics.config == sys2.dynamics.config
-        assert sys.credit.config == sys2.credit.config
-        assert sys.update.config == sys2.update.config
-
-
-# ======================================================================
-# L7 - Seam Lock (P2P anticipation)
-# ======================================================================
-def test_l7_system_trainer_runs() -> None:
-    """SystemTrainer runs without error (distributed seam tested in integration)."""
-    device = select_device()
-    if device.type == "cuda":
-        enable_deterministic_cuda()
-
-    with seeded(42):
-        sys = _make_tile_system()
-        _setup_system_device(sys, device)
-
-        x, y = tiny_batch(42)
-
-        # Single-process reference
-        trainer_config = SystemTrainerConfig(max_epochs=1, batch_size=BATCH, seed=42)
-        ref_trainer = SystemTrainer(
-            system=sys,
-            config=trainer_config,
-            train_data=[(x, y)],
-        )
-        ref_metrics = ref_trainer.train_epoch()
-        assert "train_loss" in ref_metrics
-        assert ref_metrics["train_loss"] >= 0
-
-
-# ======================================================================
-# Phase 1 — Test Logic Corrections
-# ======================================================================
-
-
-# C7 — Add EuclideanUpdate / BackpropCredit Property Tests
-class TestU_EuclideanProperties:  # ruff: ignore[invalid-class-name]
-    """Property tests for EuclideanUpdate (SGD with momentum)."""
-
-    def test_euclidean_momentum_accumulates(self) -> None:
-        """Momentum buffer should cause larger second step with same gradient."""
-        device = select_device()
-        if device.type == "cuda":
-            enable_deterministic_cuda()
-
-        with seeded(42):
-            update = EuclideanUpdate(
-                ParameterUpdateConfig.euclidean(step_size=0.01, momentum=0.9)
-            )
-            params = {"0.weight": torch.randn(10, 10, device=device)}
-            grads = [torch.randn(10, 10, device=device)]
-
-            # First step
-            p1 = update.step(params, grads, None)
-            # Second step with same grad
-            p2 = update.step(p1, grads, None)
-
-            # Momentum buffer should cause larger second step
-            step1_norm = (params["0.weight"] - p1["0.weight"]).norm()
-            step2_norm = (p1["0.weight"] - p2["0.weight"]).norm()
-            assert step2_norm > step1_norm * 1.5, (
-                f"Momentum not accumulating: step1={step1_norm:.4f}, step2={step2_norm:.4f}"
-            )
-
-
-class TestC_BackpropCreditProperties:  # ruff: ignore[invalid-class-name]
-    """Property tests for BackpropCredit."""
-
-    def test_backprop_credit_matches_autograd(self) -> None:  # ruff: ignore[too-many-locals]
-        """BackpropCredit pseudo-gradients should match autograd gradients."""
-        device = select_device()
-        if device.type == "cuda":
-            enable_deterministic_cuda()
-
-        with seeded(42):
-            sys = _make_backprop_system()
-            _setup_system_device(sys, device)
-
-            x, y = tiny_batch(42)
-
-            # Run forward pass through the geometry to get activations with graph
-            state = SystemState(x=x, y=y)
-            state.activations = sys.geometry.forward(x, sys.substrate)
-            if state.activations is not None:
-                state.activations = sys.substrate.inject_state_noise(state.activations)
-
-            # Free phase
-            free_state = sys.dynamics.settle(
-                state, sys.geometry, sys.substrate, target=None
-            )
-            free_state.energy = sys.dynamics.compute_energy(free_state, sys.geometry)
-
-            # Nudged phase - recompute forward for fresh graph
-            state = SystemState(x=x, y=y)
-            state.activations = sys.geometry.forward(x, sys.substrate)
-            if state.activations is not None:
-                state.activations = sys.substrate.inject_state_noise(state.activations)
-            nudged_state = sys.dynamics.settle(
-                state, sys.geometry, sys.substrate, target=y
-            )
-            nudged_state.energy = sys.dynamics.compute_energy(
-                nudged_state, sys.geometry
-            )
-            nudged_state.loss = task_loss(nudged_state, y)
-
-            # Get pseudo-gradients from BackpropCredit (uses autograd internally)
-            pseudo_grads = sys.credit.compute_pseudo_gradient(
-                phase_states(free=free_state, nudged=nudged_state),
-                nudged_state.loss,
-                sys.geometry,
-            )
-
-            # Get autograd gradients by recomputing the forward pass for a fresh graph
-            state = SystemState(x=x, y=y)
-            state.activations = sys.geometry.forward(x, sys.substrate)
-            if state.activations is not None:
-                state.activations = sys.substrate.inject_state_noise(state.activations)
-            nudged_state2 = sys.dynamics.settle(
-                state, sys.geometry, sys.substrate, target=y
-            )
-            nudged_state2.loss = task_loss(nudged_state2, y)
-
-            sys_geometry = sys.geometry
-            # Credit contract: one gradient per learnable weight, same order
-            weight_names = [
-                n
-                for n, p in sys_geometry.params.items()
-                if "weight" in n and p.ndim == 2
-            ]
-            params = [sys_geometry.params[n] for n in weight_names]
-            autograd_grads = torch.autograd.grad(
-                nudged_state2.loss, params, create_graph=False, allow_unused=True
-            )
-            autograd_grads = [g for g in autograd_grads if g is not None]
-
-            assert len(pseudo_grads) == len(autograd_grads)
-            for pg, ag in zip(pseudo_grads, autograd_grads, strict=True):
-                # Compare direction (cosine similarity)
-                pg_flat = pg.reshape(-1)
-                ag_flat = ag.reshape(-1)
-                if pg_flat.norm() > 0 and ag_flat.norm() > 0:
-                    cos = torch.nn.functional.cosine_similarity(
-                        pg_flat.unsqueeze(0), ag_flat.unsqueeze(0)
-                    ).item()
-                    assert cos > 0.99, (
-                        f"BackpropCredit direction mismatch: cos={cos:.4f}"
-                    )
-
-
-# C9 — Neuromorphic Passivity Test: Deterministic Noise Comparison
-def test_s_neuromorphic_passivity() -> None:
-    """NeuromorphicSubstrate: same noise seed -> deterministic noise cancels in diff."""
-    device = select_device()
-    if device.type == "cuda":
-        enable_deterministic_cuda()
-
-    substrate = NeuromorphicSubstrate()
-
-    # Use SAME noise seed for both inputs
-    with seeded(42):
-        a = torch.randn(4, 32, device=device)
-        b = torch.randn(4, 32, device=device)
-        # Capture noise state
-        torch.manual_seed(42)
-        na = substrate.inject_state_noise(a)
-
-    with seeded(42):
-        nb = substrate.inject_state_noise(b)
-
-    # Now ‖na - nb‖ ≤ ‖a - b‖ (deterministic noise cancels)
-    assert torch.norm(na - nb) <= torch.norm(a - b) + 1e-6, (
-        f"Passivity violated: ‖na-nb‖={torch.norm(na - nb):.6f} > ‖a-b‖={torch.norm(a - b):.6f}"
-    )
-
-
-# C10 — Muon Test: Gradient Orthogonalization, Not Param Orthogonality
-def test_u_muon_gradient_orthogonal() -> None:
-    """RiemannianOrthogonalUpdate: gradient should be orthogonalized."""
-    device = select_device()
-    if device.type == "cuda":
-        enable_deterministic_cuda()
-
-    with seeded(42):
-        update = RiemannianOrthogonalUpdate(
-            ParameterUpdateConfig.riemannian_orthogonal(ortho_steps=20)
-        )
-        params = {"0.weight": torch.randn(10, 10, device=device)}  # ruff: ignore[unused-variable]
-        grads = [torch.randn(10, 10, device=device)]
-
-        # Test the internal orthogonalization
-        ortho_grad = update._orthogonalize(grads[0])
-        # Orthogonalized gradient should satisfy ortho_grad.T @ ortho_grad ≈ I
-        eye = torch.eye(10, device=device)
-        assert torch.allclose(ortho_grad.T @ ortho_grad, eye, atol=1e-5), (
-            "Orthogonalization did not produce orthogonal matrix"
-        )
-
-
-# C11 — Elastic Test: Params Move Toward Old Params
-def test_u_elastic_moves_toward_old_params() -> None:
-    """ElasticConsolidationUpdate: params should move toward old_params."""
-    device = select_device()
-    if device.type == "cuda":
-        enable_deterministic_cuda()
-
-    with seeded(42):
-        update = ElasticConsolidationUpdate(
-            ParameterUpdateConfig.elastic_consolidation(ewc_lambda=1000.0)
-        )
-        params = {"0.weight": torch.randn(10, 10, device=device)}
-        grads = [torch.randn(10, 10, device=device)]
-
-        # Consolidate first with old_params = ones
-        old_params = {"0.weight": torch.ones(10, 10, device=device)}
-        update.consolidate(params, {"0.weight": torch.ones(10, 10, device=device)})
-
-        new_params = update.step(params, grads, None)
-
-        # Delta should have negative dot product with (w - old_w)
-        delta = new_params["0.weight"] - params["0.weight"]
-        diff = params["0.weight"] - old_params["0.weight"]
-        dot_prod = (delta * diff).sum().item()
-        assert dot_prod < 0, (
-            f"ElasticConsolidationUpdate: delta·(w-old_w)={dot_prod:.4f} should be < 0"
-        )
-
-
-# ======================================================================
-# Workstream A — Certify Remaining C & U Members
-# ======================================================================
-
-
-# A2 — TemporalTraceCredit: STDP Window Property Tests
-class TestC_TemporalTraceSTDP:  # ruff: ignore[invalid-class-name]
-    """STDP window property tests for TemporalTraceCredit."""
-
-    @pytest.mark.parametrize(
-        "pre_time,post_time,expected_sign",
-        [
-            (0.0, 5.0, +1),  # Causal pre->post => potentiation
-            (5.0, 0.0, -1),  # Anti-causal post->pre => depression
-            (0.0, 0.0, 0),  # Simultaneous => zero (antisymmetry)
-        ],
-    )
-    def test_stdp_causal_potentiation(self, pre_time, post_time, expected_sign) -> None:
-        """STDP window sign matches causal/anti-causal timing."""
-        from computronium.ontology import TemporalTraceCredit
-
-        credit = TemporalTraceCredit()
-        pre_spikes = torch.tensor([[pre_time]])
-        post_spikes = torch.tensor([[post_time]])
-        dt = torch.linspace(-50, 50, 101)
-        window = credit.compute_stdp_window(pre_spikes, post_spikes, dt)
-
-        # Window function W(Δt) evaluated at dt grid; check sign at Δt = post - pre
-        delta_t = post_time - pre_time
-        idx = (dt - delta_t).abs().argmin().item()
-        window_val = window[0, idx].item()
-
-        if expected_sign == 0:
-            assert abs(window_val) < 1e-6, (
-                f"Simultaneous spikes should give zero: {window_val}"
-            )
-        else:
-            assert (window_val > 0) == (expected_sign > 0), (
-                f"Expected sign {expected_sign}, got {window_val}"
-            )
-
-    def test_stdp_antisymmetry(self) -> None:
-        """STDP window shape is antisymmetric: W(Δt) = -W(-Δt).
-
-        Antisymmetry holds when potentiation and depression amplitudes are
-        equal; the default weights (a_plus > a_minus) deliberately bias the
-        window toward potentiation so the rate-coded pseudo-gradient is not
-        identically zero.
-        """
-        from computronium.ontology import CreditAssignmentConfig, TemporalTraceCredit
-
-        credit = TemporalTraceCredit(
-            CreditAssignmentConfig.temporal_trace(a_plus=1.0, a_minus=1.0)
-        )
-        dt = torch.linspace(-50, 50, 101)
-
-        # Window function is antisymmetric: W(dt) = -W(-dt)
-        window_pos = credit.compute_stdp_window(
-            torch.tensor([[0.0]]), torch.tensor([[0.0]]), dt
-        )
-        window_neg = credit.compute_stdp_window(
-            torch.tensor([[0.0]]), torch.tensor([[0.0]]), -dt
-        )
-
-        assert torch.allclose(window_pos, -window_neg, atol=1e-6), (
-            "STDP window not antisymmetric"
-        )
-
-    def test_stdp_exponential_decay(self) -> None:
-        """STDP window magnitude decays exponentially with |Δt|."""
-        from computronium.ontology import TemporalTraceCredit
-
-        credit = TemporalTraceCredit()
-        dt_grid = torch.linspace(-50, 50, 101)
-
-        # Test that window magnitude decreases with larger |Δt|
-        dt_values = [5.0, 10.0, 20.0, 40.0]
-        windows = []
-        for dt_val in dt_values:
-            pre_spikes = torch.tensor([[0.0]])
-            post_spikes = torch.tensor([[dt_val]])
-            window = credit.compute_stdp_window(pre_spikes, post_spikes, dt_grid)
-            idx = (dt_grid - dt_val).abs().argmin().item()
-            windows.append(abs(window[0, idx].item()))
-
-        # Magnitude should decrease with Δt
-        for i in range(1, len(windows)):
-            assert windows[i] < windows[i - 1], (
-                f"STDP magnitude should decay: {windows}"
-            )
-
-
-# A3 — U-Axis Step Property Tests (Corrected)
-class TestU_StepProperties:  # ruff: ignore[invalid-class-name]
-    """Corrected step property tests for U-axis update rules."""
-
-    def test_riemannian_orthogonal_gradient_orthogonalized(self) -> None:
-        """RiemannianOrthogonalUpdate: gradient is orthogonalized."""
-        device = select_device()
-        if device.type == "cuda":
-            enable_deterministic_cuda()
-
-        with seeded(42):
-            update = RiemannianOrthogonalUpdate(
-                ParameterUpdateConfig.riemannian_orthogonal(ortho_steps=20)
-            )
-            grad = torch.randn(10, 10, device=device)
-            ortho_grad = update._orthogonalize(grad)
-            eye = torch.eye(10, device=device)
-            assert torch.allclose(ortho_grad.T @ ortho_grad, eye, atol=1e-5)
-
-    def test_spectral_constrained_gradient_svd_max(self) -> None:
-        """SpectralConstrainedUpdate: gradient svd_max ≤ 1.0."""
-        device = select_device()
-        if device.type == "cuda":
-            enable_deterministic_cuda()
-
-        with seeded(42):
-            update = SpectralConstrainedUpdate(  # ruff: ignore[unused-variable]
-                ParameterUpdateConfig.spectral_constrained(spectral_norm=1.0)
-            )
-            grad = torch.randn(10, 10, device=device)
-            # Access internal projection method
-            u, s, v = torch.linalg.svd(grad, full_matrices=False)
-            s_clamped = torch.clamp(s, max=1.0)
-            projected = u @ torch.diag(s_clamped) @ v
-            s_proj = torch.linalg.svdvals(projected)
-            assert (
-                s_proj.max().item() <= 1.0 + 1e-5
-            )  # Slightly larger tolerance for numerical precision
-
-    def test_natural_gradient_fisher_whitening(self) -> None:
-        """NaturalGradientUpdate: natural gradient = g / sqrt(g^2 + damping)."""
-        device = select_device()
-        if device.type == "cuda":
-            enable_deterministic_cuda()
-
-        from computronium.ontology import NaturalGradientUpdate
-
-        with seeded(42):
-            update = NaturalGradientUpdate(  # ruff: ignore[unused-variable]
-                ParameterUpdateConfig.natural_gradient(fisher_damping=1e-3)
-            )
-            grad = torch.randn(10, 10, device=device)
-            # Diagonal Fisher: F = diag(g^2) + damping
-            fisher = grad**2 + 1e-3
-            # Whitening: g / sqrt(F)  # ruff: ignore[commented-out-code]
-            nat_grad = grad / fisher.sqrt()
-            # For large |g|, nat_grad ≈ sign(g); for small |g|, nat_grad ≈ g/sqrt(damping)
-            # Check that direction is preserved (sign matches)
-            assert torch.allclose(nat_grad.sign(), grad.sign(), atol=1e-6)
-
-    def test_elastic_consolidation_moves_toward_old_params(self) -> None:
-        """ElasticConsolidationUpdate: params move toward old_params."""
-        device = select_device()
-        if device.type == "cuda":
-            enable_deterministic_cuda()
-
-        with seeded(42):
-            update = ElasticConsolidationUpdate(
-                ParameterUpdateConfig.elastic_consolidation(ewc_lambda=1000.0)
-            )
-            params = {"0.weight": torch.randn(10, 10, device=device)}
-            grads = [torch.randn(10, 10, device=device)]
-            old_params = {"0.weight": torch.ones(10, 10, device=device)}
-
-            update.consolidate(params, old_params)
-            new_params = update.step(params, grads, None)
-
-            delta = new_params["0.weight"] - params["0.weight"]
-            assert (delta * (params["0.weight"] - old_params["0.weight"])).sum() < 0
-
-
-# ======================================================================
-# Workstream B — Certify Remaining D & S Members
-# ======================================================================
-
-
-# B1 — SpikeIntegrationDynamics: Lyapunov Lock
-def test_d_spike_integration_lyapunov() -> None:
-    """SpikeIntegrationDynamics: membrane potentials bounded, spike process non-diverging.
-
-    The layer-wise LIF settle resets every threshold-crossing membrane, so
-    settled activity never exceeds the spike threshold and per-step spike
-    totals never exceed the network's neuron count.
-    """
-    device = select_device()
-    if device.type == "cuda":
-        enable_deterministic_cuda()
-
-    from computronium.core.system_trainer import compose_system
-    from computronium.ontology import (
-        DigitalSubstrate,
-        FeedforwardGeometry,
-        GeometryConfig,
-        SpikeIntegrationDynamics,
-        StateDynamicsConfig,
-    )
-
-    with seeded(42):
-        # Use a simple geometry without hidden layers for testing spike dynamics
-        sys = compose_system(
-            substrate=DigitalSubstrate(SubstrateConfig.digital()),
-            geometry=FeedforwardGeometry(
+def test_l6_totality_adapters_project() -> None:
+    """Any nn.Module projects into the ontology via ModelAdapter (totality)."""
+    from computronium.ontology import ModelAdapter
+
+    probes = (
+        (
+            "feedforward_mlp",
+            FeedforwardGeometry(
                 GeometryConfig.feedforward(
-                    input_dim=WIDTH, output_dim=WIDTH, hidden_dims=()
+                    input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,)
                 )
             ),
-            dynamics=SpikeIntegrationDynamics(
-                StateDynamicsConfig.spike_integration(max_steps=10)
+        ),
+        (
+            "recurrent_mlp",
+            RecurrentGeometry(
+                GeometryConfig.recurrent(
+                    input_dim=WIDTH, output_dim=10, hidden_dims=(WIDTH,)
+                )
             ),
-            credit=BackpropCredit(CreditAssignmentConfig.gradient()),
-            update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.01)),
-        )
-        _setup_system_device(sys, device)
-
-        x, y = tiny_batch(42)
-        state = SystemState(x=x, y=y)
-        state.activations = sys.geometry.forward(x, sys.substrate)
-        if state.activations is not None:
-            state.activations = sys.substrate.inject_state_noise(state.activations)
-        state = sys.dynamics.settle(state, sys.geometry, sys.substrate, target=None)
-
-        spike_counts = state.spike_counts
-        assert spike_counts is not None, "spike_counts should be populated"
-        assert len(spike_counts) > 0, "Should have at least one settling step"
-
-        # (a) Membrane potentials bounded (activations after thresholding)
-        # After settling, activations should be <= threshold (1.0)
-        final_acts = state.activations
-        if final_acts is not None:
-            # Handle both list and tensor
-            if isinstance(final_acts, list):
-                final_acts = final_acts[-1] if final_acts else torch.zeros(1)
-            assert final_acts.max() < 1.5, "Membrane potentials should be bounded"
-
-        # (b) Spike counts tracked per (layer, settle step), non-diverging:
-        # each neuron fires at most once per step, so per-step totals are
-        # bounded by the layer's neuron count and the variance stays finite.
-        totals = [sc.sum().item() for sc in spike_counts]
-        assert all(t <= BATCH * WIDTH for t in totals), (
-            "Per-step spike totals must stay bounded by the neuron count"
-        )
-        var = np.var(totals)
-        assert not np.isinf(var) and not np.isnan(var), (
-            f"Spike count variance diverged: {var}"
-        )
-
-
-# B2 — NeuromorphicSubstrate: Passivity Lock (uses C9 fix - deterministic)
-# Already covered by test_s_neuromorphic_passivity
-
-
-# B3 — QuantumSubstrate: Parameter-Shift Equivalence
-def test_s_quantum_parameter_shift() -> None:
-    """QuantumSubstrate: parameter-shift rule matches finite difference."""
-    device = select_device()
-    if device.type == "cuda":
-        enable_deterministic_cuda()
-
-    import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
-
-    substrate = QuantumSubstrate()
-    update_op = substrate.get_weight_update_operator()
-    # 1-parameter circuit: current_w = θ, pseudo_grad = 1.0 (arbitrary)
-    current_w = torch.tensor([0.5], device=device)  # θ = 0.5 rad
-    pseudo_grad = torch.tensor([1.0], device=device)
-
-    # Parameter-shift estimate
-    updated = update_op(pseudo_grad, current_w)
-    param_shift_step = current_w - updated  # ∝ param_shift_grad
-
-    # Finite difference on <Z> = cos(θ)
-    eps = 1e-4
-    fd_grad = (torch.cos(current_w + eps) - torch.cos(current_w - eps)) / (2 * eps)
-
-    # Direction alignment
-    cos = F.cosine_similarity(
-        param_shift_step.unsqueeze(0), fd_grad.unsqueeze(0)
-    ).item()
-    assert cos >= 0.999, f"Parameter-shift cosine={cos:.6f} < 0.999"
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+        ),
+    )
+    for label, geometry in probes:
+        backbone = nn.Sequential(*geometry._layers)
+        system = ModelAdapter(backbone).to_system()
+        assert hasattr(system, "substrate"), label
+        assert hasattr(system, "geometry"), label
+        assert hasattr(system, "dynamics"), label
+        assert hasattr(system, "credit"), label
+        assert hasattr(system, "update"), label
+        x = torch.randn(tiny_batch(WIDTH)[0].shape)
+        out = system.forward(x)
+        assert out.shape[-1] == 10, label

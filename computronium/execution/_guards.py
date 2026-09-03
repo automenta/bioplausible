@@ -15,7 +15,6 @@ from dataclasses import dataclass
 import torch
 
 from computronium.core.logging import get_logger
-from computronium.core.model_spec import get_model_spec
 from computronium.execution.task import ExperimentTask
 from computronium.hyperopt.eval_tiers import PatientLevel
 
@@ -211,16 +210,7 @@ ALGORITHM_FAMILY_CONSTRAINTS: dict[str, dict[str, object]] = {
 
 
 def get_constrained_search_space(model_name: str) -> dict[str, object]:
-    try:
-        model_spec = get_model_spec(model_name)
-        family = model_spec.family.lower()
-    except KeyError, AttributeError, ValueError:
-        logger.warning(
-            "Could not determine family for %s, using baseline constraints",
-            model_name,
-        )
-        family = "baseline"
-
+    family = "baseline"
     constraints = ALGORITHM_FAMILY_CONSTRAINTS.get(
         family, ALGORITHM_FAMILY_CONSTRAINTS["baseline"]
     )

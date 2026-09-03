@@ -48,6 +48,7 @@ from .scaling_law import (
 from .search_space import (
     RULE_SPACES,
     SearchSpace,
+    get_available_models,
     get_rule_space,
     get_search_space,
 )
@@ -84,6 +85,7 @@ __all__ = [
     "find_ideal_backprop",
     "find_rule_frontier",
     "fit_accuracy_scaling",
+    "get_available_models",
     "get_evaluation_config",
     "get_pareto_trials",
     "get_rule_space",

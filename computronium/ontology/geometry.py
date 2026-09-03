@@ -277,11 +277,6 @@ class GeometryConfig:
             connectivity_radius: Neighborhood radius for local connections
             init_scale: Weight initialization scale
         """
-        d, h, w = lattice_dims
-        num_sites = d * h * w
-        # Store original input_dim for the input projection
-        # The geometry will handle any padding needed
-        # Store num_sites as a separate field in connectivity for geometry use
         return cls(
             input_dim=input_dim,
             output_dim=output_dim,
@@ -1345,6 +1340,38 @@ class GraphGeometry(nn.Module):
         return [self._head]
 
 
+class _AttentionBlock(nn.Module):
+    """One pre-norm transformer block: MHA + FFN, substrate-routed projections."""
+
+    q_weight: nn.Parameter
+    k_weight: nn.Parameter
+    v_weight: nn.Parameter
+    o_weight: nn.Parameter
+    ffn1_weight: nn.Parameter
+    ffn2_weight: nn.Parameter
+    ln1: nn.LayerNorm
+    ln2: nn.LayerNorm
+
+    def __init__(self, h: int, init_scale: float):
+        super().__init__()
+        scale = init_scale / _DEFAULT_INIT_SCALE
+        uniform = 1.0 / h**0.5
+        self.q_weight = nn.Parameter(torch.randn(h, h) * uniform)
+        self.k_weight = nn.Parameter(torch.randn(h, h) * uniform)
+        self.v_weight = nn.Parameter(torch.randn(h, h) * uniform)
+        self.o_weight = nn.Parameter(torch.randn(h, h) * uniform)
+        ffn_hidden = h * 4
+        self.ffn1_weight = nn.Parameter(torch.randn(ffn_hidden, h) * uniform)
+        self.ffn2_weight = nn.Parameter(
+            torch.randn(h, ffn_hidden) * (1.0 / ffn_hidden) ** 0.5
+        )
+        if init_scale != _DEFAULT_INIT_SCALE:
+            for param in self.parameters():
+                param.data.mul_(scale)
+        self.ln1 = nn.LayerNorm(h)
+        self.ln2 = nn.LayerNorm(h)
+
+
 class AttentionGeometry(nn.Module):
     """Attention topology: multi-head self-attention blocks.
 
@@ -1370,13 +1397,17 @@ class AttentionGeometry(nn.Module):
         self.config = config
         self._num_heads = config.num_heads
         self._head_dim = config.head_dim or (config.hidden_dims[0] // config.num_heads)
-        self._hidden_dim = config.hidden_dims[0] if config.hidden_dims else config.input_dim
+        self._hidden_dim = (
+            config.hidden_dims[0] if config.hidden_dims else config.input_dim
+        )
         self._dropout = config.attention_dropout
 
         # Input projection to hidden_dim
         self._input_projection = nn.Linear(config.input_dim, self._hidden_dim)
         if config.init_scale != _DEFAULT_INIT_SCALE:
-            self._input_projection.weight.data.mul_(config.init_scale / _DEFAULT_INIT_SCALE)
+            self._input_projection.weight.data.mul_(
+                config.init_scale / _DEFAULT_INIT_SCALE
+            )
 
         # Build attention blocks
         self._blocks = nn.ModuleList()
@@ -1387,62 +1418,27 @@ class AttentionGeometry(nn.Module):
         # Output projection
         self._output_projection = nn.Linear(self._hidden_dim, config.output_dim)
         if config.init_scale != _DEFAULT_INIT_SCALE:
-            self._output_projection.weight.data.mul_(config.init_scale / _DEFAULT_INIT_SCALE)
+            self._output_projection.weight.data.mul_(
+                config.init_scale / _DEFAULT_INIT_SCALE
+            )
 
         self._set_param_names()
 
-    def _build_attention_block(self, block_idx: int, config: GeometryConfig) -> nn.Module:
+    @property
+    def _typed_blocks(self) -> list[_AttentionBlock]:
+        return list(self._blocks)  # type: ignore[arg-type]
+
+    def _build_attention_block(
+        self, block_idx: int, config: GeometryConfig
+    ) -> _AttentionBlock:
         """Build a single attention block with MHA + FFN."""
-        h = self._hidden_dim
-        num_heads = self._num_heads
-        head_dim = self._head_dim
-
-        # Use a container module to hold parameters and submodules
-        block = nn.ModuleDict()
-
-        # Multi-head attention projections as Parameters
-        q_weight = nn.Parameter(torch.randn(h, h) * (1.0 / h) ** 0.5)
-        k_weight = nn.Parameter(torch.randn(h, h) * (1.0 / h) ** 0.5)
-        v_weight = nn.Parameter(torch.randn(h, h) * (1.0 / h) ** 0.5)
-        o_weight = nn.Parameter(torch.randn(h, h) * (1.0 / h) ** 0.5)
-        if config.init_scale != _DEFAULT_INIT_SCALE:
-            scale = config.init_scale / _DEFAULT_INIT_SCALE
-            q_weight.data.mul_(scale)
-            k_weight.data.mul_(scale)
-            v_weight.data.mul_(scale)
-            o_weight.data.mul_(scale)
-
-        # FFN weights as Parameters
-        ffn_hidden = h * 4
-        ffn1_weight = nn.Parameter(torch.randn(ffn_hidden, h) * (1.0 / h) ** 0.5)
-        ffn2_weight = nn.Parameter(torch.randn(h, ffn_hidden) * (1.0 / ffn_hidden) ** 0.5)
-        if config.init_scale != _DEFAULT_INIT_SCALE:
-            scale = config.init_scale / _DEFAULT_INIT_SCALE
-            ffn1_weight.data.mul_(scale)
-            ffn2_weight.data.mul_(scale)
-
-        # Layer norms as submodules
-        ln1 = nn.LayerNorm(h)
-        ln2 = nn.LayerNorm(h)
-
-        # Register parameters directly on the block
-        block.register_parameter("q_weight", q_weight)
-        block.register_parameter("k_weight", k_weight)
-        block.register_parameter("v_weight", v_weight)
-        block.register_parameter("o_weight", o_weight)
-        block.register_parameter("ffn1_weight", ffn1_weight)
-        block.register_parameter("ffn2_weight", ffn2_weight)
-        block["ln1"] = ln1
-        block["ln2"] = ln2
-
-        # Set param names
+        block = _AttentionBlock(self._hidden_dim, config.init_scale)
         _set_param_name(block.q_weight, f"block_{block_idx}_q_weight")
         _set_param_name(block.k_weight, f"block_{block_idx}_k_weight")
         _set_param_name(block.v_weight, f"block_{block_idx}_v_weight")
         _set_param_name(block.o_weight, f"block_{block_idx}_o_weight")
         _set_param_name(block.ffn1_weight, f"block_{block_idx}_ffn1_weight")
         _set_param_name(block.ffn2_weight, f"block_{block_idx}_ffn2_weight")
-
         return block
 
     def _set_param_names(self) -> None:
@@ -1462,8 +1458,15 @@ class AttentionGeometry(nn.Module):
         for name, param in self._output_projection.named_parameters():
             params[f"output_proj.{name}"] = param
         # Attention blocks
-        for i, block in enumerate(self._blocks):
-            for key in ("q_weight", "k_weight", "v_weight", "o_weight", "ffn1_weight", "ffn2_weight"):
+        for i, block in enumerate(self._typed_blocks):
+            for key in (
+                "q_weight",
+                "k_weight",
+                "v_weight",
+                "o_weight",
+                "ffn1_weight",
+                "ffn2_weight",
+            ):
                 params[f"block_{i}_{key}"] = getattr(block, key)
         return params
 
@@ -1498,7 +1501,13 @@ class AttentionGeometry(nn.Module):
         # Output projection
         return op(attn_out.reshape(-1, h), o_weight).view(b, n, h)
 
-    def _ffn(self, x: Tensor, ffn1_weight: Tensor, ffn2_weight: Tensor, op: Callable) -> Tensor:
+    def _ffn(
+        self,
+        x: Tensor,
+        ffn1_weight: Tensor,
+        ffn2_weight: Tensor,
+        op: Callable[[Tensor, Tensor], Tensor],
+    ) -> Tensor:
         """Feed-forward network with substrate operator."""
         b, n, h = x.shape
         # First linear + ReLU
@@ -1520,15 +1529,15 @@ class AttentionGeometry(nn.Module):
         # Input projection
         h = op(h, self._input_projection.weight)
         if self._input_projection.bias is not None:
-            h = h + self._input_projection.bias
+            h = h + self._input_projection.bias  # ruff: ignore[non-augmented-assignment]
         # Treat flat input as single token: [B, H] -> [B, 1, H]
         h = h.unsqueeze(1) if h.dim() == 2 else h  # [B, 1, H] for single token
 
         # Pass through attention blocks
-        for block in self._blocks:
+        for block in self._typed_blocks:
             # Attention with residual
             residual = h
-            h = block["ln1"](h)
+            h = block.ln1(h)
             attn_out = self._multi_head_attention(
                 h,
                 block.q_weight,
@@ -1541,7 +1550,7 @@ class AttentionGeometry(nn.Module):
 
             # FFN with residual
             residual = h
-            h = block["ln2"](h)
+            h = block.ln2(h)
             ffn_out = self._ffn(h, block.ffn1_weight, block.ffn2_weight, op)
             h = residual + ffn_out
 
@@ -1549,19 +1558,22 @@ class AttentionGeometry(nn.Module):
         h = h.mean(dim=1) if h.dim() == 3 else h  # [B, H]
         out = op(h, self._output_projection.weight)
         if self._output_projection.bias is not None:
-            out = out + self._output_projection.bias
+            out = out + self._output_projection.bias  # ruff: ignore[non-augmented-assignment]
         return out
 
     def route(self, activations: Tensor) -> Tensor:
         """Single-step routing through attention blocks (for settling dynamics)."""
         # For route, we use direct matmul instead of substrate operator
-        op = lambda a, w: a @ w.T
+
+        def op(a: Tensor, w: Tensor) -> Tensor:
+            return a @ w.T
+
         h = activations
         if h.dim() == 2:
             h = h.unsqueeze(1)
-        for block in self._blocks:
+        for block in self._typed_blocks:
             residual = h
-            h = block["ln1"](h)
+            h = block.ln1(h)
             attn_out = self._multi_head_attention(
                 h,
                 block.q_weight,
@@ -1573,14 +1585,14 @@ class AttentionGeometry(nn.Module):
             h = residual + attn_out
 
             residual = h
-            h = block["ln2"](h)
+            h = block.ln2(h)
             ffn_out = self._ffn(h, block.ffn1_weight, block.ffn2_weight, op)
             h = residual + ffn_out
 
         h = h.mean(dim=1) if h.dim() == 3 else h
         out = h @ self._output_projection.weight.T
         if self._output_projection.bias is not None:
-            out = out + self._output_projection.bias
+            out = out + self._output_projection.bias  # ruff: ignore[non-augmented-assignment]
         return out
 
     def forward_with_intermediates(
@@ -1596,13 +1608,13 @@ class AttentionGeometry(nn.Module):
         h = x.flatten(1) if x.dim() > 2 else x
         h = op(h, self._input_projection.weight)
         if self._input_projection.bias is not None:
-            h = h + self._input_projection.bias
+            h = h + self._input_projection.bias  # ruff: ignore[non-augmented-assignment]
         h = h.unsqueeze(1) if h.dim() == 2 else h
         acts = [h.squeeze(1) if h.shape[1] == 1 else h]
 
-        for block in self._blocks:
+        for block in self._typed_blocks:
             residual = h
-            h = block["ln1"](h)
+            h = block.ln1(h)
             attn_out = self._multi_head_attention(
                 h,
                 block.q_weight,
@@ -1615,7 +1627,7 @@ class AttentionGeometry(nn.Module):
             acts.append(h.mean(dim=1) if h.dim() == 3 else h)
 
             residual = h
-            h = block["ln2"](h)
+            h = block.ln2(h)
             ffn_out = self._ffn(h, block.ffn1_weight, block.ffn2_weight, op)
             h = residual + ffn_out
             acts.append(h.mean(dim=1) if h.dim() == 3 else h)
@@ -1623,7 +1635,7 @@ class AttentionGeometry(nn.Module):
         h = h.mean(dim=1) if h.dim() == 3 else h
         out = op(h, self._output_projection.weight)
         if self._output_projection.bias is not None:
-            out = out + self._output_projection.bias
+            out = out + self._output_projection.bias  # ruff: ignore[non-augmented-assignment]
         acts.append(out)
         return acts
 
@@ -1642,13 +1654,15 @@ class AttentionGeometry(nn.Module):
                 if len(parts) >= 3:
                     block_idx = int(parts[1])
                     param_name = "_".join(parts[2:])
-                    if block_idx < len(self._blocks) and hasattr(self._blocks[block_idx], param_name):
+                    if block_idx < len(self._blocks) and hasattr(
+                        self._blocks[block_idx], param_name
+                    ):
                         getattr(self._blocks[block_idx], param_name).data.copy_(param)
 
     def transition_modules(self) -> list[nn.Module]:
-        modules = [self._input_projection, self._output_projection]
-        for block in self._blocks:
-            modules.extend([block["ln1"], block["ln2"]])
+        modules: list[nn.Module] = [self._input_projection, self._output_projection]
+        for block in self._typed_blocks:
+            modules.extend([block.ln1, block.ln2])
         return modules
 
 
@@ -1679,10 +1693,16 @@ class SpatialLattice3DGeometry(nn.Module):
         self._num_sites = d * h * w
 
         # Input projection: flatten lattice sites into feature vectors
-        first_hidden = config.hidden_dims[0] if config.hidden_dims else config.output_dim
-        self._input_projection = nn.Linear(config.input_dim, self._num_sites * first_hidden)
+        first_hidden = (
+            config.hidden_dims[0] if config.hidden_dims else config.output_dim
+        )
+        self._input_projection = nn.Linear(
+            config.input_dim, self._num_sites * first_hidden
+        )
         if config.init_scale != _DEFAULT_INIT_SCALE:
-            self._input_projection.weight.data.mul_(config.init_scale / _DEFAULT_INIT_SCALE)
+            self._input_projection.weight.data.mul_(
+                config.init_scale / _DEFAULT_INIT_SCALE
+            )
 
         # Build site-specific weights for each layer
         self._site_weights = nn.ParameterDict()
@@ -1692,10 +1712,7 @@ class SpatialLattice3DGeometry(nn.Module):
         # Each layer transforms per-site features
         num_hidden_layers = len(config.hidden_dims)
         for layer_idx in range(num_hidden_layers):
-            if layer_idx == 0:
-                c_in = first_hidden
-            else:
-                c_in = config.hidden_dims[layer_idx - 1]
+            c_in = first_hidden if layer_idx == 0 else config.hidden_dims[layer_idx - 1]
             c_out = config.hidden_dims[layer_idx]
 
             for site in range(self._num_sites):
@@ -1711,7 +1728,9 @@ class SpatialLattice3DGeometry(nn.Module):
         final_features = self._num_sites * config.hidden_dims[-1]
         self._output_projection = nn.Linear(final_features, config.output_dim)
         if config.init_scale != _DEFAULT_INIT_SCALE:
-            self._output_projection.weight.data.mul_(config.init_scale / _DEFAULT_INIT_SCALE)
+            self._output_projection.weight.data.mul_(
+                config.init_scale / _DEFAULT_INIT_SCALE
+            )
 
         # Precompute neighbor lists for each site
         self._compute_neighbors()
@@ -1723,14 +1742,20 @@ class SpatialLattice3DGeometry(nn.Module):
         d, h, w = self._lattice_dims
         self._neighbors = {}
 
-        for dz in range(d):
+        for dz in range(d):  # ruff: ignore[too-many-nested-blocks]
             for dy in range(h):
                 for dx in range(w):
                     site = (dz * h + dy) * w + dx
                     neighbors = []
-                    for ndz in range(max(0, dz - self._radius), min(d, dz + self._radius + 1)):
-                        for ndy in range(max(0, dy - self._radius), min(h, dy + self._radius + 1)):
-                            for ndx in range(max(0, dx - self._radius), min(w, dx + self._radius + 1)):
+                    for ndz in range(
+                        max(0, dz - self._radius), min(d, dz + self._radius + 1)
+                    ):
+                        for ndy in range(
+                            max(0, dy - self._radius), min(h, dy + self._radius + 1)
+                        ):
+                            for ndx in range(
+                                max(0, dx - self._radius), min(w, dx + self._radius + 1)
+                            ):
                                 if ndz == dz and ndy == dy and ndx == dx:
                                     continue
                                 nbr = (ndz * h + ndy) * w + ndx
@@ -1784,7 +1809,7 @@ class SpatialLattice3DGeometry(nn.Module):
             else:
                 agg = torch.zeros(b, c_in, device=x.device, dtype=x.dtype)
             # Include self
-            agg = agg + x[:, site, :]
+            agg = agg + x[:, site, :]  # ruff: ignore[non-augmented-assignment]
 
             # Transform via substrate operator
             weight = self._site_weights[f"layer_{layer_idx}_site_{site}"]
@@ -1816,12 +1841,11 @@ class SpatialLattice3DGeometry(nn.Module):
         h = h.flatten(1)
         h = op(h, self._output_projection.weight)
         if self._output_projection.bias is not None:
-            h = h + self._output_projection.bias
+            h = h + self._output_projection.bias  # ruff: ignore[non-augmented-assignment]
         return h
 
     def route(self, activations: Tensor) -> Tensor:
         """Single-step routing through lattice (for settling dynamics)."""
-        op = lambda a, w: a @ w.T
         b, n, c_in = activations.shape
         h = activations
 
@@ -1836,7 +1860,7 @@ class SpatialLattice3DGeometry(nn.Module):
                     agg = nbr_acts.mean(dim=1)
                 else:
                     agg = torch.zeros(b, c_in, device=h.device, dtype=h.dtype)
-                agg = agg + h[:, site, :]
+                agg = agg + h[:, site, :]  # ruff: ignore[non-augmented-assignment]
 
                 weight = self._site_weights[f"layer_{layer_idx}_site_{site}"]
                 bias = self._site_biases[f"layer_{layer_idx}_site_{site}"]
@@ -1848,9 +1872,9 @@ class SpatialLattice3DGeometry(nn.Module):
 
         # Flatten and project to output
         h = h.flatten(1)
-        h = h @ self._output_projection.weight.T
+        h = h @ self._output_projection.weight.T  # ruff: ignore[non-augmented-assignment]
         if self._output_projection.bias is not None:
-            h = h + self._output_projection.bias
+            h = h + self._output_projection.bias  # ruff: ignore[non-augmented-assignment]
         return h
 
     def forward_with_intermediates(
@@ -1876,7 +1900,7 @@ class SpatialLattice3DGeometry(nn.Module):
         h = h.flatten(1)
         h = op(h, self._output_projection.weight)
         if self._output_projection.bias is not None:
-            h = h + self._output_projection.bias
+            h = h + self._output_projection.bias  # ruff: ignore[non-augmented-assignment]
         acts.append(h)
         return acts
 
@@ -1913,7 +1937,7 @@ class SpatialLattice3DGeometry(nn.Module):
 # ============================================================
 
 
-def geometry_from_config(config: GeometryConfig) -> Geometry:
+def geometry_from_config(config: GeometryConfig) -> Geometry:  # ruff: ignore[too-many-return-statements]
     """Instantiate the geometry implementation named by ``config.topology_type``."""
     topology_type = config.topology_type.lower()
     if topology_type in ("recurrent", "recurrent_attractor"):  # ruff: ignore[literal-membership]

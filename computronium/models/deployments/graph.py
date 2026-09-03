@@ -24,8 +24,6 @@ from torch import nn
 
 from computronium.config.unified import ModelConfig
 from computronium.core.model import BioModel
-from computronium.core.model_status import status_tag
-from computronium.core.registry import LocalityLevel, register_model
 from computronium.models.deployments import _feature_extractors as _fe
 from computronium.models.deployments.base import (
     GraphDeploymentConfig,
@@ -102,15 +100,6 @@ def _credit_assignment_type(algorithm: str) -> str:
     return mapping.get(algorithm, "equilibrium")
 
 
-@register_model(
-    "graph_tile",
-    locality_level=LocalityLevel.LOCAL,
-    bio_plausibility_score=0.75,
-    requires_backward=False,
-    credit_assignment_type="equilibrium",
-    family="tile",
-    tags=[status_tag("experimental")],
-)
 class GraphTileNet(BioModel):
     """Graph TileNet for graph-structured data.
 
@@ -360,15 +349,6 @@ def create_social_graph_model(
 def _register_variant(name: str, algorithm: str, credit_type: str, bio_score: float):
     """Helper to register algorithm-specific GraphTileNet variants."""
 
-    @register_model(
-        name,
-        locality_level=LocalityLevel.LOCAL,
-        bio_plausibility_score=bio_score,
-        requires_backward=False,
-        credit_assignment_type=credit_type,
-        family="tile",
-        tags=[status_tag("experimental")],
-    )
     class _GraphTileNetVariant(GraphTileNet):
         algorithm_name = f"GraphTileNet-{algorithm.upper()}"
 

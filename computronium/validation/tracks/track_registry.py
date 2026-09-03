@@ -8,7 +8,6 @@ This allows the Verifier to easily access all available experiments.
 from typing import TYPE_CHECKING
 
 from computronium.core.logging import get_logger
-from computronium.core.registry import ComponentCategory, Registry
 
 # Import all KEPT track modules (Phase 4 deleted: advanced_tracks, analysis_tracks,
 # engine_validation_tracks, enhanced_validation_tracks, framework_validation,
@@ -91,8 +90,6 @@ register_tracks_from_module(tradeoff_tracks)
 # 6. Signal Propagation
 register_tracks_from_module(signal_tracks)
 
-# Sync into core Registry under ComponentCategory.TRACK for unified discovery.
-
 __all__ = [
     "ALL_TRACKS",
     "get_track",
@@ -101,8 +98,6 @@ __all__ = [
     "logger",
     "register_tracks_from_module",
 ]
-for track_id, track_fn in ALL_TRACKS.items():
-    Registry.register(ComponentCategory.TRACK, name=f"track_{track_id}")(track_fn)
 
 
 def get_track(track_id: int) -> Callable:

@@ -26,7 +26,6 @@ _SUBCOMMANDS: dict[str, tuple[str, str]] = {
     "parity": ("computronium.cli.parity", "main"),
     "repro": ("computronium.cli.repro", "main"),
     "hpo": ("computronium.cli.hpo", "main"),
-    "audit": ("computronium.core.audit", "main"),
     "frontier": ("computronium.cli.frontier", "main"),
     "rank": ("computronium.cli.rank", "main"),
     "lab": ("computronium.cli.lab", "main"),

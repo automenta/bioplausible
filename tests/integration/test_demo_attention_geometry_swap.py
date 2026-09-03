@@ -88,7 +88,9 @@ def test_demo_attention_geometry_swap(emit_run_record) -> None:
         (
             "feedforward",
             lambda: FeedforwardGeometry(
-                GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=(128,))
+                GeometryConfig.feedforward(
+                    input_dim=784, output_dim=10, hidden_dims=(128,)
+                )
             ),
         ),
         (
@@ -138,5 +140,7 @@ def test_demo_attention_geometry_swap(emit_run_record) -> None:
         assert arm["probe_normal"] > 0.4, f"{name} must classify probe digits"
     ff, attn = record["arms"]["feedforward"], record["arms"]["attention"]
     # Capacity-matched: allow 2x difference
-    ratio = max(ff["param_count"], attn["param_count"]) / min(ff["param_count"], attn["param_count"])
+    ratio = max(ff["param_count"], attn["param_count"]) / min(
+        ff["param_count"], attn["param_count"]
+    )
     assert ratio < 2.5, f"arms must be roughly capacity-matched (ratio={ratio:.1f})"

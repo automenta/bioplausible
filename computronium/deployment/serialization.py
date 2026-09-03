@@ -406,7 +406,7 @@ class ModelLoader:
         Returns:
             Tuple of (model, config dict).
         """
-        from computronium.core.registry import ComponentCategory, Registry
+        from computronium.experiment.param_estimator import resolve_native_model
 
         with Path(config_path).open(encoding="utf-8") as f:
             config = json.load(f)
@@ -414,7 +414,7 @@ class ModelLoader:
         model_name = config["model_name"]
         model_params = config["model_params"]
 
-        model_cls = Registry.get(ComponentCategory.MODEL, model_name)
+        model_cls = resolve_native_model(model_name)
         model = self._construct(model_cls, model_params, model_name)
         model = model.to(self.device)
 

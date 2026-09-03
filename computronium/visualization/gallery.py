@@ -349,6 +349,74 @@ def _fig_graph_geometry_swap(record: dict) -> Figure:
     return fig
 
 
+def _fig_attention_geometry_swap(record: dict) -> Figure:
+    import matplotlib.pyplot as plt
+
+    data = record["data"]
+    arms = data["arms"]
+    names = list(arms)
+    fig, (ax_train, ax_probe) = plt.subplots(1, 2, figsize=(9, 4))
+    accs = [arms[name]["train_acc"] for name in names]
+    params = [arms[name]["param_count"] / 1000 for name in names]
+    colors = [COLOR_CONTRAST, COLOR_ARM]
+    labels = [
+        f"{name}\n({p:.1f}k params)" for name, p in zip(names, params, strict=True)
+    ]
+    ax_train.bar(labels, accs, color=colors)
+    ax_train.set_ylim(0, 1)
+    chance_line(ax_train, 1 / 10, "chance (0.1)")
+    ax_train.set_ylabel("train accuracy")
+    ax_train.set_title("D10 — one wiring, one swapped G-axis (attention)")
+    for i, acc in enumerate(accs):
+        ax_train.text(i, acc, f"{acc:.2f}", ha="center", va="bottom", fontsize=9)
+
+    probe_vals = [arms[name]["probe_normal"] for name in names]
+    perm_vals = [arms[name]["probe_permuted"] for name in names]
+    ax_probe.bar(labels, probe_vals, color=colors, label="unpermuted probe")
+    ax_probe.bar(labels, perm_vals, color=colors, alpha=0.45, label="permuted probe")
+    ax_probe.set_ylim(0, 1)
+    chance_line(ax_probe, 1 / 10, "chance (0.1)")
+    ax_probe.set_ylabel("probe accuracy")
+    ax_probe.set_title("probe vs pixel-permuted probe")
+    ax_probe.legend()
+    apply_style(fig)
+    return fig
+
+
+def _fig_spatial_lattice_geometry_swap(record: dict) -> Figure:
+    import matplotlib.pyplot as plt
+
+    data = record["data"]
+    arms = data["arms"]
+    names = list(arms)
+    fig, (ax_train, ax_probe) = plt.subplots(1, 2, figsize=(9, 4))
+    accs = [arms[name]["train_acc"] for name in names]
+    params = [arms[name]["param_count"] / 1000 for name in names]
+    colors = [COLOR_CONTRAST, COLOR_ARM]
+    labels = [
+        f"{name}\n({p:.1f}k params)" for name, p in zip(names, params, strict=True)
+    ]
+    ax_train.bar(labels, accs, color=colors)
+    ax_train.set_ylim(0, 1)
+    chance_line(ax_train, 1 / 10, "chance (0.1)")
+    ax_train.set_ylabel("train accuracy")
+    ax_train.set_title("D11 — one wiring, one swapped G-axis (3D lattice)")
+    for i, acc in enumerate(accs):
+        ax_train.text(i, acc, f"{acc:.2f}", ha="center", va="bottom", fontsize=9)
+
+    probe_vals = [arms[name]["probe_normal"] for name in names]
+    noisy_vals = [arms[name]["probe_noisy"] for name in names]
+    ax_probe.bar(labels, probe_vals, color=colors, label="clean probe")
+    ax_probe.bar(labels, noisy_vals, color=colors, alpha=0.45, label="noisy probe")
+    ax_probe.set_ylim(0, 1)
+    chance_line(ax_probe, 1 / 10, "chance (0.1)")
+    ax_probe.set_ylabel("probe accuracy")
+    ax_probe.set_title("probe vs additive-noise probe")
+    ax_probe.legend()
+    apply_style(fig)
+    return fig
+
+
 _FACTORIES: dict[str, Callable[[dict], Figure]] = {
     "compose_6axis": _fig_compose_train,
     "swap_credit": _fig_credit_swap,
@@ -359,6 +427,8 @@ _FACTORIES: dict[str, Callable[[dict], Figure]] = {
     "z3_frozen_theta": _fig_frozen_theta,
     "geometry_swap": _fig_geometry_swap,
     "graph_geometry_swap": _fig_graph_geometry_swap,
+    "attention_geometry_swap": _fig_attention_geometry_swap,
+    "spatial_lattice_geometry_swap": _fig_spatial_lattice_geometry_swap,
 }
 
 

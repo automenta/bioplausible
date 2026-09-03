@@ -21,8 +21,6 @@ import torch
 
 from computronium.analysis.pareto import ParetoFrontier, compute_pareto_frontier
 from computronium.analysis.scaling import ScalingLawFitter, fit_power_law
-from computronium.core.registry import ComponentCategory, Registry
-from computronium.core.trainer import CoreTrainer, TrainerConfig
 from computronium.utils import seed_everything
 
 logger = logging.getLogger(__name__)
@@ -97,8 +95,10 @@ def _create_model_config(
     depth: int,
     width: int,
     config: ScalingConfig,
-) -> TrainerConfig:
+):
     """Create trainer config for a model."""
+    from computronium.core.trainer import TrainerConfig
+
     # Map depth/width to model-specific parameters
     model_kwargs = {}
 
@@ -148,6 +148,8 @@ def _run_single_experiment(
     seed_everything(seed)
 
     trainer_config = _create_model_config(model_name, task, depth, width, config)
+    from computronium.core.trainer import CoreTrainer
+
     trainer = CoreTrainer(trainer_config)
 
     start_time = time.time()
@@ -209,13 +211,6 @@ def run_scaling_sweep(config: ScalingConfig) -> list[dict]:
     for task in config.tasks:  # ruff: ignore[too-many-nested-blocks]
         for algorithm in config.algorithms:
             model_name = _get_model_for_task(algorithm, task)
-
-            # Verify model is registered
-            try:
-                Registry.get_metadata(ComponentCategory.MODEL, model_name)
-            except KeyError:
-                logger.warning("Model %s not registered, skipping", model_name)
-                continue
 
             for depth in config.depths:
                 for width in config.widths:

@@ -14,12 +14,13 @@ Integrates with KnowledgeBase for persistent storage and LeaderboardGenerator.
 """
 
 import json
+import math
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 from computronium.core.logging import get_logger
-from computronium.core.registry import ComponentCategory, Registry
 from computronium.core.utils.device import get_device
 from computronium.domains import (
     GraphTask,
@@ -36,6 +37,9 @@ from computronium.leaderboard.generator import LeaderboardEntry, LeaderboardGene
 from computronium.utils import count_parameters
 
 logger = get_logger()
+
+if TYPE_CHECKING:
+    from torch import nn
 
 
 @dataclass(slots=True)
@@ -169,6 +173,7 @@ class CrossDomainBenchmarkSuite:
     ) -> BenchmarkResult | None:
         """Run a single model on a task and return benchmark result."""
         from computronium.core.trainer import CoreTrainer, TrainerConfig
+        from computronium.experiment.param_estimator import resolve_native_model
 
         try:  # ruff: ignore[too-many-statements-in-try-clause]
             config = TrainerConfig(
@@ -186,7 +191,15 @@ class CrossDomainBenchmarkSuite:
 
             model = trainer.model
             if model is None:
-                model = Registry.get(ComponentCategory.MODEL, model_name)()
+                input_dim = task.input_dim
+                if isinstance(input_dim, tuple | list):
+                    input_dim = int(math.prod(input_dim))
+                model = cast(
+                    "nn.Module",
+                    resolve_native_model(model_name)(
+                        int(input_dim or 0), 64, int(task.output_dim or 0)
+                    ),
+                )
 
             model = model.to(trainer.device)
 
@@ -258,19 +271,12 @@ class CrossDomainBenchmarkSuite:
                         results.append(result)
 
                         try:
-                            meta = Registry.get_metadata(
-                                ComponentCategory.MODEL, model_name
-                            )
                             entry = LeaderboardEntry(
                                 rank=0,
                                 model=model_name,
-                                propagator=meta.tags[0] if meta.tags else None,
-                                optimizer="adam",
                                 task=task_name,
                                 accuracy=result.metrics.get("accuracy", 0.0),
                                 loss=result.metrics.get("loss", float("inf")),
-                                bio_plausibility_score=meta.bio_plausibility_score,
-                                requires_backward=meta.requires_backward,
                                 params=result.params_count or 0,
                                 energy_proxy=result.metadata.get("energy_proxy"),
                             )

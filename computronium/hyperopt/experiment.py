@@ -18,8 +18,6 @@ import torch
 
 from computronium.core.construction import construct_model
 from computronium.core.logging import get_logger
-from computronium.core.model_spec import load_weights
-from computronium.core.registry import ComponentCategory, Registry
 from computronium.core.utils.device import get_device
 from computronium.execution._guards import SafetyConfig
 from computronium.execution._lifecycle import CheckpointManager, ExperimentArchiver
@@ -42,7 +40,7 @@ __all__ = [
 class TrialRunner:
     """Runs individual hyperparameter optimization trials."""
 
-    def __init__(
+    def __init__(  # ruff: ignore[too-many-arguments]
         self,
         storage: HyperoptStorage = None,
         device: str = "auto",
@@ -53,6 +51,8 @@ class TrialRunner:
         timeout: float = 3600.0,
         epochs: int = 3,
         event_sink: EventSink | None = None,
+        *,
+        model_cls: object | None = None,
     ):
         self.storage = storage or HyperoptStorage()
         self.checkpoint_db_path = checkpoint_db_path
@@ -62,6 +62,7 @@ class TrialRunner:
         self.epochs = epochs
         self.task_kwargs = task_kwargs or {}
         self.timeout = timeout
+        self.model_cls = model_cls
         self._events: EventSink = (
             event_sink if event_sink is not None else NullEventSink()
         )
@@ -95,27 +96,6 @@ class TrialRunner:
         self.task_obj = resolve_task_from_data_config(data_config, device=self.device)
         self.input_dim = self.task_obj.input_dim
         self.output_dim = self.task_obj.output_dim
-
-    def _load_transfer_weights(
-        self, transfer_from: int, model: torch.nn.Module, config: dict
-    ):
-        """Helper to find and load weights from a previous trial."""
-        from computronium.core.checkpoint import find_trial_artifact
-
-        with find_trial_artifact(transfer_from) as weights_path:
-            if weights_path is None:
-                logger.warning("Could not find artifact for trial %s", transfer_from)
-                return
-            try:
-                load_weights(
-                    model,
-                    weights_path,
-                    device=self.device,
-                    strict=False,
-                    freeze_layers=config.get("freeze_layers", False),
-                )
-            except OSError, RuntimeError, ValueError, KeyError:
-                logger.exception("Error loading transfer weights")
 
     def run_trial(self, trial_id: int, pruning_callback=None) -> bool:  # ruff: ignore[complex-structure, too-many-statements]
         """Run a single trial and record results."""
@@ -249,7 +229,9 @@ class TrialRunner:
         hidden_dim = config.get("hidden_dim", 128)
         num_layers = config.get("num_layers", 4)
 
-        model_cls = Registry.get(ComponentCategory.MODEL, trial.model_name)
+        model_cls = self.model_cls
+        if model_cls is None:
+            raise ValueError(f"No model class provided for {trial.model_name!r}")
 
         # Single construction layer: routes through construct_model, which
         # handles config-accepting models, the TileAlgorithm .build substrate
@@ -267,15 +249,7 @@ class TrialRunner:
         )
         model = model.to(self.device)
 
-        transfer_from = config.get("transfer_from")
-        if transfer_from:
-            logger.info(
-                "Initializing Transfer Learning from Trial %s...", transfer_from
-            )
-            self._load_transfer_weights(transfer_from, model, config)
-
-        meta = Registry.get_metadata(ComponentCategory.MODEL, trial.model_name)
-        lr = config.get("lr", meta.typical_lr_range[0])
+        lr = config.get("lr", 1e-3)
         beta = config.get("beta")
         steps = config.get("steps")
 

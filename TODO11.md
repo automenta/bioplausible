@@ -29,7 +29,12 @@
 > (timebox closed), **R11.1.2a** (ConvGeometry, D8 capacity-matched),
 > **R11.1.2b** (GraphGeometry, D9 capacity-matched), **R11.1.2c** (AttentionGeometry, D10),
 > **R11.1.2d** (SpatialLattice3DGeometry, D11), **R11.3.2** (θ-audit
-> harness), **R11.4.2** (PR-6 fairness contract draft).
+> harness), **R11.4.2** (PR-6 fairness contract draft), **R11.2.21** (zoo
+> Registry deleted: `core/registry.py`, `core/audit.py`, `core/model_spec.py`,
+> `mep/_registration.py`, `models/native/registration.py`,
+> `ontology/credit_registration.py` + ~30 consumer files stripped; all
+> surfaces resolve native 5-D factories now; registry-era tests replaced by
+> ontology-API tests or retired with their deleted features).
 > Next: R11.1.3 Tile × dynamics matrix; R11.2 remainder is pull-based only.
 
 ---
@@ -331,6 +336,29 @@ which gates every empirical item.
   break per backwards-compatibility-NONE. The stability-track `FrontierRecord`
   (`stability/frontier.py`) has no seed field; imp-19 unambiguously targets
   the campaign record.
+- [x] **R11.2.21 Zoo Registry removal** ✅ **LANDED 2026-09-03 (user
+    directive: "delete the registry").** The empty legacy model-zoo Registry
+    (`core/registry.py`, 1206 lines) and its satellites (`core/audit.py`,
+    `core/model_spec.py`, `mep/_registration.py`,
+    `models/native/registration.py`, `ontology/credit_registration.py`) are
+    deleted; every `register_*` decorator, `Registry.get/query/to_system`
+    path and `comp audit`/`comp list` command is gone. All ~30 consumer
+    modules (autoscientist, execution, hyperopt, experiments, cli, lightning,
+    deployments, local_learning rules, ontology/optimizers) now resolve
+    models via native 5-D factories (`create_*_mlp`, `resolve_native_model`)
+    or caller-supplied `model_cls`. `KernelRegistry`
+    (`acceleration/kernel_backend.py`) is a different, live registry — kept.
+    Test replacements (ontology-API based): D10/D11 geometry demos,
+    `test_research_directions` (native research factories),
+    `test_mep_integration` (presets train an EP-capable model),
+    `test_phase2` repaired to `create_backprop_system`, L6 totality lock now
+    `ModelAdapter` projection, `test_execution_resources` (ResourceMonitor).
+    Retired with their features (no replacement owed): proposer
+    objective-ranking (metadata proxies deleted), transfer-weight loading
+    (`_load_transfer_weights`/`load_weights`), queryfilter, registry
+    round-trip, module-boundary (target module gone). `hyperopt/comparison`
+    dropped `get_model_spec`; `p2p/evolution` gets
+    `get_available_models()` = sorted `RULE_SPACES` keys.
 - [ ] **R11.2.9 imp-23** — `substrate_coupled` plasticity
   engagement-verified only; probe fixed-dim `step` assumptions.
 - [x] **R11.2.10 imp-26** — params-moved learning locks ✅ **LANDED
@@ -565,6 +593,11 @@ consumer exists.
   live in the checksummed manifest). Not executed this sprint — flagged for
   the next editor / user decision.
 - **`benchmark_results/` stays untracked** (standing directive).
+- **Registry-era removals (2026-09-03):** if a stranger needs
+  transfer-weight loading or proposer objective ranking, they were deleted
+  with the zoo — re-home them onto native factories, not the registry.
+  `hyperopt/comparison.py` still carries PEP 758 `except A, B:` syntax
+  (Python 3.14-only — fine here, breaks on older interpreters).
 - **`equitile` is a deprecated identifier** (user directive 2026-09-03):
   family registrations, CLI maps, tolerances, and metamodel branches now key
   on `"tile"`. Residual `equitile` mentions are cosmetic (test *names* in
@@ -609,6 +642,19 @@ one.
 
 ## 📝 Notes for the Next Editor
 
+- **Registry is gone — never re-add it** (user directive 2026-09-03). The
+  ontology is the composition surface; models resolve through native
+  factories and `compose_*`. `KernelRegistry` (acceleration/) is unrelated
+  and stays. Demo recipe for a new row is unchanged but the last step is
+  `comp gallery --run` (re-renders `docs/figures/manifest.json`) before the
+  gallery lock passes.
+- **Attention/lattice geometry internals:** `_AttentionBlock` is a proper
+  module subclass (typed params — no ModuleDict duck-typing);
+  `AttentionGeometry._typed_blocks` is the single cast point off
+  `nn.ModuleList`. Pyright carries a small strict backlog in the new
+  geometry code (as-touch per the standing lint/type directive).
+- **`tests/property/_support.py` registry helpers deleted**; L6 totality
+  lock is adapter-based (`ModelAdapter(model).to_system()`).
 - TODO10.md header marked CLOSED → superseded (2026-09-03).
 - **README is never edited** (user directive 2026-09-03). No sunset condition.
 - **Ontology package layout convention (R11.1.8, 2026-09-03):** implementations

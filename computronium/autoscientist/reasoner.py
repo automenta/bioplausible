@@ -95,7 +95,6 @@ class HypothesisReasoner:
         # Rule-based hypotheses
         hypotheses.extend(self._cross_domain_transfer_hypotheses(recent_results))
         hypotheses.extend(self._bio_accuracy_tradeoff_hypotheses(recent_results))
-        hypotheses.extend(self._mep_variant_hypotheses(recent_results))
 
         # LLM-augmented hypotheses (if enabled)
         if self.llm_backend:
@@ -177,35 +176,6 @@ class HypothesisReasoner:
                         reasoning_template=ReasoningTemplate.COMPOSITION,
                     )
                 )
-        return hypotheses
-
-    def _mep_variant_hypotheses(
-        self,
-        recent_results: list[dict[str, object]] | None = None,
-    ) -> list[Hypothesis]:
-        """Hypothesis: different MEP variants have different strengths."""
-        from computronium.core.registry import ComponentCategory, Registry
-
-        mep_propagators = Registry.query(
-            category=ComponentCategory.CREDIT_ASSIGNMENT,
-            tags=["mep"],
-        )
-
-        hypotheses = []
-        for p in mep_propagators:
-            hypotheses.append(
-                Hypothesis(
-                    statement=f"Try {p['name']} on next experiment for comparison",
-                    confidence=0.5,
-                    proposed_propagator=p["name"],
-                    reasoning_chain=[
-                        f"{p['name']} has "
-                        f"bio_score={p['metadata'].bio_plausibility_score}",
-                        "MEP variants offer different memory/accuracy tradeoffs",
-                    ],
-                    source="rule-based",
-                )
-            )
         return hypotheses
 
     def _llm_hypotheses(

@@ -10,8 +10,6 @@ from enum import Enum
 import numpy as np
 from scipy import stats
 
-from computronium.core.model_spec import get_model_spec
-
 __all__ = [
     "AlgorithmRanking",
     "ComparisonMetric",
@@ -201,15 +199,10 @@ def compute_statistical_significance(
 
 def is_bio_plausible(model_name: str) -> bool:
     """Check if a model is bio-plausible (not backprop)."""
-
-    try:
-        spec = get_model_spec(model_name)
-        return spec.family != "baseline"  # ruff: ignore[try-consider-else]
-    except ValueError, KeyError:
-        return (
-            "backprop" not in model_name.lower()
-            and "baseline" not in model_name.lower()
-        )
+    return (
+        "backprop" not in model_name.lower()
+        and "baseline" not in model_name.lower()
+    )
 
 
 def group_trials_by_family(trials: list[dict]) -> dict[str, list[dict]]:
@@ -220,12 +213,7 @@ def group_trials_by_family(trials: list[dict]) -> dict[str, list[dict]]:
 
     for trial in trials:
         model_name = trial.get("model_name", "Unknown")
-
-        try:
-            spec = get_model_spec(model_name)
-            family = spec.family
-        except ValueError, KeyError:
-            family = model_name.split()[0].lower()
+        family = model_name.split()[0].lower()
 
         grouped[family].append(trial)
 

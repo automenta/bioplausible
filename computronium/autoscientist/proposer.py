@@ -11,13 +11,6 @@ from enum import StrEnum
 from computronium.autoscientist.bridge import AutoScientistBridge, ExperimentProposal
 from computronium.autoscientist.reasoner import Hypothesis, HypothesisReasoner
 from computronium.core.logging import get_logger
-from computronium.core.registry import (
-    ComponentCategory,
-    ComponentMetadata,
-    ComputeProfile,
-    LocalityLevel,
-    Registry,
-)
 from computronium.knowledge import KnowledgeBase
 
 __all__ = [
@@ -45,110 +38,6 @@ class ProposalObjective(StrEnum):
     ENERGY = "energy"
     LATENCY = "latency"
     PLASTICITY_CAPACITY = "plasticity_capacity"
-
-
-# Proxies for ranking candidates on non-accuracy axes. These are *declared*
-# approximations over the registry's static metadata (there is no runtime cost
-# signal at proposal time), documented so the bias is auditable, not implicit.
-_MEMORY_ORDER: dict[str, int] = {
-    "O(1)": 0,
-    "O(log N)": 1,
-    "O(N)": 2,
-    "O(N log N)": 3,
-    "O(N^2)": 4,
-}
-_ROBUST_PROFILES: frozenset[ComputeProfile] = frozenset({
-    ComputeProfile.ANALOG,
-    ComputeProfile.NEUROMORPHIC,
-    ComputeProfile.MEMRISTOR,
-})
-_ROBUST_LOCALITY: frozenset[LocalityLevel] = frozenset({
-    LocalityLevel.LOCAL,
-    LocalityLevel.FORWARD_ONLY,
-})
-# Declared stability proxy: bounded/analog profiles with bounded state
-# (conductance, phase) plus energy-based local rules avoid divergent growth.
-_STABLE_PROFILES: frozenset[ComputeProfile] = frozenset({
-    ComputeProfile.ANALOG,
-    ComputeProfile.MEMRISTOR,
-})
-_STABLE_LOCALITY: frozenset[LocalityLevel] = frozenset({
-    LocalityLevel.LOCAL,
-    LocalityLevel.EQUILIBRIUM,
-})
-# Declared energy/latency proxies: event-driven/analog profiles consume less
-# energy; forward-only rules skip backward passes (latency).
-_LOW_ENERGY_PROFILES: frozenset[ComputeProfile] = frozenset({
-    ComputeProfile.NEUROMORPHIC,
-    ComputeProfile.ANALOG,
-    ComputeProfile.OPTICAL,
-})
-_FORWARD_ONLY_LOCALITY: frozenset[LocalityLevel] = frozenset({
-    LocalityLevel.FORWARD_ONLY,
-})
-
-
-def _objective_rank(  # ruff: ignore[too-many-return-statements]
-    objective: ProposalObjective, meta: ComponentMetadata
-) -> tuple[float, ...]:
-    """Return a sort key ranking a candidate on a non-accuracy objective.
-
-    Args:
-        objective: The active proposal objective.
-        meta: The candidate's registry metadata.
-
-    Returns:
-        A tuple ordering candidates from best to worst on the objective; the
-        ACCURACY objective returns an empty key (no bias, original ordering).
-    """
-    match objective:
-        case ProposalObjective.ACCURACY:
-            return ()
-        case ProposalObjective.MEMORY:
-            # Fewer resources (as declared by memory_complexity) rank first.
-            return (_MEMORY_ORDER.get(meta.memory_complexity, 5),)
-        case ProposalObjective.SETTLING_SPEED:
-            # Proxy: lower-complexity rules settle faster than equilibrium ones.
-            return (_MEMORY_ORDER.get(meta.memory_complexity, 5),)
-        case ProposalObjective.NOISE_ROBUSTNESS:
-            # Prefer analog/neuromorphic substrates and local credit assignment,
-            # then cheaper memory within the robust set.
-            robust = (
-                meta.compute_profile in _ROBUST_PROFILES
-                or meta.locality_level in _ROBUST_LOCALITY
-            )
-            return (
-                0.0 if robust else 1.0,
-                -_MEMORY_ORDER.get(meta.memory_complexity, 5),
-            )
-        case ProposalObjective.STABILITY:
-            # Bounded-state profiles + equilibrium/local rules rank first.
-            stable = (
-                meta.compute_profile in _STABLE_PROFILES
-                or meta.locality_level in _STABLE_LOCALITY
-            )
-            return (
-                0.0 if stable else 1.0,
-                _MEMORY_ORDER.get(meta.memory_complexity, 5),
-            )
-        case ProposalObjective.ENERGY:
-            # Event-driven/analog profiles are the declared low-energy proxy,
-            # then cheaper memory.
-            low_energy = meta.compute_profile in _LOW_ENERGY_PROFILES
-            return (
-                0.0 if low_energy else 1.0,
-                _MEMORY_ORDER.get(meta.memory_complexity, 5),
-            )
-        case ProposalObjective.LATENCY:
-            # Forward-only rules skip backward passes, then cheaper memory.
-            fast = meta.locality_level in _FORWARD_ONLY_LOCALITY
-            return (
-                0.0 if fast else 1.0,
-                _MEMORY_ORDER.get(meta.memory_complexity, 5),
-            )
-        case ProposalObjective.PLASTICITY_CAPACITY:
-            # Inverse of MEMORY: richer plastic state is the point of the sweep.
-            return (-_MEMORY_ORDER.get(meta.memory_complexity, 5),)
 
 
 # Query service shape the proposer depends on (P2 read-half). Injected so the
@@ -188,20 +77,14 @@ class ExperimentProposer:
 
     def propose_batch(
         self,
-        domain: str | None = None,
         n_proposals: int = 10,
-        min_bio_score: float = 0.0,
         objective: ProposalObjective | str = ProposalObjective.ACCURACY,
     ) -> list[ExperimentProposal]:
         """
-        Propose a batch of experiments.
-
-        Combines systematic exploration with hypothesis-driven targeting.
+        Propose a batch of hypothesis-driven experiments.
 
         Args:
-            domain: Optional domain filter.
             n_proposals: Number of proposals to generate.
-            min_bio_score: Minimum bio-plausibility score.
             objective: The axis to optimize when ranking candidates. Defaults to
                 ACCURACY (historical behavior); a non-accuracy objective forces
                 the cycle to rank by memory/settling-speed/noise-robustness so
@@ -221,27 +104,15 @@ class ExperimentProposer:
         hypotheses = self.reasoner.generate_hypotheses()
 
         # 2. Convert hypotheses to proposals
-        for h in hypotheses[: n_proposals // 2]:
+        for h in hypotheses[:n_proposals]:
             proposal = self._hypothesis_to_proposal(h, objective_enum)
             if proposal:
                 proposals.append(proposal)
 
-        # 3. Fill remaining slots with systematic combinations
-        remaining = n_proposals - len(proposals)
-        if remaining > 0:
-            systematic = self._systematic_proposals(
-                domain, remaining, min_bio_score, objective_enum
-            )
-            proposals.extend(systematic)
-
-        h_count = len(hypotheses)
-        s_count = len(proposals) - h_count
         logger.info(
-            "Proposed %d experiments (%d hypothesis-driven, %d systematic) "
-            "objective=%s",
+            "Proposed %d experiments (%d hypothesis-driven) objective=%s",
             len(proposals),
-            h_count,
-            s_count,
+            len(proposals),
             objective_enum.value,
         )
         return proposals
@@ -270,69 +141,6 @@ class ExperimentProposer:
             priority=hypothesis.confidence,
             tags=tags,
         )
-
-    def _systematic_proposals(
-        self,
-        domain: str | None = None,
-        n: int = 5,
-        min_bio_score: float = 0.0,
-        objective: ProposalObjective = ProposalObjective.ACCURACY,
-    ) -> list[ExperimentProposal]:
-        """Generate systematic exploration proposals."""
-        # Get models and propagators
-        models = Registry.query(
-            category=ComponentCategory.MODEL,
-            min_bio_score=min_bio_score,
-        )
-        propagators = Registry.query(
-            category=ComponentCategory.CREDIT_ASSIGNMENT,
-            min_bio_score=min_bio_score,
-        )
-
-        # Bias audit (plan §5 cycle 2): when optimizing a non-accuracy axis,
-        # rank candidates by that axis instead of the registry's default order.
-        if objective is not ProposalObjective.ACCURACY:
-            models = sorted(
-                models,
-                key=lambda m: _objective_rank(objective, m["metadata"]),
-            )
-
-        proposals = []
-        for i in range(min(n, len(models) * len(propagators))):
-            m_idx = i % len(models)
-            p_idx = (i // len(models)) % len(propagators) if propagators else 0
-            model = models[m_idx]
-            propagator = propagators[p_idx] if propagators else None
-
-            bias = (
-                f" targeting {objective.value}"
-                if objective is not ProposalObjective.ACCURACY
-                else ""
-            )
-            proposals.append(
-                ExperimentProposal(
-                    hypothesis=(
-                        "Systematic exploration of model-propagator combinations"
-                    ),
-                    model=model["name"],
-                    task="mnist",
-                    propagator=propagator["name"] if propagator else None,
-                    justification=(
-                        f"Testing {model['name']} with "
-                        f"{propagator['name'] if propagator else 'default'}: "
-                        f"bio_score={model['metadata'].bio_plausibility_score}"
-                        f"{bias}"
-                    ),
-                    priority=0.3,
-                    tags=[
-                        "systematic",
-                        "exploration",
-                        f"objective:{objective.value}",
-                    ],
-                )
-            )
-
-        return proposals
 
     def propose_ablation(
         self,
@@ -415,82 +223,3 @@ class ExperimentProposer:
                 "proposer skipped %d already-characterized probe(s)", len(skipped)
             )
         return kept, skipped
-
-    def propose_hypercube_ablation(
-        self,
-        fixed: dict[str, str | list[str]],
-        sweep: str,
-        sweep_values: list[str],
-        n_proposals: int = 10,
-        min_bio_score: float = 0.0,
-        objective: ProposalObjective | str = ProposalObjective.ACCURACY,
-    ) -> list[ExperimentProposal]:
-        """Propose experiments via hypercube ablation along the 5-D ontology axes.
-
-        This enables the AutoScientist to perform rigorous ablation studies by
-        holding some ontology layers constant and sweeping others.
-
-        Args:
-            fixed: Dictionary of layer -> value(s) to hold constant.
-                Keys: "substrate", "geometry", "dynamics", "credit", "update"
-                Values: single value or list of values
-            sweep: Layer to sweep over ("substrate", "geometry", "dynamics", "credit", "update")
-            sweep_values: Values to sweep for the sweep layer
-            n_proposals: Number of proposals to generate
-            min_bio_score: Minimum bio-plausibility score
-            objective: The axis to optimize when ranking candidates
-
-        Returns:
-            List of experiment proposals for the hypercube ablation.
-        """
-        # Query the registry along the 5-D ontology axes
-        results = Registry.query_ontology(
-            fixed=fixed,
-            sweep=sweep,
-            sweep_values=sweep_values,
-            min_bio_score=min_bio_score,
-        )
-
-        # Convert results to proposals
-        proposals = []
-        for i, r in enumerate(results[:n_proposals]):
-            meta = r["metadata"]
-            layers = r.get("ontology_layers", {})
-
-            # Build hypothesis from the ablation
-            fixed_str = ", ".join(f"{k}={v}" for k, v in fixed.items())
-            sweep_str = (
-                f"{sweep}={sweep_values}"  # ruff: ignore[useless-if-else]
-                if isinstance(sweep_values, list)
-                else f"{sweep}={sweep_values}"
-            )
-            hypothesis = f"Hypercube ablation: fixed [{fixed_str}], sweep [{sweep_str}]"
-
-            proposals.append(
-                ExperimentProposal(
-                    hypothesis=hypothesis,
-                    model=meta.name,
-                    task="mnist",
-                    propagator=None,  # Will use model's default
-                    justification=(
-                        f"5-D ontology ablation: {hypothesis}. "
-                        f"Layers: {layers}. Bio-score: {meta.bio_plausibility_score}"
-                    ),
-                    priority=0.5,
-                    tags=[
-                        "hypercube_ablation",
-                        f"sweep:{sweep}",
-                        f"fixed:{list(fixed.keys())}",
-                        f"objective:{objective.value if isinstance(objective, ProposalObjective) else objective}",
-                    ],
-                )
-            )
-
-        logger.info(
-            "Proposed %d hypercube ablation experiments (fixed=%s, sweep=%s=%s)",
-            len(proposals),
-            list(fixed.keys()),
-            sweep,
-            sweep_values,
-        )
-        return proposals

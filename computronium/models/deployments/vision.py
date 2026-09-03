@@ -25,8 +25,6 @@ from torch import nn
 
 from computronium.config.unified import ModelConfig
 from computronium.core.model import BioModel
-from computronium.core.model_status import status_tag
-from computronium.core.registry import LocalityLevel, register_model
 from computronium.models.deployments import _feature_extractors as _fe
 from computronium.models.deployments.base import (
     ConvDeploymentConfig,
@@ -85,15 +83,6 @@ def _credit_assignment_type(algorithm: str) -> str:
     return mapping.get(algorithm, "equilibrium")
 
 
-@register_model(
-    "conv_tile",
-    locality_level=LocalityLevel.LOCAL,
-    bio_plausibility_score=0.8,
-    requires_backward=False,
-    credit_assignment_type="equilibrium",
-    family="tile",
-    tags=[status_tag("experimental")],
-)
 class ConvTileNet(BioModel):
     """Convolutional TileNet for vision tasks.
 
@@ -415,15 +404,6 @@ def create_imagenet_model(
 def _register_variant(name: str, algorithm: str, credit_type: str, bio_score: float):
     """Helper to register algorithm-specific ConvTileNet variants."""
 
-    @register_model(
-        name,
-        locality_level=LocalityLevel.LOCAL,
-        bio_plausibility_score=bio_score,
-        requires_backward=False,
-        credit_assignment_type=credit_type,
-        family="tile",
-        tags=[status_tag("experimental")],
-    )
     class _ConvTileNetVariant(ConvTileNet):
         algorithm_name = f"ConvTileNet-{algorithm.upper()}"
 

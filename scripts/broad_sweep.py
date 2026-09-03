@@ -34,7 +34,6 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from computronium.core.registry import ComponentCategory, Domain, Registry
 from computronium.hyperopt.search_space import get_rule_space, get_search_space
 
 if TYPE_CHECKING:
@@ -118,17 +117,6 @@ def _eqprop_gradient_method(model: str) -> str:
     return "equilibrium"
 
 
-def classmethod_has_train_step(model_cls: type) -> bool:
-    """Return True if ``model_cls`` overrides ``train_step`` in its own class.
-
-    Only a *direct* override (present in the class's own ``__dict__``) counts.
-    A model that only inherits a generic ``BioModel.train_step`` (which raises
-    ``NotImplementedError``) does not define a native local rule, so it still
-    needs its family propagator (e.g. ``hebbian_3d`` → CHL).
-    """
-    return model_cls.__dict__.get("train_step") is not None
-
-
 def _rule_activation_for(model: str, family: str) -> dict[str, object]:
     """Resolve the per-model rule activation for a family.
 
@@ -144,15 +132,6 @@ def _rule_activation_for(model: str, family: str) -> dict[str, object]:
     if family == "eqprop" and cfg.get("gradient_method") is not None:
         cfg["gradient_method"] = _eqprop_gradient_method(model)
         activation["config"] = cfg
-    if activation.get("propagator"):
-        from computronium.core.registry import ComponentCategory, Registry
-
-        try:
-            cls = Registry.get(ComponentCategory.MODEL, model)
-        except ValueError:
-            return activation
-        if classmethod_has_train_step(cls):
-            activation = {"config": cfg}
     return activation
 
 
@@ -163,113 +142,6 @@ def _shallow_clamp(config: dict[str, object]) -> dict[str, object]:
         if name in clamped and isinstance(clamped[name], (int, float)):
             clamped[name] = min(int(clamped[name]), int(cap))
     return clamped
-
-
-def _match_param_budget(  # ruff: ignore[complex-structure, too-many-branches]
-    model: str,
-    config: dict[str, object],
-    budget: int,
-    *,
-    input_dim: int,
-    output_dim: int,
-) -> dict[str, object]:
-    """Derive the width closely matching ``budget`` parameters (fair comparison).
-
-    Uses the static param estimator (model construction only — no training, and
-    memoised across probes), so fair-comparison width matching is cheap. Binary-
-    searches the width axis (``hidden_dim`` for MLP-family, ``hidden_channels``
-    for conv models that declare it) to the largest value whose parameter count
-    stays within ``budget``. If **no** width fits the budget, the smallest-width
-    config is still returned (best-effort minimisation) rather than the original
-    wide sample — so ``max_params`` is always honoured as far as the model's
-    minimum architecture allows. Non-width knobs are left untouched.
-
-    Args:
-        model: Registered model name (for the estimator + channel detection).
-        config: The sampled config (width axis may be overridden).
-        budget: Maximum parameter count (``max_params``).
-        input_dim: Flattened input size (for the estimator).
-        output_dim: Output size (for the estimator).
-
-    Returns:
-        A copy of ``config`` with the width matched toward ``budget``.
-    """
-    from computronium.core.construction import resolve_consumption
-    from computronium.core.registry import ComponentCategory, Registry
-    from computronium.experiment.param_estimator import estimate_param_count
-
-    model_cls = Registry.get(ComponentCategory.MODEL, model)
-    accepted = resolve_consumption(model_cls).accepted
-    is_conv = "hidden_channels" in accepted
-    is_cube = "cube_size" in accepted
-    if is_cube:
-        width_key = "cube_size"
-    elif is_conv:
-        width_key = "hidden_channels"
-    else:
-        width_key = "hidden_dim"
-    if width_key not in config:
-        if not (is_conv or is_cube):
-            return dict(config)
-        # A conv/cube family space samples ``hidden_dim``; the model derives its real
-        # width axis from it. Seed the search from that derived value.
-        seed = config.get("hidden_dim")
-        if is_cube:
-            # cube_size must be integer >= 2 (cube_size^3 hidden units)
-            config = {
-                **config,
-                "cube_size": max(2, int(seed)) if isinstance(seed, int) else 4,
-            }
-        else:
-            # Conv: hidden_channels multiple of 8 for GroupNorm
-            config = {
-                **config,
-                "hidden_channels": max(8, 8 * math.ceil(int(seed) / 8))
-                if isinstance(seed, int)
-                else 8,
-            }
-
-    def _count(width: int) -> int:
-        return estimate_param_count(
-            model,
-            {**config, width_key: width},
-            input_dim=input_dim,
-            output_dim=output_dim,
-        )
-
-    # Best-fit width (largest that stays within budget); fall back to the
-    # smallest width if no width fits (best-effort minimisation, never the
-    # original wide sample).
-    lo, hi = (2, 8) if width_key == "cube_size" else (8, 512)
-    fitted_width: int | None = None
-    min_width, min_count = lo, 0
-    try:
-        min_count = _count(min_width)
-    except Exception:
-        return dict(config)
-    if min_count > budget:
-        # Even the smallest width exceeds the budget (e.g. FabricPC's graph
-        # topology carries a fixed 784×784 input node). Stop the binary search —
-        # no width can fit — and return the smallest width so the probe is still
-        # run and honestly flagged ``over_budget`` rather than skipped.
-        return {**config, width_key: min_width}
-    for _ in range(12):
-        mid = (lo + hi) // 2
-        try:
-            count = _count(mid)
-        except Exception:
-            break
-        if count < min_count:
-            min_count, min_width = count, mid
-        if count <= budget:
-            fitted_width = mid
-            lo = mid  # can afford wider; keep searching upward
-        else:
-            hi = mid
-        if hi - lo <= 2:
-            break
-    width = fitted_width if fitted_width is not None else min_width
-    return {**config, width_key: width}
 
 
 # RULE_SPACES is the richer per-rule space (incl. equilibrium knobs). Prefer it
@@ -355,87 +227,6 @@ def space_for_family(model: str, family: str) -> dict[str, object] | None:
         return None
 
 
-def _registry_families() -> list[str]:
-    """Return the sorted set of families actually registered as models."""
-    families: set[str] = set()
-    for rec in Registry.query(category=ComponentCategory.MODEL):
-        fam = rec["metadata"].family
-        if fam:
-            families.add(fam)
-    return sorted(families)
-
-
-def _task_domain(task: str) -> Domain | None:
-    """Map a task name onto the domain it exercises, or None (no filter).
-
-    LM/transformer models registered only for NLP/RL domains must not be
-    probed on a vision task (mnist/cifar): they fail construction or measure
-    nothing meaningful. Unknown tasks return ``None`` so the breadth sweep is
-    not silently narrowed for anything it does not recognise.
-    """
-    t = task.lower()
-    if t in {
-        "mnist",
-        "fashion_mnist",
-        "fashionmnist",
-        "cifar10",
-        "cifar100",
-        "digits",
-        "sklearn_digits",
-        "digits_sklearn",
-    }:
-        return Domain.VISION
-    if "imdb" in t or "lm" in t or "text" in t:
-        return Domain.LM
-    if t in {"cartpole", "mountaincar", "lunar", "atari", "gridworld", "pendulum"}:
-        return Domain.RL
-    return None
-
-
-def _models_in_family(
-    family: str,
-    *,
-    domain: Domain | None = None,
-    include_broken: bool = False,
-) -> list[str]:
-    """Return registered model names for a family, sorted.
-
-    When ``domain`` is given, only models declared compatible with that domain
-    are returned — so a vision task never runs NLP/LM-only models. When
-    ``include_broken`` is False (default), models tagged ``status:broken`` are
-    excluded so default sweeps never waste compute on known-broken probes
-    (Plan 8 §D1; use ``--include-broken`` to opt in explicitly).
-    """
-    names = sorted(
-        rec["name"]
-        for rec in Registry.query(
-            category=ComponentCategory.MODEL,
-            family=family,
-            domain=domain,
-        )
-    )
-    if include_broken:
-        return names
-    return [n for n in names if _model_status(n) != "broken"]
-
-
-def _model_status(model: str) -> str | None:
-    """Return the ``status:<x>`` tag value for a model, or None.
-
-    ``status`` is declared through the registry ``extra``/``tags`` machinery
-    (see :mod:`computronium.core.model_status`). A model with no status tag is
-    treated as ``None`` (not filtered).
-    """
-    try:
-        meta = Registry.get_metadata(ComponentCategory.MODEL, model)
-    except ValueError:
-        return None
-    for tag in meta.tags:
-        if tag.startswith("status:"):
-            return tag.split(":", 1)[1]
-    return None
-
-
 def _is_live(runs: list[dict[str, object]], determined: bool) -> bool:
     """Liveness gate (binary): loss decreases across the run for >= half of probes.
 
@@ -489,113 +280,6 @@ def _summarize(runs: list[dict[str, object]], key: str) -> dict[str, float]:
     return {"mean": mean, "std": std, "n": len(vals)}
 
 
-def _prune_phantom_knobs(
-    model: str,
-    config: dict[str, object],
-    *,
-    input_dim: int,
-    output_dim: int,
-) -> dict[str, object]:
-    """Drop sampled knobs the model genuinely cannot consume (phantom knobs).
-
-    The sweep samples a *family* rule space (e.g. ``eqprop`` includes
-    ``beta``/``convergence_*``), but many models in the family do not consume
-    every knob — a conv/lazy/plain eqprop model routes neither ``beta`` nor
-    ``convergence_start``. Leaving those sampled (dead-weight) knobs in the
-    config makes every probe report a ``phantom_knobs=[...]`` defect even though
-    the run itself is healthy. Prune the config to the subspace the model
-    actually consumes, so the probe samples one real config from its own knob
-    space and phantom-knob noise disappears. ``learning_rate`` is retained
-    because the trainer consumes it for trainer-driven (BPTT) models.
-    """
-    from computronium.core.construction import phantom_knobs
-    from computronium.core.registry import ComponentCategory, Registry
-
-    try:
-        model_cls = Registry.get(ComponentCategory.MODEL, model)
-    except ValueError:
-        return dict(config)
-    phantom = phantom_knobs(
-        model_cls,
-        config,
-        input_dim=input_dim,
-        output_dim=output_dim,
-        model_name=model,
-    )
-    if not phantom:
-        return dict(config)
-    return {k: v for k, v in config.items() if k not in phantom}
-
-
-def _forward_probe_ok(
-    model: str,
-    config: dict[str, object],
-    *,
-    input_dim: int,
-    output_dim: int,
-    device: str,
-    propagator: str | None = None,
-) -> bool:
-    """Whether a probe of ``model`` can run at all (forward + bio propagator).
-
-    The probe path calls ``model(x)`` in two places beyond the model's own
-    ``train_step``: the liveness-loss backfill (core/trainer.py) and the energy
-    tracker's activation-sparsity forward (core/profiling.py). A model whose
-    ``forward`` needs an argument the probe cannot supply (e.g. a diffusion
-    model requiring a ``t`` timestep) crashes *every* probe — a hard failure,
-    not a liveness verdict (SWEEP_FAILURES #5). When the family forces a bio
-    propagator (CHL/FA), a model whose ``transition_modules`` the propagator
-    cannot stream (e.g. a 2D→conv3d chain) also fails every probe (SWEEP_FAILURES
-    #6). Pre-flight both once per model and skip it with a logged reason instead
-    of burning training compute on probes that only fail.
-
-    Args:
-        model: Registered model name.
-        config: Representative sampled+activation config.
-        input_dim: Flattened input size (probe uses the model's declared format).
-        output_dim: Output size.
-        device: Target device.
-        propagator: Forced family propagator name to pre-flight, if any.
-
-    Returns:
-        True if a bare ``forward`` and (when required) one propagator step
-        succeed on probe dummies.
-    """
-    import torch
-
-    from computronium.core.construction import construct_model
-    from computronium.core.profiling import _build_spatial_dummy
-    from computronium.core.registry import ComponentCategory, Registry
-
-    try:  # ruff: ignore[too-many-statements-in-try-clause]
-        model_cls = Registry.get(ComponentCategory.MODEL, model)
-        m = construct_model(
-            model_cls,
-            config,
-            input_dim=input_dim,
-            output_dim=output_dim,
-            model_name=model,
-        ).to(device)
-        m.eval()
-        spatial = getattr(m, "input_format", "flat") == "spatial"
-        dev = torch.device(device)
-        with torch.no_grad():
-            sample = (
-                _build_spatial_dummy(m, dev)
-                if spatial
-                else torch.zeros(1, int(input_dim), device=dev)
-            )
-            m(sample)
-        if propagator is not None:
-            prop_cls = Registry.get(ComponentCategory.PROPAGATOR, propagator)
-            rule = prop_cls(list(m.parameters()), m)
-            target = torch.zeros(sample.shape[0], dtype=torch.long, device=dev)
-            rule.step(x=sample, target=target)
-        return True  # ruff: ignore[try-consider-else]
-    except Exception:
-        return False
-
-
 def _probe_runs(  # ruff: ignore[too-many-arguments]
     driver: CoreTrainerDriver,
     *,
@@ -643,28 +327,6 @@ def _probe_runs(  # ruff: ignore[too-many-arguments]
         config = _shallow_clamp(sample_config_for_space(space))
         if activation.get("config"):
             config = {**config, **activation["config"]}
-        # Per-model knob pruning: drop family-space knobs this model cannot
-        # consume (phantom knobs) so healthy probes don't accumulate defect
-        # noise from dead-weight sampled knobs (SWEEP_FAILURES #2).
-        from computronium.domains.registry import resolve_task
-
-        spec = resolve_task(task)
-        config = _prune_phantom_knobs(
-            model,
-            config,
-            input_dim=spec.input_dim,
-            output_dim=spec.output_dim,
-        )
-        # Fair-comparison budget: rematch the width so every model is compared
-        # at roughly the same parameter count (~8k), not at matched depth/width.
-        if max_params > 0:
-            config = _match_param_budget(
-                model,
-                config,
-                max_params,
-                input_dim=spec.input_dim,
-                output_dim=spec.output_dim,
-            )
         probe_seed = seed + 10_000 * probe_i
         n_total += 1
         logger.info(
@@ -737,7 +399,7 @@ def _probe_runs(  # ruff: ignore[too-many-arguments]
     return runs, n_total, n_ok
 
 
-def broad_sweep(  # ruff: ignore[complex-structure, too-many-arguments, too-many-locals]
+def broad_sweep(  # ruff: ignore[too-many-arguments, too-many-locals]
     *,
     families: list[str],
     probes_per_rule: int,
@@ -750,13 +412,12 @@ def broad_sweep(  # ruff: ignore[complex-structure, too-many-arguments, too-many
     max_params: int = 0,
     max_epoch_time: float = 0.0,
     exclude_models: list[str] | None = None,
-    include_broken: bool = False,
 ) -> dict[str, object]:
     """Run the shallow breadth sweep and return the resource-landscape report.
 
     Args:
-        families: Rule-family names to sweep (``"all"`` expands to every family
-            with at least one registered model).
+        families: Rule-family names to sweep (``"all"`` expands to every
+            family with a rule space).
         probes_per_rule: Number of configs to sample per family.
         epochs: Training epochs per probe (kept shallow by design).
         task: Task name (e.g. ``"mnist"``).
@@ -767,8 +428,6 @@ def broad_sweep(  # ruff: ignore[complex-structure, too-many-arguments, too-many
         max_params: Fair-comparison parameter budget (0 = breadth mode).
         max_epoch_time: Per-epoch wall-clock budget in seconds (0 = unlimited) —
             caps slow-settling eqprop epochs so a shallow probe stays bounded.
-        include_broken: If True, also sweep models tagged ``status:broken``
-            (default excludes them, Plan 8 §D1).
 
     Returns:
         The sweep report dict (families, liveness, live resource map, dead list).
@@ -788,7 +447,7 @@ def broad_sweep(  # ruff: ignore[complex-structure, too-many-arguments, too-many
         max_epoch_time=max_epoch_time,
     )
 
-    all_families = _registry_families()
+    all_families = sorted(_RULE_FAMILIES)
     if "all" in families or not families:
         requested = all_families
     else:
@@ -800,30 +459,20 @@ def broad_sweep(  # ruff: ignore[complex-structure, too-many-arguments, too-many
     report: dict[str, object] = {}
     probe_total = 0
     probe_ok = 0
-    domain = _task_domain(task)
-    from computronium.domains.registry import resolve_task
-
-    spec = resolve_task(task)
     skipped: dict[str, list[str]] = {}
 
     for family in requested:
-        models = _models_in_family(family, domain=domain, include_broken=include_broken)
+        rule_key = _family_rule_key(family)
+        models = [rule_key] if rule_key is not None else []
+        if not models:
+            logger.warning("family=%s: no rule space, skipped", family)
+            skipped[family] = []
+            report[family] = _summarize_family(
+                {}, determined=epochs >= _MIN_LIVENESS_EPOCHS, family=family
+            )
+            continue
         if exclude_models:
             models = [m for m in models if m not in exclude_models]
-        if not include_broken:
-            skipped_broken = [
-                m
-                for m in sorted(
-                    _models_in_family(family, domain=domain, include_broken=True)
-                )
-                if m not in models
-            ]
-            if skipped_broken:
-                logger.info(
-                    "family=%s: skipped status:broken models (use --include-broken): %s",
-                    family,
-                    skipped_broken,
-                )
         family_runs: dict[str, list[dict[str, object]]] = {}
         family_skipped: list[str] = []
         for model in models:
@@ -832,30 +481,6 @@ def broad_sweep(  # ruff: ignore[complex-structure, too-many-arguments, too-many
                 logger.info(
                     "family=%s model=%s: no searchable space, skipped", family, model
                 )
-                continue
-            # Pre-sweep compatibility gate: a model whose bare ``forward`` cannot
-            # accept a probe dummy (diffusion needing ``t``, etc.) would crash
-            # every probe — a hard failure, not a liveness verdict. Construct it
-            # once (via the canonical layer) and skip it gracefully.
-            gate_cfg = _shallow_clamp(sample_config_for_space(space))
-            fam_activation = _rule_activation_for(model, family)
-            if activation_for_model := fam_activation.get("config"):
-                gate_cfg = {**gate_cfg, **activation_for_model}
-            if not _forward_probe_ok(
-                model,
-                gate_cfg,
-                input_dim=spec.input_dim,
-                output_dim=spec.output_dim,
-                device=device,
-                propagator=fam_activation.get("propagator"),
-            ):
-                logger.warning(
-                    "family=%s model=%s: forward/propagator-incompatible with "
-                    "probe driver, skipped",
-                    family,
-                    model,
-                )
-                family_skipped.append(model)
                 continue
             runs, n_total, n_ok = _probe_runs(
                 driver,
@@ -1037,11 +662,6 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help="Comma-separated model names to exclude from the sweep",
     )
-    parser.add_argument(
-        "--include-broken",
-        action="store_true",
-        help="Include models tagged status:broken in the sweep (default: skip them)",
-    )
     parser.add_argument("--cache-dir", default="logs")
     parser.add_argument(
         "--target-hardware",
@@ -1068,7 +688,6 @@ def main(argv: list[str] | None = None) -> int:
         max_params=args.max_params,
         max_epoch_time=args.max_epoch_time,
         exclude_models=[m.strip() for m in args.exclude_models.split(",") if m.strip()],
-        include_broken=args.include_broken,
     )
     report["_meta"]["elapsed_s"] = round(time.time() - start, 1)
 

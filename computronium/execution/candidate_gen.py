@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from computronium.core.logging import get_logger
-from computronium.core.registry import ComponentCategory, Registry
 from computronium.execution._guards import (
     check_ablation_needed,
     check_continual_learning_needed,
@@ -22,6 +21,7 @@ from computronium.execution._lifecycle import CurriculumManager, PromotionGate
 from computronium.execution.criteria import check_criterion
 from computronium.execution.events import EventSink, NullEventSink
 from computronium.execution.task import ExperimentTask
+from computronium.experiment.param_estimator import NATIVE_MODEL_NAMES
 from computronium.hyperopt import PatientLevel
 
 if TYPE_CHECKING:
@@ -40,17 +40,8 @@ class _ModelSpec:
 
 
 def _model_specs() -> list[_ModelSpec]:
-    """Return the cached list of model specs, lazily built from Registry."""
-    if getattr(_model_specs, "cache", None) is not None:
-        return _model_specs.cache
-    specs: list[_ModelSpec] = []
-    try:
-        for entry in Registry.query(category=ComponentCategory.MODEL):
-            specs.append(_ModelSpec(entry["name"]))
-    except KeyError, AttributeError, ValueError:  # pragma: no cover - registry empty
-        logger.exception("Failed to enumerate models from Registry")
-    _model_specs.cache = specs
-    return specs
+    """Return the native model specs available for candidate generation."""
+    return [_ModelSpec(name) for name in NATIVE_MODEL_NAMES]
 
 
 @dataclass

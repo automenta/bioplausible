@@ -11,7 +11,6 @@ Commands:
     pareto       Emit Pareto frontier plots/data for a study.
     portfolio    Build Phase 1 portfolio ranking table (Scale/Hold/Eliminated).
     benchmark    Cross-domain benchmark suite.
-    list         List registered models.
 """
 
 import argparse
@@ -19,7 +18,6 @@ import logging
 
 from computronium.cli.benchmark import main as run_benchmark_cli
 from computronium.cli.commands.compare import add_compare_subparsers, run_compare
-from computronium.cli.commands.list import add_list_subparsers, run_list
 from computronium.cli.commands.pareto import add_pareto_subparsers, run_pareto
 from computronium.cli.commands.portfolio import add_portfolio_subparsers, run_portfolio
 from computronium.cli.commands.search import add_search_subparsers, run_search
@@ -44,7 +42,6 @@ def main() -> None:
     add_portfolio_subparsers(subparsers)
     # benchmark delegates to comp benchmark CLI
     subparsers.add_parser("benchmark", help="Run cross-domain benchmark suite")
-    add_list_subparsers(subparsers)
 
     args = parser.parse_args()
 
@@ -73,7 +70,6 @@ def main() -> None:
         "pareto": run_pareto,
         "portfolio": run_portfolio,
         "benchmark": lambda args: run_benchmark_cli(),  # ruff: ignore[unused-lambda-argument]
-        "list": run_list,
     }
 
     if args.command in command_map:

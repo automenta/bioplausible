@@ -611,7 +611,6 @@ class AutoScientistCampaign:
 
     def run_iteration(  # ruff: ignore[complex-structure]
         self,
-        domain: str | None = None,
         n_experiments: int = 5,
         dry_run: bool = False,
     ) -> list[dict[str, object]]:
@@ -619,7 +618,6 @@ class AutoScientistCampaign:
         Run one iteration of the discovery loop.
 
         Args:
-            domain: Optional domain filter.
             n_experiments: Number of experiments to propose and run.
             dry_run: If True, only propose without executing.
 
@@ -642,7 +640,6 @@ class AutoScientistCampaign:
         proposals = []
         if self.proposer:
             proposals = self.proposer.propose_batch(
-                domain=domain,
                 n_proposals=n_experiments,
             )
 
@@ -703,15 +700,15 @@ class AutoScientistCampaign:
         return results
 
     def _execute_proposal(self, proposal) -> dict[str, object]:
-        """Execute a proposal: registry factory -> 5-D system -> SystemTrainer.
+        """Execute a proposal: native 5-D system -> SystemTrainer.
 
         The ontology system owns its update rule, so ``proposal.optimizer`` is
         recorded for the KB rather than overriding the composed ParameterUpdate.
         """
-        from computronium.core.registry import ComponentCategory, Registry
         from computronium.core.system_trainer import SystemTrainer, SystemTrainerConfig
         from computronium.core.utils.device import get_device
         from computronium.domains.factory import create_task
+        from computronium.experiment.param_estimator import resolve_native_model
 
         task = create_task(
             proposal.task or "mnist",
@@ -726,9 +723,10 @@ class AutoScientistCampaign:
         assert input_dim is not None  # ruff: ignore[assert]
         if isinstance(input_dim, tuple | list):
             input_dim = int(math.prod(input_dim))
-        factory = Registry.get(ComponentCategory.MODEL, proposal.model)
         lr_raw = proposal.hyperparams.get("lr", 1e-3)
-        system = factory(input_dim, 64, task.output_dim, lr=float(lr_raw))  # type: ignore[arg-type]
+        system = resolve_native_model(proposal.model)(
+            input_dim, 64, task.output_dim, lr=float(lr_raw)
+        )
 
         config = SystemTrainerConfig(
             max_epochs=5,
@@ -737,7 +735,7 @@ class AutoScientistCampaign:
         )
 
         with SystemTrainer(
-            system,
+            system,  # type: ignore[arg-type]
             config,
             task.get_dataloader("train"),  # type: ignore[attr-defined]
             task.get_dataloader("val"),  # type: ignore[attr-defined]
@@ -977,7 +975,6 @@ class AutoScientistCampaign:
     def run_campaign(
         self,
         n_iterations: int = 10,
-        domain: str | None = None,
         n_experiments_per_iter: int = 5,
         checkpoint_interval: int = 5,
     ):
@@ -993,7 +990,6 @@ class AutoScientistCampaign:
         try:
             for i in range(n_iterations):
                 results = self.run_iteration(
-                    domain=domain,
                     n_experiments=n_experiments_per_iter,
                 )
                 all_results.extend(results)

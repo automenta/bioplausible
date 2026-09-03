@@ -16,8 +16,6 @@ equivalent local rule through the Zoo propagator interface.
 import torch
 from torch import nn
 
-from computronium.core.registry import LocalityLevel, register_credit_assignment
-
 from .base import LearningRuleOptimizer
 
 __all__ = [
@@ -25,21 +23,6 @@ __all__ = [
 ]
 
 
-@register_credit_assignment(
-    "stdp",
-    family="spiking",
-    locality_level=LocalityLevel.LOCAL,
-    bio_plausibility_score=0.95,
-    credit_assignment_type="spiking",
-    requires_backward=False,
-    memory_complexity="O(N)",
-    requires=["transition_graph"],
-    tags=["spiking", "stdp", "hebbian", "local"],
-    description=(
-        "Spike-Timing-Dependent Plasticity (STDP): local weight update from"
-        " correlations between pre- and post-synaptic spike traces."
-    ),
-)
 class STDPLearningRule(LearningRuleOptimizer):
     """Spike-Timing-Dependent Plasticity (STDP) local learning rule.
 

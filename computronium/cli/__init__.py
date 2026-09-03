@@ -11,8 +11,6 @@ scripts now expose their entry points on demand instead.
 
 _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-module]
     "main": ("computronium.cli.__main__", "main"),
-    "inspect_model": ("computronium.cli.lab", "inspect_model"),
-    "list_models": ("computronium.cli.run", "list_models"),
     "run_benchmark": ("computronium.cli.run", "run_benchmark"),
     "run_core_train": ("computronium.cli.run", "run_core_train"),
     "run_from_yaml": ("computronium.cli.run", "run_from_yaml"),

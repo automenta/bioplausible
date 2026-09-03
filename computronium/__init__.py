@@ -78,8 +78,7 @@ The zoo provides two complementary interfaces for bio-plausible learning:
    implemented as drop-in ``torch.optim.Optimizer`` subclasses
    (`BioOptimizer`, `LearningRuleOptimizer`). These mutate parameters of any
    model: Backprop, FeedbackAlignment, EqProp, ContrastiveHebbianLearning,
-   MEP presets (smep, sdmep, ...). Use via the Registry API:
-   ``Registry.get(ComponentCategory.PARAM_UPDATE, "eq_prop")``.
+   MEP presets (smep, sdmep, ...).
 
 2. Model side (`computronium.models`): Learning rules that require
    model-side control of the forward/training loop (custom dual-phase passes,
@@ -87,10 +86,7 @@ The zoo provides two complementary interfaces for bio-plausible learning:
    ``train_step(x, y) -> dict[str, float]`` instead of ``optimizer.step()``.
 
 Some algorithms (FF, PEPITA, TargetProp, PCN) inherently require model-level
-control and are registered as models, not propagators. Querying them via
-``Registry.get(ComponentCategory.CREDIT_ASSIGNMENT, "pepita")`` resolves through the
-compatibility alias map to the model-side registration
-``(Registry.get(ComponentCategory.MODEL, "pepita"))`` — no ``ValueError`` raised.
+control and are exposed as models, not propagators.
 """
 
 __version__ = "1.0.0"
@@ -102,7 +98,6 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     "CompositeState": ("computronium.state", "CompositeState"),
     "CoupledTransition": ("computronium.core.joint.transition", "CoupledTransition"),
     "StateRegistry": ("computronium.state", "StateRegistry"),
-    "Registry": ("computronium.core.registry", "Registry"),
     "SystemContext": ("computronium.state", "SystemContext"),
     # Core 5-D Ontology (new decomposed modules)
     "AnalogSubstrate": ("computronium.ontology.substrate", "AnalogSubstrate"),
@@ -124,7 +119,10 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     "ConvGeometry": ("computronium.ontology.geometry", "ConvGeometry"),
     "GraphGeometry": ("computronium.ontology.geometry", "GraphGeometry"),
     "AttentionGeometry": ("computronium.ontology.geometry", "AttentionGeometry"),
-    "SpatialLattice3DGeometry": ("computronium.ontology.geometry", "SpatialLattice3DGeometry"),
+    "SpatialLattice3DGeometry": (
+        "computronium.ontology.geometry",
+        "SpatialLattice3DGeometry",
+    ),
     "theta_audit": ("computronium.core.theta_audit", "theta_audit"),
     "FeedforwardGeometry": ("computronium.ontology.geometry", "FeedforwardGeometry"),
     "GeometryConfig": ("computronium.ontology.geometry", "GeometryConfig"),
@@ -337,7 +335,6 @@ __all__ = [
     "CompositeState",
     "ComputroniumLinear",
     "ConvGeometry",
-    "GraphGeometry",
     "CoupledTransition",
     "CreditAssignmentConfig",
     "CreditRule",
@@ -351,6 +348,7 @@ __all__ = [
     "FastWeightPlasticity",
     "FeedforwardGeometry",
     "GeometryConfig",
+    "GraphGeometry",
     "HardwareConfig",
     "InstantaneousDynamics",
     "LocalGoodnessCredit",
@@ -368,12 +366,11 @@ __all__ = [
     "QuantumSubstrate",
     "RandomProjectionsCredit",
     "RecurrentGeometry",
-    "Registry",
     "RiemannianOrthogonalUpdate",
     "RoutingPlasticity",
     "RuleStatePlasticity",
-    "SpectralConstrainedUpdate",
     "SpatialLattice3DGeometry",
+    "SpectralConstrainedUpdate",
     "SpikeIntegrationDynamics",
     "StateDynamicsConfig",
     "StateRegistry",
@@ -445,15 +442,7 @@ __all__ = [
 
 
 def __getattr__(name: str) -> object:
-    """Lazily import a top-level symbol on first access.
-
-    Attribute access also triggers deferred Registry population so light
-    submodule imports (e.g. ``computronium.core.registry``) stay torch-free
-    while top-level consumers see a fully populated Registry.
-    """
-    from computronium.core.registry import _ensure_native_registered
-
-    _ensure_native_registered()
+    """Lazily import a top-level symbol on first access."""
     if name not in _LAZY:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     module_name, attr = _LAZY[name]

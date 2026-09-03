@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Protocol, TypeVar, cast, runtime_checkable
 import torch
 from torch import Tensor, nn
 
-from computronium.core.registry import ComponentMetadata, ComputeProfile
 from computronium.ontology.credit import (
     CreditAssignment,
     CreditAssignmentConfig,
@@ -674,34 +673,25 @@ class SystemConfig:
 
 
 class ModelAdapter:
-    """Adapt an existing registered model to the 5-D System interface.
-
-    This enables the Strangler Fig migration: existing models stay registered
-    and functional, but can be projected into the ontology for AutoScientist
-    queries and cross-axis ablation studies.
+    """Adapt an existing ``nn.Module`` to the 5-D System interface.
 
     Inference priority:
-    1. Registry metadata (most reliable - from @register_model decorator)
-    2. Model attributes (backend, gradient_method, max_steps, etc.)
-    3. Heuristics from class name / family tag
-    4. Defaults (DigitalSubstrate, FeedforwardGeometry, InstantaneousDynamics, etc.)
+    1. Model attributes (backend, gradient_method, max_steps, etc.)
+    2. Heuristics from class name
+    3. Defaults (DigitalSubstrate, FeedforwardGeometry, InstantaneousDynamics, etc.)
     """
 
-    def __init__(self, model: nn.Module, metadata: ComponentMetadata | None = None):
+    def __init__(self, model: nn.Module):
         self.model = model
-        self._metadata = metadata
 
     def _get_family_tolerances(self) -> tuple[float, float]:
-        """Get family-specific tolerances based on model metadata."""
-        if self._metadata and self._metadata.family:
-            family = self._metadata.family.lower()
-            # Check for exact match first
-            if family in FAMILY_TOLERANCES:
-                return FAMILY_TOLERANCES[family]
-            # Check for partial matches
-            for key, tol in FAMILY_TOLERANCES.items():
-                if key != "default" and key in family:
-                    return tol
+        """Get family-specific tolerances from the model's class name."""
+        family = type(self.model).__name__.lower()
+        if family in FAMILY_TOLERANCES:
+            return FAMILY_TOLERANCES[family]
+        for key, tol in FAMILY_TOLERANCES.items():
+            if key != "default" and key in family:
+                return tol
         return FAMILY_TOLERANCES["default"]
 
     def to_system(
@@ -724,12 +714,7 @@ class ModelAdapter:
         )
 
     def _infer_substrate(self) -> Substrate:
-        # Priority 1: Registry metadata compute_profile
-        substrate = self._infer_substrate_from_compute_profile()
-        if substrate is not None:
-            return substrate
-
-        # Priority 2: Model attributes
+        # Priority 1: Model attributes
         substrate = self._infer_substrate_from_backend()
         if substrate is not None:
             return substrate
@@ -749,52 +734,6 @@ class ModelAdapter:
             )
         )
 
-    def _infer_substrate_from_compute_profile(self) -> Substrate | None:
-        if not (self._metadata and self._metadata.compute_profile):
-            return None
-        profile = self._metadata.compute_profile
-        if profile == ComputeProfile.ANALOG:
-            return AnalogSubstrate(
-                SubstrateConfig(
-                    precision="float32",
-                    noise_level=0.0,
-                    weight_bounds=None,
-                    sparsity=0.0,
-                    device="cpu",
-                )
-            )
-        if profile == ComputeProfile.OPTICAL:
-            return OpticalSubstrate(
-                SubstrateConfig(
-                    precision="float32",
-                    noise_level=0.0,
-                    weight_bounds=None,
-                    sparsity=0.0,
-                    device="cpu",
-                )
-            )
-        if profile == ComputeProfile.MEMRISTOR:
-            return MemristiveSubstrate(
-                SubstrateConfig(
-                    precision="float32",
-                    noise_level=0.0,
-                    weight_bounds=None,
-                    sparsity=0.0,
-                    device="cpu",
-                )
-            )
-        if profile == ComputeProfile.NEUROMORPHIC:
-            return NeuromorphicSubstrate(
-                SubstrateConfig(
-                    precision="float32",
-                    noise_level=0.0,
-                    weight_bounds=None,
-                    sparsity=0.0,
-                    device="cpu",
-                )
-            )
-        return None
-
     def _infer_substrate_from_backend(self) -> Substrate | None:
         # Check model attributes for backend hints
         if hasattr(self.model, "backend"):
@@ -812,9 +751,7 @@ class ModelAdapter:
         return None
 
     def _infer_substrate_from_family(self) -> Substrate | None:
-        if not (self._metadata and self._metadata.family):
-            return None
-        family = self._metadata.family.lower()
+        family = type(self.model).__name__.lower()
         if "spiking" in family or "snn" in family or "stdp" in family:
             return NeuromorphicSubstrate(SubstrateConfig.neuromorphic())
         if "tile" in family:
@@ -967,7 +904,7 @@ class ModelAdapter:
                 "atol": atol,
                 "input_shape": tuple(x.shape),
                 "target_shape": tuple(y.shape),
-                "family": self._metadata.family if self._metadata else "unknown",
+                "family": type(self.model).__name__.lower(),
             },
         }
 

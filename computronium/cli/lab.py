@@ -7,82 +7,17 @@ from pathlib import Path
 
 import torch
 
-# Import zoo models to trigger registration
 from computronium.core.logging import get_logger
-from computronium.core.registry import Registry
 from computronium.core.utils.device import get_device
 from computronium.domains import create_task
 
 logger = get_logger()
 
 __all__ = [
-    "inspect_model",
     "inspect_state",
     "logger",
     "main",
 ]
-
-
-def inspect_model(args):
-    logger.info("[LAB]  Inspecting Model: %s", args.model)
-
-    device = str(get_device())
-
-    # Create Task
-    task = create_task(args.task, device=device)
-    task.setup()
-    logger.info(
-        "Task: %s, Input: %s, Output: %s", args.task, task.input_dim, task.output_dim
-    )
-
-    # Create System via 5-D ontology projection
-    # This uses the native 5-D composition for models that support it,
-    # or falls back to ModelAdapter for legacy models.
-    system = Registry.to_system(
-        args.model,
-        input_dim=task.input_dim or 0,
-        hidden_dim=64,
-        output_dim=task.output_dim,
-        num_layers=2,
-    )
-
-    logger.info("System Created: %s", type(system).__name__)
-
-    # Get parameter count from geometry
-    if hasattr(system, "geometry") and hasattr(system.geometry, "params"):
-        param_count = sum(p.numel() for p in system.geometry.params.values())
-        logger.info("Parameters: %.2fM", param_count / 1e6)
-
-    # Run Dummy Forward
-    logger.info("Running Verification Inference...")
-    x, _ = task.get_batch("val")
-    with torch.no_grad():
-        # LM models that expose `embed` expect integer token ids — task.get_batch
-        # already returns those ids, so forward handles the embedding internally.
-        # Non-LM models may receive raw features; flatten spatially for MLPs.
-        if x.dim() > 2 and "Conv" not in args.model:
-            x = x.view(x.size(0), -1)
-
-        try:  # ruff: ignore[too-many-statements-in-try-clause]
-            x = x.to(device)
-            # Move system geometry to device if needed
-            if hasattr(system.geometry, "to"):
-                system.geometry.to(device)
-            # System.forward signature depends on whether it's a native System (requires substrate)
-            # or an _AdaptedSystem (delegates to model.forward without substrate).
-            # Try with substrate first (native 5-D System), fall back to no substrate (adapted).
-            from computronium.ontology import DigitalSubstrate
-
-            substrate = DigitalSubstrate()
-            try:
-                out = system.forward(x, substrate)
-            except TypeError:
-                # _AdaptedSystem.forward only takes x
-                out = system.forward(x)
-        except RuntimeError, ValueError, TypeError:
-            logger.exception("Forward pass failed for model %s", args.model)
-            return
-        logger.info("[OK]  Forward pass successful. Output shape: %s", out.shape)
 
 
 def _parse_coordinate(coord_str: str) -> dict:
@@ -536,12 +471,6 @@ def main():
     parser = argparse.ArgumentParser(description="Bioplausible Lab CLI")
     subparsers = parser.add_subparsers(dest="command", help="Command")
 
-    inspect = subparsers.add_parser("inspect", help="Inspect a model architecture")
-    inspect.add_argument("--model", required=True, help="Model name")
-    inspect.add_argument(
-        "--task", default="mnist", help="Task type (e.g., mnist, cifar10)"
-    )
-
     inspect_state_parser = subparsers.add_parser(
         "inspect-state", help="Inspect joint state evolution for a 6-D coordinate"
     )
@@ -569,9 +498,7 @@ def main():
 
     logging.basicConfig(level=logging.INFO)
 
-    if args.command == "inspect":
-        inspect_model(args)
-    elif args.command == "inspect-state":
+    if args.command == "inspect-state":
         inspect_state(args)
     else:
         parser.print_help()

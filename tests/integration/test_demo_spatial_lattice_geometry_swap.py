@@ -60,7 +60,7 @@ def _probe_spatial_noise(system, batches, noise_level: float) -> float:
         for x, y in batches:
             flat = x.view(x.size(0), -1)
             if noise_level > 0:
-                flat = flat + noise_level * torch.randn_like(flat)
+                flat = flat + noise_level * torch.randn_like(flat)  # ruff: ignore[non-augmented-assignment]
             pred = system.forward(flat.to(device)).argmax(-1)
             correct += (pred.cpu() == y).sum().item()
             total += y.numel()
@@ -82,7 +82,9 @@ def test_demo_spatial_lattice_geometry_swap(emit_run_record) -> None:
         (
             "feedforward",
             lambda: FeedforwardGeometry(
-                GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=(256,))
+                GeometryConfig.feedforward(
+                    input_dim=784, output_dim=10, hidden_dims=(256,)
+                )
             ),
         ),
         (
@@ -132,5 +134,7 @@ def test_demo_spatial_lattice_geometry_swap(emit_run_record) -> None:
         assert arm["probe_normal"] > 0.4, f"{name} must classify probe digits"
     ff, lattice = record["arms"]["feedforward"], record["arms"]["spatial_lattice"]
     # Capacity-matched: allow 2x difference
-    ratio = max(ff["param_count"], lattice["param_count"]) / min(ff["param_count"], lattice["param_count"])
+    ratio = max(ff["param_count"], lattice["param_count"]) / min(
+        ff["param_count"], lattice["param_count"]
+    )
     assert ratio < 2.5, f"arms must be roughly capacity-matched (ratio={ratio:.1f})"

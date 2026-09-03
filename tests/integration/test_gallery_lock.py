@@ -31,6 +31,8 @@ EXPECTED = {
     "z3_frozen_theta": "D5",
     "geometry_swap": "D8",
     "graph_geometry_swap": "D9",
+    "attention_geometry_swap": "D10",
+    "spatial_lattice_geometry_swap": "D11",
 }
 
 

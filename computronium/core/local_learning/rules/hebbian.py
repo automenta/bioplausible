@@ -7,8 +7,6 @@ Classes: ContrastiveHebbianLearning (CHL)
 import torch
 from torch import nn
 
-from computronium.core.registry import LocalityLevel, register_credit_assignment
-
 from .base import LearningRuleOptimizer
 
 __all__ = [
@@ -16,20 +14,6 @@ __all__ = [
 ]
 
 
-@register_credit_assignment(
-    "contrastive_hebbian_learning",
-    family="hebbian",
-    locality_level=LocalityLevel.LOCAL,
-    bio_plausibility_score=0.85,
-    credit_assignment_type="hebbian",
-    requires_backward=False,
-    requires=["transition_graph"],
-    tags=["hebbian", "contrastive", "local"],
-    description=(
-        "Contrastive Hebbian Learning (CHL): local weight update from the"
-        " difference between free and clamped Hebbian associations."
-    ),
-)
 class ContrastiveHebbianLearning(LearningRuleOptimizer):
     """Contrastive Hebbian Learning (CHL).
 

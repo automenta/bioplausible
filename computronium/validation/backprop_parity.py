@@ -738,7 +738,6 @@ def run_parity(  # campaign signature; per-depth baseline + cells accumulate loc
     learning_rate: float = 1e-3,
     families: tuple[str, ...] | None = None,
     output_dir: Path,
-    include_broken: bool = False,
     width_ladder: tuple[int, ...] = _DEFAULT_WIDTH_LADDER,
 ) -> dict[str, object]:
     """Run the compute-matched parity campaign and write the reports.
@@ -753,7 +752,6 @@ def run_parity(  # campaign signature; per-depth baseline + cells accumulate loc
         learning_rate: Shared optimizer LR for the parity comparison.
         families: Subset of the plan's C1 portfolio to run; None runs all.
         output_dir: Where ``results.json`` and ``report.md`` are written.
-        include_broken: If False, ``status:broken`` models are skipped.
         width_ladder: Backprop width candidates for the §15.4 capacity-
             controlled contract. The default ladder spans 16→2048 covers both
             the small (digits) and large (MNIST) tasks; pass ``()`` to disable
@@ -765,8 +763,6 @@ def run_parity(  # campaign signature; per-depth baseline + cells accumulate loc
     Raises:
         ValueError: On an unknown family.
     """
-    from computronium.core.model_status import STATUS_TAG_PREFIX
-    from computronium.core.registry import ComponentCategory, Registry
     from computronium.experiment.probe import CoreTrainerDriver
 
     wanted = families or tuple(_FAMILY_MODELS)
@@ -834,16 +830,6 @@ def run_parity(  # campaign signature; per-depth baseline + cells accumulate loc
 
         for family in wanted:
             for model_name in _FAMILY_MODELS[family]:
-                if not include_broken:
-                    meta = Registry.get_metadata(ComponentCategory.MODEL, model_name)
-                    if any(
-                        t.startswith(f"{STATUS_TAG_PREFIX}broken") for t in meta.tags
-                    ):
-                        notes.append(
-                            f"{model_name}: status:broken, skipped (use "
-                            "--include-broken to run it)"
-                        )
-                        continue
                 # The backprop reference already has its own family port (above);
                 # skip it inside other family lists to keep the report single-entry.
                 if model_name == "backprop_mlp":
@@ -1028,7 +1014,6 @@ def main(argv: list[str] | None = None) -> int:
         help="Comma-separated family keys (Plan 8 C1 portfolio)",
     )
     parser.add_argument("--learning-rate", type=float, default=1e-3)
-    parser.add_argument("--include-broken", action="store_true")
     parser.add_argument("--output-dir", default="runs/parity")
     args = parser.parse_args(argv)
 
@@ -1048,7 +1033,6 @@ def main(argv: list[str] | None = None) -> int:
         learning_rate=args.learning_rate,
         families=families,
         output_dir=Path(args.output_dir),
-        include_broken=args.include_broken,
     )
     logger.info(
         "parity done: %d models, %d comparisons, %d notes",

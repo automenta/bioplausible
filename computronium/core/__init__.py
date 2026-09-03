@@ -1,10 +1,6 @@
-"""Core package: Registry, CoreTrainer, Config, Model."""
+"""Core package: trainers, config, model helpers."""
 
-# Lazy package init (Sprint 0.5): `import computronium.core.registry` must NOT
-# pull the zoo. `core.registry` depends only on stdlib + exceptions, but the
-# eager `core.trainer`/`core.model` imports drag in `zoo` via
-# `is_learning_rule_optimizer`. Expose symbols on demand so light consumers stay
-# fast; heavy symbols (CoreTrainer) import the zoo on first access.
+# Lazy package init: heavy symbols (CoreTrainer) import the zoo on first access.
 
 _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-module]
     "BioModel": ("computronium.core.model", "BioModel"),
@@ -12,30 +8,6 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     "ModelConfig": ("computronium.config.unified", "ModelConfig"),
     "compute_hidden_dims": ("computronium.config.unified", "compute_hidden_dims"),
     "resolve_hidden_dims": ("computronium.config.unified", "resolve_hidden_dims"),
-    "ComponentCategory": ("computronium.core.registry", "ComponentCategory"),
-    "ComponentMetadata": ("computronium.core.registry", "ComponentMetadata"),
-    "ComputeProfile": ("computronium.core.registry", "ComputeProfile"),
-    "LocalityLevel": ("computronium.core.registry", "LocalityLevel"),
-    "Registry": ("computronium.core.registry", "Registry"),
-    "register_constraint": ("computronium.core.registry", "register_constraint"),
-    "register_controller": ("computronium.core.registry", "register_controller"),
-    "register_credit_assignment": (
-        "computronium.core.registry",
-        "register_credit_assignment",
-    ),
-    "register_hardware": ("computronium.core.registry", "register_hardware"),
-    "register_metric": ("computronium.core.registry", "register_metric"),
-    "register_model": ("computronium.core.registry", "register_model"),
-    "register_optimizer": ("computronium.core.registry", "register_optimizer"),
-    "register_param_update": ("computronium.core.registry", "register_param_update"),
-    "register_propagator": ("computronium.core.registry", "register_propagator"),
-    "register_sparsity": ("computronium.core.registry", "register_sparsity"),
-    "register_task": ("computronium.core.registry", "register_task"),
-    "register_track": ("computronium.core.registry", "register_track"),
-    "register_update_strategy": (
-        "computronium.core.registry",
-        "register_update_strategy",
-    ),
     "CoreTrainer": ("computronium.core.trainer", "CoreTrainer"),
     "TrainerConfig": ("computronium.core.trainer", "TrainerConfig"),
     "TrainingMetrics": ("computronium.core.trainer", "TrainingMetrics"),

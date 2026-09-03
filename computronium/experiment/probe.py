@@ -20,7 +20,6 @@ from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from computronium.core._caching import DatasetCache, ModelCache
-from computronium.core.trainer import CoreTrainer, TrainerConfig
 
 # Whether probes persist results to the knowledge layer (KnowledgeBase /
 # FailureTracker) by default. Environment-controllable so tests can isolate.
@@ -212,18 +211,19 @@ class CoreTrainerDriver:
             RuntimeError: If training raises or returns no history.
         """
         from computronium.core.exceptions import NumericalInstabilityError
-        from computronium.core.registry import ComponentCategory, Registry
+        from computronium.core.trainer import CoreTrainer, TrainerConfig
         from computronium.domains.registry import resolve_task
         from computronium.experiment.param_estimator import (
             build_model_kwargs,
             estimate_param_count,
             phantom_knobs,
+            resolve_native_model,
         )
         from computronium.utils import seed_everything
 
         seed_everything(seed, device)
         spec = resolve_task(task)
-        model_cls = Registry.get(ComponentCategory.MODEL, model)
+        model_cls = resolve_native_model(model)
         model_kwargs = build_model_kwargs(
             model_cls,
             config,

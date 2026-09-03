@@ -1,12 +1,10 @@
 """Shared CLI utilities and constants."""
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from computronium.core._paths import db_path
 from computronium.core.logging import get_logger
-from computronium.core.registry import ComponentCategory, Registry
 from computronium.hyperopt.eval_tiers import (
     EvaluationConfig,
     PatientLevel,
@@ -21,11 +19,7 @@ __all__ = [
     "_DB_PATH",
     "_STORAGE_URL",
     "_TrialContext",
-    "_family_target",
     "_make_objective",
-    "_query_registry_models",
-    "_resolve_family_models",
-    "_resolve_survivors",
     "_resolve_targets",
     "_set_storage",
     "_tier_for_args",
@@ -51,9 +45,8 @@ def _set_storage(db_path_str: str | None = None) -> tuple[str, str]:
     return path, f"sqlite:///{path}"
 
 
-# Maps the CLI family label to the canonical ``family`` value used on the
-# component registry metadata.  ``feedback_alignment`` → ``fa`` (matching the
-# registry convention used by the native model registrations).
+# Maps the CLI family label to the canonical ``family`` value used by the
+# hyperopt tooling. ``feedback_alignment`` → ``fa``.
 FAMILY_MAP: dict[str, str] = {
     "eqprop": "eqprop",
     "forward_only": "forward_only",
@@ -93,107 +86,19 @@ _BASELINE_MODELS = frozenset({
 })
 
 
-def _query_registry_models(reg_family: str) -> list[str]:
-    """Return registered model names for a registry family value."""
-    entries = Registry.query(category=ComponentCategory.MODEL, family=reg_family)
-    return [str(m["name"]) for m in entries]
-
-
-def _resolve_family_models(cli_family: str) -> tuple[str, list[str]]:
-    """Resolve a CLI family label to (registry_family, [model_names]).
-
-    Native tile deployments register under ``family="tile"``; registration
-    is triggered lazily by the ``Registry.query`` below.
-    """
-    reg_family = FAMILY_MAP.get(cli_family, cli_family)
-    models = _query_registry_models(reg_family)
-    # Exclude documented baselines that fail the learns-gate
-    models = [m for m in models if m not in _BASELINE_MODELS]
-    return reg_family, models
-
-
 def _resolve_targets(args) -> list[tuple[str, str, str | None, list[str]]]:
-    """Return ``[(study_name, reg_family, cli_family, [model_names]), ...]``.
+    """Return ``[(study_name, family, cli_family, [model_names]), ...]``.
 
-    ``cli_family`` is ``None`` in the legacy per-model (``--models``) path.
+    ``cli_family`` is ``None`` in the per-model (``--models``) path.
     """
     targets: list[tuple[str, str, str | None, list[str]]] = []
-    if args.family:
-        if args.family == "survivors":
-            return _resolve_survivors(args)
-        families = list(FAMILY_MAP) if args.family == "all" else [args.family]
-        for cli_family in families:
-            target = _family_target(cli_family, args.task)
-            if target is not None:
-                targets.append(target)
-        return targets
 
     if args.models:
         models = [m.strip() for m in args.models.split(",") if m.strip()]
         for m in models:
             targets.append((f"{m}_{args.task}", m, None, [m]))
-        return targets
 
     return targets
-
-
-def _family_target(
-    cli_family: str, task: str
-) -> tuple[str, str, str | None, list[str]] | None:
-    """Resolve one CLI family label to a (study, family, cli, models) target."""
-    reg_family, models = _resolve_family_models(cli_family)
-    if not models:
-        logger.warning("No models registered for family '%s'; skipping", cli_family)
-        return None
-    for m in models:
-        logger.warning("Skipping %s: incompatible with task '%s'", m, task)
-    return (f"{reg_family}_{task}", reg_family, cli_family, models)
-
-
-def _resolve_survivors(args) -> list[tuple[str, str, str | None, list[str]]]:
-    """Resolve ``--family survivors``: auto-expand to surviving CLI families.
-
-    Reads the portfolio CSV we emit (default ``results/portfolio.csv``) and
-    keeps only rows whose status is ``Scale`` or ``Hold`` (Phase 1.2 gate:
-    only families that survived the digits decision advance to CIFAR-10).
-    """
-    import csv as _csv
-
-    path = Path(getattr(args, "survivors_csv", "") or "results/portfolio.csv")
-    if not path.exists():
-        logger.warning(
-            "Survivors CSV '%s' not found; treating all families as survivors", path
-        )
-        families = list(FAMILY_MAP)
-    else:
-        families: list[str] = []
-        with path.open("r", encoding="utf-8", newline="") as f:
-            rows = list(_csv.DictReader(f))
-        header = list(rows[0].keys()) if rows else []
-        status_col = next((c for c in header if c.lower() == "status"), "status")
-        for r in rows:
-            fam = (r.get("family") or "").strip()
-            if not fam or fam == "backprop":
-                continue
-            status = (r.get(status_col) or "").strip()
-            if status in {"Scale", "Hold"}:
-                families.append(fam)
-        if not families:
-            logger.warning("No survivors in '%s'; defaulting to all families", path)
-            families = list(FAMILY_MAP)
-
-    # Map registry family values back to CLI labels where possible.
-    cli_by_reg = {rf: cli for cli, rf in FAMILY_MAP.items()}
-    resolved: list[tuple[str, str, str | None, list[str]]] = []
-    for family in families:
-        cli = cli_by_reg.get(family, family)
-        if cli not in FAMILY_MAP:
-            logger.warning("Unknown survivor family '%s'; skipping", family)
-            continue
-        reg_family, models = _resolve_family_models(cli)
-        if models:
-            resolved.append((f"{reg_family}_{args.task}", reg_family, cli, models))
-    return resolved
 
 
 def _tier_for_args(args) -> PatientLevel:

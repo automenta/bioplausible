@@ -28,7 +28,6 @@ from campaign_tab import (  # ruff: ignore[module-import-not-at-top-of-file]
 )
 from charts import (  # ruff: ignore[module-import-not-at-top-of-file]
     loss_series,
-    parity_explanation,
     parity_gap,
 )
 from nicegui import ui  # ruff: ignore[module-import-not-at-top-of-file]
@@ -44,7 +43,6 @@ from runner import (  # ruff: ignore[module-import-not-at-top-of-file]
     TRAINABLE_MODELS,
     DemoPanel,
     default_trainer_config,
-    model_metadata,
     prepare_trainer_config,
     run_async,
 )
@@ -134,8 +132,7 @@ class DemoUi:
         self.acc_fig: ui.elements.plotly_element.Plotly | None = None
         self.gap_label: ui.label | None = None
         self.run_btn: ui.button | None = None
-        self.meta_a: ui.label | None = None
-        self.meta_b: ui.label | None = None
+
         self.weight_box: ui.column | None = None
         # Ontology mode state
         self.ontology_mode: bool = False
@@ -153,17 +150,6 @@ class DemoUi:
         )
         fig.update_layout(height=260, margin=dict(l=40, r=20, t=20, b=30))
         return ui.plotly(fig)
-
-
-def _meta_text(name: str) -> str:
-    """One-line Sprint 2.5 metadata summary for a model (or '—' if unknown)."""
-    m = model_metadata(name)
-    if not m:
-        return "—"
-    return (
-        f"bio {m['bio_plausibility_score']} · locality {m['locality_level']} · "
-        f"family {m['family']}"
-    )
 
 
 def _build_ontology_system(layer_choices: dict[str, str]) -> System:
@@ -392,13 +378,6 @@ def create_page(demo: DemoUi) -> None:
     demo.panel_a = _fresh_panel(model_a.value, task_sel.value, 5, 0.001)
     demo.panel_b = _fresh_panel(model_b.value, task_sel.value, 5, 0.001)
 
-    demo.meta_a = ui.label("")
-    demo.meta_b = ui.label("")
-    demo.meta_a.set_text(_meta_text(model_a.value))
-    demo.meta_b.set_text(_meta_text(model_b.value))
-    model_a.on("change", lambda: demo.meta_a.set_text(_meta_text(model_a.value)))
-    model_b.on("change", lambda: demo.meta_b.set_text(_meta_text(model_b.value)))
-
     with ui.row():
         with ui.column():
             ui.label("Config A")
@@ -484,11 +463,7 @@ def create_page(demo: DemoUi) -> None:
             demo.run_btn.enable()
             return
         gap = parity_gap(demo.panel_a, demo.panel_b)
-        if gap is None:
-            text = "Parity gap: —"
-        else:
-            note = parity_explanation(demo.panel_a, demo.panel_b, gap)
-            text = f"Parity gap (B−A): {gap} pp{note}"
+        text = "Parity gap: —" if gap is None else f"Parity gap (B−A): {gap} pp"
         demo.gap_label.set_text(text)
         demo.run_btn.enable()
 

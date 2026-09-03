@@ -159,20 +159,6 @@ def perturb_nonlocal(state: SystemState, layer: int, eps: float) -> SystemState:
     return new_state
 
 
-# ----------------------------------------------------------------------
-# Registry helpers for L6/L7
-# ----------------------------------------------------------------------
-def _all_registered_model_names() -> list[str]:
-    """Get all registered model names from Registry."""
-    from computronium.core.registry import ComponentCategory, Registry
-
-    try:
-        Registry.list()  # triggers lazy native registration
-        return list(Registry._components.get(ComponentCategory.MODEL, {}).keys())
-    except Exception:
-        return []
-
-
 def _round_trip_configs(system: System) -> System:  # ruff: ignore[too-many-locals]
     """Serialize system configs to JSON and reconstruct.
 

@@ -13,8 +13,8 @@ import torch
 from torch import nn
 
 from computronium.core.construction import construct_model
-from computronium.core.registry import ComponentCategory, Registry
 from computronium.core.trainer import dispatch_train_step
+from computronium.experiment.param_estimator import resolve_native_model
 
 __all__ = [
     "STANDARD_OPTIMIZERS",
@@ -26,13 +26,13 @@ __all__ = [
 def create_model(
     name: str, input_dim: int | None = None, output_dim: int | None = None, **kwargs
 ) -> nn.Module:
-    """Instantiate a registered model via the single construction layer.
+    """Instantiate a native model via the single construction layer.
 
     Thin adapter over :func:`computronium.core.construction.construct_model`
     used by lightning integration code. Tests patch this symbol to bypass
     real construction, so the name stays module-level and patchable.
     """
-    cls = Registry.get(ComponentCategory.MODEL, name)
+    cls = resolve_native_model(name)
     config = dict(kwargs)
     if input_dim is not None:
         config.setdefault("input_dim", input_dim)
@@ -51,7 +51,13 @@ def create_model(
 
 
 # Standard optimizers that follow PyTorch conventions
-STANDARD_OPTIMIZERS = {"adam", "adamw", "sgd", "rmsprop"}
+_TORCH_OPTIMIZERS = {
+    "adam": torch.optim.Adam,
+    "adamw": torch.optim.AdamW,
+    "sgd": torch.optim.SGD,
+    "rmsprop": torch.optim.RMSprop,
+}
+STANDARD_OPTIMIZERS = frozenset(_TORCH_OPTIMIZERS)
 
 
 class BioLightningModule(pl.LightningModule):
@@ -108,20 +114,12 @@ class BioLightningModule(pl.LightningModule):
         self._last_energy: float = 0.0
 
     def configure_optimizers(self):
-        """Create and store the computronium optimizer."""
-        opt_cls = Registry.get(ComponentCategory.PARAM_UPDATE, self.optimizer_name)
-        # Standard torch optimizers don't accept model=; computronium ones do
-        try:
-            self._optimizer = opt_cls(
-                self.model.parameters(),
-                model=self.model,
-                lr=self.hparams.get("lr", 1e-3),
-            )
-        except TypeError:
-            self._optimizer = opt_cls(
-                self.model.parameters(),
-                lr=self.hparams.get("lr", 1e-3),
-            )
+        """Create and store the optimizer."""
+        opt_cls = _TORCH_OPTIMIZERS[self.optimizer_name.lower()]
+        self._optimizer = opt_cls(
+            self.model.parameters(),
+            lr=self.hparams.get("lr", 1e-3),
+        )
         return self._optimizer
 
     def configure_model(self) -> None:

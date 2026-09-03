@@ -1,6 +1,30 @@
 {
   "figures": [
     {
+      "capability_id": "D10",
+      "capability_name": "attention_geometry_swap",
+      "data_sha256": "e6708739bb2f373ed1a8cf0a24dfa6c63f19b42e011a2e4cf98c30213a97ac63",
+      "demo_test": "tests/integration/test_demo_attention_geometry_swap.py",
+      "figure_png": "d10_attention_geometry_swap.png",
+      "provenance": {
+        "config_sha256": "e6708739bb2f373ed1a8cf0a24dfa6c63f19b42e011a2e4cf98c30213a97ac63",
+        "git_commit": "c1e86ff52701f9d1b86a38ba171a323228276220"
+      },
+      "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
+    },
+    {
+      "capability_id": "D11",
+      "capability_name": "spatial_lattice_geometry_swap",
+      "data_sha256": "94f4d73e2d667be250cb8499ab87262c1663fea5f2094465ba1c4abce42a16a8",
+      "demo_test": "tests/integration/test_demo_spatial_lattice_geometry_swap.py",
+      "figure_png": "d11_spatial_lattice_geometry_swap.png",
+      "provenance": {
+        "config_sha256": "94f4d73e2d667be250cb8499ab87262c1663fea5f2094465ba1c4abce42a16a8",
+        "git_commit": "c1e86ff52701f9d1b86a38ba171a323228276220"
+      },
+      "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
+    },
+    {
       "capability_id": "D1",
       "capability_name": "compose_6axis",
       "data_sha256": "589a600a372b629e25c1b4f30a1383242704c9b34f4561f9540b51fe9010b42e",
@@ -8,7 +32,7 @@
       "figure_png": "d1_compose_6axis.png",
       "provenance": {
         "config_sha256": "589a600a372b629e25c1b4f30a1383242704c9b34f4561f9540b51fe9010b42e",
-        "git_commit": "6c8aec7daa1a39fce168cb81db6e49a5830db5c2"
+        "git_commit": "c1e86ff52701f9d1b86a38ba171a323228276220"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -20,7 +44,7 @@
       "figure_png": "d2_swap_credit.png",
       "provenance": {
         "config_sha256": "5e3b812ca7a5b3de4d1555064e9f6c32162ab003f3f27edd7b63c81b2ca64b9d",
-        "git_commit": "6c8aec7daa1a39fce168cb81db6e49a5830db5c2"
+        "git_commit": "c1e86ff52701f9d1b86a38ba171a323228276220"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -32,7 +56,7 @@
       "figure_png": "d3_swap_plasticity.png",
       "provenance": {
         "config_sha256": "623738404540be7334fda66512eabe0f3eb06a203b24d9cdb2912a66efc340d1",
-        "git_commit": "6c8aec7daa1a39fce168cb81db6e49a5830db5c2"
+        "git_commit": "c1e86ff52701f9d1b86a38ba171a323228276220"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -44,7 +68,7 @@
       "figure_png": "d4_memory_budget.png",
       "provenance": {
         "config_sha256": "e1b90bf9efc6080ce7d177331d74896e02395bb762f171a872844b8b1caca746",
-        "git_commit": "6c8aec7daa1a39fce168cb81db6e49a5830db5c2"
+        "git_commit": "c1e86ff52701f9d1b86a38ba171a323228276220"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -56,7 +80,7 @@
       "figure_png": "d5_z3_frozen_theta.png",
       "provenance": {
         "config_sha256": "4538685f139762a34709769c01ddb5ea1206419896a4120d2243a475a9d4c2ad",
-        "git_commit": "6c8aec7daa1a39fce168cb81db6e49a5830db5c2"
+        "git_commit": "c1e86ff52701f9d1b86a38ba171a323228276220"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -68,7 +92,7 @@
       "figure_png": "d6_substrate_swap.png",
       "provenance": {
         "config_sha256": "e02dec88a3c325a560428ad863449df782d6a434be475c61ec9cfb9e2c63c343",
-        "git_commit": "6c8aec7daa1a39fce168cb81db6e49a5830db5c2"
+        "git_commit": "c1e86ff52701f9d1b86a38ba171a323228276220"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -80,7 +104,7 @@
       "figure_png": "d7_spike_settle.png",
       "provenance": {
         "config_sha256": "47b92e9a04c991177a001021f815aca582a8094ef404f43fa74f3c825126d350",
-        "git_commit": "6c8aec7daa1a39fce168cb81db6e49a5830db5c2"
+        "git_commit": "c1e86ff52701f9d1b86a38ba171a323228276220"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -92,7 +116,7 @@
       "figure_png": "d8_geometry_swap.png",
       "provenance": {
         "config_sha256": "476fb4a2e7957032427991f04c1fcd516eda8b029ca710f39ebc54e0195c7726",
-        "git_commit": "6c8aec7daa1a39fce168cb81db6e49a5830db5c2"
+        "git_commit": "c1e86ff52701f9d1b86a38ba171a323228276220"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -104,7 +128,7 @@
       "figure_png": "d9_graph_geometry_swap.png",
       "provenance": {
         "config_sha256": "56ae2908520a30aa463020827b85b19afc8609ffa7336dfee64c05aeafd07aae",
-        "git_commit": "6c8aec7daa1a39fce168cb81db6e49a5830db5c2"
+        "git_commit": "c1e86ff52701f9d1b86a38ba171a323228276220"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     }

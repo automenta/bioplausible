@@ -16,8 +16,6 @@ from torch import nn
 
 from computronium.core.logging import get_logger
 from computronium.core.losses import compute_accuracy
-from computronium.core.model_spec import get_model_spec
-from computronium.core.registry import ComponentCategory, Registry
 from computronium.core.utils.device import get_device
 from computronium.domains import create_task
 from computronium.domains.base import DomainType
@@ -38,38 +36,24 @@ def create_model(
     hidden_dim=128,
     num_layers=4,
     device="cpu",
-    task_type="vision",
-    **kwargs,
 ) -> nn.Module:
-    """Instantiate a model via the single construction layer.
+    """Instantiate a native 5-D system for the named model.
 
-    Accepts the legacy ``ModelSpec`` shape returned by :func:`get_model_spec`
-    and defers to :func:`computronium.core.construction.construct_model`.
+    ``spec`` may be a name or any object exposing a ``name`` attribute.
     Module-level symbol so tests can patch
     ``computronium.execution.robustness.create_model``.
     """
-    from computronium.core.construction import construct_model
+    from computronium.experiment.param_estimator import resolve_native_model
 
-    name = getattr(spec, "name", None) or str(spec)
-    cls = Registry.get(ComponentCategory.MODEL, name)
-    config = dict(kwargs)
-    if input_dim is not None:
-        config.setdefault("input_dim", input_dim)
-    if output_dim is not None:
-        config.setdefault("output_dim", output_dim)
-    if hidden_dim is not None:
-        config.setdefault("hidden_dim", hidden_dim)
-    if num_layers is not None:
-        config.setdefault("num_layers", num_layers)
-    config.setdefault("task_type", task_type)
-    model = construct_model(
-        cls,
-        config,
-        input_dim=input_dim or 0,
-        output_dim=output_dim or 0,
-        model_name=name,
+    name = str(getattr(spec, "name", None) or spec)
+    model = resolve_native_model(name)(
+        input_dim or 0,
+        hidden_dim,
+        output_dim or 0,
+        num_layers=num_layers,
+        device=device,
     )
-    return model.to(device)
+    return model  # type: ignore[return-value]
 
 
 matplotlib.use("Agg")
@@ -124,15 +108,13 @@ class RobustnessEvaluator:
             task = create_task(self.task_name, device=self.device, quick_mode=True)
             task.setup()
 
-            spec = get_model_spec(self.model_name)
             model = create_model(
-                spec=spec,
+                self.model_name,
                 input_dim=task.input_dim,
                 output_dim=task.output_dim,
                 hidden_dim=self.config.get("hidden_dim", 128),
                 num_layers=self.config.get("num_layers", 4),
                 device=self.device,
-                task_type=task.task_type,
             )
 
             # Load weights if provided, else train briefly

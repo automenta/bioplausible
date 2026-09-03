@@ -9,7 +9,6 @@ AutoScientist proposes experiments; the Bridge packages them as
 from dataclasses import dataclass, field
 
 from computronium.core.logging import get_logger
-from computronium.core.registry import ComponentCategory, Registry
 
 __all__ = [
     "AutoScientistBridge",
@@ -60,54 +59,6 @@ class AutoScientistBridge:
         if proposal.propagator:
             config["propagator"] = proposal.propagator
         return config
-
-    def discover_viable_combinations(
-        self,
-        domain: str | None = None,
-        min_bio_score: float = 0.0,
-    ) -> list[dict[str, object]]:
-        """
-        Discover all viable model+propagator+optimizer combinations.
-
-        Used by AutoScientist to generate search space.
-        """
-        models = Registry.query(
-            category=ComponentCategory.MODEL,
-            domain=domain,
-            min_bio_score=min_bio_score,
-        )
-        propagators = Registry.query(
-            category=ComponentCategory.CREDIT_ASSIGNMENT,
-            domain=domain,
-            min_bio_score=min_bio_score,
-        )
-        optimizers = Registry.query(
-            category=ComponentCategory.PARAM_UPDATE,
-            domain=domain,
-        )
-
-        combinations = []
-        for m in models:
-            for p in propagators:
-                for o in optimizers:
-                    combinations.append({
-                        "model": m["name"],
-                        "model_meta": m["metadata"],
-                        "propagator": p["name"],
-                        "propagator_meta": p["metadata"],
-                        "optimizer": o["name"],
-                        "optimizer_meta": o["metadata"],
-                    })
-
-        logger.info(
-            "Discovered %d viable combinations "
-            "(models=%d, propagators=%d, optimizers=%d)",
-            len(combinations),
-            len(models),
-            len(propagators),
-            len(optimizers),
-        )
-        return combinations
 
     def submit_proposal(self, proposal: ExperimentProposal) -> None:
         """Submit a proposal for execution."""

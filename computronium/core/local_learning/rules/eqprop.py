@@ -11,7 +11,6 @@ import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowerc
 from torch import nn
 
 from computronium.core.local_learning.settling import energy_gradient_descent
-from computronium.core.registry import register_credit_assignment
 from computronium.core.utils.optimizer import OptimizerConfig, create_optimizer
 
 from .base import LearningRuleOptimizer
@@ -28,7 +27,6 @@ __all__ = [
 ]
 
 
-@register_credit_assignment("eq_prop", requires=["transition_graph"], family="eqprop")
 class EqProp(LearningRuleOptimizer):
     """
     Standard Equilibrium Propagation.
@@ -277,15 +275,6 @@ class EqProp(LearningRuleOptimizer):
                 weight.grad = -(contrast.T @ inp) / batch_size
 
 
-@register_credit_assignment(
-    "adam_eq_prop",
-    requires=["transition_graph"],
-    family="eqprop",
-    description=(
-        "Adam-flavored Equilibrium Propagation: EP contrastive gradients "
-        "applied via the Adam optimizer instead of SGD+momentum."
-    ),
-)
 class AdamEqProp(EqProp):
     """
     Adam-flavored Equilibrium Propagation.
@@ -349,11 +338,6 @@ class AdamEqProp(EqProp):
         self._adam.step()
 
 
-@register_credit_assignment(
-    "holomorphic_eq_prop",
-    requires=["transition_graph"],
-    family="eqprop",
-)
 class HolomorphicEqProp(LearningRuleOptimizer):
     """
     Holomorphic EqProp: Complex-valued EqProp for exact gradients.
@@ -392,11 +376,6 @@ class HolomorphicEqProp(LearningRuleOptimizer):
                 self._apply_update(param.grad, param, buffer)
 
 
-@register_credit_assignment(
-    "finite_nudge_eq_prop",
-    requires=["transition_graph"],
-    family="eqprop",
-)
 class FiniteNudgeEqProp(LearningRuleOptimizer):
     """
     Finite Nudge EqProp: Large beta for noise robustness.
@@ -434,9 +413,6 @@ class FiniteNudgeEqProp(LearningRuleOptimizer):
                 self._apply_update(param.grad, param, buffer)
 
 
-@register_credit_assignment(
-    "lazy_eq_prop", requires=["transition_graph"], family="eqprop"
-)
 class LazyEqProp(LearningRuleOptimizer):
     """
     Lazy EqProp: Event-driven updates.

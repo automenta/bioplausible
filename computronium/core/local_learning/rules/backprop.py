@@ -8,8 +8,6 @@ import torch
 import torch.nn.functional as F  # ruff: ignore[lowercase-imported-as-non-lowercase]
 from torch import nn
 
-from computronium.core.registry import LocalityLevel, register_credit_assignment
-
 from .base import LearningRuleOptimizer
 
 __all__ = [
@@ -17,19 +15,6 @@ __all__ = [
 ]
 
 
-@register_credit_assignment(
-    "backprop",
-    family="backprop",
-    locality_level=LocalityLevel.GLOBAL,
-    bio_plausibility_score=0.3,
-    credit_assignment_type="backpropagation",
-    requires_backward=True,
-    tags=["backprop", "standard"],
-    description=(
-        "Standard backpropagation via autograd: forward pass, loss"
-        " computation, backward pass, and SGD parameter update."
-    ),
-)
 class Backprop(LearningRuleOptimizer):
     """Standard backpropagation via autograd."""
 

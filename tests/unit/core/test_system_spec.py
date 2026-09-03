@@ -30,8 +30,8 @@ from computronium.ontology import (
     ParameterUpdateConfig,
     RecurrentGeometry,
     RiemannianOrthogonalUpdate,
-    SpectralConstrainedUpdate,
     SpatialLattice3DGeometry,
+    SpectralConstrainedUpdate,
     StateDynamicsConfig,
     SubstrateConfig,
     TargetInversionCredit,
@@ -532,7 +532,9 @@ class TestJointSystemSpecRoundTrip:
         for name, param in sys.geometry.params.items():
             assert torch.equal(param, recon.geometry.params[name]), name
 
-    @pytest.mark.parametrize("topology", ["feedforward", "recurrent", "conv", "attention", "spatial_lattice"])
+    @pytest.mark.parametrize(
+        "topology", ["feedforward", "recurrent", "conv", "attention", "spatial_lattice"]
+    )
     def test_joint_spec_round_trip(self, topology: str) -> None:
         """to_spec -> json -> from_spec restores trained geometry params bitwise."""
         sys = self._joint(topology)

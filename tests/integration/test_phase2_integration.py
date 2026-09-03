@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from computronium import create_backprop_system
 from computronium.hyperopt.experiment import TrialRunner
 from computronium.hyperopt.storage import HyperoptStorage
 
@@ -24,15 +25,18 @@ class TestPhase2Integration(unittest.TestCase):
         model_name = "backprop_mlp"
         config = {
             "lr": 0.01,
-            "hidden_dim": 32,
-            "num_layers": 2,
+            "hidden_dims": (32,),
             "save_artifacts": False,
         }
         trial_id = storage.create_trial(model_name, config)
 
         # Run Trial via Runner
         runner = TrialRunner(
-            storage=storage, device="cpu", task="mnist", quick_mode=True
+            storage=storage,
+            device="cpu",
+            task="mnist",
+            quick_mode=True,
+            model_cls=create_backprop_system,
         )
 
         # Override runner epochs to match config

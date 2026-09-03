@@ -208,7 +208,6 @@ Original Accuracy: {metrics.get("accuracy", 0.0):.4f}
 
 import torch
 import json
-from computronium.core.registry import ComponentCategory, Registry
 from computronium.domains import create_task
 from computronium.core.utils.device import get_device
 
@@ -224,19 +223,21 @@ def reproduce():
     task.setup()
 
     logger.info("Creating model...")
-    from computronium.core.construction import construct_model
+    from computronium.models.native.eqprop_native import create_native_eqprop_mlp
 
-    model_cls = Registry.get(ComponentCategory.MODEL, config["model"])
-    model = construct_model(
-        model_cls,
-        {
-            "hidden_dim": config.get("hidden_dim", 128),
-            "num_layers": config.get("num_layers", 4),
-        },
-        input_dim=task.input_dim,
-        output_dim=task.output_dim,
-        model_name=config["model"],
-    ).to(device)
+    input_dim = task.input_dim
+    if isinstance(input_dim, (tuple, list)):
+        import math
+        input_dim = int(math.prod(input_dim))
+
+    model = create_native_eqprop_mlp(
+        input_dim,
+        config.get("hidden_dim", 128),
+        task.output_dim,
+        num_layers=config.get("num_layers", 4),
+        lr=config.get("lr", 0.001),
+        device=device,
+    )
 
     if "beta" in config and hasattr(model, "beta"):
         model.beta = config["beta"]
