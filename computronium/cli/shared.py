@@ -58,7 +58,7 @@ FAMILY_MAP: dict[str, str] = {
     "eqprop": "eqprop",
     "forward_only": "forward_only",
     "feedback_alignment": "fa",
-    "equitile": "equitile",
+    "tile": "tile",
     "hebbian": "hebbian",
     "predictive_coding": "predictive_coding",
     "target_prop": "target_prop",
@@ -102,7 +102,7 @@ def _query_registry_models(reg_family: str) -> list[str]:
 def _resolve_family_models(cli_family: str) -> tuple[str, list[str]]:
     """Resolve a CLI family label to (registry_family, [model_names]).
 
-    Native tile deployments register under ``family="equitile"``; registration
+    Native tile deployments register under ``family="tile"``; registration
     is triggered lazily by the ``Registry.query`` below.
     """
     reg_family = FAMILY_MAP.get(cli_family, cli_family)

@@ -64,6 +64,12 @@ def _energy_tensor(value: ActivityValue) -> Tensor:
             return value
         case int() | float():
             return torch.tensor(float(value))
+        case list():
+            if value and isinstance(value[0], Tensor):
+                return value[-1]
+            return torch.zeros(1)
+        case dict():
+            return torch.zeros(1)
         case _:
             return torch.zeros(1)
 
@@ -76,7 +82,9 @@ def _state_energy_vector(state: object) -> Tensor:
         acts = acts if isinstance(acts, list) else [acts]
         return acts[-1] if acts else torch.zeros(1)
     activity = _get_state_activity(state)
-    return activity.get("output", torch.zeros(1)) if activity else torch.zeros(1)
+    if not activity:
+        return torch.zeros(1)
+    return _energy_tensor(activity.get("output", torch.zeros(1)))
 
 
 def _create_output_state(
@@ -1052,3 +1060,15 @@ class LazyStateDynamics:
     def clear_cache(self) -> None:
         """Clear the lazy activation cache."""
         self._activation_cache.clear()
+
+
+__all__ = [
+    "DiffusionDynamics",
+    "EnergyMinimizationDynamics",
+    "InstantaneousDynamics",
+    "LazyStateDynamics",
+    "PredictiveSettlingDynamics",
+    "SpikeIntegrationDynamics",
+    "StateDynamics",
+    "StateDynamicsConfig",
+]

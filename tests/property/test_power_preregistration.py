@@ -55,6 +55,7 @@ def _record(coordinate: str, accuracy: float) -> FrontierRecord:
         settling_time=4.0,
         basin_stability=0.5,
         resources=ResourceUsage(),
+        seed=0,
     )
 
 

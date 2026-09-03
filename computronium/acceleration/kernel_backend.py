@@ -413,7 +413,7 @@ def infer_algorithm_family(model_name: str) -> AlgorithmFamily | None:  # ruff: 
     # ``tile_pc``/``tile_snn``/``tile_target_prop`` must resolve to TILE — the
     # tile marker is the most specific prefix, so check it before the generic
     # family substrings those names also carry.
-    if "tile" in name or "equitile" in name:
+    if "tile" in name:
         return AlgorithmFamily.TILE
     # ``fabricpc_graph_pcn`` carries a "pc" substring and should be PC, while
     # ``predictive_coding_hybrid`` carries neither "pc" nor "fa" — check both

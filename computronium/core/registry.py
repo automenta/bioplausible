@@ -120,7 +120,7 @@ class ComponentMetadata:
     version: str = "1.0.0"
     # Algorithm family tag (per REFACTOR2 §3.2): "eqprop", "fa", "hebbian",
     # "forward_only", "target_prop", "spiking", "predictive_coding", "backprop",
-    # "mep", "equitile", etc. Directory layout mirrors this but `family` is the
+    # "mep", "tile", etc. Directory layout mirrors this but `family` is the
     # canonical searchable attribute for grouping in the README/Registry queries.
     family: str = ""
     # Domain support: "vision", "lm", "rl", "graph", "tabular", "timeseries", "scientific"
@@ -823,8 +823,8 @@ class Registry:
                     "ep",
                     "chl",
                 ],
-                "TileMesh": ["tile", "equitile"],
-                "TileGeometry": ["tile", "equitile"],
+                "TileMesh": ["tile"],
+                "TileGeometry": ["tile"],
                 "Neuromorphic": ["neuromorphic", "fabric"],
                 "SpatialLattice": ["spatial_lattice", "neural_cube", "3d"],
             },

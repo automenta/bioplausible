@@ -387,7 +387,7 @@ register_model(
 # Register native Tile models
 register_model(
     "native_tile_ep",
-    family="equitile",
+    family="tile",
     domain="general",
     tags=["native", "tile", "equilibrium", "energy-based"],
     bio_plausibility_score=0.9,
@@ -405,7 +405,7 @@ register_model(
 
 register_model(
     "native_tile_fa",
-    family="equitile",
+    family="tile",
     domain="general",
     tags=["native", "tile", "feedback-alignment", "random-projections"],
     bio_plausibility_score=0.75,
@@ -423,7 +423,7 @@ register_model(
 
 register_model(
     "native_tile_tp",
-    family="equitile",
+    family="tile",
     domain="general",
     tags=["native", "tile", "target-prop", "predictive"],
     bio_plausibility_score=0.8,
@@ -441,7 +441,7 @@ register_model(
 
 register_model(
     "native_tile_snn",
-    family="equitile",
+    family="tile",
     domain="general",
     tags=["native", "tile", "spiking", "neuromorphic"],
     bio_plausibility_score=0.95,
@@ -515,7 +515,7 @@ register_model(
 # Register native Tile Hebbian model
 register_model(
     "native_tile_hebbian",
-    family="equitile",
+    family="tile",
     domain="general",
     tags=["native", "tile", "hebbian", "local"],
     bio_plausibility_score=0.85,
@@ -534,7 +534,7 @@ register_model(
 # Register native Tile Predictive Coding model
 register_model(
     "native_tile_pc",
-    family="equitile",
+    family="tile",
     domain="general",
     tags=["native", "tile", "predictive-coding", "local"],
     bio_plausibility_score=0.9,
@@ -553,7 +553,7 @@ register_model(
 # Register native Tile GNN model
 register_model(
     "native_tile_gnn",
-    family="equitile",
+    family="tile",
     domain="general",
     tags=["native", "tile", "gnn", "graph"],
     bio_plausibility_score=0.85,

@@ -1,7 +1,6 @@
-"""Dynamics package."""
+"""Layer 3: StateDynamics — Forward Evolution & Settling."""
 
-# Import from the original dynamics module (_dynamics.py)
-from .._dynamics import (
+from computronium.ontology.dynamics._dynamics import (
     DiffusionDynamics,
     EnergyMinimizationDynamics,
     InstantaneousDynamics,

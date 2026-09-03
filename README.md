@@ -48,7 +48,7 @@ Computronium provides the ontology, infrastructure, and automation tooling used 
 System = Substrate × Geometry × StateDynamics × Plasticity × CreditAssignment × ParameterUpdate
 ```
 
-A **System is a 6-axis coordinate; 5-D systems are the `M = NullPlasticity` subspace.**
+A **System is a 6-axis coordinate; 5-D systems are the `P = NullPlasticity` subspace.**
 
 This decomposition is the framework's organizing abstraction for comparing learning systems. It defines compatibility constraints over combinations of primitives; compatible combinations form the search space explored by the **AutoScientist**. The ontology is a design abstraction, not an established law of computation.
 
@@ -57,7 +57,7 @@ This decomposition is the framework's organizing abstraction for comparing learn
 | **🔩 Substrate** | $S$ | Physical state space: precision, noise, sparsity constraints | `Digital`, `Memristive` (conductance, IR-drop), `Neuromorphic` (async spikes), `Photonic` (phase/amplitude), `Quantum` (unitary gates), `Noisy`, `Complex`, `Sparse`, `Ternary` |
 | **🔷 Geometry** | $G$ | Topology & routing of computational units | `FeedforwardDAG` (MLP/CNN), `RecurrentAttractor` (Hopfield/EqProp), `TileMesh` (TileNet), `FabricPC` (arbitrary node-edge), `SpatialLattice3D` (neural_cube) |
 | **🌀 StateDynamics** | $D$ | Forward evolution & settling (the "forward pass") | `EnergyMinimization` (EqProp), `PredictiveSettling` (Predictive Coding), `SpikeIntegration` (LIF/Izhikevich), `InstantaneousPass` (FF/Backprop), `LazyStateDynamics` (on-demand activation), `Diffusion` |
-| **🧬 Plasticity (MetaDynamics)** | $M$ | Mechanism making the computational rule a dynamical variable | `NullPlasticity` (Zero-Extension), `RoutingPlasticity` (gating/rerouting), `FastWeightPlasticity` (episode-local memory), `SubstrateCoupledPlasticity` (physical plasticity), `RuleStatePlasticity` (Z3: rule selection) |
+| **🧬 Plasticity (MetaDynamics)** | $P$ | Mechanism making the computational rule a dynamical variable | `NullPlasticity` (Zero-Extension), `RoutingPlasticity` (gating/rerouting), `FastWeightPlasticity` (episode-local memory), `SubstrateCoupledPlasticity` (physical plasticity), `RuleStatePlasticity` (Z3: rule selection) |
 | **💡 CreditAssignment** | $C$ | Error routing & pseudo-gradient computation | `ThermodynamicContrast` (EqProp free/nudged), `RandomProjectionsCredit` (FA/DFA), `LocalGoodnessCredit` (Forward-Forward/PEPITA), `TemporalTraceCredit` (STDP), `TargetInversionCredit` (Target Prop), `HomeostaticCredit` (autonomous Lipschitz scaling) |
 | **🔧 ParameterUpdate** | $U$ | Slow, persistent parameter consolidation Δθ | `EuclideanUpdate` (SGD/Adam), `RiemannianOrthogonalUpdate` (Muon), `SpectralConstrainedUpdate`, `NaturalGradientUpdate` (Fisher), `ElasticConsolidationUpdate` (EWC) |
 

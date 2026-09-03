@@ -202,7 +202,6 @@ FAMILY_TOLERANCES: dict[str, tuple[float, float]] = {
     "backprop": (0.01, 1e-4),
     "gradient": (0.01, 1e-4),
     "mep": (0.1, 5e-3),
-    "equitile": (0.1, 5e-3),
     "tile": (0.1, 5e-3),
     "default": (0.1, 1e-3),
 }
@@ -818,15 +817,57 @@ class ModelAdapter:
         family = self._metadata.family.lower()
         if "spiking" in family or "snn" in family or "stdp" in family:
             return NeuromorphicSubstrate(SubstrateConfig.neuromorphic())
-        if "tile" in family or "equitile" in family:
+        if "tile" in family:
             return DigitalSubstrate(SubstrateConfig.digital())
         return None
 
+    _NON_FORWARD_LINEAR_MARKERS = ("feedback", "recurrent", "b_", "fa_")
+
+    def _probe_linear_dims(self) -> tuple[int, ...] | None:
+        """Chain the model's forward Linear layers into (input, *hidden, output).
+
+        Walks registered modules in order, skipping non-forward Linears
+        (FA feedback, recurrent). Returns None when the shapes don't form
+        a single feedforward chain.
+        """
+        module_names = {id(mod): name for name, mod in self.model.named_modules()}
+        linears = [
+            m
+            for m in self.model.modules()
+            if isinstance(m, nn.Linear)
+            and not any(
+                marker in module_names[id(m)].lower()
+                for marker in self._NON_FORWARD_LINEAR_MARKERS
+            )
+        ]
+        if not linears:
+            return None
+        dims = [linears[0].in_features, linears[0].out_features]
+        for layer in linears[1:]:
+            if layer.in_features != dims[-1]:
+                return None
+            dims.append(layer.out_features)
+        return tuple(dims)
+
     def _infer_geometry(self) -> Geometry:
-        # Simplified: return FeedforwardGeometry
+        dims = self._probe_linear_dims()
+        if dims is not None:
+            input_dim, *hidden_dims, output_dim = dims
+        elif (input_dim := getattr(self.model, "input_dim", None)) is not None and (
+            output_dim := getattr(self.model, "output_dim", None)
+        ) is not None:
+            hidden_dims = []
+        else:
+            raise TypeError(
+                f"Cannot infer geometry for {type(self.model).__name__}: "
+                "no Linear chain and no input_dim/output_dim attributes. "
+                "Register the model with explicit ontology geometry metadata."
+            )
         return FeedforwardGeometry(
             GeometryConfig.feedforward(
-                input_dim=784, output_dim=10, hidden_dims=(256, 128)
+                input_dim=input_dim,
+                output_dim=output_dim,
+                hidden_dims=tuple(hidden_dims),
             )
         )
 
@@ -1050,55 +1091,7 @@ class _AdaptedSystem:
         }
 
     @classmethod
-    def from_spec(cls, spec: dict[str, object]) -> System[TS, TG, TD, TC, TU]:
+    def from_spec(
+        cls, spec: dict[str, object]
+    ) -> System[Substrate, Geometry, StateDynamics, CreditAssignment, ParameterUpdate]:
         raise NotImplementedError("Cannot reconstruct adapted system from spec")
-
-
-def substrate_from_config(config: SubstrateConfig) -> Substrate:  # ruff: ignore[too-many-return-statements]
-    """Factory function to instantiate substrate from config."""
-    from computronium.ontology.substrate import SubstrateType
-
-    match config.substrate_type:
-        case SubstrateType.DIGITAL:
-            from computronium.ontology.substrate import DigitalSubstrate
-
-            return DigitalSubstrate(config)
-        case SubstrateType.ANALOG:
-            from computronium.ontology.substrate import AnalogSubstrate
-
-            return AnalogSubstrate(config)
-        case SubstrateType.MEMRISTIVE:
-            from computronium.ontology.substrate import MemristiveSubstrate
-
-            return MemristiveSubstrate(config)
-        case SubstrateType.NEUROMORPHIC:
-            from computronium.ontology.substrate import NeuromorphicSubstrate
-
-            return NeuromorphicSubstrate(config)
-        case SubstrateType.OPTICAL:
-            from computronium.ontology.substrate import OpticalSubstrate
-
-            return OpticalSubstrate(config)
-        case SubstrateType.QUANTUM:
-            from computronium.ontology.substrate import QuantumSubstrate
-
-            return QuantumSubstrate(config)
-        case SubstrateType.SPARSE:
-            from computronium.ontology.substrate import SparseSubstrate
-
-            return SparseSubstrate(config)
-        case SubstrateType.TERNARY:
-            from computronium.ontology.substrate import TernarySubstrate
-
-            return TernarySubstrate(config)
-        case _:
-            # Complex substrate uses DIGITAL type with special config
-            if config.precision == "float32" and getattr(
-                config, "_complex_emulated", False
-            ):
-                from computronium.ontology.substrate import ComplexSubstrate
-
-                return ComplexSubstrate(config)
-            from computronium.ontology.substrate import DigitalSubstrate
-
-            return DigitalSubstrate(config)

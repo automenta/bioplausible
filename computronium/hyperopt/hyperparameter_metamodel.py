@@ -320,7 +320,7 @@ class HyperparameterMetamodel:
         elif family == "predictive_coding" or family == "predictive-coding":  # ruff: ignore[repeated-equality-comparison]
             applicable_scopes.add(HyperparamScope.PREDICTIVE_CODING)
 
-        elif family == "equitile":
+        elif family == "tile":
             applicable_scopes.add(HyperparamScope.EQUILIBRIUM)
 
         elif family == "backprop" or family == "backpropagation":  # ruff: ignore[repeated-equality-comparison]

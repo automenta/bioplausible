@@ -729,3 +729,22 @@ class QuantizedSubstrate(DigitalSubstrate):
     def quantize_weights(self, w: Tensor) -> Tensor:
         scale = w.abs().max() / 127
         return (w / scale).round().clamp(-128, 127) * scale
+
+
+__all__ = [
+    "AnalogSubstrate",
+    "ComplexSubstrate",
+    "DigitalSubstrate",
+    "MemristiveSubstrate",
+    "NeuromorphicSubstrate",
+    "NoisySubstrate",
+    "OpticalSubstrate",
+    "QuantizedSubstrate",
+    "QuantumSubstrate",
+    "SparseSubstrate",
+    "Substrate",
+    "SubstrateConfig",
+    "SubstrateType",
+    "TernarySubstrate",
+    "substrate_from_config",
+]

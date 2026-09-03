@@ -21,8 +21,13 @@
 > (neuromorphic spike dropout, D6 five-arm), **R11.2.4** (joint round-trip +
 > lock), **R11.2.5** (init_scale functional), **R11.2.7** (energy dedup),
 > **R11.2.1** (ruff baseline: `ruff check .` clean at HEAD; E501 disabled
-> forever by user directive). Next: R11.2 remainder (pyright baseline,
-> R11.2.3/R11.2.8/R11.2.18/R11.2.20), then R11.1.2 geometries.
+> forever by user directive), **R11.1.8 + R11.2.3** (facade merge + twin
+> resolution), **R11.2.18** (xpass resolved), **R11.2.12** (tile family
+> fold), **R11.2.8** (FrontierRecord.seed required), **R11.1.5** (adapter
+> shape-probing, fail-loud), **R11.2.10** (params-moved locks + three
+> non-learning findings), **R11.2.11** (resolved-by-contract), **R11.2.20**
+> (timebox closed). Next: R11.1.2 geometries; R11.2 remainder is
+> pull-based only.
 
 ---
 
@@ -135,21 +140,36 @@ sequencing below is the expected order, not a mandate.
   equivalence), per-step `inject_state_noise`. Pull when the
   acceleration/kernel path is next touched or a substrate-axis demo needs
   them. Kernel-equivalence locks (max_diff < 1e-5) are the acceptance bar.
-- [ ] **R11.1.5 Adapter heuristics (R3.5).** `_AdaptedSystem._infer_geometry`
-  hardcoded (784→256,128→10) — recover heuristics from the deleted
-  `adapter/` package. Pull when the strangler-fig adapter path is next
-  touched (L6's Registry.to_system totality lock is the guardrail).
+- [x] **R11.1.5 Adapter heuristics (R3.5)** ✅ **LANDED 2026-09-03.**
+  Recon finding: the deleted `adapter/` package (git 49144879) had *equally*
+  hardcoded geometry constants (784→(256,128)→10 / (256,)) — nothing richer
+  to recover. Landed the genuine upgrade instead: `_probe_linear_dims` walks
+  the model's registered `nn.Linear` modules in order (skipping feedback/
+  recurrent-named ones), chains shapes into `(input, *hidden, output)`;
+  falls back to model `input_dim`/`output_dim` attributes (single-Linear
+  geometry) when no chain exists; **raises `TypeError` otherwise** — no
+  silent fabricated dims (user challenge 2026-09-03: hardcoded 784→(256,128)
+  →10 fallback removed). L6 totality lock constructs models with explicit
+  dims (probe resolves the real chain) and already treats TypeError as a
+  constructor-incompatibility skip.
 - [ ] **R11.1.6 `_TaskTrainer` gaps (R3.6).** Scheduler wiring, energy
   tracking, honor `tracker`/`safety_config`. Pull when hyperopt trials need
   them.
 - [ ] **R11.1.7 Nudge-unwired settle paths (imp-29).** predictive_settling
   target clamp; diffusion target term. Pull when a campaign manifest needs
   those coordinates fully wired.
-- [ ] **R11.1.8 Ontology facade merge (R2.2 residual).**
-  `ontology/_substrate.py` impl vs `ontology/substrate/` facade; same
-  pattern for `_dynamics.py` vs `dynamics/`. Merge the parallel legacy/new
-  pairs on next ontology-structure touch; grep for other twins while there
-  (feeds R11.2's PlasticityConfig item).
+- [x] **R11.1.8 Ontology facade merge (R2.2 residual)** ✅ **LANDED
+  2026-09-03.** Both parallel pairs merged: `_dynamics.py` → 
+  `dynamics/_dynamics.py`, `_substrate.py` → `substrate/_substrate.py`
+  (implementation in `_`-prefixed internal modules; package `__init__` is a
+  pure re-export surface, satisfying ruff non-empty-init-module). Folded
+  `substrate/factory.py` into `substrate/_substrate.py` (kept the
+  enum-matching `substrate_from_config`; the raising variant had no
+  importers). Twin sweep found one more: `ontology/system.py` carried its own
+  `substrate_from_config` copy — zero importers, deleted. `_energy_tensor`
+  now handles the full `ActivityValue` union (list→last tensor, dict→zeros)
+  fixing the pyright return-type error. Ruff + pyright clean on all touched
+  modules.
 - [ ] **R11.1.9 Timing-asymmetric STDP wired to the 5-D pipeline** (from the
   `create_spiking_snn_mlp` Register-C row; the D-axis's remaining depth).
   The pipeline-facing rate-coded surrogate has no error signal (chance on
@@ -204,10 +224,15 @@ which gates every empirical item.
   (pseudo-gradient union-type handling), `cli/parity.py`,
   `tests/property/test_axis_certifications.py`. Then decide: repo-wide
   strict, or scope the type-check gate to the packages that must hold.
-- [ ] **R11.2.3 Root `PlasticityConfig` twin-class resolution** (found in
-  the R10.2.1 audit): root resolves to `computronium.state`'s twin, a
-  different class from `core.joint.transition.PlasticityConfig`. Fold into
-  the R11.1.8 facade merge.
+- [x] **R11.2.3 Root `PlasticityConfig` twin-class resolution** ✅ **LANDED
+  2026-09-03.** `core/joint/transition.py` no longer defines twin
+  `PlasticityConfig`/`NullPlasticity`/`PlasticityPrimitive`/
+  `CoupledTransition` classes — it re-exports from `computronium.state`
+  (single class across all import paths; verified by runtime identity
+  assert). ~140 duplicated lines deleted. Also fixed
+  `LegacyDynamicsAsCoupledTransition.step`: x/y now narrowed with
+  `isinstance(…, Tensor)` (TypeError on non-tensor x) and `new_activity`
+  annotated `dict[str, ActivityValue]` (dict invariance) — pyright 0 errors.
 - [x] **R11.2.4 Joint `to_spec`→`from_spec` round-trip** ✅ **LANDED
   2026-09-03.** Both wrappers (`_JointSystem` and `_NullJointSystem`) had the
   bug; extracted shared `_geometry_spec_parts`/`_restore_geometry_params`
@@ -226,19 +251,56 @@ which gates every empirical item.
 - [x] **R11.2.7 imp-8** — `compute_energy` duplication ✅ **LANDED
   2026-09-03.** `_state_energy_vector` extracted; PredictiveSettling /
   SpikeIntegration / Diffusion share it.
-- [ ] **R11.2.6 imp-4** — Pyright full strict on ontology (131 findings;
-  annotation work in `_dynamics`/`geometry`/`update`).
-- [x] **R11.2.7 imp-8** — ~~`compute_energy` duplication~~ folded above (landed with R11.2.4/R11.2.5).
-- [ ] **R11.2.8 imp-19** — `FrontierRecord.seed` legacy default 42 →
-  required at next schema break.
+- [x] **R11.2.6 imp-4** — Pyright strict on ontology **PARTIAL 2026-09-03**:
+  `system.py` TypeVar misuse fixed (`_AdaptedSystem.from_spec` now declares
+  concrete `System[Substrate, Geometry, …]` bounds); `_dynamics.py` return
+  type fixed. `pyright computronium/ontology/` now 0 errors, 0 warnings.
+  Remaining R11.2.2-listed files (`core/pipeline.py`, `joint.py`,
+  `plasticity/*`, `cli/parity.py`, `test_axis_certifications.py`) are
+  as-touch only (deprioritized directive).
+- [x] **R11.2.8 imp-19** — `FrontierRecord.seed` legacy default 42 →
+  **required** ✅ **LANDED 2026-09-03.** Campaign `FrontierRecord`
+  (`core/campaign/frontier_record.py`) takes `seed: int` with no default
+  (field moved before the first defaulted field); `from_dict` reads
+  `data["seed"]` strictly (no 42 fallback). All production constructors
+  (`evaluation.py`) and test fixtures already passed seed explicitly — clean
+  break per backwards-compatibility-NONE. The stability-track `FrontierRecord`
+  (`stability/frontier.py`) has no seed field; imp-19 unambiguously targets
+  the campaign record.
 - [ ] **R11.2.9 imp-23** — `substrate_coupled` plasticity
   engagement-verified only; probe fixed-dim `step` assumptions.
-- [ ] **R11.2.10 imp-26** — params-moved learning locks for the remaining
-  README-table factories (FA lock exists).
+- [x] **R11.2.10 imp-26** — params-moved learning locks ✅ **LANDED
+  2026-09-03.** New lock `tests/property/test_params_moved.py`,
+  parametrized over all ten README-table factories (tiny dims, 2
+  train_steps, probe-measured ground truth, never guessed). **Movers
+  (asserted):** backprop, eqprop, fa, ff, tile. **Pinned non-learners
+  (strict xfail, fix flips xpass):** snn + hebbian (R11.1.9's documented
+  no-error-signal plateau), **and three new findings surfaced by this very
+  lock:** pepita, tp, pc — their `train_step` completes with valid metrics
+  but zero params move (LocalGoodness/TargetInversion pipeline paths yield
+  no pseudo-gradient through `compose_system` wiring). The pc case is the
+  most surprising (ThermodynamicContrast moves for eqprop; pc uses
+  LocalGoodness + PredictiveSettling) — root-causing queued as register
+  material, not guessed at here.
 - [ ] **R11.2.11 imp-27** — rename rebuilder-style `settle` implementations
-  whose names mislead.
-- [ ] **R11.2.12 imp-30** — deployments' `family="tile"` registrations
-  CLI-orphaned → fold into `family="equitile"` or drop.
+  whose names mislead. **Resolution recorded 2026-09-03:** superseded by the
+  canonical mutation contract — the `StateDynamics.settle` protocol docstring
+  now states the return-value contract ("implementations may rebuild rather
+  than mutate; callers must bind and use the returned state") and the
+  `tests/property/test_settle_caller_census.py` AST lock enforces it
+  repo-wide. Renaming was the pre-contract proposal; the contract + lock is
+  the stronger instrument. Closing as resolved-by-contract.
+- [x] **R11.2.12 deployments' `family="tile"` registrations** ✅ **LANDED
+  2026-09-03 (direction per user directive: `tile` is canonical,
+  `equitile` is deprecated).** 7 native deployments in
+  `models/native/registration.py` re-registered `family="equitile"` →
+  `family="tile"`; CLI `FAMILY_MAP` now keys `"tile": "tile"` (deprecated
+  label dropped per backwards-compatibility-NONE); metamodel scope branch
+  keys on `"tile"`; registry TileMesh/TileGeometry family lists → `["tile"]`;
+  `FAMILY_TOLERANCES` dropped its `"equitile"` key; kernel-backend family
+  inference simplified (`"tile" in name` — substring already subsumes
+  legacy names). No test pins `family="equitile"`; `test_queryfilter_snapshot`
+  already used `family="tile"`.
 - [ ] **R11.2.13 imp-36** — campaign stability axis non-discriminative →
   cheap per-episode proxy.
 - [ ] **R11.2.14 imp-37** — latency objective is wall-clock noise →
@@ -253,12 +315,19 @@ which gates every empirical item.
   edited (standing directive 2026-09-03). The `create_snn_mlp` row's true
   fix is R11.1.9 (a real-Spike SNN factory coordinate); the README row
   simply stays as history.
-- [ ] **R11.2.18 `test_scaling_invariants` xpass** —
-  `deep_network_accuracy[100]` pre-existing xpass. Next touch of that file.
-- [ ] **R11.2.20 Timebox the pass** (E-2 analog): R11.2 as a whole gets
-  three working sessions; a finding class that resists is scoped out
-  explicitly (with the reason recorded) rather than stretched. Infra
-  friction doesn't consume the box.
+- [x] **R11.2.18 `test_scaling_invariants` xpass** ✅ **LANDED 2026-09-03.**
+  `deep_network_accuracy[100]` passes deterministically (fixed seeds 42/43);
+  the GATE-0 xfail reason (poor equilibrium-method accuracy) is obsolete —
+  marker removed, test now asserts `acc > 0.3` live.
+- [x] **R11.2.20 Timebox the pass** (E-2 analog) ✅ **CLOSED 2026-09-03.**
+  R11.2 consumed its sessions: ruff baseline (R11.2.1), facade merge +
+  twin resolution (R11.1.8/R11.2.3), xpass (R11.2.18), tile fold (R11.2.12),
+  seed-required (R11.2.8), params-moved locks (R11.2.10) landed; pyright
+  baseline explicitly deprioritized by user directive (as-touch only);
+  imp-27 resolved-by-contract. No finding class stretched past its box —
+  the pepita/tp/pc non-learning paths are *findings*, recorded, not stretched
+  work. Remaining R11.2 items (R11.2.9/13/14/16) are explicitly scoped,
+  pull-based items, not timebox residue.
 
 ## 🔬 R11.3 — Research-Track Pulls (TODO10 Register A; RESEARCH3 spines)
 
@@ -402,6 +471,14 @@ consumer exists.
   figure lock fires again after a sweep, check test asserts first, then
   re-render — only treat as a defect if the same run disagrees with itself.
 - **`benchmark_results/` stays untracked** (standing directive).
+- **`equitile` is a deprecated identifier** (user directive 2026-09-03):
+  family registrations, CLI maps, tolerances, and metamodel branches now key
+  on `"tile"`. Residual `equitile` mentions are cosmetic (test *names* in
+  `test_equitile_domains.py`, model *name* `rl_equitile` in
+  `configs/rl_cartpole.yaml`, benchmark variable names, historical
+  docstrings) — rename on next touch of those surfaces, never as a sweep.
+  If `comp audit` ever flags historical `family="equitile"` rows in HPO/KB
+  stores, map at read time rather than migrating DBs.
 
 ---
 
@@ -440,6 +517,28 @@ one.
 
 - TODO10.md header marked CLOSED → superseded (2026-09-03).
 - **README is never edited** (user directive 2026-09-03). No sunset condition.
+- **Ontology package layout convention (R11.1.8, 2026-09-03):** implementations
+  live in `_`-prefixed internal modules (`dynamics/_dynamics.py`,
+  `substrate/_substrate.py`); package `__init__.py` is docstrings + re-exports
+  only (ruff non-empty-init-module enforces this). New ontology primitives
+  follow the same shape. Ruff's per-file noqa markers carried over verbatim
+  during the moves — they self-flag on touch.
+- **PlasticityConfig single source:** `computronium.state.transitions` owns
+  it; `core/joint/transition.py` re-exports. Never redefine — import.
+- **Sprint retro 2026-09-03 (binding for future sessions):**
+  (a) Tests run **once at close** — mid-session gates are ruff + pyright on
+  changed files only (seconds); behavioral questions get throwaway probe
+  scripts; file moves/renames get grep + pyright, no test runs at all.
+  (b) Any signature/config break (required fields, renamed identifiers):
+  AST-walk the *entire* repo including `tests/` for call sites before
+  finishing the item — eyeballing three test files missed
+  `test_power_preregistration.py` this sprint.
+  (c) Behavior inherited from deleted code is not automatically correct —
+  when the recon shows the old implementation was itself the debt, land the
+  fail-loud upgrade, don't preserve a silent fallback.
+  (d) When a plan item is phrased as either/or ("fold into X or drop"),
+  cross-check the repo's current naming conventions before picking a
+  direction; plan phrasing can lag the codebase (the equitile→tile case).
 - Work lean: one Register item per landing, each with a test that
   demonstrates it. Don't pull infrastructure "just in case".
 - RESEARCH3 protocol (E-1 smoke → pilot → full; E-11 DECISIONS.md) governs

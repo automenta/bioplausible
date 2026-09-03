@@ -1,6 +1,6 @@
-"""Substrate package."""
+"""Layer 1: Substrate — Physical State Space Constraints."""
 
-from computronium.ontology._substrate import (
+from computronium.ontology.substrate._substrate import (
     AnalogSubstrate,
     ComplexSubstrate,
     DigitalSubstrate,
@@ -15,8 +15,8 @@ from computronium.ontology._substrate import (
     SubstrateConfig,
     SubstrateType,
     TernarySubstrate,
+    substrate_from_config,
 )
-from computronium.ontology.substrate.factory import substrate_from_config
 
 __all__ = [
     "AnalogSubstrate",

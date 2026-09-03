@@ -39,6 +39,9 @@ class FrontierRecord:
     # Resource usage
     resources: ResourceUsage  # Compute, memory, energy, latency
 
+    # Provenance seed (required: no silent legacy default)
+    seed: int
+
     # Plasticity identification
     plasticity_primitive: str = (
         "null"  # null, routing, fast_weights, substrate_coupled, rule_state
@@ -58,7 +61,6 @@ class FrontierRecord:
 
     # Metadata (provenance: floats for numeric knobs, str for stream labels)
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
-    seed: int = 42
     metadata: dict[str, float | str] = field(default_factory=dict)
 
     # Campaign tracking
@@ -118,7 +120,7 @@ class FrontierRecord:
             },
             consolidation_events=data.get("consolidation_events", []),
             timestamp=data.get("timestamp", datetime.now().isoformat()),
-            seed=data.get("seed", 42),
+            seed=data["seed"],
             metadata=data.get("metadata", {}),
             campaign_id=data.get("campaign_id"),
             episode_index=data.get("episode_index", 0),

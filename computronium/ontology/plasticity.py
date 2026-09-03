@@ -1,4 +1,4 @@
-"""Plasticity Primitives (M-axis) - 5-D Ontology Extension.
+"""Plasticity Primitives (P-axis) - 5-D Ontology Extension.
 
 Plasticity defines how learning rules adapt the system's parameters.
 This module re-exports plasticity primitives from their implementation locations

@@ -277,10 +277,6 @@ class TestDeepNetworkCreditAssignment:
     @pytest.mark.parametrize("depth", [100])
     @settings(max_examples=2, deadline=None)
     @given(st.data())
-    @pytest.mark.xfail(
-        reason="GATE-0: Deep network accuracy with equilibrium method is poor. "
-        "Contrastive method or more epochs needed."
-    )
     def test_deep_network_accuracy(self, depth, data):
         """100-layer network should achieve reasonable accuracy."""
         model = create_native_eqprop_mlp(

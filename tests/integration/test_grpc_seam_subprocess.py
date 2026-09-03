@@ -21,12 +21,12 @@ from computronium.core.distributed_trainer import (
     DistributedTrainingError,
 )
 from computronium.core.system_trainer import compose_system
-from computronium.ontology import System
 from computronium.ontology import (
     DigitalSubstrate,
     EnergyMinimizationDynamics,
     EuclideanUpdate,
     GeometryConfig,
+    System,
     SystemState,
     TargetInversionCredit,
     TileGeometry,
