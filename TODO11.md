@@ -1,170 +1,458 @@
-# TODO11.md — Active Plan: The Library, Complete
+# TODO11.md — Active Plan: The Library, Completed and Connected
 
-> **Opened 2026-09-02.** Successor to [TODO10.md](TODO10.md) (R10 sprint closed:
-> three consecutive green gate runs, D1–D7 covering all six ontology axes, 69 s
-> walltime). Research catalog: [RESEARCH3.md](RESEARCH3.md).
+> **Opened 2026-09-02 (draft).** Successor to [TODO10.md](TODO10.md)
+> (R10 closed: D1–D7 demonstrate all six ontology axes; three consecutive
+> green gate runs banked; the acceptance session — *read, run, change one
+> thing, see it matter* — is available to any stranger). This plan contains
+> **all remaining TODO10 work**: Register B capability pulls, the Register C
+> hygiene pass, the carried registers, and the research-track spine's
+> open prerequisites. Research catalog: [RESEARCH3.md](RESEARCH3.md).
 >
-> **Identity decision (reaffirmed):** Computronium is an ML library whose every
-> claim is a live demonstration. The demo suite (D1–D7) is the proof; the
-> README quotes it; everything else is history or hypothesis.
+> **Identity (reaffirmed from R10 v4):** Computronium is an ML library whose
+> every claim is a live demonstration. Tests are the evidence system. A claim
+> stands only while the current code re-demonstrates it, on demand, in under
+> two minutes. Verification is continuous, not archival.
 >
-> **State:** OPEN — R10 complete. R11 begins with the remaining library-
-> completeness items (Register B), a dedicated code-quality pass (Register C),
-> and the first successor-round deliverables (Register E).
+> **Prime directive:** *Nothing is claimed that the suite does not re-show at
+> HEAD. The demo suite is the proof; the README quotes it; everything else is
+> history or hypothesis.*
+>
+> **State:** OPEN — nothing landed yet. First moves: pre-flight checks below,
+> then R11.2 (hygiene) in parallel with R11.1.2 (neuromorphic fidelity — the
+> one Register B item whose pull condition is already arguable).
 
 ---
 
-## 🎯 The Demonstration Table (unchanged — R10 re-pinned 2026-09-02)
+## 📜 Standing Directives (carried, binding)
 
-| # | Capability | Demo test | What the runner sees | Registered corroboration (history, not claim) |
-|---|------------|-----------|----------------------|------------------------------------------------|
-| D1 | Six-axis composition is real | `test_demo_compose_6axis.py` | A system composed from all six axes trains; its config round-trips to an identical system; the J1 Zero-Extension invariant holds at train scale end-to-end | EqProp parity & energy proofs (L4-locked continuously) |
-| D2 | One trainer, every credit rule | `test_demo_swap_credit.py` | Three credit rules through byte-identical wiring except one constructor argument — all three learn | Deep-credit registered study |
-| D3 | The M-axis swap matters | `test_demo_swap_plasticity.py` | Routing visibly retains what null forgets across a task switch — designed so the gap is seen, not computed | Retention registered study (16 seeds) |
-| D4 | The memory profiler is honest | `test_demo_memory_budget.py` | The backprop-profiled arm simply **cannot run** under a tight budget (walled, deterministically); the O(1)-memory arm runs | Memory-budget registered study |
-| D5 | Frozen θ is a guarantee, bitwise | `test_demo_z3_frozen_theta.py` | θ's hash identical across the whole freeze→adapt→switch→restore run; restored ψ reproduces stage-A accuracy *exactly* | Z3 registered study |
-| D6 | The substrate axis is physical | `test_demo_substrate_swap.py` | One swapped substrate through identical wiring: digital learns, mild IR-drop learns less, severe IR-drop walls at chance — differential-pair conductances (int8 STE) carrying the signed weights | — |
-| D7 | The D-axis settles in time | `test_demo_spike_settle.py` | One swapped D-axis argument through identical wiring: the instantaneous pass and the layer-wise LIF settle both train (≈0.87 / 0.85); the trained LIF network fires visibly (every threshold crossing counted per settle step) and its membranes come back bounded by the spike threshold — the Lyapunov lock, live | — |
+These are session-established user directives and measured facts. They bind
+every workstream below.
 
----
-
-## 📦 Register B — Library Completeness (pulled under R10.3.6)
-
-**Rule: every pulled item lands with its demo test (`tests/integration/test_demo_*`) — no test, no feature.** These are the axes' missing primitives; the demo suite can only demonstrate what exists.
-
-| Item | Contents | Pull condition |
-|------|----------|----------------|
-| **Geometries** | `ConvGeometry` / `GraphGeometry` / `AttentionGeometry` / 3D `SpatialLattice3D` — geometry-DEFERRED skips stay skips | Science runs on Feedforward/Recurrent/Tile at MLP scale today. Pull when a demo test or campaign manifest needs the geometry (e.g., a vision demo test wants Conv; a graph domain task wants GraphGeometry). |
-| **Substrate fidelity — neuromorphic half** | Neuromorphic: real spike dropout or drop the cosmetic `sparsity` field. Memristive half done (differential-pair conductances, int8 STE, re-pinned 2026-09-02) | Pull when a neuromorphic-axis claim or demo test needs the fidelity to be real |
-| **Tile × dynamics matrix** | tile_ep/pc/gnn/snn device-dynamics incompatibilities; tile_fa/tp/hebbian — fix or document as permanent xfail with precise reasons | Pull on next touch of the tile family, or when a demo wants the full tile matrix. |
-| **Adapter heuristics** | `_AdaptedSystem._infer_geometry` hardcoded (784→256,128→10) — recover heuristics from the deleted `adapter/` package | Pull when the strangler-fig adapter path is next touched. |
-| **`_TaskTrainer` gaps** | Scheduler wiring, energy tracking, honor `tracker`/`safety_config` | Pull when hyperopt trials need them. |
-| **Kernels** | FA feedback projection through the Substrate operator API; `SubstrateSettleKernel` in `KernelRegistry`; MEP Triton kernels (Muon, Fisher whitening) → Substrate update operator; sparse transpose-mask handling, ternary `init_scale` (un-xfail ternary equivalence), per-step `inject_state_noise` | Pull when the acceleration/kernel path is next touched or a substrate-axis demo needs them. |
-| **Nudge-unwired settle paths** | predictive_settling target clamp; diffusion target term | Pull when a campaign manifest needs those coordinates to be fully wired. |
-| **Substrate facade merge** | `ontology/_substrate.py` impl vs `ontology/substrate/` facade — facade is fine; consider merge + grep for other parallel legacy/new pairs (same pattern exists for `_dynamics.py` vs `dynamics/`) | Pull on next ontology-structure touch. |
-
----
-
-## 🧹 Register C — Code-Quality Backlog (dedicated hygiene pass)
-
-| Item | Pull condition |
-|------|----------------|
-| Root `PlasticityConfig` resolves to `computronium.state`'s twin, which is a **different class** from `core.joint.transition.PlasticityConfig` (pyright flags the resulting confusion in `core/system_trainer/joint.py`) | Next merge of `computronium/state/` with `computronium/core/joint/` (R2.2-residual pattern); the root-exports lock test pins what exists today |
-| Repo-wide ruff/pyright hygiene: `ruff check .` reports ~4.8k pre-existing findings (max-args=5, preview rules, S-rules on subprocess) and pyright-basic flags `pipeline.py` / `core/system_trainer/joint.py` / `plasticity/{routing,fast_weights}.py` / `cli/parity.py` / `tests/property/test_axis_certifications.py` — CI's ruff and pyright steps fail at HEAD independent of R10 | Dedicated hygiene pass: either fix forward or scope the CI steps to the gates that are meant to hold (property/demo/lock suites) |
-| Joint `to_spec`→`from_spec` round-trip broken — `from_spec` calls `GeometryConfig(**spec["geometry"])` but `to_spec` embeds `params`/`recurrent_weight` keys → TypeError | Next touch of `core/system_trainer/joint.py` (or when a demo/figure needs joint-spec round-trips) |
-| imp-4 — Pyright full `strict` on ontology (131 findings; torch `Unknown` tracking; annotation work in `_dynamics`/`geometry`/`update`) | Next annotation pass on those modules |
-| imp-8 — `compute_energy` duplication across Energy/Spike/Instantaneous/Diffusion → extract `_energy_from_state(state, geometry)` | Next touch of any dynamics module |
-| `FeedforwardGeometry._build_layers` ignores `GeometryConfig.init_scale` (nn.Linear defaults only; found in the D7 sweep — three init scales gave byte-identical results) | Next touch of geometry construction, or when a demo needs weight-scale control |
-| imp-19 — `FrontierRecord.seed` legacy default 42 → required at next schema break | Schema break |
-| imp-23 — `substrate_coupled` plasticity engagement-verified only; probe fixed-dim `step` assumptions | Next touch of that plasticity |
-| imp-26 — params-moved learning locks for the remaining README-table factories (FA lock exists) | Next touch of each factory |
-| imp-27 — rename rebuilder-style `settle` implementations whose names mislead | Next touch of each implementation |
-| imp-30 — deployments' `family="tile"` registrations CLI-orphaned → fold into `family="equitile"` or drop | Next touch of deployment registry |
-| imp-36 — campaign stability axis non-discriminative → cheap per-episode proxy | When a manifest needs stability contrast |
-| imp-37 — latency objective is wall-clock noise → repeated-timing methodology or deterministic proxy | Before any task-scale latency claim |
-| imp-41 — `demo/tests/` 28 stale failures → rewrite or delete | Next demo-test touch (or R11, where the demo gets rebuilt) |
-| R3.8 — `natural_language_query` TF-IDF weighting; derive `V_nudged = free energy + β·loss` to strengthen the PC Lyapunov xfail | Next touch of the knowledge base / PC verification |
-| README `create_snn_mlp` row advertises SpikeIntegration × TemporalTrace × Euclidean, but the factory builds Instantaneous × LocalGoodness for trainer compatibility | Next README factual-correction pass (R10.2.7 rules) |
-| `create_spiking_snn_mlp` runs end-to-end post-D7-pull (it crashed at settle step 1 before) but plateaus at chance on MNIST: the pipeline-facing STDP surrogate is a pure Hebbian correlation (no error signal); timing-asymmetric STDP lives in `core/local_learning/rules/spiking.py`, unwired to the 5-D pipeline. R10.3.5 refutation candidate | When the SNN family is next touched, or a research paragraph needs it |
-| test_scaling_invariants xpass — `deep_network_accuracy[100]` pre-existing xpass recurred in the full gate | Next touch of that file |
+- **`benchmark_results/` stays untracked and gitignored — never re-add it**
+  (user directive 2026-09-02, superseding earlier TODO10 language).
+- **README carries no new code snippets or evidence links while the code is
+  under active development.** README stays the hand-maintained two-locked-
+  block index; evidence links live in `docs/RESULTS.md` and the gallery. The
+  preset-factory locked block (TODO10 R10.2.7a) is added only when a demo
+  test exercises a preset factory, and only after the active-development
+  directive is lifted.
+- **Test-execution discipline (user directive 2026-09-02):** never run tests
+  without showing output and walltime (`--durations` is in addopts; pipe
+  through `tail`/`grep`, never silent `head`-truncation of failures).
+  Minimize redundant test executions: measure levers in throwaway scripts
+  before touching tests; re-pin in lockstep, re-run once.
+- **Device policy (measured 2026-09-02, RTX 3080):** the demo suite stays on
+  **CPU** — the tiny Digital builds (784→32→10, batch 64, Python settle loop)
+  are kernel-launch-bound, and CUDA ran *slower* (D2 hit the 60 s timeout).
+  GPU-first applies where work is FLOP-bound: registered-scale studies,
+  campaign fleets, large hidden dims, long horizons. Rule: *prefer GPU where
+  appropriate — measured, not assumed* (AGENTS.md), with the demo-suite CPU
+  verdict as the standing counter-example.
+- **DataLoader workers:** `num_workers=2` measured faster at demo scale
+  (13.2 s vs 20.7 s per epoch). `num_workers=0` is the *flake* mitigation
+  (D7 precedent), not a speed rule.
+- **GitHub CI is not yet in use** (user directive 2026-09-02): the gates that
+  matter are the locally runnable invocations recorded in this plan; workflow
+  edits are bookkeeping, not acceptance criteria.
 
 ---
 
-## 📋 Register D — Carried Deferred (from TODO8; unchanged)
+## 🎯 The Demonstration Table (D1–D7; re-pinned 2026-09-02)
+
+| # | Capability | Demo test | What the runner sees |
+|---|------------|-----------|----------------------|
+| D1 | Six-axis composition is real | `test_demo_compose_6axis.py` | Six-axis system trains (≈ 0.84 over the 600-batch cap); config round-trips (L6); 5-D build trained identically gives bitwise-equal θ (J1) |
+| D2 | One trainer, every credit rule | `test_demo_swap_credit.py` | Three credit rules through byte-identical wiring except one constructor argument — all three learn (≈ 0.87 / 0.86 / 0.62) |
+| D3 | The M-axis swap matters | `test_demo_swap_plasticity.py` | Routing visibly retains what null forgets across a task switch (A40/B40, mastery precondition asserted) |
+| D4 | The memory profiler is honest | `test_demo_memory_budget.py` | The BPTT-profiled arm cannot run under a tight budget (walled, deterministically); the O(1)-memory arm runs |
+| D5 | Frozen θ is a guarantee, bitwise | `test_demo_z3_frozen_theta.py` | θ hash identical across freeze→adapt→switch→restore; restored ψ reproduces stage-A accuracy exactly |
+| D6 | The substrate axis is physical | `test_demo_substrate_swap.py` | One swapped substrate: digital 0.91 / mild IR-drop 0.78 / severe 0.12 — differential-pair conductances (int8 STE) |
+| D7 | The D-axis settles in time | `test_demo_spike_settle.py` | One swapped D-axis argument: instant 0.87 / LIF 0.85; spikes counted per (layer, step); membranes bounded by threshold — the Lyapunov lock, live |
+
+**Adding a demo row (standing recipe, from R10's Implementation Map):**
+(1) demo test `tests/integration/test_demo_<name>.py` importing only from the
+package root (+ its experiment module if benchmark-surface), emitting
+`emit_run_record("D<N>", "<name>", data)` **before** asserting; (2) figure
+factory in `computronium/visualization/gallery.py` + `_FACTORIES` entry;
+(3) entry in `EXPECTED` of `tests/integration/test_gallery_lock.py`;
+(4) rows in the Demonstration Table and `docs/RESULTS.md`; (5) optional
+locked README block via `scripts/readme_snippets.json` + `<!-- lock: -->`
+(only when the active-development directive is lifted).
+
+---
+
+## ✅ Pre-flight (before any R11.1/R11.3 pull)
+
+- [ ] Property locks green: `uv run pytest tests/property/ -q`
+- [ ] Demo gate green ≤ 90 s: `uv run pytest tests/integration/ -k "demo or gallery_lock" -q` (8/8 at HEAD: 69 s)
+- [ ] Drift locks green: `uv run pytest tests/unit/core/test_readme_snippet_lock.py tests/unit/core/test_root_exports.py -q`
+- [ ] Gallery manifest + run records committed (figure-lock data layer tracked); worktree clean or deliberately dirty with the re-pin noted
+- [ ] `comp repro` 7/8 (the `native_tile_ep` exclusion is the R11.1.3 pointer, not a regression)
+
+---
+
+## 🔩 R11.1 — Capability Pulls (TODO10 Register B, complete)
+
+**Rule (R10.3.6, inherited): every pulled item lands with its demo test —
+no test, no feature.** Pulls are condition-gated, not scheduled; the
+sequencing below is the expected order, not a mandate.
+
+- [ ] **R11.1.1 Neuromorphic substrate fidelity** (the open half of the
+  substrate-fidelity item; pull condition already arguable). Decide by
+  whichever makes a *visible* demo: (a) real spike dropout in
+  `NeuromorphicSubstrate.inject_state_noise` / forward operator — the
+  `sparsity` field (0.95) becomes functional, `x` is thinned to the active
+  spike set per step; or (b) drop the cosmetic `sparsity` field and say so.
+  The xfail at `tests/integration/test_energy_invariants.py::test_neuromorphic_substrate_sparsity`
+  is the oracle: implement (a) → un-xfail it; implement (b) → delete it with
+  the field. C9 passivity lock (deterministic noise cancellation) must keep
+  passing either way — dropout must key off the same seeded stream. Lands
+  with demo test (`test_demo_neuromorphic_swap.py` or a fourth D6 arm —
+  D6 is the natural home: one more substrate argument through identical
+  wiring, spike sparsity visible in the probe counts).
+- [ ] **R11.1.2 Geometries.** `ConvGeometry` / `GraphGeometry` /
+  `AttentionGeometry` / 3-D `SpatialLattice3D`. Pull one per demonstration
+  need: Conv when a vision demo wants translation structure (CIFAR-shaped
+  input), Graph when a graph-domain task wants GraphGeometry, Attention when
+  an LM/sequence demo needs it, SpatialLattice3D when `neural_cube`'s
+  geometry is next expressed as a coordinate. Geometry-DEFERRED skips stay
+  skips until their pull. Each lands with a demo test exercising the G-axis
+  swap through identical wiring (D1/D2 pattern).
+- [ ] **R11.1.3 Tile × dynamics matrix (R3.4) + `native_tile_ep` repro.**
+  tile_ep/pc/gnn/snn device-dynamics incompatibilities — fix or document as
+  permanent xfail with precise reasons; same for tile_fa/tp/hebbian.
+  Includes the `comp repro` 7/8 pointer: fix or document `native_tile_ep`
+  (pre-existing; CI's reproducibility step excludes it explicitly). Pull on
+  next touch of the tile family or when a demo wants the full tile matrix.
+- [ ] **R11.1.4 Kernels (R4.1–R4.4).** FA feedback projection through the
+  Substrate operator API; `SubstrateSettleKernel` in `KernelRegistry`; MEP
+  Triton kernels (Muon, Fisher whitening) → Substrate update operator;
+  sparse transpose-mask handling, ternary `init_scale` (un-xfail ternary
+  equivalence), per-step `inject_state_noise`. Pull when the
+  acceleration/kernel path is next touched or a substrate-axis demo needs
+  them. Kernel-equivalence locks (max_diff < 1e-5) are the acceptance bar.
+- [ ] **R11.1.5 Adapter heuristics (R3.5).** `_AdaptedSystem._infer_geometry`
+  hardcoded (784→256,128→10) — recover heuristics from the deleted
+  `adapter/` package. Pull when the strangler-fig adapter path is next
+  touched (L6's Registry.to_system totality lock is the guardrail).
+- [ ] **R11.1.6 `_TaskTrainer` gaps (R3.6).** Scheduler wiring, energy
+  tracking, honor `tracker`/`safety_config`. Pull when hyperopt trials need
+  them.
+- [ ] **R11.1.7 Nudge-unwired settle paths (imp-29).** predictive_settling
+  target clamp; diffusion target term. Pull when a campaign manifest needs
+  those coordinates fully wired.
+- [ ] **R11.1.8 Ontology facade merge (R2.2 residual).**
+  `ontology/_substrate.py` impl vs `ontology/substrate/` facade; same
+  pattern for `_dynamics.py` vs `dynamics/`. Merge the parallel legacy/new
+  pairs on next ontology-structure touch; grep for other twins while there
+  (feeds R11.2's PlasticityConfig item).
+- [ ] **R11.1.9 Timing-asymmetric STDP wired to the 5-D pipeline** (from the
+  `create_spiking_snn_mlp` Register-C row; the D-axis's remaining depth).
+  The pipeline-facing rate-coded surrogate has no error signal (chance on
+  MNIST); genuine STDP lives unwired in `core/local_learning/rules/spiking.py`.
+  This is also the standing **R10.3.5 refutation candidate**: a visible
+  refutation demo (Hebbian-only plateau) ships with the same pipeline as any
+  success. Pull when the SNN family is next touched or a research paragraph
+  needs it; a learning claim additionally needs the trace-based rule in the
+  pipeline.
+- [ ] **R11.1.10 LazyStateDynamics at demo scale** (the D-axis's other
+  remaining depth). Research-track/register material until a visible regime
+  exists — pull only when a demo regime shows on-demand activation visibly
+  (e.g., settle-count contrast on a large-dim build).
+- [ ] **R11.1.11 Domain extensions (README-planned entries; pull-based, do
+  not open-endedly build).** `wikitext2`/`penn_treebank` (LM),
+  `mountain_car`/`lunar_lander` (RL), `diabetes`/`california_housing`
+  (tabular regression), `ett_h1` (time series), PDE suite
+  (Heat/Wave/Burgers/Navier-Stokes). Pull conditions: the PDE suite pulls
+  **with** the RESEARCH3 Physics-informed proof item (its systems ladder);
+  the others pull when a benchmark, demo, or research paragraph needs the
+  domain. Planned entries never count toward implemented totals until
+  landed with a test.
+
+## 🧹 R11.2 — The Hygiene Pass (TODO10 Register C, complete)
+
+One dedicated pull; either fix forward or scope explicitly. This also
+unblocks RESEARCH3 **PR-0** (verification gate: pytest/pyright/ruff green),
+which gates every empirical item.
+
+- [ ] **R11.2.1 Ruff baseline (~4.8k findings).** `ruff check .` on
+  pre-existing modules (max-args=5, preview rules, S-rules on subprocess).
+  Decide per class: fix forward, configure, or per-line noqa with reason.
+  End state: `ruff check .` clean at HEAD.
+- [ ] **R11.2.2 Pyright baseline.** pyright-basic findings in
+  `core/pipeline.py` (SystemState/CompositeState confusion),
+  `core/system_trainer/joint.py` (`JointSystem` import symbol, TypeVar
+  shadowing, `SystemContext` scoping, `PlasticityConfig` twin-class
+  assignment), `core/plasticity/routing.py` + `fast_weights.py`
+  (pseudo-gradient union-type handling), `cli/parity.py`,
+  `tests/property/test_axis_certifications.py`. Then decide: repo-wide
+  strict, or scope the type-check gate to the packages that must hold.
+- [ ] **R11.2.3 Root `PlasticityConfig` twin-class resolution** (found in
+  the R10.2.1 audit): root resolves to `computronium.state`'s twin, a
+  different class from `core.joint.transition.PlasticityConfig`. Fold into
+  the R11.1.8 facade merge.
+- [ ] **R11.2.4 Joint `to_spec`→`from_spec` round-trip broken:**
+  `from_spec` calls `GeometryConfig(**spec["geometry"])` but `to_spec`
+  embeds `params`/`recurrent_weight` keys → TypeError. Next touch of
+  `core/system_trainer/joint.py` — or now, since R11.2.2 is already in that
+  file.
+- [ ] **R11.2.5 `FeedforwardGeometry._build_layers` ignores
+  `GeometryConfig.init_scale`** (three init scales gave byte-identical
+  results in the D7 sweep; every factory's `init_scale` argument is
+  decorative on feedforward builds). Next touch of geometry construction —
+  natural to bundle with R11.1.2.
+- [ ] **R11.2.6 imp-4** — Pyright full strict on ontology (131 findings;
+  annotation work in `_dynamics`/`geometry`/`update`).
+- [ ] **R11.2.7 imp-8** — `compute_energy` duplication across
+  Energy/Spike/Instantaneous/Diffusion → extract `_energy_from_state`.
+- [ ] **R11.2.8 imp-19** — `FrontierRecord.seed` legacy default 42 →
+  required at next schema break.
+- [ ] **R11.2.9 imp-23** — `substrate_coupled` plasticity
+  engagement-verified only; probe fixed-dim `step` assumptions.
+- [ ] **R11.2.10 imp-26** — params-moved learning locks for the remaining
+  README-table factories (FA lock exists). When a preset factory gains its
+  lock/demo, add the preset block to the README sidecar map (TODO10
+  R10.2.7a superseded-note's standing pointer).
+- [ ] **R11.2.11 imp-27** — rename rebuilder-style `settle` implementations
+  whose names mislead.
+- [ ] **R11.2.12 imp-30** — deployments' `family="tile"` registrations
+  CLI-orphaned → fold into `family="equitile"` or drop.
+- [ ] **R11.2.13 imp-36** — campaign stability axis non-discriminative →
+  cheap per-episode proxy.
+- [ ] **R11.2.14 imp-37** — latency objective is wall-clock noise →
+  repeated-timing methodology or deterministic proxy. Blocks any
+  task-scale latency claim.
+- [ ] **R11.2.15 imp-41** — `demo/tests/` 28 stale failures → rewrite or
+  delete. Resolves with the R11.4 UI rebuild (the demo gets rebuilt, not
+  patched), or before it if the path is touched.
+- [ ] **R11.2.16 R3.8** — `natural_language_query` TF-IDF weighting; derive
+  `V_nudged = free energy + β·loss` to strengthen the PC Lyapunov xfail.
+- [ ] **R11.2.17 README factual correction:** `create_snn_mlp` row
+  advertises SpikeIntegration × TemporalTrace × Euclidean; the factory
+  builds Instantaneous × LocalGoodness for trainer compatibility. Either
+  land a true-Spike SNN factory coordinate once R11.1.9 gives the pipeline
+  a real error signal, or correct the row (R10.2.7 rules).
+- [ ] **R11.2.18 `test_scaling_invariants` xpass** —
+  `deep_network_accuracy[100]` pre-existing xpass. Next touch of that file.
+
+## 🔬 R11.3 — Research-Track Pulls (TODO10 Register A; RESEARCH3 spines)
+
+**Front-page rule: outputs feed the corroboration appendix and papers —
+never the front page.** Every pull inherits RESEARCH3's Execution Protocol
+(E-1 three-rung ladder, E-2 timeboxes, E-3 reproducibility, E-10 control
+set, E-11 decision log). Pull-based, never blocking the library workstreams.
+
+- [ ] **R11.3.1 PR-9 — Campaign commissioning** (Tangible Checkpoint 3;
+  the gateway to every unattended result). One tiny AutoScientist campaign
+  completing a full **iterate → interrupt → checkpoint → resume** cycle
+  end-to-end, recorded. Machinery is built (`CampaignStack`:
+  deterministic resume, skip-not-duplicate, YAML+SQLite checkpoints) but
+  the commissioned cycle is not yet a recorded run.
+- [ ] **R11.3.2 PR-2 — θ-invariance audit harness.** Snapshot → freeze →
+  run → re-snapshot → exact-diff as a reusable context manager with
+  per-seed reports (D5 demonstrates the guarantee; the harness makes it a
+  library feature for Z3 / Algorithm-Migration / continual-learning runs).
+- [ ] **R11.3.2b PR-3a — Software resource instrumentation.** `ResourceUsage`
+  + `core/profiling.py` wired into suite runners emitting proxy
+  FLOPs/memory/latency; feeds Z3 energy metrics (proxy tier), L2
+  effective-FLOPs, the 𝒞 vector.
+- [ ] **R11.3.3 PR-5 — Calibrated stability guard.** ROC-calibrated kill
+  thresholds (<5% false-kill on known-good, >95% kill rate, <10%
+  overhead) from the demo-suite/PR-7 harvest; `_fast_proxy` vs
+  full-Jacobian disagreement rate quantified. PR-0's shipped
+  `PowerPreregistration`/embedded-control machinery is the substrate.
+- [ ] **R11.3.4 AutoScientist M-axis frontier** (Tangible Checkpoint 5 —
+  the first *finding* figure). One axis at a time: pin S/G/D/C/U, sweep
+  M ∈ {Null, Routing, FastWeight, RuleState}; ResourceUsage aggregated
+  post-hoc; 2-D Pareto projections annotated per knee.
+- [ ] **R11.3.5 Z3 flagship registered commission** (Tangible Checkpoint 6).
+  ≥95% on all three tasks at exact Δθ=0 within ≤20% of fine-tuning steps;
+  ≥5 seeds; baselines a–d incl. ICL bridge. Runs on the fixed instrument
+  (fresh Adam at every boundary). If it falsifies: L1 adaptation figure
+  substitutes; boundary condition becomes the publication.
+- [ ] **R11.3.6 Walled-regime boundary commission** — pilot-mapped
+  (`benchmark_results/boundary_map_pilot.json`); pull when the research
+  track needs the boundary location as a preregistered claim.
+- [ ] **R11.3.7 Task-family generalization** — the linear-teacher boundary
+  raises which task families behave differently; pull when a research
+  paragraph needs a second task family (design inherits R8 gates + R9
+  method rules wholesale).
+- [ ] **R11.3.8 CL prior-art revival (Split-MNIST)** — through the R8
+  gates; pull when the research track wants a real-data retention study.
+- [ ] **R11.3.9 AutoScientist boundary mapping** — switch rate where
+  routing retention dies; IR-drop level where the Pareto frontier shifts;
+  map only after the effect exists.
+- [ ] **R11.3.9b Registered-artifact provenance backfill** — archaeology
+  (timestamps vs git log) when the corroboration appendix is extended;
+  "provenance unknown" is an acceptable, honest label.
+- [ ] **R11.3.10 PR-2/PR-4/PR-6/PR-8 companions** — θ-audit harness (=
+  R11.3.2), statistics kit completion, fairness-contract draft (writing
+  only, zero compute — natural waiting-period work per E-8), export-parity
+  round-trip. Pull with their consumers (Z3, benchmark paper, Edge).
+
+## 🚀 R11.4 — Adoption Surface (TODO10 Register E)
+
+- [ ] **R11.4.1 Drop-in PyTorch wrapper (CP-C).**
+  `torch.nn.ComputroniumLinear` (+ conv/embedding as needed): one-line swap
+  of `nn.Linear` + optimizer for an EqProp/FF coordinate; free/nudged
+  phases, settling loops, ψ bookkeeping internal; `NullPlasticity`+backprop
+  falls back to native behavior bit-for-bit. Acceptance: a script written
+  by someone unfamiliar with internals runs unmodified except the swapped
+  line; gradients/accuracy match the hand-written loop within noise;
+  `torch.compile` + LR-scheduler smoke tests. Pull after the API stabilizes
+  (R11.1/R11.2); fills any waiting period (E-8).
+- [ ] **R11.4.2 PR-6 fairness contract draft.** Per-rule tuning budgets
+  (GPU-hours, not epochs), early-stopping policy, seeds, data splits, the
+  ICL-bridge scale-matching rule — written once, consumed by four items.
+  Zero compute; draft during any blocked period.
+- [ ] **R11.4.3 R11 Live demo UI.** Compose tab as primary surface (pick any
+  6-axis coordinate, hit run, watch curves), demo suite as pre-built
+  presets, ψ visualizer + θ-hash badge as library features, one-click
+  export. **Ships only when the API is stable** — the demo presents the
+  library; it does not design it. imp-41 resolves here (the `demo/tests/`
+  stale suite gets rebuilt, not patched).
+- [ ] **R11.4.4 Hygiene sweep.** `demo/checkpoints/`, stray DBs at repo root
+  (`dummy.db`, `execution_state.db`), ancient screenshot archives — only
+  when it blocks a figure, a test, or a fresh checkout.
+
+## 📋 Register D — Carried Deferred (unchanged from TODO10)
 
 | Item | Reason |
 |------|--------|
 | Coverage floor (~16.8%) | opt-in `--cov`; raise after API stabilizes |
-| Rocq general-case formalization | CP-B pull-based; diagonal case done with paper proof |
+| Rocq general-case formalization | CP-B pull-based; diagonal case done with paper proof; ψ-coverage proposition is the next statement |
 | `test_ontology_parity.py` decomposition | Slow-marked; split fast/slow only if gate iteration speed demands |
-| Physical hardware (PR-3b / CP-D) | Latency-gated procurement per RESEARCH3 |
+| Physical hardware (PR-3b / CP-D) | Latency-gated procurement per RESEARCH3; proxy tier (R11.3.2b) decouples all software-side claims |
 
 ---
 
-## 🚀 Register E — Successor Rounds
+## 🔒 R11.5 — The Standing Rules (R10.3 verbatim, renumbered)
 
-### R11 — Live demo (compose-and-run UI)
-Compose tab as primary surface (pick any 6-axis coordinate, hit run, watch curves), demo suite as pre-built presets, ψ visualizer + θ-hash badge as library features, one-click export. Built only when the API is stable — the demo presents the library; it does not design it. imp-41 resolves here (the demo gets rebuilt, not patched).
-
-### Drop-in PyTorch wrapper (RESEARCH3 CP-C)
-Remove adoption friction — users swap one line, not their training loop.
-- `torch.nn.ComputroniumLinear` (+ conv/embedding): replaces `nn.Linear` + optimizer with an EqProp or Forward-Forward coordinate; free/nudged phases, settling loops, ψ bookkeeping handled internally; `NullPlasticity`+backprop coordinate falls back to native behavior bit-for-bit.
-- Compatibility targets: DDP wrapping, LR schedulers, `torch.compile` smoke test, torchvision-style model zoo integration example.
-- Acceptance test: training script written by someone unfamiliar with Computronium internals runs unmodified except the swapped line; gradients/accuracy match hand-written loop within noise.
-
-### Hygiene sweep
-`demo/checkpoints/`, stray DBs at repo root — `dummy.db`, `execution_state.db` — ancient screenshot archives — only when it blocks a figure, a test, or a fresh checkout.
-
----
-
-## 👁️ Register F — Watch (triggers convert to pull items; history canonical in TODO9.md/TODO10.md)
-
-- axis_probe `[2-0]` flake — no recurrence since 2026-08-31; still watching.
-- CUDA tolerance boundaries shift xfail edges — CPU/GPU tests kept separate; construction seeding in place.
-- R9.1 lr=0.03 is calibrated for the 40-episode budget — re-calibrate on schedule/budget changes; read A-mastery (~0.5 floor) before reading retention. Confirmed live at demo scale (2026-09-02 pre-flight): at A20/B20 the retention effect *reverses* — mastery precondition is load-bearing for D3.
-- Control-band sizing (imp-59): preregistrate the at-chance band from the registered N of the control arm's scored samples.
-- Smoke-scale campaign deltas are capped at chance by the non-stationary stream (imp-54) — accumulated-learning/retention claims run the persistent-θ chain only; CampaignStack rebuilds θ per episode regardless of teacher stationarity.
-- The budget is a commissioning gate (R9.2): a feasible arm's walk is identical under every budget that admits it — never read walled arms' absence as "lost", or feasible arms' repeated readout as new evidence.
-- `_LAZY` map and `__all__` can drift apart silently (both hand-maintained) — **resolved 2026-09-02**: the R10.2.1 audit found divergence (15 `_LAZY` names missing from `__all__`, one dead `OntologyConfig` entry) and added the standing lock `tests/unit/core/test_root_exports.py` (lockstep + every lazy entry resolves).
-- Demo-suite evidence layer committed 2026-09-02: `docs/figures/manifest.json`, `docs/figures/run_records/`, and `docs/figures/registered/` are tracked — the figure lock's data layer is live on a fresh clone.
-
----
-
-## 🔧 R11 — The Standing Rules (inherit R10.3 + one addition)
-
-- [ ] **R11.1 No test, no feature.** Every feature ships with an integration test that demonstrates it working end-to-end. The test is the example.
-- [ ] **R11.2 No claim without a live demonstration.** The front page (README, gallery, Demonstration Table) carries only claims the suite re-shows at HEAD. When a test is removed, flaky, or failing, its claim *disappears from the front page automatically* — the system degrades to silence, never to stale assertions. Fix the demonstration; the claim resumes.
-- [ ] **R11.3 Corroboration never carries.** Registered numbers are history: labeled, scoped, provenance-annotated, and confined to RESULTS.md's back section and the research track. A figure caption or README line that leans on a stored number is a defect.
-- [ ] **R11.4 Scope honesty.** Demo-scale demonstrations speak for demo scale; registered claims live in the research track where preregistration governs. Neither borrows the other's clothes.
-- [ ] **R11.5 Refutations ship with the same pipeline** — same figure factory, same docs, same terms. A demonstration that shows the library failing somewhere is as welcome as one that shows it succeeding.
-- [ ] **R11.6 Pull rule:** a backlog item is pulled only if it ends in a live demonstration, a gallery figure, or a RESULTS.md capability paragraph. Infrastructure is justified by the capability it lets the suite show, never by itself and never by a stored result that needs it.
-- [ ] **R11.7 Demo UI is a library feature, not a sprint.** The R11 compose-and-run UI (Register E) ships only when the underlying API is stable and the demo suite is green at HEAD. The UI does not design the API; it reflects it.
-- [ ] **CI:** `ruff format --check` → `ruff check` → `pyright` → `pytest --cov` → `pip-audit`, plus: demo tests, positive control, drift lock (R10.2.8), figure lock (R10.1.4). Demo tests join the fast gate. New modules meet the same strict-typing bar as everything else. **Repo-wide ruff/pyright hygiene is a separate pass (Register C); the fast gate holds on property/demo/lock suites only.**
+- [ ] **R11.5.1 No test, no feature.** Every feature ships with an
+  integration test that demonstrates it working end-to-end.
+- [ ] **R11.5.2 No claim without a live demonstration.** When a test is
+  removed, flaky, or failing, its claim disappears from the front page
+  automatically — the system degrades to silence, never to stale assertions.
+- [ ] **R11.5.3 Corroboration never carries.** Registered numbers are
+  history: labeled, scoped, provenance-annotated, confined to RESULTS.md's
+  back section and the research track.
+- [ ] **R11.5.4 Scope honesty.** Demo-scale demonstrations speak for demo
+  scale; registered claims live in the research track. Neither borrows the
+  other's clothes.
+- [ ] **R11.5.5 Refutations ship with the same pipeline** — same figure
+  factory, same docs, same terms (R11.1.9's Hebbian plateau is the standing
+  candidate).
+- [ ] **R11.5.6 Pull rule.** A backlog item is pulled only if it ends in a
+  live demonstration, a gallery figure, or a RESULTS.md capability
+  paragraph. Infrastructure is justified by the capability it lets the
+  suite show, never by itself.
+- [ ] **R11.5.7 Gates (local invocations; CI is bookkeeping until used).**
+  `ruff format --check` → `ruff check` → `pyright` → `pytest` fast gates:
+  property suite + demo gate (`pytest tests/integration/ -k "demo or
+  gallery_lock"`, ≤90 s) + drift locks (README snippets, root exports) +
+  positive control. After R11.2, the ruff/pyright steps are expected to
+  *hold*, not merely exist. No new verification rounds are commissioned in
+  R11; R11 spends R6–R10's trust.
 
 ---
 
-## 🎯 Tangible-Result Checkpoints (what the investment returns)
+## 👁️ Watch (triggers convert to pull items; history canonical in TODO9/TODO10)
 
-R11 is an investment; these are the returns, each with a materialization condition.
-
-1. **Library completeness (R11 sprints 1–2):** Register B items pulled under R11.6, each with its demo test green in the suite — the Demonstration Table grows axes/geometries/substrates as visible capabilities, not promised ones. **Gate:** `pytest tests/integration/ -k demo` green, walltime ≤90 s.
-2. **Hygiene pass (R11 sprint 3):** Register C items resolved — repo-wide `ruff check` and `pyright` clean on the full tree (or CI steps scoped to the gates that matter with explicit allow-lists). No pre-existing findings block unrelated work.
-3. **Drop-in PyTorch wrapper (R11 sprint 2–3, parallel):** CP-C deliverable — pip-installable module, smoke-test suite, one-line-swap README GIF. Adoption multiplier for every other deliverable.
-4. **Live demo UI (R11 sprint 3–4):** R11 compose-and-run UI (Register E) — a stranger composes any 6-axis coordinate, hits run, watches curves in real time. Ships only when the API is stable.
-5. **First research-shaped result (RESEARCH3 CP-A):** Pareto frontier over the resource vector 𝒞, one M-axis primitive swept at a time, annotated with which primitive owns each knee — the first figure that is a *finding*, not a demonstration. Depends on RESEARCH3 PR-9 campaign commissioning passing.
-6. **Z3 flagship registered commission (RESEARCH3 CP-A):** ≥95% on all three tasks at exact Δθ=0 within ≤20% of fine-tuning steps — accuracy-vs-steps curves, forgetting matrix, per-seed Δθ audit. If it falsifies: the L1 adaptation figure substitutes as the campaign seed and the boundary condition becomes the publication.
-
-Sequencing rule: 1–2 are R11 core; 3 pulls immediately after (wrapper depends on API stability from 1); 4 ships when 1 is stable; 5–6 are RESEARCH3 CP-A's spine. No checkpoint blocks on a later one.
+- **axis_probe `[2-0]` flake** — no recurrence since 2026-08-31.
+- **CUDA tolerance boundaries** shift xfail edges — CPU/GPU tests kept
+  separate; construction seeding in place.
+- **R9.1 lr=0.03** calibrated for the 40-episode budget; read A-mastery
+  (~0.5 floor) before reading retention; at A20/B20 the retention effect
+  *reverses* — mastery precondition is load-bearing for D3.
+- **Control-band sizing (imp-59):** preregistrate the at-chance band from
+  the registered N of the control arm's scored samples.
+- **Smoke-scale campaign deltas (imp-54):** capped at chance by the
+  non-stationary stream — accumulated-learning/retention claims run the
+  persistent-θ chain only.
+- **Budget commissioning gate (R9.2):** a feasible arm's walk is identical
+  under every budget that admits it — never read walled arms' absence as
+  "lost".
+- **Transient d6 hash (2026-09-02):** one early session emission hashed
+  differently (6ea65…) and never reproduced (3 subsequent runs identical at
+  989683…, solo and in-suite) — the figure lock caught it as designed. If it
+  recurs, treat as a real determinism defect, not a re-pin.
+- **Z3 demo `MetaRecipe` defaults:** pins `meta_train_epochs=4` (fresh-ψ
+  floor ≈ 0.68, restored beats floor+0.1 at 1.0). If defaults or task
+  generators change, re-run the 3/4/5-epoch calibration sweep before
+  re-pinning.
+- **D7 spike watch:** asserts `total_spikes > 100` (observed ≈ 1.8k),
+  `membrane_max ≤ 1.0` (structural). If default drift silences the hidden
+  layer, re-run the D7 sweep before re-pinning. Sub-threshold-at-init is
+  expected.
+- **D6/D7 wall dials:** `BATCH_CAP` in `test_demo_substrate_swap.py` (1000)
+  and `test_demo_spike_settle.py` (300); D1/D2 caps (600) are the other
+  dial. Under differential-pair semantics the D6 staircase is 0.5→0.89,
+  1.5→0.78, 3.0→0.56, 4.0→0.42, 6.0→0.22, 8.0→0.12 — severe arm sits at 8.0
+  with ceiling 0.4; don't move it below 6.0-class without re-sweeping.
+- **`_LAZY`↔`__all__` lockstep** — resolved 2026-09-02 via
+  `tests/unit/core/test_root_exports.py`; the lock holds it.
+- **Evidence layer tracked** — manifest + run records + registered figure
+  committed; gallery lock live on a fresh clone. `benchmark_results/`
+  stays untracked (standing directive).
 
 ---
 
-## 📐 R11 Sprint Plan (proposed sequencing)
+## 🎯 Tangible-Result Checkpoints (R11 edition; each with a materialization condition)
 
-| Sprint | Focus | Deliverables |
-|--------|-------|--------------|
-| **1** | Geometry axis completion | `ConvGeometry` + demo test (`test_demo_conv.py`); `GraphGeometry` + demo test if graph domain task needs it; README factory rows updated; gallery re-pin. |
-| **2** | Substrate fidelity + tile matrix | Neuromorphic spike dropout (or sparsity field removal) + demo test; tile_ep/tile_pc device-dynamics fixes or documented xfails; gallery re-pin. |
-| **3** | Hygiene pass + kernels | Register C dedicated pass (ruff/pyright clean or CI scoped); FA feedback projection through Substrate operator; `SubstrateSettleKernel` registered; MEP Triton kernels for Muon/Fisher. |
-| **4** | Adapter + _TaskTrainer + wrapper | Strangler-fig heuristics recovered; scheduler/energy/tracker wired; Drop-in PyTorch wrapper v1 + smoke test; README factory row for wrapper. |
-| **5** | R11 Live demo UI | Compose tab (6-axis picker), preset gallery, ψ visualizer, θ-hash badge, one-click export. Built on stable API from sprints 1–3. |
-| **6** | RESEARCH3 CP-A integration | Campaign stack commissioned (PR-9), AutoScientist M-axis frontier campaign run, Z3 flagship commissioned. |
+1. **Capability pulls demonstrated (R11.1):** Register B items land each
+   with its demo test green in the gate — the Demonstration Table grows
+   axes/geometries/substrates as visible capabilities. **Gate:** demo suite
+   green, walltime ≤ 90 s.
+2. **Truthful gates (R11.2):** ruff/pyright green at HEAD or explicitly
+   scoped; the CI order (`format → check → pyright → pytest → pip-audit`)
+   becomes enforceable rather than aspirational. **Unblocks PR-0.**
+3. **Commissioned campaign stack (R11.3.1 / RESEARCH3 PR-9):** one full
+   iterate → interrupt → checkpoint → resume cycle recorded — the gateway
+   to every unattended result.
+4. **Calibrated stability guard (R11.3.3 / PR-5):** ROC-calibrated kill
+   thresholds from the demo/PR-7 harvest (<5% false-kill, >95% kill, <10%
+   overhead); the failure manifesto starts accumulating as a dataset.
+5. **Adoption surface (R11.4):** wrapper v1 (pip-installable, smoke suite,
+   one-line swap) and/or the live demo UI — the multiplier for everything
+   else.
+6. **The first research-shaped result (R11.3.4):** M-axis Pareto frontier
+   over 𝒞, annotated with which primitive owns each knee — the first figure
+   that is a *finding*, not a demonstration.
+7. **The discovery bet (R11.3.5):** Z3 flagship at registered scale; either
+   outcome is tangible per the pre-registered fallback.
 
----
-
-## 🔍 Pre-flight Checks (before sprint 1)
-
-- [ ] Property locks green: `uv run pytest tests/property/ -q`
-- [ ] Demo gate green: `uv run pytest tests/integration/ -k "demo or gallery_lock" -q` (8/8, ≤90 s)
-- [ ] Drift locks green: `uv run pytest tests/unit/core/test_readme_snippet_lock.py tests/unit/core/test_root_exports.py -q`
-- [ ] Manifest + run records committed (gallery lock data layer tracked)
-- [ ] RESEARCH3 PR-0 verification gate green (TIER-0/digits campaign)
+Sequencing: 1–2 are R11 core (parallel; hygiene unblocks everything); 3–4
+pull when the research track is wanted (3 before 4); 5 after the API
+stabilizes; 6–7 are RESEARCH3 CP-A's tail. No checkpoint blocks on a later
+one.
 
 ---
 
 ## 📝 Notes for the Next Editor
 
-- R10 closed cleanly: the demo suite (D1–D7) covers all six axes at 69 s walltime; the gallery manifest + run records are committed; the figure lock and snippet lock are green.
-- Register B items are the *only* library-completeness work — they don't ship without a demo test. Don't pull infrastructure "just in case."
-- Register C is a separate hygiene pass; don't mix it with capability pulls. Either fix the ~4.8k findings or explicitly scope CI to the gates that hold.
-- RESEARCH3 items (Register A) live on the research track; they feed the corroboration appendix and papers, never the front page.
-- The Z3 optimizer-hygiene defect (RESEARCH3 PR-1) is fixed in current code (fresh Adam at every boundary, documented in-module) — the commission runs on the fixed instrument.
+- R10 closed cleanly at 69 s gate walltime (D1/D2 loader caps pulled,
+  Register C item closed); D1 ≈ 0.84, D2 ≈ 0.87/0.86/0.62 are the pinned
+  numbers everywhere (docstrings, README blocks, RESULTS.md, manifest).
+- Pull one Register item per landing; each lands with its demo test, figure
+  or RESULTS.md paragraph (R11.5.6). Don't pull infrastructure "just in
+  case".
+- Keep hygiene separate from capability pulls — R11.2 is one dedicated
+  pass, not a tax on every feature.
+- When any demo test is touched, re-pin its docstring regime, the README
+  locked blocks (if designated), RESULTS.md rows, and the gallery manifest
+  **in the same change**; the figure/snippet locks fail loudly otherwise —
+  that is the system working, not a nuisance.
+- RESEARCH3 protocol (E-1 smoke → pilot → full; E-11 DECISIONS.md) governs
+  every R11.3 pull. Infra-failures don't consume tuning rounds.
+
+## Termination criterion
+
+R11 closes when a stranger can, in one sitting: compose a system from *any*
+geometry, substrate, and dynamics the ontology declares (not just the
+Feedforward/Recurrent/Digital/Memristive/EnergyMinimization set R10
+demonstrated), watch it train in the demo suite **and** in the UI, and find
+the repo's own gates — ruff, pyright, property locks, demo gate, figure
+lock — green at HEAD without caveats. The library is then *complete relative
+to its own ontology*: every axis declares only primitives that exist and
+demonstrate themselves. Research claims remain where they belong — the
+corroboration appendix and RESEARCH3, pull-based, never the front page.
