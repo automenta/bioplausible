@@ -13,6 +13,7 @@ import torch
 
 from computronium.core.system_trainer import compose_joint_system, compose_system
 from computronium.ontology import (
+    AttentionGeometry,
     BackpropCredit,
     ConvGeometry,
     CreditAssignmentConfig,
@@ -30,6 +31,7 @@ from computronium.ontology import (
     RecurrentGeometry,
     RiemannianOrthogonalUpdate,
     SpectralConstrainedUpdate,
+    SpatialLattice3DGeometry,
     StateDynamicsConfig,
     SubstrateConfig,
     TargetInversionCredit,
@@ -483,6 +485,26 @@ class TestJointSystemSpecRoundTrip:
                     pool_hw=(2, 2),
                 )
             )
+            if topology == "conv"
+            else AttentionGeometry(
+                GeometryConfig.attention(
+                    input_dim=16,
+                    output_dim=4,
+                    hidden_dim=16,
+                    num_layers=1,
+                    num_heads=2,
+                )
+            )
+            if topology == "attention"
+            else SpatialLattice3DGeometry(
+                GeometryConfig.spatial_lattice(
+                    input_dim=16 // 8,  # 8 sites = 2*2*2
+                    output_dim=4,
+                    lattice_dims=(2, 2, 2),
+                    hidden_dims=(12,),
+                    connectivity_radius=1,
+                )
+            )
         )
         dynamics = (
             EnergyMinimizationDynamics(
@@ -510,7 +532,7 @@ class TestJointSystemSpecRoundTrip:
         for name, param in sys.geometry.params.items():
             assert torch.equal(param, recon.geometry.params[name]), name
 
-    @pytest.mark.parametrize("topology", ["feedforward", "recurrent", "conv"])
+    @pytest.mark.parametrize("topology", ["feedforward", "recurrent", "conv", "attention", "spatial_lattice"])
     def test_joint_spec_round_trip(self, topology: str) -> None:
         """to_spec -> json -> from_spec restores trained geometry params bitwise."""
         sys = self._joint(topology)

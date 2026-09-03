@@ -52,7 +52,7 @@ class GeometryConfig:
         hidden_dims: List of hidden layer dimensions
         num_layers: Number of layers (alternative to hidden_dims)
         topology_type: "feedforward", "recurrent", "tile_mesh",
-            "neuromorphic", "spatial_lattice"
+            "neuromorphic", "spatial_lattice", "attention", "conv", "graph"
         connectivity: Optional adjacency specification
         recurrent_weight: Optional recurrent weight matrix (for recurrent topology)
         init_scale: Multiplicative scale on weight initialization (weights and
@@ -64,6 +64,13 @@ class GeometryConfig:
         input_hw: Input spatial extent (height, width) (conv topology)
         pool_hw: Adaptive average-pool grid before the classifier head
             (conv topology)
+        # Attention topology fields
+        num_heads: int = 8
+        head_dim: int | None = None
+        attention_dropout: float = 0.0
+        # SpatialLattice3D topology fields
+        lattice_dims: tuple[int, int, int] = (4, 4, 4)
+        connectivity_radius: int = 1
     """
 
     input_dim: int
@@ -79,6 +86,13 @@ class GeometryConfig:
     in_channels: int = 1
     input_hw: tuple[int, int] = (28, 28)
     pool_hw: tuple[int, int] = (4, 4)
+    # Attention topology
+    num_heads: int = 8
+    head_dim: int | None = None
+    attention_dropout: float = 0.0
+    # SpatialLattice3D topology
+    lattice_dims: tuple[int, int, int] = (4, 4, 4)
+    connectivity_radius: int = 1
 
     @classmethod
     def feedforward(
@@ -169,6 +183,116 @@ class GeometryConfig:
             in_channels=in_channels,
             input_hw=input_hw,
             pool_hw=pool_hw,
+        )
+
+    @classmethod
+    def graph(
+        cls,
+        *,
+        input_dim: int,
+        output_dim: int,
+        edge_index: list[list[int]],
+        hidden_dims: tuple[int, ...] = (64, 64),
+        init_scale: float = 0.1,
+    ) -> GeometryConfig:
+        """Create a graph topology config.
+
+        Args:
+            input_dim: Node feature dimension
+            output_dim: Output dimension (num classes for node classification)
+            edge_index: Graph connectivity as [2, num_edges] list of lists
+            hidden_dims: Hidden dimensions for each GNN layer
+            init_scale: Weight initialization scale
+        """
+        return cls(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dims=hidden_dims,
+            num_layers=len(hidden_dims) + 1,
+            topology_type="graph",
+            connectivity={"edge_index": edge_index},
+            recurrent_weight=None,
+            init_scale=init_scale,
+        )
+
+    @classmethod
+    def attention(
+        cls,
+        *,
+        input_dim: int,
+        output_dim: int,
+        hidden_dim: int,
+        num_layers: int = 2,
+        num_heads: int = 8,
+        head_dim: int | None = None,
+        attention_dropout: float = 0.0,
+        init_scale: float = 0.1,
+    ) -> GeometryConfig:
+        """Create an attention topology config.
+
+        Args:
+            input_dim: Input dimension
+            output_dim: Output dimension
+            hidden_dim: Model dimension (d_model)
+            num_layers: Number of attention blocks
+            num_heads: Number of attention heads
+            head_dim: Dimension per head (defaults to hidden_dim // num_heads)
+            attention_dropout: Dropout rate for attention weights
+            init_scale: Weight initialization scale
+        """
+        if head_dim is None:
+            head_dim = hidden_dim // num_heads
+        return cls(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dims=(hidden_dim,) * num_layers,
+            num_layers=num_layers,
+            topology_type="attention",
+            connectivity=None,
+            recurrent_weight=None,
+            init_scale=init_scale,
+            num_heads=num_heads,
+            head_dim=head_dim,
+            attention_dropout=attention_dropout,
+        )
+
+    @classmethod
+    def spatial_lattice(
+        cls,
+        *,
+        input_dim: int,
+        output_dim: int,
+        lattice_dims: tuple[int, int, int] = (4, 4, 4),
+        hidden_dims: tuple[int, ...] = (32, 32),
+        connectivity_radius: int = 1,
+        init_scale: float = 0.1,
+    ) -> GeometryConfig:
+        """Create a 3D spatial lattice topology config.
+
+        Args:
+            input_dim: Total input dimension
+            output_dim: Output dimension
+            lattice_dims: 3D lattice dimensions (depth, height, width)
+            hidden_dims: Hidden dimensions for each layer (per site)
+            connectivity_radius: Neighborhood radius for local connections
+            init_scale: Weight initialization scale
+        """
+        d, h, w = lattice_dims
+        num_sites = d * h * w
+        # Store original input_dim for the input projection
+        # The geometry will handle any padding needed
+        # Store num_sites as a separate field in connectivity for geometry use
+        return cls(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dims=hidden_dims,
+            num_layers=len(hidden_dims) + 1,
+            topology_type="spatial_lattice",
+            connectivity={"lattice_dims": lattice_dims, "radius": connectivity_radius},
+            recurrent_weight=None,
+            init_scale=init_scale,
+            lattice_dims=lattice_dims,
+            connectivity_radius=connectivity_radius,
         )
 
 
@@ -1060,6 +1184,730 @@ class ConvGeometry(nn.Module):
         return [self._head]
 
 
+class GraphGeometry(nn.Module):
+    """Graph topology: message passing over an edge index.
+
+    Implements a multi-layer Graph Neural Network where each layer performs:
+        1. Feature transformation via the substrate's forward operator
+        2. Neighborhood aggregation (mean pooling over neighbors)
+
+    The edge_index is provided via config (serialized as nested lists for JSON
+    compatibility). Multiple layers are stacked with ReLU activations between.
+    """
+
+    _layer_weights: nn.ParameterDict
+    _layer_biases: nn.ParameterDict
+    _head: nn.Linear
+
+    def __init__(self, config: GeometryConfig):
+        super().__init__()
+        self.config = config
+        self._layer_weights = nn.ParameterDict()
+        self._layer_biases = nn.ParameterDict()
+
+        # Parse edge_index from config (stored as list[list[int]])
+        if config.connectivity is None or "edge_index" not in config.connectivity:
+            raise ValueError(
+                "GraphGeometry requires config.connectivity with 'edge_index' key"
+            )
+        edge_index = config.connectivity["edge_index"]
+        self._edge_index = torch.tensor(edge_index, dtype=torch.long)
+
+        # Build layers
+        c_in = config.input_dim
+        hidden_dims = config.hidden_dims if config.hidden_dims else (64,)
+        for i, c_out in enumerate(hidden_dims):
+            weight = nn.Parameter(torch.randn(c_out, c_in) * (1.0 / c_in) ** 0.5)
+            if config.init_scale != _DEFAULT_INIT_SCALE:
+                weight.data.mul_(config.init_scale / _DEFAULT_INIT_SCALE)
+            self._layer_weights[f"layer_{i}"] = weight
+            self._layer_biases[f"layer_{i}"] = nn.Parameter(torch.zeros(c_out))
+            c_in = c_out
+
+        # Classifier head
+        self._head = nn.Linear(c_in, config.output_dim)
+        if config.init_scale != _DEFAULT_INIT_SCALE:
+            self._head.weight.data.mul_(config.init_scale / _DEFAULT_INIT_SCALE)
+
+        self._set_param_names()
+        self._compute_degrees()
+
+    def _set_param_names(self) -> None:
+        for key, weight in self._layer_weights.items():
+            _set_param_name(weight, f"{key}_weight")
+            _set_param_name(self._layer_biases[key], f"{key}_bias")
+        _set_param_name(self._head.weight, "head_weight")
+        if self._head.bias is not None:
+            _set_param_name(self._head.bias, "head_bias")
+
+    def _compute_degrees(self) -> None:
+        """Pre-compute neighbor counts for mean aggregation."""
+        num_nodes = self._edge_index.max().item() + 1
+        row, _ = self._edge_index
+        deg = torch.zeros(num_nodes, dtype=torch.long)
+        deg.scatter_add_(0, row, torch.ones_like(row))
+        self.register_buffer("_deg", deg.clamp(min=1), persistent=False)
+
+    def _move_edge_index(self, device: torch.device) -> None:
+        """Move edge_index and degree buffer to device."""
+        if self._edge_index.device != device:
+            self._edge_index = self._edge_index.to(device)
+        if hasattr(self, "_deg") and self._deg.device != device:
+            self._deg = self._deg.to(device)
+
+    @property
+    def params(self) -> dict[str, Tensor]:
+        params: dict[str, Tensor] = {}
+        for key, weight in self._layer_weights.items():
+            params[f"{key}_weight"] = weight
+            params[f"{key}_bias"] = self._layer_biases[key]
+        params["head_weight"] = self._head.weight
+        params["head_bias"] = self._head.bias
+        return params
+
+    def _aggregate(self, h: Tensor) -> Tensor:
+        """Mean aggregation over neighbors: h_out[i] = mean(h[j] for j in N(i))."""
+        row, col = self._edge_index
+        # h[col] gives source node features for each edge
+        # scatter_add aggregates to destination nodes (row)
+        aggr = torch.zeros_like(h)
+        aggr.index_add_(0, row, h[col])
+        return aggr / self._deg.unsqueeze(1).to(h.dtype)
+
+    def _stack(self, x: Tensor, op: Callable[[Tensor, Tensor], Tensor]) -> Tensor:
+        """Apply stacked graph layers with substrate operator for feature transform."""
+        self._move_edge_index(x.device)
+        h = x
+        for i in range(len(self._layer_weights)):
+            weight = self._layer_weights[f"layer_{i}"]
+            bias = self._layer_biases[f"layer_{i}"]
+            # Feature transformation via substrate operator
+            h = op(h, weight)
+            # Out-of-place: in-place adds pin the downstream settle graph
+            h = h + bias  # ruff: ignore[non-augmented-assignment]
+            # Non-linearity
+            h = torch.relu(h)
+            # Neighborhood aggregation
+            h = self._aggregate(h)
+        return h
+
+    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
+        if substrate is None:
+            from computronium.ontology.substrate import DigitalSubstrate
+
+            substrate = DigitalSubstrate()
+        op = substrate.get_forward_operator()
+        h = self._stack(x, op)
+        return op(h, self._head.weight) + self._head.bias
+
+    def route(self, activations: Tensor) -> Tensor:
+        """Single-step routing through the graph (for settling dynamics)."""
+        h = self._stack(activations, lambda a, w: a @ w.T)
+        return h @ self._head.weight.T + self._head.bias
+
+    def forward_with_intermediates(
+        self, x: Tensor, substrate: Substrate | None = None
+    ) -> list[Tensor]:
+        if substrate is None:
+            from computronium.ontology.substrate import DigitalSubstrate
+
+            substrate = DigitalSubstrate()
+        op = substrate.get_forward_operator()
+        self._move_edge_index(x.device)
+
+        acts = [x]
+        h = x
+        for i in range(len(self._layer_weights)):
+            weight = self._layer_weights[f"layer_{i}"]
+            bias = self._layer_biases[f"layer_{i}"]
+            h = op(h, weight)
+            h = h + bias  # ruff: ignore[non-augmented-assignment]
+            h = torch.relu(h)
+            h = self._aggregate(h)
+            acts.append(h)
+
+        out = op(h, self._head.weight) + self._head.bias
+        acts.append(out)
+        return acts
+
+    def update_params(self, new_params: dict[str, Tensor]) -> None:
+        for name, param in new_params.items():
+            if name.endswith("_weight") and name.startswith("layer_"):
+                self._layer_weights[name[: -len("_weight")]].data.copy_(param)
+            elif name.endswith("_bias") and name.startswith("layer_"):
+                self._layer_biases[name[: -len("_bias")]].data.copy_(param)
+            elif name == "head_weight":
+                self._head.weight.data.copy_(param)
+            elif name == "head_bias":
+                self._head.bias.data.copy_(param)
+
+    def transition_modules(self) -> list[nn.Module]:
+        return [self._head]
+
+
+class AttentionGeometry(nn.Module):
+    """Attention topology: multi-head self-attention blocks.
+
+    Implements a stacked transformer-style architecture where each block consists of:
+    1. Multi-head self-attention with substrate-routed projections
+    2. Feed-forward network (MLP) with substrate-routed projections
+    3. Residual connections and layer normalization
+
+    The attention projections (Q, K, V, O) and FFN weights are routed through
+    the substrate's forward operator, keeping substrate physics in the loop.
+    """
+
+    _blocks: nn.ModuleList
+    _input_projection: nn.Linear
+    _output_projection: nn.Linear
+    _num_heads: int
+    _head_dim: int
+    _hidden_dim: int
+    _dropout: float
+
+    def __init__(self, config: GeometryConfig):
+        super().__init__()
+        self.config = config
+        self._num_heads = config.num_heads
+        self._head_dim = config.head_dim or (config.hidden_dims[0] // config.num_heads)
+        self._hidden_dim = config.hidden_dims[0] if config.hidden_dims else config.input_dim
+        self._dropout = config.attention_dropout
+
+        # Input projection to hidden_dim
+        self._input_projection = nn.Linear(config.input_dim, self._hidden_dim)
+        if config.init_scale != _DEFAULT_INIT_SCALE:
+            self._input_projection.weight.data.mul_(config.init_scale / _DEFAULT_INIT_SCALE)
+
+        # Build attention blocks
+        self._blocks = nn.ModuleList()
+        for i in range(config.num_layers):
+            block = self._build_attention_block(i, config)
+            self._blocks.append(block)
+
+        # Output projection
+        self._output_projection = nn.Linear(self._hidden_dim, config.output_dim)
+        if config.init_scale != _DEFAULT_INIT_SCALE:
+            self._output_projection.weight.data.mul_(config.init_scale / _DEFAULT_INIT_SCALE)
+
+        self._set_param_names()
+
+    def _build_attention_block(self, block_idx: int, config: GeometryConfig) -> nn.Module:
+        """Build a single attention block with MHA + FFN."""
+        h = self._hidden_dim
+        num_heads = self._num_heads
+        head_dim = self._head_dim
+
+        # Use a container module to hold parameters and submodules
+        block = nn.ModuleDict()
+
+        # Multi-head attention projections as Parameters
+        q_weight = nn.Parameter(torch.randn(h, h) * (1.0 / h) ** 0.5)
+        k_weight = nn.Parameter(torch.randn(h, h) * (1.0 / h) ** 0.5)
+        v_weight = nn.Parameter(torch.randn(h, h) * (1.0 / h) ** 0.5)
+        o_weight = nn.Parameter(torch.randn(h, h) * (1.0 / h) ** 0.5)
+        if config.init_scale != _DEFAULT_INIT_SCALE:
+            scale = config.init_scale / _DEFAULT_INIT_SCALE
+            q_weight.data.mul_(scale)
+            k_weight.data.mul_(scale)
+            v_weight.data.mul_(scale)
+            o_weight.data.mul_(scale)
+
+        # FFN weights as Parameters
+        ffn_hidden = h * 4
+        ffn1_weight = nn.Parameter(torch.randn(ffn_hidden, h) * (1.0 / h) ** 0.5)
+        ffn2_weight = nn.Parameter(torch.randn(h, ffn_hidden) * (1.0 / ffn_hidden) ** 0.5)
+        if config.init_scale != _DEFAULT_INIT_SCALE:
+            scale = config.init_scale / _DEFAULT_INIT_SCALE
+            ffn1_weight.data.mul_(scale)
+            ffn2_weight.data.mul_(scale)
+
+        # Layer norms as submodules
+        ln1 = nn.LayerNorm(h)
+        ln2 = nn.LayerNorm(h)
+
+        # Register parameters directly on the block
+        block.register_parameter("q_weight", q_weight)
+        block.register_parameter("k_weight", k_weight)
+        block.register_parameter("v_weight", v_weight)
+        block.register_parameter("o_weight", o_weight)
+        block.register_parameter("ffn1_weight", ffn1_weight)
+        block.register_parameter("ffn2_weight", ffn2_weight)
+        block["ln1"] = ln1
+        block["ln2"] = ln2
+
+        # Set param names
+        _set_param_name(block.q_weight, f"block_{block_idx}_q_weight")
+        _set_param_name(block.k_weight, f"block_{block_idx}_k_weight")
+        _set_param_name(block.v_weight, f"block_{block_idx}_v_weight")
+        _set_param_name(block.o_weight, f"block_{block_idx}_o_weight")
+        _set_param_name(block.ffn1_weight, f"block_{block_idx}_ffn1_weight")
+        _set_param_name(block.ffn2_weight, f"block_{block_idx}_ffn2_weight")
+
+        return block
+
+    def _set_param_names(self) -> None:
+        _set_param_name(self._input_projection.weight, "input_proj_weight")
+        if self._input_projection.bias is not None:
+            _set_param_name(self._input_projection.bias, "input_proj_bias")
+        _set_param_name(self._output_projection.weight, "output_proj_weight")
+        if self._output_projection.bias is not None:
+            _set_param_name(self._output_projection.bias, "output_proj_bias")
+
+    @property
+    def params(self) -> dict[str, Tensor]:
+        params = {}
+        # Input/output projections
+        for name, param in self._input_projection.named_parameters():
+            params[f"input_proj.{name}"] = param
+        for name, param in self._output_projection.named_parameters():
+            params[f"output_proj.{name}"] = param
+        # Attention blocks
+        for i, block in enumerate(self._blocks):
+            for key in ("q_weight", "k_weight", "v_weight", "o_weight", "ffn1_weight", "ffn2_weight"):
+                params[f"block_{i}_{key}"] = getattr(block, key)
+        return params
+
+    def _multi_head_attention(
+        self,
+        x: Tensor,
+        q_weight: Tensor,
+        k_weight: Tensor,
+        v_weight: Tensor,
+        o_weight: Tensor,
+        op: Callable[[Tensor, Tensor], Tensor],
+    ) -> Tensor:
+        """Compute multi-head attention with substrate operator."""
+        b, n, h = x.shape
+        nh = self._num_heads
+        hd = self._head_dim
+
+        # Project to Q, K, V
+        q = op(x.reshape(-1, h), q_weight).view(b, n, nh, hd).transpose(1, 2)
+        k = op(x.reshape(-1, h), k_weight).view(b, n, nh, hd).transpose(1, 2)
+        v = op(x.reshape(-1, h), v_weight).view(b, n, nh, hd).transpose(1, 2)
+
+        # Scaled dot-product attention
+        attn_scores = torch.matmul(q, k.transpose(-2, -1)) / (hd**0.5)
+        attn_weights = torch.softmax(attn_scores, dim=-1)
+        if self._dropout > 0 and self.training:
+            attn_weights = torch.nn.functional.dropout(attn_weights, p=self._dropout)
+
+        attn_out = torch.matmul(attn_weights, v)
+        attn_out = attn_out.transpose(1, 2).contiguous().view(b, n, h)
+
+        # Output projection
+        return op(attn_out.reshape(-1, h), o_weight).view(b, n, h)
+
+    def _ffn(self, x: Tensor, ffn1_weight: Tensor, ffn2_weight: Tensor, op: Callable) -> Tensor:
+        """Feed-forward network with substrate operator."""
+        b, n, h = x.shape
+        # First linear + ReLU
+        hidden = torch.relu(op(x.reshape(-1, h), ffn1_weight))
+        # Second linear
+        out = op(hidden, ffn2_weight).view(b, n, h)
+        return out
+
+    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
+        if substrate is None:
+            from computronium.ontology.substrate import DigitalSubstrate
+
+            substrate = DigitalSubstrate()
+        op = substrate.get_forward_operator()
+
+        # Flatten input if needed (e.g., [B, C, H, W] -> [B, C*H*W])
+        h = x.flatten(1) if x.dim() > 2 else x
+
+        # Input projection
+        h = op(h, self._input_projection.weight)
+        if self._input_projection.bias is not None:
+            h = h + self._input_projection.bias
+        # Treat flat input as single token: [B, H] -> [B, 1, H]
+        h = h.unsqueeze(1) if h.dim() == 2 else h  # [B, 1, H] for single token
+
+        # Pass through attention blocks
+        for block in self._blocks:
+            # Attention with residual
+            residual = h
+            h = block["ln1"](h)
+            attn_out = self._multi_head_attention(
+                h,
+                block.q_weight,
+                block.k_weight,
+                block.v_weight,
+                block.o_weight,
+                op,
+            )
+            h = residual + attn_out
+
+            # FFN with residual
+            residual = h
+            h = block["ln2"](h)
+            ffn_out = self._ffn(h, block.ffn1_weight, block.ffn2_weight, op)
+            h = residual + ffn_out
+
+        # Output projection (take first/last token or mean pool)
+        h = h.mean(dim=1) if h.dim() == 3 else h  # [B, H]
+        out = op(h, self._output_projection.weight)
+        if self._output_projection.bias is not None:
+            out = out + self._output_projection.bias
+        return out
+
+    def route(self, activations: Tensor) -> Tensor:
+        """Single-step routing through attention blocks (for settling dynamics)."""
+        # For route, we use direct matmul instead of substrate operator
+        op = lambda a, w: a @ w.T
+        h = activations
+        if h.dim() == 2:
+            h = h.unsqueeze(1)
+        for block in self._blocks:
+            residual = h
+            h = block["ln1"](h)
+            attn_out = self._multi_head_attention(
+                h,
+                block.q_weight,
+                block.k_weight,
+                block.v_weight,
+                block.o_weight,
+                op,
+            )
+            h = residual + attn_out
+
+            residual = h
+            h = block["ln2"](h)
+            ffn_out = self._ffn(h, block.ffn1_weight, block.ffn2_weight, op)
+            h = residual + ffn_out
+
+        h = h.mean(dim=1) if h.dim() == 3 else h
+        out = h @ self._output_projection.weight.T
+        if self._output_projection.bias is not None:
+            out = out + self._output_projection.bias
+        return out
+
+    def forward_with_intermediates(
+        self, x: Tensor, substrate: Substrate | None = None
+    ) -> list[Tensor]:
+        if substrate is None:
+            from computronium.ontology.substrate import DigitalSubstrate
+
+            substrate = DigitalSubstrate()
+        op = substrate.get_forward_operator()
+
+        # Flatten input if needed (e.g., [B, C, H, W] -> [B, C*H*W])
+        h = x.flatten(1) if x.dim() > 2 else x
+        h = op(h, self._input_projection.weight)
+        if self._input_projection.bias is not None:
+            h = h + self._input_projection.bias
+        h = h.unsqueeze(1) if h.dim() == 2 else h
+        acts = [h.squeeze(1) if h.shape[1] == 1 else h]
+
+        for block in self._blocks:
+            residual = h
+            h = block["ln1"](h)
+            attn_out = self._multi_head_attention(
+                h,
+                block.q_weight,
+                block.k_weight,
+                block.v_weight,
+                block.o_weight,
+                op,
+            )
+            h = residual + attn_out
+            acts.append(h.mean(dim=1) if h.dim() == 3 else h)
+
+            residual = h
+            h = block["ln2"](h)
+            ffn_out = self._ffn(h, block.ffn1_weight, block.ffn2_weight, op)
+            h = residual + ffn_out
+            acts.append(h.mean(dim=1) if h.dim() == 3 else h)
+
+        h = h.mean(dim=1) if h.dim() == 3 else h
+        out = op(h, self._output_projection.weight)
+        if self._output_projection.bias is not None:
+            out = out + self._output_projection.bias
+        acts.append(out)
+        return acts
+
+    def update_params(self, new_params: dict[str, Tensor]) -> None:
+        for name, param in new_params.items():
+            if name.startswith("input_proj."):
+                pname = name.replace("input_proj.", "")
+                if hasattr(self._input_projection, pname):
+                    getattr(self._input_projection, pname).data.copy_(param)
+            elif name.startswith("output_proj."):
+                pname = name.replace("output_proj.", "")
+                if hasattr(self._output_projection, pname):
+                    getattr(self._output_projection, pname).data.copy_(param)
+            elif name.startswith("block_"):
+                parts = name.split("_")
+                if len(parts) >= 3:
+                    block_idx = int(parts[1])
+                    param_name = "_".join(parts[2:])
+                    if block_idx < len(self._blocks) and hasattr(self._blocks[block_idx], param_name):
+                        getattr(self._blocks[block_idx], param_name).data.copy_(param)
+
+    def transition_modules(self) -> list[nn.Module]:
+        modules = [self._input_projection, self._output_projection]
+        for block in self._blocks:
+            modules.extend([block["ln1"], block["ln2"]])
+        return modules
+
+
+class SpatialLattice3DGeometry(nn.Module):
+    """3D Spatial Lattice topology: local connectivity on a 3D grid.
+
+    Implements a neural cube where each site connects to its neighbors within
+    a radius. Uses message passing similar to GraphGeometry but with
+    structured 3D lattice connectivity. The substrate operator is applied
+    for feature transformations at each site.
+    """
+
+    _site_weights: nn.ParameterDict
+    _site_biases: nn.ParameterDict
+    _input_projection: nn.Linear
+    _output_projection: nn.Linear
+    _lattice_dims: tuple[int, int, int]
+    _num_sites: int
+    _radius: int
+    _neighbors: dict[int, list[int]]  # precomputed neighbor lists
+
+    def __init__(self, config: GeometryConfig):
+        super().__init__()
+        self.config = config
+        self._lattice_dims = config.lattice_dims
+        self._radius = config.connectivity_radius
+        d, h, w = self._lattice_dims
+        self._num_sites = d * h * w
+
+        # Input projection: flatten lattice sites into feature vectors
+        first_hidden = config.hidden_dims[0] if config.hidden_dims else config.output_dim
+        self._input_projection = nn.Linear(config.input_dim, self._num_sites * first_hidden)
+        if config.init_scale != _DEFAULT_INIT_SCALE:
+            self._input_projection.weight.data.mul_(config.init_scale / _DEFAULT_INIT_SCALE)
+
+        # Build site-specific weights for each layer
+        self._site_weights = nn.ParameterDict()
+        self._site_biases = nn.ParameterDict()
+
+        # Number of hidden layers = len(hidden_dims)
+        # Each layer transforms per-site features
+        num_hidden_layers = len(config.hidden_dims)
+        for layer_idx in range(num_hidden_layers):
+            if layer_idx == 0:
+                c_in = first_hidden
+            else:
+                c_in = config.hidden_dims[layer_idx - 1]
+            c_out = config.hidden_dims[layer_idx]
+
+            for site in range(self._num_sites):
+                weight = nn.Parameter(torch.randn(c_out, c_in) * (1.0 / c_in) ** 0.5)
+                if config.init_scale != _DEFAULT_INIT_SCALE:
+                    weight.data.mul_(config.init_scale / _DEFAULT_INIT_SCALE)
+                self._site_weights[f"layer_{layer_idx}_site_{site}"] = weight
+                bias = nn.Parameter(torch.zeros(c_out))
+                self._site_biases[f"layer_{layer_idx}_site_{site}"] = bias
+
+        # Output projection: maps flattened site features to output_dim
+        # Always needed when we have multiple sites and want single output vector
+        final_features = self._num_sites * config.hidden_dims[-1]
+        self._output_projection = nn.Linear(final_features, config.output_dim)
+        if config.init_scale != _DEFAULT_INIT_SCALE:
+            self._output_projection.weight.data.mul_(config.init_scale / _DEFAULT_INIT_SCALE)
+
+        # Precompute neighbor lists for each site
+        self._compute_neighbors()
+
+        self._set_param_names()
+
+    def _compute_neighbors(self) -> None:
+        """Precompute neighbor indices for each lattice site."""
+        d, h, w = self._lattice_dims
+        self._neighbors = {}
+
+        for dz in range(d):
+            for dy in range(h):
+                for dx in range(w):
+                    site = (dz * h + dy) * w + dx
+                    neighbors = []
+                    for ndz in range(max(0, dz - self._radius), min(d, dz + self._radius + 1)):
+                        for ndy in range(max(0, dy - self._radius), min(h, dy + self._radius + 1)):
+                            for ndx in range(max(0, dx - self._radius), min(w, dx + self._radius + 1)):
+                                if ndz == dz and ndy == dy and ndx == dx:
+                                    continue
+                                nbr = (ndz * h + ndy) * w + ndx
+                                neighbors.append(nbr)
+                    self._neighbors[site] = neighbors
+
+    def _set_param_names(self) -> None:
+        if self._input_projection is not None:
+            _set_param_name(self._input_projection.weight, "input_proj_weight")
+            if self._input_projection.bias is not None:
+                _set_param_name(self._input_projection.bias, "input_proj_bias")
+        if self._output_projection is not None:
+            _set_param_name(self._output_projection.weight, "output_proj_weight")
+            if self._output_projection.bias is not None:
+                _set_param_name(self._output_projection.bias, "output_proj_bias")
+        for key, weight in self._site_weights.items():
+            _set_param_name(weight, f"{key}_weight")
+            _set_param_name(self._site_biases[key], f"{key}_bias")
+
+    @property
+    def params(self) -> dict[str, Tensor]:
+        params = {}
+        if self._input_projection is not None:
+            for name, param in self._input_projection.named_parameters():
+                params[f"input_proj.{name}"] = param
+        if self._output_projection is not None:
+            for name, param in self._output_projection.named_parameters():
+                params[f"output_proj.{name}"] = param
+        params.update({f"{k}_weight": v for k, v in self._site_weights.items()})
+        params.update({f"{k}_bias": v for k, v in self._site_biases.items()})
+        return params
+
+    def _propagate_layer(
+        self,
+        x: Tensor,  # [B, num_sites, c_in]
+        layer_idx: int,
+        op: Callable[[Tensor, Tensor], Tensor],
+    ) -> Tensor:
+        """Apply one layer of site-wise transformations with neighbor aggregation."""
+        b, n, c_in = x.shape
+        c_out = self._site_weights[f"layer_{layer_idx}_site_0"].shape[0]
+        out = torch.zeros(b, n, c_out, device=x.device, dtype=x.dtype)
+
+        for site in range(n):
+            # Aggregate neighbors + self
+            nbrs = self._neighbors[site]
+            if nbrs:
+                nbr_acts = x[:, nbrs, :]  # [B, num_nbrs, c_in]
+                # Mean aggregation over neighbors
+                agg = nbr_acts.mean(dim=1)
+            else:
+                agg = torch.zeros(b, c_in, device=x.device, dtype=x.dtype)
+            # Include self
+            agg = agg + x[:, site, :]
+
+            # Transform via substrate operator
+            weight = self._site_weights[f"layer_{layer_idx}_site_{site}"]
+            bias = self._site_biases[f"layer_{layer_idx}_site_{site}"]
+            out[:, site, :] = op(agg, weight) + bias
+            out[:, site, :] = torch.relu(out[:, site, :])
+
+        return out
+
+    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
+        if substrate is None:
+            from computronium.ontology.substrate import DigitalSubstrate
+
+            substrate = DigitalSubstrate()
+        op = substrate.get_forward_operator()
+
+        # Flatten input if needed (e.g., [B, C, H, W] -> [B, C*H*W])
+        h = x.flatten(1) if x.dim() > 2 else x
+
+        # Input projection and reshape to [B, num_sites, hidden_dim]
+        h = self._input_projection(h)
+        h = h.view(h.shape[0], self._num_sites, -1)
+
+        # Pass through lattice layers
+        for layer_idx in range(len(self.config.hidden_dims)):
+            h = self._propagate_layer(h, layer_idx, op)
+
+        # Flatten and project to output
+        h = h.flatten(1)
+        h = op(h, self._output_projection.weight)
+        if self._output_projection.bias is not None:
+            h = h + self._output_projection.bias
+        return h
+
+    def route(self, activations: Tensor) -> Tensor:
+        """Single-step routing through lattice (for settling dynamics)."""
+        op = lambda a, w: a @ w.T
+        b, n, c_in = activations.shape
+        h = activations
+
+        for layer_idx in range(len(self.config.hidden_dims)):
+            c_out = self._site_weights[f"layer_{layer_idx}_site_0"].shape[0]
+            out = torch.zeros(b, n, c_out, device=h.device, dtype=h.dtype)
+
+            for site in range(n):
+                nbrs = self._neighbors[site]
+                if nbrs:
+                    nbr_acts = h[:, nbrs, :]
+                    agg = nbr_acts.mean(dim=1)
+                else:
+                    agg = torch.zeros(b, c_in, device=h.device, dtype=h.dtype)
+                agg = agg + h[:, site, :]
+
+                weight = self._site_weights[f"layer_{layer_idx}_site_{site}"]
+                bias = self._site_biases[f"layer_{layer_idx}_site_{site}"]
+                out[:, site, :] = agg @ weight.T + bias
+                out[:, site, :] = torch.relu(out[:, site, :])
+
+            h = out
+            c_in = c_out
+
+        # Flatten and project to output
+        h = h.flatten(1)
+        h = h @ self._output_projection.weight.T
+        if self._output_projection.bias is not None:
+            h = h + self._output_projection.bias
+        return h
+
+    def forward_with_intermediates(
+        self, x: Tensor, substrate: Substrate | None = None
+    ) -> list[Tensor]:
+        if substrate is None:
+            from computronium.ontology.substrate import DigitalSubstrate
+
+            substrate = DigitalSubstrate()
+        op = substrate.get_forward_operator()
+
+        # Flatten input if needed (e.g., [B, C, H, W] -> [B, C*H*W])
+        h = x.flatten(1) if x.dim() > 2 else x
+
+        h = self._input_projection(h)
+        h = h.view(h.shape[0], self._num_sites, -1)
+        acts = [h.flatten(1)]
+
+        for layer_idx in range(len(self.config.hidden_dims)):
+            h = self._propagate_layer(h, layer_idx, op)
+            acts.append(h.flatten(1))
+
+        h = h.flatten(1)
+        h = op(h, self._output_projection.weight)
+        if self._output_projection.bias is not None:
+            h = h + self._output_projection.bias
+        acts.append(h)
+        return acts
+
+    def update_params(self, new_params: dict[str, Tensor]) -> None:
+        for name, param in new_params.items():
+            if name.startswith("input_proj."):
+                pname = name.replace("input_proj.", "")
+                if hasattr(self._input_projection, pname):
+                    getattr(self._input_projection, pname).data.copy_(param)
+            elif name.startswith("output_proj."):
+                pname = name.replace("output_proj.", "")
+                if hasattr(self._output_projection, pname):
+                    getattr(self._output_projection, pname).data.copy_(param)
+            elif name.endswith("_weight") and name.startswith("layer_"):
+                key = name[: -len("_weight")]
+                if key in self._site_weights:
+                    self._site_weights[key].data.copy_(param)
+            elif name.endswith("_bias") and name.startswith("layer_"):
+                key = name[: -len("_bias")]
+                if key in self._site_biases:
+                    self._site_biases[key].data.copy_(param)
+
+    def transition_modules(self) -> list[nn.Module]:
+        modules = []
+        if self._input_projection is not None:
+            modules.append(self._input_projection)
+        if self._output_projection is not None:
+            modules.append(self._output_projection)
+        return modules
+
+
 # ============================================================
 # Geometry Dispatch
 # ============================================================
@@ -1080,6 +1928,12 @@ def geometry_from_config(config: GeometryConfig) -> Geometry:
         return TileGeometry(config, neurons_per_tile=8, tiles_per_layer=2)
     if topology_type == "conv":
         return ConvGeometry(config)
+    if topology_type == "graph":
+        return GraphGeometry(config)
+    if topology_type == "attention":
+        return AttentionGeometry(config)
+    if topology_type == "spatial_lattice":
+        return SpatialLattice3DGeometry(config)
     if topology_type == "feedforward":
         return FeedforwardGeometry(config)
     raise ValueError(f"Unknown topology_type: {topology_type!r}")

@@ -43,11 +43,14 @@ from computronium.ontology.dynamics import (
 
 # Utility functions
 from computronium.ontology.geometry import (
+    AttentionGeometry,
     ConvGeometry,
     FeedforwardGeometry,
     Geometry,
     GeometryConfig,
+    GraphGeometry,
     RecurrentGeometry,
+    SpatialLattice3DGeometry,
     TileGeometry,
     _set_param_name,
     geometry_from_config,
@@ -138,6 +141,9 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "RecurrentGeometry",
     "TileGeometry",
     "ConvGeometry",
+    "GraphGeometry",
+    "AttentionGeometry",
+    "SpatialLattice3DGeometry",
     "geometry_from_config",
     # StateDynamics
     "StateDynamicsConfig",

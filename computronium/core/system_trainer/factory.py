@@ -82,9 +82,16 @@ def _geometry_spec_parts(
     """Split a serialized geometry spec into its config and trained params."""
     serialized_params = geometry_dict.pop("params", None)
     # JSON serialization converts tuples to lists; restore tuple types
-    for field in ("hidden_dims", "conv_channels", "input_hw", "pool_hw"):
+    for field in ("hidden_dims", "conv_channels", "input_hw", "pool_hw", "lattice_dims"):
         if isinstance(geometry_dict.get(field), list):
             geometry_dict[field] = tuple(geometry_dict[field])
+    # Restore connectivity.lattice_dims if present
+    connectivity = geometry_dict.get("connectivity")
+    if isinstance(connectivity, dict) and isinstance(connectivity.get("lattice_dims"), list):
+        connectivity["lattice_dims"] = tuple(connectivity["lattice_dims"])
+    # Remove num_sites from connectivity if present (added by factory, not part of config)
+    if isinstance(connectivity, dict) and "num_sites" in connectivity:
+        del connectivity["num_sites"]
     return GeometryConfig(**geometry_dict), serialized_params
 
 

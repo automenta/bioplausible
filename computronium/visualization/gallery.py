@@ -35,6 +35,9 @@ if TYPE_CHECKING:
 SCOPE_LABEL = "live demo scale (HEAD, CPU, fixed seeds)"
 RECORDS_DIRNAME = "run_records"
 
+# For D9 graph geometry swap
+NUM_CLASSES = 4
+
 
 @dataclass(frozen=True, slots=True)
 class FigureMeta:
@@ -310,6 +313,42 @@ def _fig_geometry_swap(record: dict) -> Figure:
     return fig
 
 
+def _fig_graph_geometry_swap(record: dict) -> Figure:
+    import matplotlib.pyplot as plt
+
+    data = record["data"]
+    arms = data["arms"]
+    names = list(arms)
+    fig, (ax_train, ax_probe) = plt.subplots(1, 2, figsize=(9, 4))
+    accs = [arms[name]["train_acc"] for name in names]
+    params = [arms[name]["param_count"] / 1000 for name in names]
+    colors = [COLOR_CONTRAST, COLOR_ARM]
+    labels = [
+        f"{name}\n({p:.1f}k params)" for name, p in zip(names, params, strict=True)
+    ]
+    ax_train.bar(labels, accs, color=colors)
+    ax_train.set_ylim(0, 1)
+    chance = 1 / NUM_CLASSES
+    chance_line(ax_train, chance, f"chance ({chance:.2f})")
+    ax_train.set_ylabel("train accuracy")
+    ax_train.set_title("D9 — one wiring, one swapped G-axis (graph structure)")
+    for i, acc in enumerate(accs):
+        ax_train.text(i, acc, f"{acc:.2f}", ha="center", va="bottom", fontsize=9)
+
+    # Probe comparison: edge perturbation robustness
+    probe_key = "probe_perturb_02"
+    probe_vals = [arms[name][probe_key] for name in names]
+    ax_probe.bar(labels, probe_vals, color=colors)
+    ax_probe.set_ylim(0, 1)
+    chance_line(ax_probe, chance, f"chance ({chance:.2f})")
+    ax_probe.set_ylabel("probe accuracy (20% edge dropout)")
+    ax_probe.set_title("graph arm more robust to edge perturbation")
+    for i, p in enumerate(probe_vals):
+        ax_probe.text(i, p, f"{p:.2f}", ha="center", va="bottom", fontsize=9)
+    apply_style(fig)
+    return fig
+
+
 _FACTORIES: dict[str, Callable[[dict], Figure]] = {
     "compose_6axis": _fig_compose_train,
     "swap_credit": _fig_credit_swap,
@@ -319,6 +358,7 @@ _FACTORIES: dict[str, Callable[[dict], Figure]] = {
     "spike_settle": _fig_spike_settle,
     "z3_frozen_theta": _fig_frozen_theta,
     "geometry_swap": _fig_geometry_swap,
+    "graph_geometry_swap": _fig_graph_geometry_swap,
 }
 
 

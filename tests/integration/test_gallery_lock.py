@@ -30,6 +30,7 @@ EXPECTED = {
     "spike_settle": "D7",
     "z3_frozen_theta": "D5",
     "geometry_swap": "D8",
+    "graph_geometry_swap": "D9",
 }
 
 

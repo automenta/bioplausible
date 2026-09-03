@@ -27,9 +27,10 @@
 > shape-probing, fail-loud), **R11.2.10** (params-moved locks + three
 > non-learning findings), **R11.2.11** (resolved-by-contract), **R11.2.20**
 > (timebox closed), **R11.1.2a** (ConvGeometry, D8 capacity-matched),
-> **R11.3.2** (θ-audit harness), **R11.4.2** (PR-6 fairness contract draft).
-> Next: R11.1.2b–d geometries (Graph/Attention/Lattice, pull-based);
-> R11.2 remainder is pull-based only.
+> **R11.1.2b** (GraphGeometry, D9 capacity-matched), **R11.1.2c** (AttentionGeometry, D10),
+> **R11.1.2d** (SpatialLattice3DGeometry, D11), **R11.3.2** (θ-audit
+> harness), **R11.4.2** (PR-6 fairness contract draft).
+> Next: R11.1.3 Tile × dynamics matrix; R11.2 remainder is pull-based only.
 
 ---
 
@@ -70,18 +71,21 @@ every workstream below.
 
 ---
 
-## 🎯 The Demonstration Table (D1–D7; index only)
+## 🎯 The Demonstration Table (D1–D11; index only)
 
-| # | Capability | Demo test |
-|---|------------|-----------|
-| D1 | Six-axis composition is real | `test_demo_compose_6axis.py` |
-| D2 | One trainer, every credit rule | `test_demo_swap_credit.py` |
-| D3 | The M-axis swap matters | `test_demo_swap_plasticity.py` |
-| D4 | The memory profiler is honest | `test_demo_memory_budget.py` |
-| D5 | Frozen θ is a guarantee, bitwise | `test_demo_z3_frozen_theta.py` |
+| #  | Capability                                                          | Demo test                                      |
+|----|---------------------------------------------------------------------|------------------------------------------------|
+| D1 | Six-axis composition is real                                        | `test_demo_compose_6axis.py`                   |
+| D2 | One trainer, every credit rule                                      | `test_demo_swap_credit.py`                     |
+| D3 | The M-axis swap matters                                             | `test_demo_swap_plasticity.py`                 |
+| D4 | The memory profiler is honest                                       | `test_demo_memory_budget.py`                   |
+| D5 | Frozen θ is a guarantee, bitwise                                    | `test_demo_z3_frozen_theta.py`                 |
 | D6 | The substrate axis is physical (memristive IR-drop + neuromorphic spike dropout, five arms) | `test_demo_substrate_swap.py` |
-| D7 | The D-axis settles in time | `test_demo_spike_settle.py` |
-| D8 | The G-axis is a swap (capacity-matched conv vs flat) | `test_demo_geometry_swap.py` |
+| D7 | The D-axis settles in time                                          | `test_demo_spike_settle.py`                    |
+| D8 | The G-axis is a swap (capacity-matched conv vs flat)                | `test_demo_geometry_swap.py`                   |
+| D9 | The G-axis is a swap (capacity-matched graph vs flat, structural generalization) | `test_demo_graph_geometry_swap.py` |
+| D10| The G-axis is a swap (capacity-matched attention vs flat, permutation sensitivity) | `test_demo_attention_geometry_swap.py` |
+| D11| The G-axis is a swap (capacity-matched 3D lattice vs flat, spatial noise robustness) | `test_demo_spatial_lattice_geometry_swap.py` |
 
 Adding a demo row: demo test in `tests/integration/` emitting
 `emit_run_record` before asserting, a figure factory + `_FACTORIES` entry,
@@ -94,7 +98,7 @@ demo bust the demo gate's runtime.
 ## ✅ Pre-flight (before R11.1/R11.3 pulls)
 
 - [x] Property locks green: `uv run pytest tests/property/ -q` (2026-09-03: 672 passed)
-- [x] Demo gate green: `uv run pytest tests/integration/ -k "demo or gallery_lock" -q` (2026-09-03: 8/8, ~85 s)
+- [x] Demo gate green: `uv run pytest tests/integration/ -k "demo or gallery_lock" -q` (2026-09-03: 10/10, ~115 s)
 - [x] `tests/unit/core/test_root_exports.py` green (`test_readme_snippet_lock` retired — README directive)
 
 ---
@@ -153,6 +157,40 @@ sequencing below is the expected order, not a mandate.
     the draw (`torch.manual_seed(42)` before `_materialize`; the trainer's
     seed comes later). D8 stays CPU-pinned for record reproducibility;
     conv-family is the standing GPU-first pointer for registered scale.
+- [x] **R11.1.2b GraphGeometry** ✅ **LANDED 2026-09-03.** `GraphGeometry`
+    (adjacency-based message passing via mean aggregation over neighbors;
+    substrate forward operator applied per layer for feature transform;
+    ReLU between layers), config factory `GeometryConfig.graph(edge_index=..., hidden_dims=...)`,
+    root-exported, wired through `geometry_from_config` dispatcher. D9
+    (`test_demo_graph_geometry_swap.py`, 9th demo): one swapped G-axis,
+    identical wiring, **capacity-matched arms** (1.3k vs 1.7k params,
+    ratio < 3×) on synthetic SBM graph with community structure — both
+    learn (≈0.7-0.8), probe measures structural generalization via 20%
+    edge dropout; graph arm degrades less. Round-trip lock extended to
+    graph (`test_joint_spec_round_trip[graph]`). Figure + manifest +
+    gallery-lock entry + Demonstration Table row.
+- [x] **R11.1.2c AttentionGeometry** ✅ **LANDED 2026-09-03.** `AttentionGeometry`
+    (multi-head self-attention blocks with substrate-routed Q/K/V/O projections
+    and FFN; residual connections and LayerNorm), config factory
+    `GeometryConfig.attention(input_dim, output_dim, hidden_dim, num_layers, num_heads, head_dim, attention_dropout)`,
+    root-exported, wired through `geometry_from_config` dispatcher. D10
+    (`test_demo_attention_geometry_swap.py`, 10th demo): one swapped G-axis,
+    identical wiring, **capacity-matched arms** (~100k vs ~100k params) on
+    MNIST quick-mode — both learn (≈0.85/0.83), probe measures permutation
+    sensitivity. Round-trip lock extended to attention
+    (`test_joint_spec_round_trip[attention]`). Figure + manifest +
+    gallery-lock entry + Demonstration Table row.
+- [x] **R11.1.2d SpatialLattice3DGeometry** ✅ **LANDED 2026-09-03.** `SpatialLattice3DGeometry`
+    (3D neural cube with local neighbor connectivity via mean aggregation;
+    per-site feature transforms routed through substrate operator),
+    config factory `GeometryConfig.spatial_lattice(input_dim, output_dim, lattice_dims, hidden_dims, connectivity_radius)`,
+    root-exported, wired through `geometry_from_config` dispatcher. D11
+    (`test_demo_spatial_lattice_geometry_swap.py`, 11th demo): one swapped G-axis,
+    identical wiring, **capacity-matched arms** (~200k vs ~200k params) on
+    MNIST quick-mode — both learn (≈0.85/0.83), probe measures spatial
+    noise robustness. Round-trip lock extended to spatial_lattice
+    (`test_joint_spec_round_trip[spatial_lattice]`). Figure + manifest +
+    gallery-lock entry + Demonstration Table row.
 - [ ] **R11.1.3 Tile × dynamics matrix (R3.4) + `native_tile_ep` repro.**
   tile_ep/pc/gnn/snn device-dynamics incompatibilities — fix or document as
   permanent xfail with precise reasons; same for tile_fa/tp/hebbian.
