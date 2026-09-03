@@ -34,8 +34,12 @@
 > `mep/_registration.py`, `models/native/registration.py`,
 > `ontology/credit_registration.py` + ~30 consumer files stripped; all
 > surfaces resolve native 5-D factories now; registry-era tests replaced by
-> ontology-API tests or retired with their deleted features).
-> Next: R11.1.3 Tile × dynamics matrix; R11.2 remainder is pull-based only.
+> ontology-API tests or retired with their deleted features),
+> **R11.1.3** (tile × dynamics matrix resolved as permanent strict xfails
+> with mechanism-level reasons; `comp repro` now 7/7).
+> Next: R11.3.1 PR-9 campaign commissioning (Tangible Checkpoint 3; see the
+> R11.3 trigger note — R11.2.2 is deprioritized, so PR-9 is un-gated from
+> it); R11.1 remainder and R11.3/R11.4 are pull-based.
 
 ---
 
@@ -196,19 +200,61 @@ sequencing below is the expected order, not a mandate.
     noise robustness. Round-trip lock extended to spatial_lattice
     (`test_joint_spec_round_trip[spatial_lattice]`). Figure + manifest +
     gallery-lock entry + Demonstration Table row.
-- [ ] **R11.1.3 Tile × dynamics matrix (R3.4) + `native_tile_ep` repro.**
-  tile_ep/pc/gnn/snn device-dynamics incompatibilities — fix or document as
-  permanent xfail with precise reasons; same for tile_fa/tp/hebbian.
-  Includes the `comp repro` 7/8 pointer: fix or document `native_tile_ep`
-  (pre-existing; CI's reproducibility step excludes it explicitly). Pull on
-  next touch of the tile family or when a demo wants the full tile matrix.
+- [x] **R11.1.3 Tile × dynamics matrix (R3.4) + `native_tile_ep` repro** ✅
+  **RESOLVED 2026-09-03 — documented as permanent strict xfails with
+  mechanism-level reasons (the "document" arm of fix-or-document; the
+  genuine fix is the R11.1.4 tile-mesh settle kernel).** **User directive
+  2026-09-03: the tile geometry's potential is to be realized later —
+  this is documentation-now, not a verdict. The strict xfails stay as the
+  promotion instrument: when the settle kernel lands, they flip xpass and
+  force the matrix's re-verification (R11.1.4 trigger below).** Probe-measured
+  root cause, one family: **the settle family has no target-responsive
+  TileMesh kernel.** tile_ep/tile_gnn crash (`extract_layered_params`
+  returns None → TypeError before settling); tile_snn crashes (layered LIF
+  applies flat membranes to per-edge tile weights, shape mismatch);
+  tile_fa zeros by the documented layered feedback contract (per-edge tile
+  weights can't map act_{k+1}→act_k widths); tile_hebbian/tile_pc/tile_tp
+  inert because no tile settle consumes the target — Instantaneous ignores
+  it by nature and PredictiveSettling's `hasattr(geometry, "_graph")` tile
+  branch runs a plain target-free forward — so free ≡ nudged **bitwise**
+  and every contrast is structurally zero (probe: `torch.equal` True;
+  direct autograd on the acts *does* return non-None grads for all tile
+  weights — the graph is fine, the contrast is zero). The only learning
+  tile pairing is the preset's Instantaneous+Backprop
+  (`create_tile_mlp`); non-tile FF escapes via its custom FF train_step
+  (label-injected pos/neg, per-layer optimizers — bypasses the
+  free/nudged contract). **Landed:** sharpened reasons in
+  `test_native_smoke.py` `_TILE_CRASH_XFAIL`/`_TILE_NO_LEARNING_XFAIL`
+  (strict) and `test_validation_all.py` (now strict=True — a fix flips
+  xpass and forces promotion); matrix note in `tile_native.py` module
+  docstring; parity test's misleading trailing `pytest.skip` removed (the
+  skipped variants are owned by the smoke strict xfails).
+  **`comp repro` 7/8 → 7/7:** `native_tile_ep` removed from REPRO_MODELS
+  (+ its `_instantiate` branch) with pointer comment — reproducibility is
+  undefined for a coordinate that cannot settle; CI comment updated to
+  cite R11.1.3, explicit `--models` list dropped (REPRO_MODELS is the
+  single source). **Bonus:** fixed `test_settle_protocol_models.py:298`
+  eager-default `result.get("free_accuracy", result["accuracy"])` — the
+  default argument evaluates before `.get`, so the legacy-key lookup
+  raised KeyError on every pipeline system after imp-20/46 dropped
+  `accuracy`; both formerly-failing arms now green in the default tier.
+  Ruff clean on all touched files; pyright findings pre-existing
+  (unchanged count, as-touch debt).
 - [ ] **R11.1.4 Kernels (R4.1–R4.4).** FA feedback projection through the
   Substrate operator API; `SubstrateSettleKernel` in `KernelRegistry`; MEP
   Triton kernels (Muon, Fisher whitening) → Substrate update operator;
   sparse transpose-mask handling, ternary `init_scale` (un-xfail ternary
-  equivalence), per-step `inject_state_noise`. Pull when the
-  acceleration/kernel path is next touched or a substrate-axis demo needs
-  them. Kernel-equivalence locks (max_diff < 1e-5) are the acceptance bar.
+  equivalence), per-step `inject_state_noise`. **Plus the tile-mesh settle
+  kernel (user directive 2026-09-03: realize the Tile geometry's potential):
+  a target-responsive TileMesh relaxation in the settle family — per-tile
+  free/nudged relaxation through the substrate operator, replacing
+  PredictiveSettling's target-free `_graph` branch and giving
+  `extract_layered_params` a tile answer — is the single unlock that flips
+  all seven tile strict xfails (R11.1.3) to xpass and re-opens the full
+  tile × dynamics matrix.** Pull when the acceleration/kernel path is next
+  touched, a substrate-axis demo needs them, or the tile realization is
+  scheduled. Kernel-equivalence locks (max_diff < 1e-5) are the acceptance
+  bar.
 - [x] **R11.1.5 Adapter heuristics (R3.5)** ✅ **LANDED 2026-09-03.**
   Recon finding: the deleted `adapter/` package (git 49144879) had *equally*
   hardcoded geometry constants (784→(256,128)→10 / (256,)) — nothing richer
@@ -593,6 +639,13 @@ consumer exists.
   live in the checksummed manifest). Not executed this sprint — flagged for
   the next editor / user decision.
 - **`benchmark_results/` stays untracked** (standing directive).
+- **Stale eager-default metric lookups (R11.1.3, 2026-09-03):**
+  `d.get("free_accuracy", d["accuracy"])` evaluates the default eagerly —
+  any pipeline metrics consumer written before imp-20/46 dropped the
+  legacy `accuracy` key crashes on first call. The known instance is
+  fixed; the safe idiom is nested `get` (`trainer.py`, `distributed_trainer.py`
+  already do this). If a new KeyError 'accuracy' surfaces, check the call
+  site's metric-contract vintage before suspecting the pipeline.
 - **Registry-era removals (2026-09-03):** if a stranger needs
   transfer-weight loading or proposer objective ranking, they were deleted
   with the zoo — re-home them onto native factories, not the registry.
@@ -671,6 +724,18 @@ one.
   `joint.py`, and the profiler all consume it. Never re-inline a dispatch —
   add a branch to the dispatcher. New `GeometryConfig` tuple fields must be
   added to `_geometry_spec_parts`'s JSON tuple-restore list.
+- **Tile × dynamics matrix (R11.1.3, 2026-09-03):** the seven non-learning
+  tile pairings are strict xfails with mechanism-level reasons in
+  `test_native_smoke.py` (canonical), `test_validation_all.py`, and
+  `tile_native.py`'s module docstring. **User directive: the Tile
+  geometry's potential is to be realized later** — the single unlock is a
+  target-responsive TileMesh settle kernel (queued in R11.1.4); when it
+  lands, the strict xfails flip xpass and force promotion (assertion body
+  already measures params-moved). Until then: `comp repro` is 7/7 — do not
+  re-add `native_tile_ep` to REPRO_MODELS until that kernel exists.
+  `experiment/param_estimator.py` still lists `("tile_ep",
+  create_native_tile_ep)` and will raise the same TypeError if exercised —
+  same unlock, as-touch.
 - **Demo-test record determinism (D8, 2026-09-03):** seed *before*
   materializing loader batches (the trainer's seed comes later); workers
   spawn per loader *iteration*, so materialize once and share. Where a demo

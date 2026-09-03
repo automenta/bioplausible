@@ -295,7 +295,12 @@ class TestSettleProtocolMultiEpochLearning:
             losses.append(result["loss"])
             # Pipeline systems: post-update target-free; TileAlgorithm BPTT:
             # plain target-free forward fit (both honest learning signals).
-            accuracies.append(result.get("free_accuracy", result["accuracy"]))
+            # Eager default evaluation: probe keys before indexing.
+            accuracies.append(
+                result["free_accuracy"]
+                if "free_accuracy" in result
+                else result["accuracy"]
+            )
 
         # Loss should generally decrease (allow small fluctuation)
         assert losses[-1] <= losses[0] + 0.2

@@ -708,11 +708,9 @@ class TestTileParity:
             acc = train_system(system, train_loader, val_loader, epochs, device)
             assert acc >= 0.0, f"{name}: accuracy {acc:.1f}%"
 
-        # Variants with known device/dynamics issues - skip for now
-        # These are tracked as native model implementation issues
-        pytest.skip(
-            "native_tile_ep, native_tile_pc, native_tile_gnn, native_tile_snn have device/dynamics issues"
-        )
+        # native_tile_ep/pc/gnn/snn are permanent strict xfails with
+        # mechanism-level reasons in tests/property/test_native_smoke.py
+        # (R11.1.3): no target-responsive TileMesh settle kernel exists.
 
 
 class TestResearchModelsParity:

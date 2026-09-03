@@ -137,7 +137,9 @@ class TestValidationAll:
     # --- Native Tile Models ---
 
     @pytest.mark.xfail(
-        reason="TileGeometry incompatible with EnergyMinimizationDynamics - known issue"
+        reason="EnergyMinimizationDynamics needs a layered geometry (extract_layered_params); "
+        "no tile-mesh settle kernel — permanent xfail, R11.1.3",
+        strict=True,
     )
     def test_native_tile_ep(self):
         """Native Tile EP learns - XFAIL: TileGeometry lacks _layers for EnergyMinimizationDynamics."""
@@ -153,7 +155,9 @@ class TestValidationAll:
         self._train_system_and_assert_learns(model, self.x, self.y, "native_tile_ep")
 
     @pytest.mark.xfail(
-        reason="FA with InstantaneousDynamics produces no error signal - known issue"
+        reason="InstantaneousDynamics ignores the target: free ≡ nudged bitwise, "
+        "FA layered feedback contract yields zeros — permanent xfail, R11.1.3",
+        strict=True,
     )
     def test_native_tile_fa(self):
         """Native Tile FA learns - XFAIL: InstantaneousDynamics doesn't produce free/nudged difference."""
@@ -169,7 +173,9 @@ class TestValidationAll:
         self._train_system_and_assert_learns(model, self.x, self.y, "native_tile_fa")
 
     @pytest.mark.xfail(
-        reason="TileGeometry + PredictiveSettlingDynamics not working - known issue"
+        reason="PredictiveSettling tile branch runs a target-free forward; "
+        "TargetInversion propagates through layered weights — permanent xfail, R11.1.3",
+        strict=True,
     )
     def test_native_tile_tp(self):
         """Native Tile TP learns - XFAIL: TileGeometry issues with predictive settling."""
@@ -186,7 +192,9 @@ class TestValidationAll:
         self._train_system_and_assert_learns(model, self.x, self.y, "native_tile_tp")
 
     @pytest.mark.xfail(
-        reason="TileGeometry + InstantaneousDynamics + LocalGoodnessCredit not working - known issue"
+        reason="InstantaneousDynamics ignores the target: free ≡ nudged bitwise, "
+        "G_free − G_nudged ≡ 0 — permanent xfail, R11.1.3",
+        strict=True,
     )
     def test_native_tile_hebbian(self):
         """Native Tile Hebbian learns - XFAIL: LocalGoodnessCredit returns empty gradients."""
