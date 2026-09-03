@@ -121,6 +121,8 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
         "EnergyMinimizationDynamics",
     ),
     "EuclideanUpdate": ("computronium.ontology.update", "EuclideanUpdate"),
+    "ConvGeometry": ("computronium.ontology.geometry", "ConvGeometry"),
+    "theta_audit": ("computronium.core.theta_audit", "theta_audit"),
     "FeedforwardGeometry": ("computronium.ontology.geometry", "FeedforwardGeometry"),
     "GeometryConfig": ("computronium.ontology.geometry", "GeometryConfig"),
     "InstantaneousDynamics": (
@@ -330,6 +332,7 @@ __all__ = [
     "BackpropCredit",
     "CompositeState",
     "ComputroniumLinear",
+    "ConvGeometry",
     "CoupledTransition",
     "CreditAssignmentConfig",
     "CreditRule",
@@ -431,6 +434,7 @@ __all__ = [
     "replace_linear_with_computronium",
     "smep",
     "smep_fast",
+    "theta_audit",
 ]
 
 

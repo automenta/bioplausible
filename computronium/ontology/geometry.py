@@ -12,6 +12,8 @@ from torch import Tensor, nn
 from computronium.core.tile.topology import TileGraph
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from computronium.ontology.substrate import Substrate
 
 _DEFAULT_INIT_SCALE = 0.1
@@ -56,6 +58,12 @@ class GeometryConfig:
         init_scale: Multiplicative scale on weight initialization (weights and
             recurrent matrices; recurrent matrices additionally carry a 0.1
             sub-scale for EqProp's small-recurrent convention)
+        conv_channels: Output channels per convolution layer (conv topology)
+        kernel_size: Convolution kernel edge length (conv topology)
+        in_channels: Input channel count (conv topology)
+        input_hw: Input spatial extent (height, width) (conv topology)
+        pool_hw: Adaptive average-pool grid before the classifier head
+            (conv topology)
     """
 
     input_dim: int
@@ -66,6 +74,11 @@ class GeometryConfig:
     connectivity: dict[str, object] | None
     recurrent_weight: list[list[float]] | None
     init_scale: float = _DEFAULT_INIT_SCALE
+    conv_channels: tuple[int, ...] = ()
+    kernel_size: int = 3
+    in_channels: int = 1
+    input_hw: tuple[int, int] = (28, 28)
+    pool_hw: tuple[int, int] = (4, 4)
 
     @classmethod
     def feedforward(
@@ -127,6 +140,35 @@ class GeometryConfig:
             connectivity=None,
             recurrent_weight=None,
             init_scale=init_scale,
+        )
+
+    @classmethod
+    def conv(
+        cls,
+        *,
+        input_dim: int,
+        output_dim: int,
+        conv_channels: tuple[int, ...] = (8, 16),
+        kernel_size: int = 3,
+        in_channels: int = 1,
+        input_hw: tuple[int, int] = (28, 28),
+        pool_hw: tuple[int, int] = (4, 4),
+        init_scale: float = 0.1,
+    ) -> GeometryConfig:
+        return cls(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            hidden_dims=(),
+            num_layers=len(conv_channels) + 1,
+            topology_type="conv",
+            connectivity=None,
+            recurrent_weight=None,
+            init_scale=init_scale,
+            conv_channels=conv_channels,
+            kernel_size=kernel_size,
+            in_channels=in_channels,
+            input_hw=input_hw,
+            pool_hw=pool_hw,
         )
 
 
@@ -882,3 +924,162 @@ class TileGeometry(nn.Module):
             acts.append(out)
 
         return acts
+
+
+class ConvGeometry(nn.Module):
+    """Convolutional topology: shared kernels routed through the substrate operator.
+
+    Each conv layer is a flat kernel matrix applied to im2col patches
+    (``unfold → op(patches, W_i) → fold``), so substrate physics stay in
+    the loop exactly as for dense routing. An adaptive average pool fixes
+    the classifier head's input extent.
+    """
+
+    _conv_weights: nn.ParameterDict
+    _conv_biases: nn.ParameterDict
+    _head: nn.Linear
+
+    def __init__(self, config: GeometryConfig):
+        if config.kernel_size % 2 == 0:
+            raise ValueError(
+                f"ConvGeometry requires an odd kernel_size, got {config.kernel_size}"
+            )
+        super().__init__()
+        self.config = config
+        self._conv_weights = nn.ParameterDict()
+        self._conv_biases = nn.ParameterDict()
+        c_in = config.in_channels
+        for i in range(len(config.conv_channels)):
+            c_out = config.conv_channels[i]
+            fan_in = c_in * config.kernel_size**2
+            weight = nn.Parameter(torch.randn(c_out, fan_in) * (1.0 / fan_in) ** 0.5)
+            if config.init_scale != _DEFAULT_INIT_SCALE:
+                weight.data.mul_(config.init_scale / _DEFAULT_INIT_SCALE)
+            self._conv_weights[f"layer_{i}"] = weight
+            self._conv_biases[f"layer_{i}"] = nn.Parameter(torch.zeros(c_out))
+            c_in = c_out
+        self._head = nn.Linear(
+            c_in * config.pool_hw[0] * config.pool_hw[1], config.output_dim
+        )
+        if config.init_scale != _DEFAULT_INIT_SCALE:
+            self._head.weight.data.mul_(config.init_scale / _DEFAULT_INIT_SCALE)
+        self._set_param_names()
+
+    def _set_param_names(self) -> None:
+        for key, weight in self._conv_weights.items():
+            _set_param_name(weight, f"{key}_weight")
+            _set_param_name(self._conv_biases[key], f"{key}_bias")
+        _set_param_name(self._head.weight, "head_weight")
+        if self._head.bias is not None:
+            _set_param_name(self._head.bias, "head_bias")
+
+    @property
+    def params(self) -> dict[str, Tensor]:
+        params: dict[str, Tensor] = {}
+        for key, weight in self._conv_weights.items():
+            params[f"{key}_weight"] = weight
+            params[f"{key}_bias"] = self._conv_biases[key]
+        params["head_weight"] = self._head.weight
+        params["head_bias"] = self._head.bias
+        return params
+
+    def _im2col(self, x: Tensor) -> tuple[Tensor, int]:
+        """Reshape (B, C, H, W) input into flat patches for the operator."""
+        k = self.config.kernel_size
+        p = k // 2
+        patches = nn.functional.unfold(x, k, stride=1, padding=p)
+        b, _, n = patches.shape
+        return patches.transpose(1, 2).reshape(b * n, -1), n
+
+    def _stack(self, x: Tensor, op: Callable[[Tensor, Tensor], Tensor]) -> Tensor:
+        c = self.config.in_channels
+        h, w = self.config.input_hw
+        if x.dim() == 2:
+            x = x.view(-1, c, h, w)
+        side = h
+        for i, _ in enumerate(self.config.conv_channels):
+            patches, n = self._im2col(x)
+            out = op(patches, self._conv_weights[f"layer_{i}"])
+            # Out-of-place: in-place adds pin the downstream settle graph
+            out = out + self._conv_biases[f"layer_{i}"]  # ruff: ignore[non-augmented-assignment]
+            x = torch.relu(out.view(x.shape[0], n, -1).transpose(1, 2))
+            x = x.reshape(x.shape[0], -1, side, side)
+        return nn.functional.adaptive_avg_pool2d(x, self.config.pool_hw).flatten(1)
+
+    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
+        if substrate is None:
+            from computronium.ontology.substrate import DigitalSubstrate
+
+            substrate = DigitalSubstrate()
+        op = substrate.get_forward_operator()
+        features = self._stack(x, op)
+        return op(features, self._head.weight) + self._head.bias
+
+    def route(self, activations: Tensor) -> Tensor:
+        features = self._stack(activations, lambda a, w: a @ w.T)
+        return features @ self._head.weight.T + self._head.bias
+
+    def forward_with_intermediates(
+        self, x: Tensor, substrate: Substrate | None = None
+    ) -> list[Tensor]:
+        if substrate is None:
+            from computronium.ontology.substrate import DigitalSubstrate
+
+            substrate = DigitalSubstrate()
+        op = substrate.get_forward_operator()
+        c = self.config.in_channels
+        h, w = self.config.input_hw
+        acts = [x.flatten(1) if x.dim() > 2 else x]
+        if x.dim() == 2:
+            x = x.view(-1, c, h, w)
+        side = h
+        for i, _ in enumerate(self.config.conv_channels):
+            patches, n = self._im2col(x)
+            out = op(patches, self._conv_weights[f"layer_{i}"])
+            # Out-of-place: in-place adds pin the downstream settle graph
+            out = out + self._conv_biases[f"layer_{i}"]  # ruff: ignore[non-augmented-assignment]
+            x = torch.relu(out.view(x.shape[0], n, -1).transpose(1, 2))
+            x = x.reshape(x.shape[0], -1, side, side)
+            acts.append(x.flatten(1))
+        pooled = nn.functional.adaptive_avg_pool2d(x, self.config.pool_hw).flatten(1)
+        acts.append(op(pooled, self._head.weight) + self._head.bias)
+        return acts
+
+    def update_params(self, new_params: dict[str, Tensor]) -> None:
+        for name, param in new_params.items():
+            if name.endswith("_weight") and name.startswith("layer_"):
+                self._conv_weights[name[: -len("_weight")]].data.copy_(param)
+            elif name.endswith("_bias") and name.startswith("layer_"):
+                self._conv_biases[name[: -len("_bias")]].data.copy_(param)
+            elif name == "head_weight":
+                self._head.weight.data.copy_(param)
+            elif name == "head_bias":
+                self._head.bias.data.copy_(param)
+
+    def transition_modules(self) -> list[nn.Module]:
+        return [self._head]
+
+
+# ============================================================
+# Geometry Dispatch
+# ============================================================
+
+
+def geometry_from_config(config: GeometryConfig) -> Geometry:
+    """Instantiate the geometry implementation named by ``config.topology_type``."""
+    topology_type = config.topology_type.lower()
+    if topology_type in ("recurrent", "recurrent_attractor"):  # ruff: ignore[literal-membership]
+        hidden_dim = config.hidden_dims[-1] if config.hidden_dims else None
+        recurrent_weight = None
+        if config.recurrent_weight is not None:
+            recurrent_weight = torch.tensor(config.recurrent_weight)
+        return RecurrentGeometry(
+            config, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight
+        )
+    if topology_type in ("tile_mesh", "tile"):  # ruff: ignore[literal-membership]
+        return TileGeometry(config, neurons_per_tile=8, tiles_per_layer=2)
+    if topology_type == "conv":
+        return ConvGeometry(config)
+    if topology_type == "feedforward":
+        return FeedforwardGeometry(config)
+    raise ValueError(f"Unknown topology_type: {topology_type!r}")

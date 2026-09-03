@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import torch
-
 from computronium.ontology import (
     BackpropCredit,
     CreditAssignmentConfig,
@@ -13,7 +11,6 @@ from computronium.ontology import (
     ElasticConsolidationUpdate,
     EnergyMinimizationDynamics,
     EuclideanUpdate,
-    FeedforwardGeometry,
     GeometryConfig,
     HomeostaticCredit,
     InstantaneousDynamics,
@@ -22,7 +19,6 @@ from computronium.ontology import (
     ParameterUpdateConfig,
     PredictiveSettlingDynamics,
     RandomProjectionsCredit,
-    RecurrentGeometry,
     RiemannianOrthogonalUpdate,
     SpectralConstrainedUpdate,
     SpikeIntegrationDynamics,
@@ -31,7 +27,7 @@ from computronium.ontology import (
     TargetInversionCredit,
     TemporalTraceCredit,
     ThermodynamicContrast,
-    TileGeometry,
+    geometry_from_config,
     substrate_from_config,
 )
 
@@ -70,26 +66,8 @@ def extract_config(system: System) -> dict[str, object]:
 
 
 def _geometry_from_config(geometry: GeometryConfig) -> Geometry:
-    """Instantiate geometry from config."""
-    topology_type = geometry.topology_type.lower()
-    if topology_type in ("recurrent", "recurrent_attractor"):  # ruff: ignore[literal-membership]
-        hidden_dim = geometry.hidden_dims[-1] if geometry.hidden_dims else None
-        recurrent_weight = None
-        if geometry.recurrent_weight is not None:
-            recurrent_weight = torch.tensor(geometry.recurrent_weight)
-        return RecurrentGeometry(
-            geometry, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight
-        )
-    elif topology_type in ("tile_mesh", "tile"):  # ruff: ignore[literal-membership]
-        return TileGeometry(
-            geometry,
-            neurons_per_tile=8,
-            tiles_per_layer=2,
-        )
-    elif topology_type == "feedforward":
-        return FeedforwardGeometry(geometry)
-    else:
-        raise ValueError(f"Unknown topology_type: {topology_type!r}")
+    """Instantiate geometry from config (single dispatcher in ontology)."""
+    return geometry_from_config(geometry)
 
 
 def _dynamics_from_config(dynamics: StateDynamicsConfig) -> StateDynamics:

@@ -43,12 +43,14 @@ from computronium.ontology.dynamics import (
 
 # Utility functions
 from computronium.ontology.geometry import (
+    ConvGeometry,
     FeedforwardGeometry,
     Geometry,
     GeometryConfig,
     RecurrentGeometry,
     TileGeometry,
     _set_param_name,
+    geometry_from_config,
     layer_stack,
 )
 from computronium.ontology.plasticity import (
@@ -135,6 +137,8 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "FeedforwardGeometry",
     "RecurrentGeometry",
     "TileGeometry",
+    "ConvGeometry",
+    "geometry_from_config",
     # StateDynamics
     "StateDynamicsConfig",
     "StateDynamics",

@@ -1,98 +1,75 @@
-"""Unit tests for the θ-invariance audit harness (RESEARCH3 PR-2)."""
+"""PR-2 θ-invariance audit harness: exact-diff as a library feature.
 
-from __future__ import annotations
+Control arm proves the harness isn't vacuous (training moves θ and the
+audit says so); the frozen arm proves a genuinely θ-invariant episode
+reports clean — the same instrument D5 demonstrates on Z3 machinery.
+"""
 
 import pytest
 import torch
-from torch import nn
 
-from computronium.core.plasticity.theta_audit import (
-    ThetaAuditReport,
-    ThetaInvarianceAudit,
-    require_frozen,
+from computronium import (
+    BackpropCredit,
+    DigitalSubstrate,
+    EuclideanUpdate,
+    FeedforwardGeometry,
+    GeometryConfig,
+    InstantaneousDynamics,
+    NullPlasticity,
+    ParameterUpdateConfig,
+    SubstrateConfig,
+    SystemTrainerConfig,
+    compose_joint_system,
+    theta_audit,
 )
+from computronium.core.system_trainer import SystemTrainer
 
 
-class _Model(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.theta = nn.Parameter(torch.randn(4, 4))
-        self.psi = nn.Parameter(torch.randn(4), requires_grad=False)
+def _tiny_system():
+    torch.manual_seed(0)
+    return compose_joint_system(
+        substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
+        geometry=FeedforwardGeometry(
+            GeometryConfig.feedforward(input_dim=8, output_dim=4, hidden_dims=(8,))
+        ),
+        dynamics=InstantaneousDynamics(),
+        plasticity=NullPlasticity(),
+        credit=BackpropCredit(),
+        update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.1)),
+    )
 
 
-def _select_theta(name: str, _p: nn.Parameter) -> bool:
-    return name == "theta"
+def test_audit_flags_moved_theta() -> None:
+    system = _tiny_system()
+    with theta_audit(system, label="training", seed=42) as audit:
+        x = torch.randn(16, 8)
+        y = torch.randint(0, 4, (16,))
+        SystemTrainer(
+            system=system,
+            config=SystemTrainerConfig(max_epochs=1, device="cpu", seed=42),
+            train_data=[(x, y)],
+        ).fit()
+    report = audit.report
+    assert report.theta_sha256_before != report.theta_sha256_after
+    assert report.moved, "training must move θ for this control arm"
+    with pytest.raises(AssertionError, match="training"):
+        report.assert_invariant()
 
 
-class TestThetaInvarianceAudit:
-    def test_invariant_when_untouched(self):
-        model = _Model()
-        model.theta.requires_grad_(False)
-        with ThetaInvarianceAudit(model, selector=_select_theta) as audit:
-            _ = model.psi * 2
-        report = audit.report
-        assert report is not None
-        assert report.invariant
-        assert report.max_abs_change == 0.0
-        assert report.changed_keys == ()
-        assert report.frozen_on_entry
-
-    def test_detects_drift(self):
-        model = _Model()
-        model.theta.requires_grad_(False)
-        with ThetaInvarianceAudit(model, selector=_select_theta) as audit:  # ruff: ignore[multiple-with-statements]
-            with torch.no_grad():
-                model.theta.add_(1e-3)
-        report = audit.report
-        assert report is not None
-        assert not report.invariant
-        assert report.changed_keys == ("theta",)
-        assert report.max_abs_change == pytest.approx(1e-3, abs=1e-6)
-        assert not report.is_within(1e-6)
-        assert report.is_within(1e-2)
-
-    def test_entry_raises_on_trainable_selection(self):
-        model = _Model()
-        with pytest.raises(RuntimeError, match="trainable"):  # ruff: ignore[multiple-with-statements]
-            with ThetaInvarianceAudit(model, selector=_select_theta):
-                pass
-
-    def test_expect_frozen_false_allows_trainable(self):
-        model = _Model()
-        with ThetaInvarianceAudit(
-            model, selector=_select_theta, expect_frozen=False
-        ) as audit:
-            pass
-        report = audit.report
-        assert report is not None
-        assert not report.frozen_on_entry
-
-    def test_no_report_on_exception(self):
-        model = _Model()
-        model.theta.requires_grad_(False)
-        audit_holder = []
-
-        def _run() -> None:
-            with ThetaInvarianceAudit(model, selector=_select_theta) as audit:
-                audit_holder.append(audit)
-                raise ValueError("boom")
-
-        with pytest.raises(ValueError):
-            _run()
-        assert audit_holder[0].report is None
-
-    def test_report_defaults(self):
-        report = ThetaAuditReport(
-            frozen_on_entry=True, max_abs_change=0.0, changed_keys=()
-        )
-        assert report.invariant and report.is_within(0.0)
+def test_audit_passes_free_episode() -> None:
+    system = _tiny_system()
+    with theta_audit(system, label="inference", seed=42) as audit, torch.no_grad():
+        system.forward(torch.randn(16, 8))
+    report = audit.report
+    assert report.invariant
+    report.assert_invariant()
+    assert report.seed == 42
 
 
-def test_require_frozen_raises_on_trainable():
-    params: dict[str, nn.Parameter] = {
-        "ok": nn.Parameter(torch.zeros(1), requires_grad=False)
-    }
-    require_frozen(params)
-    params["bad"] = nn.Parameter(torch.zeros(1))
-    with pytest.raises(RuntimeError, match="bad"):
-        require_frozen(params)
+def test_audit_accepts_plain_mapping() -> None:
+    params = {"w": torch.randn(3, 3)}
+    with theta_audit(params, label="mapping") as audit:
+        params["w"].add_(1.0)
+    # the tensor was mutated in place, so the audit must flag it by name
+    assert audit.report.moved == ("w",)
+    assert not audit.report.invariant

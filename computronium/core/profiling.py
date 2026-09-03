@@ -678,6 +678,17 @@ def _create_joint_system_from_parts(  # ruff: ignore[complex-structure, too-many
             ),
             hidden_dim=hidden_dims[0] if hidden_dims else 64,
         )
+    elif geometry_type == "conv":
+        from computronium.ontology import ConvGeometry
+
+        geometry = ConvGeometry(
+            GeometryConfig.conv(
+                input_dim=input_dim,
+                output_dim=output_dim,
+                conv_channels=hidden_dims if hidden_dims else (8, 16),
+                init_scale=0.1,
+            )
+        )
     else:
         raise ValueError(f"Unknown geometry: {geometry_type}")
 

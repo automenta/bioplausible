@@ -14,6 +14,7 @@ import torch
 from computronium.core.system_trainer import compose_joint_system, compose_system
 from computronium.ontology import (
     BackpropCredit,
+    ConvGeometry,
     CreditAssignmentConfig,
     DigitalSubstrate,
     ElasticConsolidationUpdate,
@@ -470,6 +471,18 @@ class TestJointSystemSpecRoundTrip:
                     input_dim=16, output_dim=4, hidden_dims=(12,)
                 )
             )
+            if topology == "feedforward"
+            else ConvGeometry(
+                GeometryConfig.conv(
+                    input_dim=64,
+                    output_dim=4,
+                    conv_channels=(4,),
+                    kernel_size=3,
+                    in_channels=1,
+                    input_hw=(8, 8),
+                    pool_hw=(2, 2),
+                )
+            )
         )
         dynamics = (
             EnergyMinimizationDynamics(
@@ -497,7 +510,7 @@ class TestJointSystemSpecRoundTrip:
         for name, param in sys.geometry.params.items():
             assert torch.equal(param, recon.geometry.params[name]), name
 
-    @pytest.mark.parametrize("topology", ["feedforward", "recurrent"])
+    @pytest.mark.parametrize("topology", ["feedforward", "recurrent", "conv"])
     def test_joint_spec_round_trip(self, topology: str) -> None:
         """to_spec -> json -> from_spec restores trained geometry params bitwise."""
         sys = self._joint(topology)

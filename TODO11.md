@@ -26,8 +26,10 @@
 > fold), **R11.2.8** (FrontierRecord.seed required), **R11.1.5** (adapter
 > shape-probing, fail-loud), **R11.2.10** (params-moved locks + three
 > non-learning findings), **R11.2.11** (resolved-by-contract), **R11.2.20**
-> (timebox closed). Next: R11.1.2 geometries; R11.2 remainder is
-> pull-based only.
+> (timebox closed), **R11.1.2a** (ConvGeometry, D8 capacity-matched),
+> **R11.3.2** (θ-audit harness), **R11.4.2** (PR-6 fairness contract draft).
+> Next: R11.1.2b–d geometries (Graph/Attention/Lattice, pull-based);
+> R11.2 remainder is pull-based only.
 
 ---
 
@@ -79,6 +81,7 @@ every workstream below.
 | D5 | Frozen θ is a guarantee, bitwise | `test_demo_z3_frozen_theta.py` |
 | D6 | The substrate axis is physical (memristive IR-drop + neuromorphic spike dropout, five arms) | `test_demo_substrate_swap.py` |
 | D7 | The D-axis settles in time | `test_demo_spike_settle.py` |
+| D8 | The G-axis is a swap (capacity-matched conv vs flat) | `test_demo_geometry_swap.py` |
 
 Adding a demo row: demo test in `tests/integration/` emitting
 `emit_run_record` before asserting, a figure factory + `_FACTORIES` entry,
@@ -127,6 +130,29 @@ sequencing below is the expected order, not a mandate.
   geometry is next expressed as a coordinate. Geometry-DEFERRED skips stay
   skips until their pull. Each lands with a demo test exercising the G-axis
   swap through identical wiring (D1/D2 pattern).
+  - [x] **R11.1.2a ConvGeometry** ✅ **LANDED 2026-09-03.** `ConvGeometry`
+    (im2col patches through the substrate's forward operator — physics stay
+    in the loop; adaptive avg-pool head; odd-kernel guard), config fields
+    appended+defaulted (`conv_channels/kernel_size/in_channels/input_hw/
+    pool_hw`), `GeometryConfig.conv()`, root-exported, wired into
+    `from_spec`/`compose_system_from_configs`/profiler via the new single
+    dispatcher **`geometry_from_config`** (four duplicated topology
+    dispatch sites consolidated into one, ~60 duplicated lines deleted;
+    `_geometry_spec_parts` restores the new tuple fields from JSON).
+    D8 (`test_demo_geometry_swap.py`, 8th demo): one swapped G-axis,
+    identical wiring, **capacity-matched arms** (3,940 vs 3,818 params,
+    parity asserted — user-directed fairness fix) — both learn
+    (≈0.68/0.72), shift-4 probe ≈0.44 (conv) vs ≈0.20 (ff): structure,
+    not size. Round-trip lock extended to conv
+    (`test_joint_spec_round_trip[conv]`). Figure + manifest + gallery-lock
+    entry + RESULTS.md G-row + Demonstration Table row. **Regime facts
+    (measured, 3080):** conv is the demo suite's first FLOP-bound path —
+    0.8 s CUDA vs 12.3 s CPU per arm at demo scale (15×); CUDA output is
+    nondeterministic run-to-run (cuBLAS), and the CPU record is
+    deterministic only with the materialization shuffle seeded *before*
+    the draw (`torch.manual_seed(42)` before `_materialize`; the trainer's
+    seed comes later). D8 stays CPU-pinned for record reproducibility;
+    conv-family is the standing GPU-first pointer for registered scale.
 - [ ] **R11.1.3 Tile × dynamics matrix (R3.4) + `native_tile_ep` repro.**
   tile_ep/pc/gnn/snn device-dynamics incompatibilities — fix or document as
   permanent xfail with precise reasons; same for tile_fa/tp/hebbian.
@@ -351,10 +377,18 @@ consumer exists.
   what was interrupted and what resume replayed. Machinery is built
   (`CampaignStack`: deterministic resume, skip-not-duplicate, YAML+SQLite
   checkpoints) but the commissioned cycle is not yet a recorded run.
-- [ ] **R11.3.2 PR-2 — θ-invariance audit harness.** Snapshot → freeze →
-  run → re-snapshot → exact-diff as a reusable context manager with
-  per-seed reports (D5 demonstrates the guarantee; the harness makes it a
-  library feature for Z3 / Algorithm-Migration / continual-learning runs).
+- [x] **R11.3.2 PR-2 — θ-invariance audit harness.** ✅ **LANDED
+  2026-09-03.** `core/theta_audit.py`: `theta_audit(system_or_mapping,
+  label=…, seed=…)` context manager — snapshot θ on entry, exact-diff on
+  exit, `ThetaAuditReport.invariant` + `assert_invariant()` raising with
+  the moved-parameter list. Accepts any composed System
+  (``system.geometry.params``) or a plain name->tensor mapping; SHA-256
+  covers name+device+dtype+bytes. Root-exported. Locked in
+  `tests/unit/core/test_theta_audit.py`: control arm (training moves θ,
+  audit flags it — not vacuous), free arm (inference episode reports
+  clean), plain-mapping arm. D5 remains the Z3-machinery demonstration;
+  the harness makes the same instrument a library feature for
+  Algorithm-Migration / continual-learning runs.
 - [ ] **R11.3.2b PR-3a — Software resource instrumentation.** `ResourceUsage`
   + `core/profiling.py` wired into suite runners emitting proxy
   FLOPs/memory/latency; feeds Z3 energy metrics (proxy tier), L2
@@ -404,10 +438,18 @@ consumer exists.
   line; gradients/accuracy match the hand-written loop within noise;
   `torch.compile` + LR-scheduler smoke tests. Pull after the API stabilizes
   (R11.1/R11.2); fills any waiting period (E-8).
-- [ ] **R11.4.2 PR-6 fairness contract draft.** Per-rule tuning budgets
-  (GPU-hours, not epochs), early-stopping policy, seeds, data splits, the
-  ICL-bridge scale-matching rule — written once, consumed by four items.
-  Zero compute; draft during any blocked period.
+- [x] **R11.4.2 PR-6 fairness contract draft.** ✅ **LANDED 2026-09-03**
+  (`docs/FAIRNESS_CONTRACT.md`, v0.1). Sections F-1..F-6: GPU-hour (not
+  epoch) budgets with per-arm spend logs, one stopping rule per experiment
+  applied identically (walled-at-budget reporting instead of silent
+  extension/drop), seed floors per experiment class (toy ≥3, flagship/campaign
+  ≥5, order-stratified), splits versioned + disjointness asserted, per-arm
+  capacity/cost disclosure with the performance-gated (not parameter-matched)
+  comparator rule carried from RESEARCH3, unfiltered multi-comparison
+  reporting, pipeline parity (train mirrors export). Consumers table maps
+  the four downstream items (Z3 flagship, benchmark paper, M-axis frontier,
+  task-family generalization); consumers pin concrete values at pilot
+  promotion, the contract fixes only the rules. Zero compute, as planned.
 - [ ] **R11.4.3 R11 Live demo UI.** Compose tab as primary surface (pick any
   6-axis coordinate, hit run, watch curves), demo suite as pre-built
   presets, ψ visualizer + θ-hash badge as library features, one-click
@@ -470,6 +512,20 @@ consumer exists.
   record data. Tests still pass their asserts; manifest re-rendered. If a
   figure lock fires again after a sweep, check test asserts first, then
   re-render — only treat as a defect if the same run disagrees with itself.
+- **D8 record determinism (2026-09-03):** the run record changes when the
+  demo's *data path* changes (materialization order, device). The seed must
+  precede the loader draw, not just the trainer. If the lock fires on D8,
+  check `torch.manual_seed(42)` still precedes `_materialize` and DEVICE is
+  still `"cpu"` before suspecting drift elsewhere.
+- **Conv = GPU pointer (measured 2026-09-03):** conv-family geometries are
+  the demo suite's first FLOP-bound regime (15× CUDA speedup at demo scale);
+  CUDA records are nondeterministic run-to-run. Registered-scale conv
+  studies go GPU-first; committed demo records stay CPU.
+- **RESULTS.md front-table numbers churn** (user challenge 2026-09-03): the
+  embedded approximations go stale on every re-pin; candidate improvement is
+  numbers-free front table (swap + pointer + directional claim only, values
+  live in the checksummed manifest). Not executed this sprint — flagged for
+  the next editor / user decision.
 - **`benchmark_results/` stays untracked** (standing directive).
 - **`equitile` is a deprecated identifier** (user directive 2026-09-03):
   family registrations, CLI maps, tolerances, and metamodel branches now key
@@ -525,6 +581,20 @@ one.
   during the moves — they self-flag on touch.
 - **PlasticityConfig single source:** `computronium.state.transitions` owns
   it; `core/joint/transition.py` re-exports. Never redefine — import.
+- **Geometry dispatch single source (R11.1.2a, 2026-09-03):**
+  `computronium.ontology.geometry_from_config` is the one
+  topology_type→implementation dispatcher; `factory.py`, `spec.py`,
+  `joint.py`, and the profiler all consume it. Never re-inline a dispatch —
+  add a branch to the dispatcher. New `GeometryConfig` tuple fields must be
+  added to `_geometry_spec_parts`'s JSON tuple-restore list.
+- **Demo-test record determinism (D8, 2026-09-03):** seed *before*
+  materializing loader batches (the trainer's seed comes later); workers
+  spawn per loader *iteration*, so materialize once and share. Where a demo
+  needs fairness across arms, match parameter counts and assert the parity
+  (user directive 2026-09-03: "compare accuracy / # of parameters").
+- **Comments discipline (user directive 2026-09-03, repeated):** minimal
+  comments; names + assert messages carry the why. Module docstrings on demo
+  tests stay (they are the claim record); inline narration does not.
 - **Sprint retro 2026-09-03 (binding for future sessions):**
   (a) Tests run **once at close** — mid-session gates are ruff + pyright on
   changed files only (seconds); behavioral questions get throwaway probe
@@ -539,6 +609,14 @@ one.
   (d) When a plan item is phrased as either/or ("fold into X or drop"),
   cross-check the repo's current naming conventions before picking a
   direction; plan phrasing can lag the codebase (the equitile→tile case).
+  (e) **Diagnose nondeterminism at the data layer first** — a figure-lock
+  drift that survives re-pins is an unseeded draw (D8's loader shuffle),
+  not a manifest problem; three re-pin loops were spent before the seed
+  order was checked. When the same sha keeps changing: seed the stream,
+  run the demo twice, compare bytes — never re-pin between.
+  (f) Fairness/capacity requirements arrive mid-item and reshape the demo
+  (conv ≈1/10 params) — apply them by re-balancing the *weaker* arm, not by
+  asserting superiority of the over-provisioned one.
 - Work lean: one Register item per landing, each with a test that
   demonstrates it. Don't pull infrastructure "just in case".
 - RESEARCH3 protocol (E-1 smoke → pilot → full; E-11 DECISIONS.md) governs

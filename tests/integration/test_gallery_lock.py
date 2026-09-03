@@ -29,6 +29,7 @@ EXPECTED = {
     "substrate_swap": "D6",
     "spike_settle": "D7",
     "z3_frozen_theta": "D5",
+    "geometry_swap": "D8",
 }
 
 

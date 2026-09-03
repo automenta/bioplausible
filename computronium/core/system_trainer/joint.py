@@ -26,13 +26,11 @@ from computronium.ontology import (
     ElasticConsolidationUpdate,
     EnergyMinimizationDynamics,
     EuclideanUpdate,
-    FeedforwardGeometry,
     GeometryConfig,
     InstantaneousDynamics,
     NaturalGradientUpdate,
     ParameterUpdateConfig,
     PredictiveSettlingDynamics,
-    RecurrentGeometry,
     RiemannianOrthogonalUpdate,
     SpectralConstrainedUpdate,
     SpikeIntegrationDynamics,
@@ -40,6 +38,7 @@ from computronium.ontology import (
     SubstrateConfig,
     System,
     ThermodynamicContrast,
+    geometry_from_config,
     substrate_from_config,
 )
 
@@ -463,7 +462,7 @@ def _joint_from_spec(spec: dict) -> JointSystem:
     return joint
 
 
-def compose_joint_system_from_configs(  # ruff: ignore[complex-structure, too-many-branches, too-many-statements]
+def compose_joint_system_from_configs(  # ruff: ignore[complex-structure, too-many-branches]
     substrate: SubstrateConfig,
     geometry: GeometryConfig,
     dynamics: StateDynamicsConfig,
@@ -504,27 +503,7 @@ def compose_joint_system_from_configs(  # ruff: ignore[complex-structure, too-ma
     substrate_instance = substrate_from_config(substrate)
 
     # Instantiate geometry from config
-    topology_type = geometry.topology_type.lower()
-    if topology_type in ("recurrent", "recurrent_attractor"):  # ruff: ignore[literal-membership]
-        hidden_dim = geometry.hidden_dims[-1] if geometry.hidden_dims else None
-        recurrent_weight = None
-        if geometry.recurrent_weight is not None:
-            recurrent_weight = torch.tensor(geometry.recurrent_weight)
-        geometry_instance = RecurrentGeometry(
-            geometry, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight
-        )
-    elif topology_type in ("tile_mesh", "tile"):  # ruff: ignore[literal-membership]
-        from computronium.ontology import TileGeometry
-
-        geometry_instance = TileGeometry(
-            geometry,
-            neurons_per_tile=8,
-            tiles_per_layer=2,
-        )
-    elif topology_type == "feedforward":
-        geometry_instance = FeedforwardGeometry(geometry)
-    else:
-        raise ValueError(f"Unknown topology_type: {topology_type!r}")
+    geometry_instance = geometry_from_config(geometry)
 
     # Instantiate dynamics from config — unknown values raise; a silent
     # fallback here once ran "diffusion" coordinates as Instantaneous.

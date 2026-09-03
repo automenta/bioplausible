@@ -271,6 +271,45 @@ def _fig_spike_settle(record: dict) -> Figure:
     return fig
 
 
+def _fig_geometry_swap(record: dict) -> Figure:
+    import matplotlib.pyplot as plt
+
+    data = record["data"]
+    arms = data["arms"]
+    names = list(arms)
+    shifts = data["probe_shifts"]
+    fig, (ax_train, ax_probe) = plt.subplots(1, 2, figsize=(9, 4))
+    accs = [arms[name]["train_acc"] for name in names]
+    params = [arms[name]["param_count"] / 1000 for name in names]
+    colors = [COLOR_CONTRAST, COLOR_ARM]
+    labels = [
+        f"{name}\n({p:.1f}k params)" for name, p in zip(names, params, strict=True)
+    ]
+    ax_train.bar(labels, accs, color=colors)
+    ax_train.set_ylim(0, 1)
+    chance_line(ax_train, 1 / 10, "chance (0.1)")
+    ax_train.set_ylabel("train accuracy")
+    ax_train.set_title("D8 — one wiring, one swapped G-axis (capacity-fair)")
+    for i, acc in enumerate(accs):
+        ax_train.text(i, acc, f"{acc:.2f}", ha="center", va="bottom", fontsize=9)
+    for name, color, p in zip(names, colors, params, strict=True):
+        probe = arms[name]["probe"]
+        ax_probe.plot(
+            shifts,
+            [probe[str(s)] for s in shifts],
+            marker="o",
+            color=color,
+            label=f"{name} ({p:.1f}k params)",
+        )
+    chance_line(ax_probe, 1 / 10, "chance (0.1)")
+    ax_probe.set_xlabel("probe digit shift (px)")
+    ax_probe.set_ylabel("probe accuracy")
+    ax_probe.set_title("the smaller conv arm retains the shifted digits")
+    ax_probe.legend()
+    apply_style(fig)
+    return fig
+
+
 _FACTORIES: dict[str, Callable[[dict], Figure]] = {
     "compose_6axis": _fig_compose_train,
     "swap_credit": _fig_credit_swap,
@@ -279,6 +318,7 @@ _FACTORIES: dict[str, Callable[[dict], Figure]] = {
     "substrate_swap": _fig_substrate_swap,
     "spike_settle": _fig_spike_settle,
     "z3_frozen_theta": _fig_frozen_theta,
+    "geometry_swap": _fig_geometry_swap,
 }
 
 

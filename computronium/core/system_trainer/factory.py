@@ -30,6 +30,7 @@ from computronium.ontology import (
     SubstrateConfig,
     System,
     ThermodynamicContrast,
+    geometry_from_config,
     substrate_from_config,
 )
 
@@ -81,8 +82,9 @@ def _geometry_spec_parts(
     """Split a serialized geometry spec into its config and trained params."""
     serialized_params = geometry_dict.pop("params", None)
     # JSON serialization converts tuples to lists; restore tuple types
-    if isinstance(geometry_dict.get("hidden_dims"), list):
-        geometry_dict["hidden_dims"] = tuple(geometry_dict["hidden_dims"])
+    for field in ("hidden_dims", "conv_channels", "input_hw", "pool_hw"):
+        if isinstance(geometry_dict.get(field), list):
+            geometry_dict[field] = tuple(geometry_dict[field])
     return GeometryConfig(**geometry_dict), serialized_params
 
 
@@ -175,7 +177,7 @@ def compose_system[  # ruff: ignore[complex-structure]
             }
 
         @classmethod
-        def from_spec(cls, spec: dict) -> System:  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+        def from_spec(cls, spec: dict) -> System:  # ruff: ignore[complex-structure, too-many-branches]
             """Reconstruct a System from a specification dictionary.
 
             Args:
@@ -202,31 +204,7 @@ def compose_system[  # ruff: ignore[complex-structure]
 
             # Reconstructed geometry
             geometry_cfg, serialized_params = _geometry_spec_parts(spec["geometry"])
-            topology_type = geometry_cfg.topology_type.lower()
-            if topology_type in ("recurrent", "recurrent_attractor"):  # ruff: ignore[literal-membership]
-                hidden_dim = (
-                    geometry_cfg.hidden_dims[-1] if geometry_cfg.hidden_dims else None
-                )
-                recurrent_weight = None
-                if geometry_cfg.recurrent_weight is not None:
-                    recurrent_weight = torch.tensor(geometry_cfg.recurrent_weight)
-                geometry = RecurrentGeometry(
-                    geometry_cfg,
-                    hidden_dim=hidden_dim,
-                    recurrent_weight=recurrent_weight,
-                )
-            elif topology_type in ("tile_mesh", "tile"):  # ruff: ignore[literal-membership]
-                from computronium.ontology import TileGeometry
-
-                geometry = TileGeometry(
-                    geometry_cfg,
-                    neurons_per_tile=8,
-                    tiles_per_layer=2,
-                )
-            elif topology_type == "feedforward":
-                geometry = FeedforwardGeometry(geometry_cfg)
-            else:
-                raise ValueError(f"Unknown topology_type: {topology_type!r}")
+            geometry = geometry_from_config(geometry_cfg)
 
             _restore_geometry_params(geometry, serialized_params)
 
@@ -588,7 +566,7 @@ def extract_config(system: System) -> dict[str, object]:
     }
 
 
-def compose_system_from_configs(  # ruff: ignore[complex-structure, too-many-branches]
+def compose_system_from_configs(  # ruff: ignore[complex-structure]
     substrate: SubstrateConfig,
     geometry: GeometryConfig,
     dynamics: StateDynamicsConfig,
@@ -615,27 +593,7 @@ def compose_system_from_configs(  # ruff: ignore[complex-structure, too-many-bra
     substrate_instance = substrate_from_config(substrate)
 
     # Instantiate geometry from config
-    topology_type = geometry.topology_type.lower()
-    if topology_type in ("recurrent", "recurrent_attractor"):  # ruff: ignore[literal-membership]
-        hidden_dim = geometry.hidden_dims[-1] if geometry.hidden_dims else None
-        recurrent_weight = None
-        if geometry.recurrent_weight is not None:
-            recurrent_weight = torch.tensor(geometry.recurrent_weight)
-        geometry_instance = RecurrentGeometry(
-            geometry, hidden_dim=hidden_dim, recurrent_weight=recurrent_weight
-        )
-    elif topology_type in ("tile_mesh", "tile"):  # ruff: ignore[literal-membership]
-        from computronium.ontology import TileGeometry
-
-        geometry_instance = TileGeometry(
-            geometry,
-            neurons_per_tile=8,
-            tiles_per_layer=2,
-        )
-    elif topology_type == "feedforward":
-        geometry_instance = FeedforwardGeometry(geometry)
-    else:
-        raise ValueError(f"Unknown topology_type: {topology_type!r}")
+    geometry_instance = geometry_from_config(geometry)
 
     # Instantiate dynamics from config
     dynamics_type = dynamics.dynamics_type.lower()
