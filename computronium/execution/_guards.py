@@ -79,7 +79,7 @@ class SafetyWrapper:
             self.total_failures += 1
             return False, {
                 "error": "loss_nan_or_inf",
-                "loss_value": float(loss),
+                "loss_value": loss.detach().item(),
                 "step": self.step_count,
             }
 
@@ -140,7 +140,7 @@ class SafetyWrapper:
         self.consecutive_failures = 0
         return True, {
             "grad_norm": total_norm,
-            "loss": float(loss),
+            "loss": loss.detach().item(),
             "step": self.step_count,
         }
 

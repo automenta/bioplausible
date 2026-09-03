@@ -30,6 +30,8 @@
 > **R11.1.2b** (GraphGeometry, D9 capacity-matched), **R11.1.2c** (AttentionGeometry, D10),
 > **R11.1.2d** (SpatialLattice3DGeometry, D11), **R11.3.2** (θ-audit
 > harness), **R11.4.2** (PR-6 fairness contract draft), **R11.2.21** (zoo
+> Registry deleted), **R11.1.6** (_TaskTrainer scheduler/tracker/safety
+> wiring; verified GPU),
 > Registry deleted: `core/registry.py`, `core/audit.py`, `core/model_spec.py`,
 > `mep/_registration.py`, `models/native/registration.py`,
 > `ontology/credit_registration.py` + ~30 consumer files stripped; all
@@ -274,9 +276,13 @@ sequencing below is the expected order, not a mandate.
   →10 fallback removed). L6 totality lock constructs models with explicit
   dims (probe resolves the real chain) and already treats TypeError as a
   constructor-incompatibility skip.
-- [ ] **R11.1.6 `_TaskTrainer` gaps (R3.6).** Scheduler wiring, energy
-  tracking, honor `tracker`/`safety_config`. Pull when hyperopt trials need
-  them.
+- [x] **R11.1.6 `_TaskTrainer` gaps (R3.6)** ✅ **LANDED 2026-09-03.**
+  Scheduler wiring (cosine, step, linear, cosine_warmup via
+  `scheduler_type`/`scheduler_kwargs`), experiment tracker logging
+  (`tracker.log_metrics`), numerical safety wrapper (`SafetyConfig`/`SafetyWrapper`
+  with NaN/Inf detection, gradient clipping, LR reduction on failure), energy
+  tracking placeholder (`track_energy` flag; no-op for plain modules). Verified
+  on GPU with all scheduler types.
 - [ ] **R11.1.7 Nudge-unwired settle paths (imp-29).** predictive_settling
   target clamp; diffusion target term. Pull when a campaign manifest needs
   those coordinates fully wired.

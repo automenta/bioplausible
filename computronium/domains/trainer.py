@@ -14,6 +14,7 @@ from torch import nn
 from computronium.core.logging import get_logger
 from computronium.core.losses import compute_loss
 from computronium.domains.base import DomainType
+from computronium.execution._guards import SafetyConfig, SafetyWrapper
 
 __all__ = [
     "TaskProtocol",
@@ -22,6 +23,12 @@ __all__ = [
 ]
 
 logger = get_logger()
+
+
+class _TrackerProtocol(Protocol):
+    """Protocol for experiment trackers."""
+
+    def log_metrics(self, metrics: dict[str, float]) -> None: ...
 
 
 @runtime_checkable
@@ -86,6 +93,12 @@ class _TaskTrainer:
     Runs the canonical forward/loss/backward/step loop over task batches with
     inline validation, preserving the ``train_*``-prefixed metric shape
     expected by hyperopt callers.
+
+    Supports:
+    - Learning rate schedulers (via ``scheduler_type``/``scheduler_kwargs``)
+    - Experiment tracking (via ``tracker``)
+    - Numerical safety (via ``safety_config``)
+    - Energy tracking placeholder (via ``track_energy``; no-op for plain modules)
     """
 
     def __init__(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
@@ -101,6 +114,10 @@ class _TaskTrainer:
         track_energy: bool = False,
         ablation_tags: dict | None = None,
         output_dir: str = "",
+        tracker: _TrackerProtocol | None = None,
+        safety_config: SafetyConfig | None = None,
+        scheduler_type: str | None = None,
+        scheduler_kwargs: dict | None = None,
         **kwargs,
     ):
         self.model: nn.Module = cast("nn.Module", model)
@@ -116,14 +133,88 @@ class _TaskTrainer:
         self.ablation_tags = ablation_tags or {}
         self.output_dir = output_dir
         self._loss = _resolve_task_loss(task)
+        self.tracker: _TrackerProtocol | None = tracker
+        self.safety_config = safety_config or SafetyConfig()
+        self.safety_wrapper = SafetyWrapper(self.safety_config)
         if use_compile:
             self.model = cast("nn.Module", torch.compile(self.model))
         lr = float(kwargs.pop("lr", 1e-3))
         self.optimizer = optimizer or torch.optim.Adam(self.model.parameters(), lr=lr)
 
+        # Learning rate scheduler
+        self.scheduler: torch.optim.lr_scheduler.LRScheduler | None = None
+        if scheduler_type:
+            self._create_scheduler(scheduler_type, scheduler_kwargs or {})
+
+    def _create_scheduler(
+        self, scheduler_type: str, scheduler_kwargs: dict
+    ) -> None:
+        """Create learning rate scheduler from type and kwargs."""
+        scheduler_type_lower = scheduler_type.lower()
+        if scheduler_type_lower == "cosine":
+            t_max = scheduler_kwargs.get("t_max", self.epochs)
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                self.optimizer, T_max=t_max, **{
+                    k: v for k, v in scheduler_kwargs.items() if k != "t_max"
+                }
+            )
+        elif scheduler_type_lower == "step":
+            step_size = scheduler_kwargs.get("step_size", 10)
+            gamma = scheduler_kwargs.get("gamma", 0.1)
+            self.scheduler = torch.optim.lr_scheduler.StepLR(
+                self.optimizer, step_size=step_size, gamma=gamma
+            )
+        elif scheduler_type_lower == "linear":
+            start_factor = scheduler_kwargs.get("start_factor", 1.0)
+            end_factor = scheduler_kwargs.get("end_factor", 0.01)
+            total_iters = scheduler_kwargs.get("total_iters", self.epochs)
+            self.scheduler = torch.optim.lr_scheduler.LinearLR(
+                self.optimizer,
+                start_factor=start_factor,
+                end_factor=end_factor,
+                total_iters=total_iters,
+            )
+        elif scheduler_type_lower == "cosine_warmup":
+            from torch.optim.lr_scheduler import SequentialLR
+            warmup_iters = scheduler_kwargs.get("warmup_iters", 5)
+            warmup = torch.optim.lr_scheduler.LinearLR(
+                self.optimizer,
+                start_factor=scheduler_kwargs.get("warmup_start_factor", 0.01),
+                end_factor=1.0,
+                total_iters=warmup_iters,
+            )
+            t_max = scheduler_kwargs.get("t_max", max(1, self.epochs - warmup_iters))
+            cosine = torch.optim.lr_scheduler.CosineAnnealingLR(
+                self.optimizer, T_max=t_max
+            )
+            self.scheduler = SequentialLR(
+                self.optimizer,
+                schedulers=[warmup, cosine],
+                milestones=[warmup_iters],
+            )
+        else:
+            logger.warning("Unknown scheduler type: %s", scheduler_type)
+
+    def _step_scheduler(self) -> None:
+        """Step the learning rate scheduler if present."""
+        if self.scheduler is not None:
+            self.scheduler.step()
+
+    def _log_metrics(self, metrics: dict[str, float]) -> None:
+        """Log metrics to tracker if available."""
+        if self.tracker is not None and hasattr(self.tracker, "log_metrics"):
+            self.tracker.log_metrics(metrics)
+
+    def _safe_step(self, loss: torch.Tensor) -> tuple[bool, dict[str, object]]:
+        """Execute a safe backward/step with gradient clipping and NaN checks."""
+        return self.safety_wrapper.safe_backward_and_step(
+            loss, self.optimizer, self.model, self.grad_clip
+        )
+
     def _run_batches(self, split: str, no_grad: bool = False) -> dict[str, float]:
         total_loss = 0.0
         total_acc = 0.0
+        total_energy = 0.0
         batches = self.eval_batches if (no_grad and self.eval_batches) else 1
         ctx = torch.no_grad() if no_grad else contextlib.nullcontext()
         with ctx:
@@ -133,17 +224,26 @@ class _TaskTrainer:
                 logits = self.model(x)
                 loss = compute_loss(self._loss, logits, y)
                 if not no_grad:
-                    self.optimizer.zero_grad()
-                    loss.backward()
-                    if self.grad_clip:
-                        nn.utils.clip_grad_norm_(
-                            self.model.parameters(), self.grad_clip
+                    success, step_info = self._safe_step(loss)
+                    if not success:
+                        logger.warning(
+                            "Step failed: %s, failure %d/%d",
+                            step_info.get("error"),
+                            self.safety_wrapper.consecutive_failures,
+                            self.safety_config.max_nan_retries,
                         )
-                    self.optimizer.step()
+                        if self.safety_wrapper.should_abort():
+                            self.safety_wrapper.handle_failure(self.optimizer)
+                            raise RuntimeError(
+                                f"Training aborted after {self.safety_config.max_nan_retries} consecutive failures"
+                            )
                 total_loss += loss.item()
                 total_acc += _accuracy(logits, y)
         n = int(batches)
-        return {"loss": total_loss / n, "accuracy": total_acc / n}
+        result = {"loss": total_loss / n, "accuracy": total_acc / n}
+        if self.track_energy:
+            result["energy"] = total_energy / n
+        return result
 
     def train_epoch(self) -> dict[str, float]:
         """Run one epoch of training and return aggregated metrics."""
@@ -162,6 +262,14 @@ class _TaskTrainer:
         except (NotImplementedError, RuntimeError, KeyError, ValueError) as e:
             logger.warning("Validation skipped for %s: %s", self.task.name, e)
 
+        # Step scheduler at epoch boundary
+        self._step_scheduler()
+
         metrics["time"] = time.time() - epoch_t0
         metrics["samples_seen"] = float(self.batches_per_epoch * self.batch_size)
+        metrics["lr"] = self.optimizer.param_groups[0]["lr"]
+
+        # Log to tracker
+        self._log_metrics(metrics)
+
         return metrics
