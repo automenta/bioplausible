@@ -225,6 +225,30 @@ $$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \
 
 ---
 
+## μPC: Depth-Scaling Predictive Coding (arXiv:2505.13124)
+
+**Question:** can the depth-scaling technique from Depth-μP lift Computronium's local rules (PC, EqProp) past the ~10-layer / deep-signal-loss boundary documented in the deep-EqProp autopsies?
+
+**Why it matters:** μPC decouples weight init from forward-pass scaling — `W ~ N(0,1)` (no fan-in) with explicit per-layer multipliers `a_1 = 1/√(input)`, `a_l = 1/√(N·L)` (hidden, with residual skips), `a_L = 1/N` (output). This enables 100+ layer PC and **zero-shot LR transfer across width and depth**. It is the most direct known fix for a pathology Computronium already documents as an internal boundary (RESEARCH3 line 185: "deep vanilla settling loses the contrastive signal entirely"). Computronium's `init_scale` (`geometry.py:45`, a single global multiplier) is the natural primitive to generalize into per-layer depth-scaled init — a small, well-contained change that could reopen the deep-PC/EqProp frontier.
+
+**Falsifiable hypothesis:** with per-layer depth-scaled init (μPC-style) and residual skips, PredictiveSettlingDynamics/EqProp trains deep (≥30-layer) MLPs to classification on MNIST where the current single-`init_scale` init loses the contrastive signal (fails to learn, or learns at chance); weight and activity LRs transfer zero-shot across widths/depths.
+
+**Design:**
+1. Extend `GeometryConfig.init_scale` → layer-dependent (per-layer scale vector from depth L, width N, per fan-in), leaving the single-scalar default path byte-identical (backwards-compat NONE but D8/params-moved locks must hold — measure first).
+2. Add residual-skip support to `FeedforwardGeometry`/`_linear_stack` for the hidden layers (μPC requires identity skips for the depth scaling to work).
+3. Three-way gradient decomposition (forward / self / top-down / weight scalings) as the non-square / graph-topology generalization — needed before `GraphGeometry`/`TileMesh` graph scaling; depth via `ShortestPathDepth`/`LongestPathDepth` per-node (R11.3.13).
+4. Demo: deep-MLP learning staircase (depth sweep 10→30→100+) with current vs μPC init; zero-shot LR-transfer grid.
+
+**Gate:** deep arm learns where current arm fails; params-moved + bitwise determinism locks still green; demo suite gate green.
+
+**Deliverables:** the depth-scaling figure (accuracy vs depth, both init schemes); the LR-transfer grid; a PC-Lyapunov strengthening (feeds R11.2.16).
+
+**Risks:** the three-way decomposition's `c_td = 1/(a·√fan_out)` explodes on output layers (the FabricPC revision flagged this) — verify the reference implementation's absence of separate top-down scaling and match it; residual skips change geometry param counts (fairness re-checks).
+
+**Substrate:** `geometry.py` (`init_scale`/`_linear_stack`), `PredictiveSettlingDynamics`, `FeedforwardGeometry`; new lock `tests/property/test_mupc_depth_scaling.py`. Tracks as TODO11 R11.3.11 (pull-based).
+
+---
+
 ## Algorithm Discovery (AI for AI)
 
 **Question:** can the AutoScientist invent a (CreditAssignment × ParameterUpdate) combination that beats Adam+backprop on a declared task suite — and transfer beyond it?
