@@ -38,6 +38,7 @@ from computronium.core.continual import (
     run_continual_learning_suite,
     run_continual_train_step,
 )
+from computronium.core.system_trainer._resume import TrainerSnapshot, fold_in
 from computronium.core.system_trainer.config import (
     SystemTrainerConfig,
     _DataProvider,
@@ -75,6 +76,8 @@ from computronium.core.system_trainer.trainer import SystemTrainer
 __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "SystemTrainer",
     "SystemTrainerConfig",
+    "TrainerSnapshot",
+    "fold_in",
     "JointSystem",
     "compose_joint_system",
     "compose_joint_system_from_configs",

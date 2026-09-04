@@ -9,10 +9,21 @@ from typing import TYPE_CHECKING
 import torch
 
 from computronium.core.logging import get_logger
+from computronium.core.system_trainer._resume import (
+    DOMAIN_EPOCH,
+    TrainerSnapshot,
+    fold_in,
+)
 
 if TYPE_CHECKING:
     from types import TracebackType
 
+    from torch import Tensor
+
+    from computronium.core.system_trainer.config import (
+        SystemTrainerConfig,
+        _DataProvider,
+    )
     from computronium.ontology import System
 
 logger = get_logger()
@@ -31,9 +42,9 @@ class SystemTrainer:
     """
 
     system: System
-    config: SystemTrainerConfig  # ruff: ignore[undefined-name]
-    train_data: _DataProvider  # ruff: ignore[undefined-name]
-    val_data: _DataProvider | None = None  # ruff: ignore[undefined-name]
+    config: SystemTrainerConfig
+    train_data: _DataProvider
+    val_data: _DataProvider | None = None
 
     # Training state
     current_epoch: int = field(default=0, init=False)
@@ -46,6 +57,14 @@ class SystemTrainer:
         # Move system components to device
         if hasattr(self.system.geometry, "to"):
             self.system.geometry.to(self.device)  # type: ignore[attr-defined]
+
+    def _begin_epoch(self) -> None:
+        """Seed the stream the epoch's shuffle permutation draws from."""
+        if not self.config.resumable:
+            return
+        torch.manual_seed(
+            fold_in(self.config.seed, self.current_epoch, 0, domain=DOMAIN_EPOCH)
+        )
 
     def _setup_device(self) -> None:
         if self.config.device == "auto":
@@ -62,13 +81,18 @@ class SystemTrainer:
     def train_epoch(self) -> dict[str, float]:
         """Run one training epoch."""
         self.system.geometry.train()
+        self._begin_epoch()
 
         epoch_loss = 0.0
         epoch_acc = 0.0
         epoch_energy = 0.0
         num_batches = 0
 
-        for _, (x, y) in enumerate(self.train_data):
+        for batch_idx, (x, y) in enumerate(self.train_data):
+            if self.config.resumable:
+                torch.manual_seed(
+                    fold_in(self.config.seed, self.current_epoch, batch_idx)
+                )
             x = x.to(self.device)  # ruff: ignore[redefined-loop-name]
             y = y.to(self.device)  # ruff: ignore[redefined-loop-name]
 
@@ -150,11 +174,76 @@ class SystemTrainer:
             "val_acc": val_acc / max(num_batches, 1),
         }
 
-    def fit(self) -> list[dict[str, float]]:
-        """Run full training loop."""
-        logger.info("Starting training for %d epochs", self.config.max_epochs)
+    def snapshot(self) -> TrainerSnapshot:
+        """Capture the full resume state (theta, optimizer state, counters)."""
+        theta = {
+            name: t.detach().clone() for name, t in self.system.geometry.params.items()
+        }
+        buffers: dict[str, Tensor] = getattr(
+            self.system.update, "_momentum_buffers", {}
+        )
+        opt_state = {name: t.detach().clone() for name, t in buffers.items()}
+        return TrainerSnapshot(
+            epoch=self.current_epoch,
+            global_step=self.global_step,
+            history=tuple(self.history),
+            theta=theta,
+            opt_state=opt_state,
+        )
 
-        for _ in range(self.config.max_epochs):
+    @classmethod
+    def from_snapshot(
+        cls,
+        *,
+        system: System,
+        config: SystemTrainerConfig,
+        train_data: _DataProvider,
+        snapshot: TrainerSnapshot,
+        val_data: _DataProvider | None = None,
+    ) -> SystemTrainer:
+        """Build a trainer that resumes ``snapshot`` at ``snapshot.epoch``.
+
+        With ``config.resumable`` enabled and the same ``seed`` / data
+        stream, continuing training is bitwise identical to never having
+        stopped (R11.2.24). ``max_epochs`` counts total epochs.
+        """
+        trainer = cls(
+            system=system, config=config, train_data=train_data, val_data=val_data
+        )
+        trainer._restore(snapshot)
+        return trainer
+
+    def _restore(self, snap: TrainerSnapshot) -> None:
+        self.system.geometry.update_params({
+            name: t.to(self.device) for name, t in snap.theta.items()
+        })
+        if snap.opt_state:
+            buffers = getattr(self.system.update, "_momentum_buffers", None)
+            if buffers is None:
+                raise TypeError(
+                    f"{type(self.system.update).__name__} carries no "
+                    "optimizer state to restore into"
+                )
+            for name, t in snap.opt_state.items():
+                buffers[name] = t.to(self.device).clone()
+        self.current_epoch = snap.epoch
+        self.global_step = snap.global_step
+        self.history = list(snap.history)
+        logger.info(
+            "Resumed from snapshot: epoch %d, global_step %d",
+            snap.epoch,
+            snap.global_step,
+        )
+
+    def fit(self) -> list[dict[str, float]]:
+        """Run the training loop to ``config.max_epochs`` total epochs."""
+        logger.info(
+            "Starting training for %d epochs (from epoch %d)",
+            self.config.max_epochs,
+            self.current_epoch,
+        )
+
+        while self.current_epoch < self.config.max_epochs:
             self.train_epoch()
 
         logger.info("Training complete")

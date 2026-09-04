@@ -31,6 +31,9 @@ class SystemTrainerConfig:
         log_every_n_steps: Logging frequency
         seed: Random seed
         deterministic: Use deterministic algorithms
+        resumable: Reseed the global RNG per batch via ``fold_in`` so an
+            interrupted run resumes bitwise identical to an uninterrupted
+            one (R11.2.24); required for ``from_snapshot`` parity claims.
     """
 
     max_epochs: int = 10
@@ -44,6 +47,7 @@ class SystemTrainerConfig:
     log_every_n_steps: int = 10
     seed: int = 42
     deterministic: bool = False
+    resumable: bool = False
 
 
 class _DataProvider(Protocol):

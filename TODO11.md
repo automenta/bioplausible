@@ -19,7 +19,8 @@
 > history or hypothesis.*
 >
 > **State: CORE COMPLETE (2026-09-04).** All planned R11 capability pulls and
-> hygiene items landed at HEAD; R11.3.12 (ePC, D12) pulled 2026-09-04. The
+> hygiene items landed at HEAD; R11.3.12 (ePC, D12) pulled 2026-09-04. R11.2.24
+> (resumable trainer, fold_in RNG) pulled 2026-09-04. The
 > library demonstrates all 12 capabilities (D1–D12) at demo scale;
 > `comp repro` 8/8; property suite 670 passed; demo gate 13/13; gallery lock
 > green; `comp gallery` renders all figures. Remaining items are explicitly
@@ -119,6 +120,7 @@ every workstream below.
 | **R11.2.20** | Timebox closed | All scoped items landed; no finding class stretched past its box |
 | **R11.2.21** | Zoo Registry deleted | 6 files + ~30 consumers stripped; all surfaces resolve native 5-D factories |
 | **R11.2.22** | Fidelity-gate determinism | `check_coordinate_fidelity(seed, fork_rng)`; verdicts deterministic |
+| **R11.2.24** | Resumable trainer (`fold_in` RNG) | `TrainerSnapshot` + `from_snapshot`; interrupted == uninterrupted **bitwise** (`tests/integration/test_trainer_resume.py`); pure `fold_in` locked by hypothesis (`tests/property/test_fold_in_rng.py`) |
 
 ### R11.3 — Research Track (RESEARCH3 Spines)
 
@@ -154,7 +156,6 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 | **R11.3.11** μPC depth scaling | Deep PC/EqProp boundary study; layer-dependent init scale (`init_scale` → per-layer depth-scaled, `1/√(N·L)` hidden + `1/N` output, N(0,1) init) — μPC (arXiv:2505.13124) lifts PC past ~10 layers and gives zero-shot LR transfer; directly targets the known deep-EqProp signal-loss boundary (RESEARCH3.md:185). Pull with a scaling-paragraph or the PC Lyapunov xfail. | Research |
 | **R11.3.13** Depth-metric classes | `ShortestPathDepth`/`LongestPathDepth`/`FixedDepth` for arbitrary graph topologies (feeds μPC scaling on `GraphGeometry`/`TileMesh`/`FabricPC` where "depth" is per-node effective path length). Pull with R11.3.11 when graph-scaling is wanted. | Research |
 | **R11.2.23** Energy-framed metric contract | FabricPC's `EvalMetric(value, weight) + finalize` weighted aggregation — correct ragged-batch / per-token vs per-sample normalization, `perplexity = exp(mean CE)` (not mean of per-batch exp). Upgrade to Computronium's metric reporting. | Hygiene |
-| **R11.2.24** Resumable trainer (`fold_in` RNG) | `train` returns `(params, opt_state, step)`; resume = pass back + `start_epoch`. RNG = `fold_in(base, epoch, batch)` — a pure function, so interrupted == uninterrupted bitwise. Strengthens campaign checkpoint/resume (R11.3.1). | Hygiene |
 | **R11.3.5** Z3 flagship registered commission | Tangible Checkpoint 6 — ≥95% on 3 tasks, exact Δθ=0, ≤20% fine-tuning steps, ≥5 seeds | Research |
 | **R11.3.6–3.10** Boundary mapping, CL, task-family, provenance, companions | Pull when research paragraph needs them | Research |
 | **R11.4.1** Drop-in PyTorch wrapper | API stable; fills waiting period (E-8) | Adoption |
@@ -194,7 +195,14 @@ These land **only when a demo, campaign, or research paragraph needs them**.
   registered claims live in the research track. Neither borrows the other's
   clothes.
 - **R11.5.5 Refutations ship with the same pipeline** — same figure factory,
-  same docs, same terms (R11.1.9's Hebbian plateau is the standing candidate).
+  same docs, same terms. Standing candidate: the **spiking family's learning
+  claim**. Status at HEAD (2026-09-04): R11.1.9 wired timing-asymmetric STDP
+  (rasters, eligibility traces, threshold) into the 5-D pipeline, but no demo
+  measures whether it *learns* — the pre-wiring Hebbian-plateau result
+  (TODO10: spiking at chance on MNIST) is history, not a live refutation.
+  First spiking pull must show one or the other: plateau (refutation figure,
+  same pipeline) or learning (capability claim). Until then the library's
+  "honest failure" slot is vacant.
 - **R11.5.6 Pull rule.** A backlog item is pulled only if it ends in a live
   demonstration, a gallery figure, or a RESULTS.md capability paragraph.
   Infrastructure is justified by the capability it lets the suite show,
@@ -323,6 +331,26 @@ Sequencing: 1–4 complete; 5 after API stabilizes (done); 6–7 are RESEARCH3 C
   (candidates if revisited: PC-native weight gradient (∂ŝ/∂θ)ᵀε or a
   contrast-β decoupled from the loss weight).
 - **Remaining pull-based items:** R11.1.10, R11.1.11, R11.2.9/13/14/16, R11.3.4–3.11, R11.3.13, R11.4.1/4.3/4.4. Land only when demo/campaign/research needs them.
+- **Resumable trainer (R11.2.24, landed 2026-09-04):** `fold_in(base, epoch, batch, *, domain)`
+  (SplitMix64, `computronium/core/system_trainer/_resume.py`) + `TrainerSnapshot`
+  (epoch, global_step, history, theta, opt_state). `SystemTrainer(resumable=True)`
+  reseeds the global torch RNG per epoch (domain `DOMAIN_EPOCH`, fixes the
+  DataLoader shuffle draw) and per batch, so *every* downstream draw — shuffle,
+  substrate noise, projection masks — is a pure function of coordinates.
+  Resume: `snap = trainer.snapshot()` → `SystemTrainer.from_snapshot(system=…,
+  config=…, train_data=…, snapshot=snap)`; `max_epochs` counts **total** epochs.
+  Opt-in flag: `resumable=False` (default) leaves legacy trajectories byte-for-byte
+  unchanged — do not flip the default without re-pinning all demo records.
+  Restores into `EuclideanUpdate._momentum_buffers`; updates without optimizer
+  state restore an empty opt_state (fail-loud `TypeError` if snapshot has state
+  but the update object has nowhere to put it).
+- **Follow-ups unlocked by R11.2.24 (as-touch / pull-based):**
+  campaign episodes (R11.3.1) can set `resumable=True` to make kill→resume
+  bitwise rather than statistically equal; `CheckpointManager`'s global
+  RNG-state capture (`checkpoint.py`) becomes redundant per-episode once
+  trainers run resumable — retire it only when no consumer needs stream-position
+  resume; `fold_in` is the canonical seed derivation for any future per-batch
+  keyed randomness (probes, campaign shard seeds).
 - **Lint/type debt deprioritized:** ruff clean passively; pyright on new modules only. Legacy findings carry per-line noqa markers that self-flag on touch.
 
 ### Sprint Retro (2026-09-03, binding for future sessions)
@@ -355,12 +383,57 @@ Sequencing: 1–4 complete; 5 after API stabilizes (done); 6–7 are RESEARCH3 C
 
 ---
 
+## 🚪 The R12 Fork (2026-09-04 — decision point, not work)
+
+R11 is **core complete**. D1–D12 demonstrate every axis; `comp repro` 8/8;
+property suite, demo gate, gallery lock green at HEAD. What remains is not
+cleanup — it is choosing which future the completed library serves. The
+remaining checkpoints are three different futures:
+
+| Future | Checkpoint | What it produces |
+|--------|-----------|------------------|
+| Make it visible | CP-5 Adoption | Wrapper / UI — someone who isn't you can use it |
+| Make it say something | CP-6 First finding | P-axis Pareto frontier over 𝒞 — first figure that is a *finding*, not a demonstration |
+| Big swing | CP-7 Discovery bet | Z3 flagship, pre-registered with fallback |
+
+**Standing recommendation: CP-6 before CP-5.** The instrument was made
+honest at real cost; the payoff of honesty is a finding, and adoption
+follows what the instrument shows, not its surface. The backlog already
+points there — μPC depth scaling (R11.3.11), depth-metric classes
+(R11.3.13), ePC's deep-stack credit limitation (Notes: contrastive ÷β)
+are all deep-EqProp-boundary territory, and the PR-5 stability guard is
+calibrated and idle. Demo-scale machinery + registered-scale GPU (conv
+speedup measured) is exactly the sweep CP-6 needs. CP-7 rides CP-6's
+findings; CP-5 stays pull-based until a finding gives people a reason to
+adopt.
+
+---
+
+## ⚡ Performance Proposals — Evaluated (2026-09-04 external review)
+
+Assessed against measured regime facts (demo suite is CPU and
+kernel-launch-bound, not FLOP-bound; conv-family is the first GPU-bound
+path at 15×; `KernelRegistry` already hosts Triton-family kernels in
+`acceleration/`). All are **pull-based per R11.5.6** — perf work lands
+when a registered-scale study or campaign needs it, never speculatively.
+
+| Proposal | Verdict | Note |
+|----------|---------|------|
+| `torch.compile` on settle/credit paths | **Viable, pull with a registered-scale GPU study** |compile helps FLOP-bound paths; the demo suite's Python settle loop is launch-bound and CPU-pinned — compile would not move the gate. Caution: settle loops have data-dependent convergence breaks and `no_grad`/`enable_grad` context switches; wrap whole-settle, not per-step. |
+| `torch.vmap` over settle steps | **Rejected (category error)** | Settling is sequentially dependent; `vmap` maps over batch axes, not time. Batch parallelism already exists via the loader. |
+| Triton kernels for substrate ops | **Viable, as-touch** | `acceleration/` kernel infrastructure exists (snn/contrastive kernels); extend when a commissioned study's profile shows the operator is the bottleneck. Not TODO.md R4.3 (that is `UV_LINK_MODE`). |
+| `system.compile()` static-graph export | **Pull with CP-6/CP-7** | Only worth building when campaign fleets hit abstraction overhead at registered scale; measure first (profiling infra exists). |
+
+---
+
 ## Termination Criterion
 
 R11 closes when a stranger can, in one sitting: compose a system from *any*
 geometry, substrate, and dynamics the ontology declares (not just the
 Feedforward/Recurrent/Digital/Memristive/EnergyMinimization set R10
-demonstrated), watch it train in the demo suite **and** in the UI, and find
+demonstrated), watch it train in the demo suite (the live UI is a separate
+adoption round, R11.4.3 — presentation, not a library-completeness gate),
+and find
 the repo's own gates — ruff, pyright, property locks, demo gate, figure
 lock — green at HEAD without caveats. The library is then *complete relative
 to its own ontology*: every axis declares only primitives that exist and
