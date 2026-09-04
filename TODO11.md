@@ -20,7 +20,10 @@
 >
 > **State: CORE COMPLETE (2026-09-04).** All planned R11 capability pulls and
 > hygiene items landed at HEAD; R11.3.12 (ePC, D12) pulled 2026-09-04. R11.2.24
-> (resumable trainer, fold_in RNG) pulled 2026-09-04. The
+> (resumable trainer, fold_in RNG) pulled 2026-09-04. User-directed general-
+> improvements session (2026-09-04): R11.2.23 (sample-weighted metrics +
+> `val_ppl`) and R11.4.1 v1 (`SystemModule` facade) landed; `GradientCredit`
+> fail-loud resolved (Watch). The
 > library demonstrates all 12 capabilities (D1–D12) at demo scale;
 > `comp repro` 8/8; property suite 670 passed; demo gate 13/13; gallery lock
 > green; `comp gallery` renders all figures. Remaining items are explicitly
@@ -122,6 +125,7 @@ every workstream below.
 | **R11.2.22** | Fidelity-gate determinism | `check_coordinate_fidelity(seed, fork_rng)`; verdicts deterministic |
 | **R11.2.24** | Resumable trainer (`fold_in` RNG) | `TrainerSnapshot` + `from_snapshot`; interrupted == uninterrupted **bitwise** (`tests/integration/test_trainer_resume.py`); pure `fold_in` locked by hypothesis (`tests/property/test_fold_in_rng.py`) |
 | **R11.2.25** | `torch.compile` settle fast paths | `compiled=True` now covers **both** energy families: sPC layered settle (2.0× train_step, bitwise parity) and `EnergyMinimizationDynamics`/`SubstrateSettleKernel` loop (1.75× settle, parity 9.5e-7, autograd-graph parity for thermo credit locked). Eager path byte-identical when off. Locks in `test_compiled_settle.py`; probes `torch_compile_settle.py` / `torch_compile_eqprop_kernel.py` |
+| **R11.2.23** | Metric aggregation contract (pulled 2026-09-04, user-directed "general improvements" session) | Trainer epoch metrics are **sample-weighted** sums (ragged final batch no longer over-weights); `validate()` reports `val_ppl = exp(mean CE)` from the same per-sample normalization. Lock: `tests/unit/core/test_trainer_metric_aggregation.py` (weighted-mean identity via delegating spy, ragged batches, ppl identity) |
 
 ### R11.3 — Research Track (RESEARCH3 Spines)
 
@@ -137,6 +141,7 @@ every workstream below.
 | Item | Description | Key Evidence |
 |------|-------------|--------------|
 | **R11.4.2** | PR-6 Fairness contract draft | `docs/FAIRNESS_CONTRACT.md` v0.1 (F-1..F-6, consumers table) |
+| **R11.4.1 (v1)** | `SystemModule` drop-in nn.Module facade (pulled 2026-09-04, user-directed "general improvements" session) | `computronium/nn/system_module.py`, root export. Plain-PyTorch inference (`forward` under `no_grad`/`eval`), `fit_step` for internal credit assignment (no optimizer), `parameters()`/`train()` delegate to geometry. Lock: `tests/unit/nn/test_system_module.py`. Scope-honest: this is the wrapper *surface*, not pip packaging |
 
 ---
 
@@ -156,10 +161,10 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 | **R11.3.4** AutoScientist M-axis frontier | Tangible Checkpoint 5 — first *finding* figure (Pareto over 𝒞) | Research |
 | **R11.3.11** μPC depth scaling | Deep PC/EqProp boundary study; layer-dependent init scale (`init_scale` → per-layer depth-scaled, `1/√(N·L)` hidden + `1/N` output, N(0,1) init) — μPC (arXiv:2505.13124) lifts PC past ~10 layers and gives zero-shot LR transfer; directly targets the known deep-EqProp signal-loss boundary (RESEARCH3.md:185). Pull with a scaling-paragraph or the PC Lyapunov xfail. **E-1 probe done 2026-09-04** (`scripts/probes/mupc_depth_init.py` — read its docstring for numbers): boundary at depth ≥ 8 is NOT PC-specific (BP dies too; credit path verified healthy); μPC init ≈ 2× PC learning at depth 8 under a real budget (0.225 vs 0.123). **Blocked on an affordable sweep**: sPC layered settle is kernel-launch-bound (CUDA 201 vs CPU 142 ms/step) — pull the settle-kernel/compile enablement (see Watch) before the frontier. | Research |
 | **R11.3.13** Depth-metric classes | `ShortestPathDepth`/`LongestPathDepth`/`FixedDepth` for arbitrary graph topologies (feeds μPC scaling on `GraphGeometry`/`TileMesh`/`FabricPC` where "depth" is per-node effective path length). Pull with R11.3.11 when graph-scaling is wanted. | Research |
-| **R11.2.23** Energy-framed metric contract | FabricPC's `EvalMetric(value, weight) + finalize` weighted aggregation — correct ragged-batch / per-token vs per-sample normalization, `perplexity = exp(mean CE)` (not mean of per-batch exp). Upgrade to Computronium's metric reporting. | Hygiene |
+| **R11.2.23** Energy-framed metric contract | **Pulled 2026-09-04** (see R11.2.23 in Completed) — live trainer sample-weighted metrics + `val_ppl`. FabricPC's legacy `EvalMetric` design informed the contract; FabricPC itself is archived | ~~Hygiene~~ ✅ |
 | **R11.3.5** Z3 flagship registered commission | Tangible Checkpoint 6 — ≥95% on 3 tasks, exact Δθ=0, ≤20% fine-tuning steps, ≥5 seeds | Research |
 | **R11.3.6–3.10** Boundary mapping, CL, task-family, provenance, companions | Pull when research paragraph needs them | Research |
-| **R11.4.1** Drop-in PyTorch wrapper | API stable; fills waiting period (E-8) | Adoption |
+| **R11.4.1** Drop-in PyTorch wrapper | **v1 pulled 2026-09-04** (see R11.4.1 in Completed) — remaining: pip packaging + acceptance test per RESEARCH3 PR sequence | Adoption |
 | **R11.4.3** Live demo UI | API stable — ships only when library is stable; rebuilds `demo/tests/` | Adoption |
 | **R11.4.4** Hygiene sweep | Only when blocks a figure, test, or fresh checkout | Adoption |
 
@@ -257,10 +262,13 @@ uv run python -m pytest tests/unit/core/test_root_exports.py -q
   headroom: extend to SpikeIntegration (D7) with the same recipe when the
   spiking demo is pulled; batch-per-step 4–8× stacks for free. The R11.3.11
   depth frontier is affordable — run it with `compiled=True`.
-- **`GradientCredit` silently zero-fills unused grads** (`allow_unused=True`,
-  `credit.py`) — probe verified the PC/BP graph reaches every layer today,
-  but any future dynamics that detaches activations would degrade silently
-  to last-layer-only learning. Candidate fail-loud upgrade (as-touch).
+- **`GradientCredit` fail-loud — RESOLVED (2026-09-04):** `allow_unused=True`
+  zero-fill replaced with a `RuntimeError` naming the detached weights
+  (`credit.py`, `GradientCredit.compute_pseudo_gradient`; `BackpropCredit`
+  is the same class). A future dynamics that detaches activations now fails
+  loudly instead of silently degrading to last-layer-only learning.
+  `LocalGoodnessCredit` keeps its zero-fill (surplus recurrent self-connection
+  weights legitimately receive `None`).
 - **`uv run pytest` resolves the USER-site pytest (2026-09-04):** the launcher
   at `~/.local/bin/pytest` (shebang `/usr/bin/python`) shadows the venv's,
   importing protobuf 6.33.6 from user site against gencode 7.35.1 stubs →
@@ -345,6 +353,25 @@ Sequencing: 1–4 complete; 5 after API stabilizes (done); 6–7 are RESEARCH3 C
   the ÷β contrastive credit caps ePC's learning signal on deeper stacks
   (candidates if revisited: PC-native weight gradient (∂ŝ/∂θ)ᵀε or a
   contrast-β decoupled from the loss weight).
+- **Metric aggregation contract (R11.2.23, pulled 2026-09-04):**
+  `SystemTrainer.train_epoch`/`validate` now accumulate **sample-weighted**
+  sums (`trainer.py`) — a ragged final batch no longer counts as a full
+  batch-weight — and `validate()` adds `val_ppl = exp(mean CE)`. Epoch
+  numbers shift microscopically vs old records (only the ragged batch
+  differs); demo gate + gallery lock re-verified green at the landing. The
+  lock (`tests/unit/core/test_trainer_metric_aggregation.py`) checks the
+  weighted-mean identity through a delegating spy (`_SpySystem`) because
+  `_ComposedSystem` attributes are read-only — reuse that pattern for
+  trainer instrumentation instead of mocks.
+- **GradientCredit fail-loud (2026-09-04):** detached-weight zero-fill is
+  gone; `BackpropCredit is GradientCredit` (alias). Anything that relied on
+  silent zeros now raises. `LocalGoodnessCredit` intentionally keeps
+  `allow_unused` (surplus recurrent self-connections).
+- **SystemModule (R11.4.1 v1, 2026-09-04):** `computronium/nn/system_module.py`,
+  exported root + `computronium.nn`. Training stays credit-internal —
+  `fit_step`, never `loss.backward()`. Remaining for CP-5: pip packaging,
+  acceptance test (RESEARCH3 PR sequence), `to(device)` passthrough if a
+  consumer needs it.
 - **Remaining pull-based items:** R11.1.10, R11.1.11, R11.2.9/13/14/16, R11.3.4–3.11, R11.3.13, R11.4.1/4.3/4.4. Land only when demo/campaign/research needs them.
 - **Resumable trainer (R11.2.24, landed 2026-09-04):** `fold_in(base, epoch, batch, *, domain)`
   (SplitMix64, `computronium/core/system_trainer/_resume.py`) + `TrainerSnapshot`

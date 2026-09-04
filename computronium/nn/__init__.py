@@ -21,6 +21,7 @@ from computronium.nn.rules import (
     CreditRule,
     CreditRuleConfig,
 )
+from computronium.nn.system_module import SystemModule
 
 __all__ = [
     "ComputroniumLinear",
@@ -31,6 +32,7 @@ __all__ = [
     "NullPlasticity",
     "PlasticityConfig",
     "PlasticityType",
+    "SystemModule",
     "create_plasticity",
     "replace_linear_with_computronium",
 ]

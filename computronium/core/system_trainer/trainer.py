@@ -86,7 +86,8 @@ class SystemTrainer:
         epoch_loss = 0.0
         epoch_acc = 0.0
         epoch_energy = 0.0
-        num_batches = 0
+        num_samples = 0
+        num_samples = 0
 
         for batch_idx, (x, y) in enumerate(self.train_data):
             if self.config.resumable:
@@ -97,13 +98,15 @@ class SystemTrainer:
             y = y.to(self.device)  # ruff: ignore[redefined-loop-name]
 
             metrics = self.system.train_step(x, y)
+            batch = x.size(0)
 
-            epoch_loss += metrics.get("loss", 0.0)
-            epoch_acc += metrics.get(
-                "free_accuracy", metrics.get("nudged_fit_accuracy", 0.0)
+            epoch_loss += metrics.get("loss", 0.0) * batch
+            epoch_acc += (
+                metrics.get("free_accuracy", metrics.get("nudged_fit_accuracy", 0.0))
+                * batch
             )
-            epoch_energy += metrics.get("energy", 0.0)
-            num_batches += 1
+            epoch_energy += metrics.get("energy", 0.0) * batch
+            num_samples += batch
             self.global_step += 1
 
             if self.global_step % self.config.log_every_n_steps == 0:
@@ -117,9 +120,10 @@ class SystemTrainer:
                     metrics.get("energy", 0.0),
                 )
 
-        avg_loss = epoch_loss / max(num_batches, 1)
-        avg_acc = epoch_acc / max(num_batches, 1)
-        avg_energy = epoch_energy / max(num_batches, 1)
+        denom = max(num_samples, 1)
+        avg_loss = epoch_loss / denom
+        avg_acc = epoch_acc / denom
+        avg_energy = epoch_energy / denom
 
         epoch_metrics = {
             "epoch": self.current_epoch,
@@ -152,9 +156,9 @@ class SystemTrainer:
             return {}
 
         self.system.geometry.eval()
-        val_loss = 0.0
-        val_acc = 0.0
-        num_batches = 0
+        val_ce_sum = 0.0
+        val_correct = 0
+        num_samples = 0
 
         with torch.no_grad():
             for x, y in self.val_data:
@@ -162,16 +166,17 @@ class SystemTrainer:
                 y = y.to(self.device)  # ruff: ignore[redefined-loop-name]
 
                 logits = self.system.forward(x)
-                loss = torch.nn.functional.cross_entropy(logits, y)
-                acc = (logits.argmax(-1) == y).float().mean().item()
+                ce = torch.nn.functional.cross_entropy(logits, y, reduction="sum")
+                val_ce_sum += ce.item()
+                val_correct += (logits.argmax(-1) == y).sum().item()
+                num_samples += y.size(0)
 
-                val_loss += loss.item()
-                val_acc += acc
-                num_batches += 1
-
+        denom = max(num_samples, 1)
+        val_loss = val_ce_sum / denom
         return {
-            "val_loss": val_loss / max(num_batches, 1),
-            "val_acc": val_acc / max(num_batches, 1),
+            "val_loss": val_loss,
+            "val_acc": val_correct / denom,
+            "val_ppl": torch.exp(torch.tensor(val_loss)).item(),
         }
 
     def snapshot(self) -> TrainerSnapshot:

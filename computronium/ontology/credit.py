@@ -1018,11 +1018,15 @@ class GradientCredit:
         grads = torch.autograd.grad(
             loss, params, retain_graph=False, create_graph=False, allow_unused=True
         )
-        # Return None grads as zeros of correct shape
-        return [
-            g if g is not None else torch.zeros_like(p)
-            for p, g in zip(params, grads, strict=True)
-        ]
+        detached = [n for n, g in zip(weight_names, grads, strict=True) if g is None]
+        if detached:
+            raise RuntimeError(
+                f"GradientCredit: no gradient reached {detached}. The loss "
+                "graph does not touch every learnable weight — a dynamics "
+                "that detaches activations would silently degrade learning "
+                "to the reached layers only. Zero-filling hides that failure."
+            )
+        return list(grads)
 
     def surrogate_objective(
         self,

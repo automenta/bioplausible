@@ -159,6 +159,7 @@ if TYPE_CHECKING:
     )
     from computronium.nn import (
         ComputroniumLinear,
+        SystemModule,
         CreditRule,
         CreditRuleConfig,
         PlasticityType,
@@ -353,6 +354,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     "create_task": ("computronium.domains.factory", "create_task"),
     # System Trainers
     "SystemTrainer": ("computronium.core.system_trainer", "SystemTrainer"),
+    "SystemModule": ("computronium.nn", "SystemModule"),
     "SystemTrainerConfig": ("computronium.core.system_trainer", "SystemTrainerConfig"),
     "compose_joint_system": (
         "computronium.core.system_trainer",
@@ -525,6 +527,7 @@ __all__ = [
     "SystemContext",
     "SystemState",
     "SystemTrainer",
+    "SystemModule",
     "SystemTrainerConfig",
     "TargetInversionCredit",
     "TemporalTraceCredit",
