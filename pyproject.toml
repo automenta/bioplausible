@@ -230,6 +230,9 @@ ignore = [
 "computronium/ontology/dynamics/_dynamics.py" = [
     "non-augmented-assignment", # out-of-place adds are the settle graph-safety idiom (R5.3)
 ]
+"computronium/ontology/_settle_kernel.py" = [
+    "non-augmented-assignment", # out-of-place adds are the settle graph-safety idiom (R5.3)
+]
 "tests/**/*.py" = [
     "assert",   # assert in tests
     "no-self-use", # no-self-use in test methods

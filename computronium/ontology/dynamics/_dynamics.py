@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 from computronium.ontology._settle_kernel import (
     LayeredParams,
     SubstrateSettleKernel,
+    _compiled_eqprop_settle,
     _one_hot,
     extract_layered_params,
 )
@@ -220,6 +221,7 @@ class StateDynamicsConfig:
         momentum: float = 0.0,
         track_free_energy_per_iter: bool = False,
         gradient_checkpointing: bool = False,
+        compiled: bool = False,
     ) -> StateDynamicsConfig:
         return cls(
             dynamics_type="energy_minimization",
@@ -231,6 +233,7 @@ class StateDynamicsConfig:
             momentum=momentum,
             track_free_energy_per_iter=track_free_energy_per_iter,
             gradient_checkpointing=gradient_checkpointing,
+            compiled=compiled,
         )
 
     @classmethod
@@ -726,8 +729,32 @@ class EnergyMinimizationDynamics:
         ) -> tuple[list[Tensor], list[Tensor] | None]:
             return kernel.step(acts, beta_, target_, velocity_)
 
-        # Use gradient checkpointing if enabled
-        if use_checkpointing:
+        # Compiled fast path (R11.2.25): whole settle as one graph. Guards
+        # keep it on the kernel's common case; runs a fixed step budget
+        # (skips the eager convergence early-exit).
+        use_compiled = (
+            self.config.compiled
+            and self.config.momentum == 0
+            and params.recurrent_weight is None
+            and not self.config.track_free_energy_per_iter
+            and not use_checkpointing
+            and type(substrate).__name__ == "DigitalSubstrate"
+            and len(all_acts) == len(params.weights) + 1
+        )
+        if use_compiled:
+            all_acts = list(
+                _compiled_eqprop_settle(
+                    cast("list[Tensor]", all_acts),
+                    params.weights,
+                    params.biases,
+                    params.activations,
+                    self.config.step_size,
+                    beta,
+                    target,
+                    self.config.max_steps,
+                )
+            )
+        elif use_checkpointing:
             from torch.utils import checkpoint
 
             for _step in range(self.config.max_steps):  # ruff: ignore[used-dummy-variable]

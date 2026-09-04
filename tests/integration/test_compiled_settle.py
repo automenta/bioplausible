@@ -29,6 +29,7 @@ from computronium import (
     compose_system,
 )
 from computronium.ontology import (
+    EnergyMinimizationDynamics,
     FeedforwardGeometry,
     PredictiveSettlingDynamics,
 )
@@ -102,3 +103,69 @@ def test_compiled_flag_in_config_round_trip() -> None:
     config = _config(compiled=True)
     assert config.compiled is True
     assert config.dynamics_type == "predictive_settling"
+
+
+def _eqprop_system(compiled: bool):
+    torch.manual_seed(0)  # seed BEFORE geometry construction
+    return compose_system(
+        substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
+        geometry=FeedforwardGeometry(
+            GeometryConfig.feedforward(
+                input_dim=784, output_dim=10, hidden_dims=(32, 32)
+            )
+        ),
+        dynamics=EnergyMinimizationDynamics(
+            StateDynamicsConfig.energy_minimization(
+                max_steps=5, step_size=0.5, beta=0.5, compiled=compiled
+            )
+        ),
+        credit=ThermodynamicContrast(
+            CreditAssignmentConfig.thermodynamic_contrast(beta=0.5)
+        ),
+        update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.05)),
+    )
+
+
+def test_compiled_eqprop_settle_matches_eager() -> None:
+    x = torch.randn(16, 784)
+    acts = []
+    for compiled in (False, True):
+        system = _eqprop_system(compiled)
+        settled = system.dynamics.settle(
+            cast("CompositeState", SystemState(x=x)),
+            system.geometry,
+            system.substrate,
+        )
+        assert settled.activations is not None
+        acts.append(settled.activations)
+    max_dev = max(
+        (a - b).abs().max().item() for a, b in zip(acts[0], acts[1], strict=True)
+    )
+    assert max_dev < 1e-5, f"compiled EqProp settle diverged: {max_dev}"
+
+
+def test_compiled_eqprop_settle_builds_autograd_graph() -> None:
+    """Thermo credit differentiates through the settle — compiled path must too."""
+    x = torch.randn(16, 784)
+    y = torch.randint(0, 10, (16,))
+    grad_norms = []
+    for compiled in (False, True):
+        system = _eqprop_system(compiled)
+        with torch.enable_grad():
+            settled = system.dynamics.settle(
+                cast("CompositeState", SystemState(x=x)),
+                system.geometry,
+                system.substrate,
+            )
+            assert settled.activations is not None
+            loss = torch.nn.functional.cross_entropy(settled.activations[-1], y)
+            grads = torch.autograd.grad(
+                loss,
+                [p for p in system.geometry.params.values() if p.requires_grad],
+                allow_unused=True,
+            )
+        norms = [g.norm().item() if g is not None else 0.0 for g in grads]
+        assert any(n > 0 for n in norms), "compiled settle broke the autograd graph"
+        grad_norms.append(norms)
+    for eager_n, compiled_n in zip(*grad_norms, strict=True):
+        assert abs(eager_n - compiled_n) <= 1e-3 * (1.0 + eager_n)
