@@ -457,6 +457,61 @@ metrics), probe-first per RESEARCH3 E-1.
 
 ---
 
+## 🔬 CP-6 Execution Doctrine (2026-09-04 — external strategy review, applied)
+
+R11 core-complete means the posture shifts: not building a library —
+operating a completed, verified, honest instrument. Three priorities,
+everything else ruthlessly ignored while CP-6 runs.
+
+### 1. Prime objective — interrogate the deep-EqProp boundary (R11.3.11 + R11.3.13)
+
+The library treats locality, energy, and physical constraints as
+first-class; plain BP and plain PC both decay through deep local-learning
+regimes (~10 layers). The question CP-6 answers: do **μPC** (depth-scaled
+init) and **ePC** (error reparameterization) actually solve this on
+non-trivial topologies, or merely shift the failure mode?
+
+- E-1 smoke probe **done** (`scripts/probes/mupc_depth_init.py` — read its
+  docstring before re-deriving: boundary at depth ≥ 8 is not PC-specific;
+  μPC ≈ 2× PC learning at depth 8 under a real budget).
+- Implement `ShortestPathDepth`/`LongestPathDepth` (R11.3.13) so "depth" is
+  measurable per-node on `GraphGeometry`/`TileMesh`, where layer-counting
+  fails; then sweep μPC × ePC × substrate-noise across depth.
+- Deliverable: *the exact depth and substrate-noise constraint at which
+  local credit physically breaks down vs global backprop.*
+
+### 2. Leave the CPU sandbox — registered-scale GPU campaigns
+
+The demo suite (D1–D12) is CPU/kernel-launch-bound by measured verdict; it
+proves the *ontology*, not a *finding*. Registered-scale work runs GPU with
+the `torch.compile` settle fast paths (R11.2.25) already landed; conv-family
+is the measured 15× FLOP-bound path.
+
+- Commission AutoScientist on a registered-scale sweep of the
+  **stability–plasticity frontier**: map the 𝒞-vector Pareto frontier
+  (compute, memory, energy, latency, plastic-state capacity) across
+  plasticity primitives (Routing vs FastWeight vs Null).
+- Deliverable: one figure showing the trade-off between settling time
+  (dynamical latency) and basin stability per plasticity primitive — the
+  first *finding* (checkpoint 6), not a demonstration.
+- PR-5 stability guard is calibrated and idle — wire
+  `probe_interval_for_overhead` into the campaign loop when it starts.
+
+### 3. Hunt for refutations (standing rule R11.5.5)
+
+The goal is the *physics of learning*, not benchmark wins over PyTorch —
+accuracy horse-races are solved and boring. A negative result from the deep
+μPC sweep **is the finding**: publish it in the failure manifesto with the
+same pipeline, same figures, same terms (*"local energy-based learning
+collapses at depth L > 12 due to X; μPC scaling fails to rescue it because
+of Y"*). A rigorously documented failure boundary for local, asynchronous,
+energy-minimizing systems is a real contribution to neuromorphic and
+biologically-plausible ML. The instrument stays honest even when the
+hypothesis dies — and the spiking-family learning slot (R11.5.5) remains
+open for exactly this kind of live refutation.
+
+---
+
 ## ⚡ Performance Proposals — Evaluated (2026-09-04 external review)
 
 Assessed against measured regime facts (demo suite is CPU and
