@@ -554,7 +554,7 @@ class TestJointSystemSpecRoundTrip:
         assert torch.equal(sys.forward(x), recon.forward(x))
 
     def test_joint_routing_round_trip(self) -> None:
-        """A non-null M-axis round-trips its config through the joint spec."""
+        """A non-null P-axis round-trips its config through the joint spec."""
         from computronium.ontology.plasticity import RoutingPlasticity
 
         sys = self._joint("feedforward", plasticity=RoutingPlasticity(gate_dim=8))

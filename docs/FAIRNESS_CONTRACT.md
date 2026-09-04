@@ -73,7 +73,7 @@ and reporting. It is not a claim about outcomes.
 |------|----------------------------------|
 | Z3 flagship (R11.3.5) | F-1 budgets, F-3 seed floor, ICL-bridge gating |
 | Benchmark paper (20-rules) | F-1/F-2 across all rules, F-4 disclosure table |
-| M-axis frontier (R11.3.4) | F-4 𝒞-vector reporting, F-5 pipeline parity |
+| P-axis frontier (R11.3.4) | F-4 𝒞-vector reporting, F-5 pipeline parity |
 | Task-family generalization (R11.3.7) | F-3 splits, F-5 identical pipelines |
 
 ## Status

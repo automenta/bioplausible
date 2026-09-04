@@ -116,7 +116,7 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
     gradients are consumed as plain values — keeping settle graphs from
     accumulating is the default for every non-autograd family).
 
-    If ``plasticity`` and ``psi`` are provided, the M-axis is engaged:
+    If ``plasticity`` and ``psi`` are provided, the P-axis is engaged:
     ψ steps once per episode via ``plasticity.step(psi, z, context)`` and
     can modulate activity via ``plasticity.modulate(activations, psi)`` if
     the primitive implements it. J2/J3 invariants: θ untouched intra-episode;
@@ -133,7 +133,7 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
         states: dict[Phase, SystemState] = {}
         initial_activations = forward_pass(substrate, geometry, x)
 
-        # M-axis: step plasticity once per episode on the input/target state
+        # P-axis: step plasticity once per episode on the input/target state
         if plasticity is not None and psi is not None and context is not None:
             from computronium.state import CompositeState
 
@@ -146,7 +146,7 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
             target = y if phase is Phase.NUDGED else None
             settled = dynamics.settle(state, geometry, substrate, target=target)
 
-            # M-axis: modulate settled activity if plasticity provides modulate hook
+            # P-axis: modulate settled activity if plasticity provides modulate hook
             if plasticity is not None and psi is not None:
                 modulate = getattr(plasticity, "modulate", None)
                 if modulate is not None:

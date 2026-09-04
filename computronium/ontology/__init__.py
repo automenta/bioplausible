@@ -30,6 +30,12 @@ from computronium.ontology.credit import (
     TemporalTraceCredit,
     ThermodynamicContrast,
 )
+from computronium.ontology.depth import (
+    DepthMetric,
+    FixedDepth,
+    LongestPathDepth,
+    ShortestPathDepth,
+)
 from computronium.ontology.dynamics import (
     DYNAMICS_REGISTRY,
     DiffusionDynamics,
@@ -148,6 +154,11 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "AttentionGeometry",
     "SpatialLattice3DGeometry",
     "geometry_from_config",
+    # Depth metrics
+    "DepthMetric",
+    "FixedDepth",
+    "ShortestPathDepth",
+    "LongestPathDepth",
     # StateDynamics
     "StateDynamicsConfig",
     "StateDynamics",
@@ -180,7 +191,7 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "SpectralConstrainedUpdate",
     "NaturalGradientUpdate",
     "ElasticConsolidationUpdate",
-    # Plasticity (M-axis)  # ruff: ignore[commented-out-code]
+    # Plasticity (P-axis)  # ruff: ignore[commented-out-code]
     "PlasticityPrimitive",
     "PlasticityConfig",
     "TransitionFn",

@@ -159,10 +159,10 @@ if TYPE_CHECKING:
     )
     from computronium.nn import (
         ComputroniumLinear,
-        SystemModule,
         CreditRule,
         CreditRuleConfig,
         PlasticityType,
+        SystemModule,
         replace_linear_with_computronium,
     )
     from computronium.ontology.credit import (
@@ -193,6 +193,12 @@ if TYPE_CHECKING:
         RecurrentGeometry,
         SpatialLattice3DGeometry,
         TileGeometry,
+    )
+    from computronium.ontology.depth import (
+        DepthMetric,
+        FixedDepth,
+        LongestPathDepth,
+        ShortestPathDepth,
     )
     from computronium.ontology.plasticity import (
         FastWeightPlasticity,
@@ -265,6 +271,10 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     "theta_audit": ("computronium.core.theta_audit", "theta_audit"),
     "FeedforwardGeometry": ("computronium.ontology.geometry", "FeedforwardGeometry"),
     "GeometryConfig": ("computronium.ontology.geometry", "GeometryConfig"),
+    "DepthMetric": ("computronium.ontology.depth", "DepthMetric"),
+    "FixedDepth": ("computronium.ontology.depth", "FixedDepth"),
+    "ShortestPathDepth": ("computronium.ontology.depth", "ShortestPathDepth"),
+    "LongestPathDepth": ("computronium.ontology.depth", "LongestPathDepth"),
     "InstantaneousDynamics": (
         "computronium.ontology.dynamics",
         "InstantaneousDynamics",
@@ -484,6 +494,7 @@ __all__ = [
     "CreditRule",
     "CreditRuleConfig",
     "DataConfig",
+    "DepthMetric",
     "DiffusionDynamics",
     "DigitalSubstrate",
     "ElasticConsolidationUpdate",
@@ -493,11 +504,13 @@ __all__ = [
     "ExperimentConfig",
     "FastWeightPlasticity",
     "FeedforwardGeometry",
+    "FixedDepth",
     "GeometryConfig",
     "GraphGeometry",
     "HardwareConfig",
     "InstantaneousDynamics",
     "LocalGoodnessCredit",
+    "LongestPathDepth",
     "MemristiveSubstrate",
     "ModelConfig",
     "NaturalGradientUpdate",
@@ -515,6 +528,7 @@ __all__ = [
     "RiemannianOrthogonalUpdate",
     "RoutingPlasticity",
     "RuleStatePlasticity",
+    "ShortestPathDepth",
     "SpatialLattice3DGeometry",
     "SpectralConstrainedUpdate",
     "SpikeIntegrationDynamics",
@@ -525,9 +539,9 @@ __all__ = [
     "System",
     "SystemConfig",
     "SystemContext",
+    "SystemModule",
     "SystemState",
     "SystemTrainer",
-    "SystemModule",
     "SystemTrainerConfig",
     "TargetInversionCredit",
     "TemporalTraceCredit",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
 import torch
 from torch import Tensor, nn
@@ -27,23 +27,47 @@ from computronium.ontology._tile_blocks import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from computronium.ontology.depth import DepthMetric
     from computronium.ontology.substrate import Substrate
 
 _DEFAULT_INIT_SCALE = 0.1
 
+type InitScheme = Literal["default", "mupc"]
 
-def _linear_stack(dims: tuple[int, ...], init_scale: float) -> list[nn.Module]:
+
+def _linear_stack(
+    dims: tuple[int, ...],
+    init_scale: float,
+    init_scheme: InitScheme = "default",
+) -> list[nn.Module]:
     """MLP layers with weights rescaled from PyTorch's fan-in-adaptive init.
 
     ``init_scale`` multiplies the default init; the config default
     ``_DEFAULT_INIT_SCALE`` is the ×1.0 identity, so legacy builds are
     bit-identical.
+
+    ``init_scheme="mupc"`` replaces the fan-in init with μPC depth-scaled
+    init (Ernoult et al., arXiv:2505.13124): weights ~ N(0, 1), hidden
+    layers scaled 1/√(N·L), output layer scaled 1/N (N = uniform width,
+    L = hidden-layer count). ``init_scale`` is not applied in this scheme.
     """
     layers: list[nn.Module] = []
+    width = dims[1] if len(dims) > 1 else dims[0]
+    num_hidden = len(dims) - 2
     for i in range(len(dims) - 1):
         layer = nn.Linear(dims[i], dims[i + 1])
-        if init_scale != _DEFAULT_INIT_SCALE:
-            layer.weight.data.mul_(init_scale / _DEFAULT_INIT_SCALE)
+        match init_scheme:
+            case "mupc" if num_hidden > 0:
+                nn.init.normal_(layer.weight)
+                scale = (
+                    1.0 / width
+                    if i == len(dims) - 2
+                    else (1.0 / (width * num_hidden) ** 0.5)
+                )
+                layer.weight.data.mul_(scale)
+            case _:
+                if init_scale != _DEFAULT_INIT_SCALE:
+                    layer.weight.data.mul_(init_scale / _DEFAULT_INIT_SCALE)
         layers.append(layer)
         if i < len(dims) - 2:
             layers.append(nn.ReLU())
@@ -71,6 +95,12 @@ class GeometryConfig:
         init_scale: Multiplicative scale on weight initialization (weights and
             recurrent matrices; recurrent matrices additionally carry a 0.1
             sub-scale for EqProp's small-recurrent convention)
+        init_scheme: "default" (fan-in × init_scale) or "mupc" (μPC
+            depth-scaled init, arXiv:2505.13124 — N(0,1) weights, hidden
+            1/√(N·L), output 1/N; supersedes init_scale for the
+            feedforward stack only — recurrent weight matrices keep the
+            EqProp small-recurrent convention (init_scale × 0.1) under
+            both schemes, whose stability depends on the 0.1 sub-scale)
         conv_channels: Output channels per convolution layer (conv topology)
         kernel_size: Convolution kernel edge length (conv topology)
         in_channels: Input channel count (conv topology)
@@ -94,6 +124,7 @@ class GeometryConfig:
     connectivity: dict[str, object] | None
     recurrent_weight: list[list[float]] | None
     init_scale: float = _DEFAULT_INIT_SCALE
+    init_scheme: InitScheme = "default"
     conv_channels: tuple[int, ...] = ()
     kernel_size: int = 3
     in_channels: int = 1
@@ -115,6 +146,7 @@ class GeometryConfig:
         output_dim: int,
         hidden_dims: tuple[int, ...],
         init_scale: float = 0.1,
+        init_scheme: InitScheme = "default",
     ) -> GeometryConfig:
         return cls(
             input_dim=input_dim,
@@ -125,6 +157,7 @@ class GeometryConfig:
             connectivity=None,
             recurrent_weight=None,
             init_scale=init_scale,
+            init_scheme=init_scheme,
         )
 
     @classmethod
@@ -135,6 +168,7 @@ class GeometryConfig:
         output_dim: int,
         hidden_dims: tuple[int, ...],
         init_scale: float = 0.1,
+        init_scheme: InitScheme = "default",
     ) -> GeometryConfig:
         return cls(
             input_dim=input_dim,
@@ -145,6 +179,7 @@ class GeometryConfig:
             connectivity=None,
             recurrent_weight=None,
             init_scale=init_scale,
+            init_scheme=init_scheme,
         )
 
     @classmethod
@@ -207,6 +242,7 @@ class GeometryConfig:
         edge_index: list[list[int]],
         hidden_dims: tuple[int, ...] = (64, 64),
         init_scale: float = 0.1,
+        init_scheme: InitScheme = "default",
     ) -> GeometryConfig:
         """Create a graph topology config.
 
@@ -216,6 +252,7 @@ class GeometryConfig:
             edge_index: Graph connectivity as [2, num_edges] list of lists
             hidden_dims: Hidden dimensions for each GNN layer
             init_scale: Weight initialization scale
+            init_scheme: Weight initialization scheme ("default" or "mupc")
         """
         return cls(
             input_dim=input_dim,
@@ -226,6 +263,7 @@ class GeometryConfig:
             connectivity={"edge_index": edge_index},
             recurrent_weight=None,
             init_scale=init_scale,
+            init_scheme=init_scheme,
         )
 
     @classmethod
@@ -418,7 +456,9 @@ class FeedforwardGeometry(nn.Module):
             *self.config.hidden_dims,
             self.config.output_dim,
         )
-        self._layers = nn.ModuleList(_linear_stack(dims, self.config.init_scale))
+        self._layers = nn.ModuleList(
+            _linear_stack(dims, self.config.init_scale, self.config.init_scheme)
+        )
         self._set_param_names()
 
     def _set_param_names(self) -> None:
@@ -554,7 +594,9 @@ class RecurrentGeometry(nn.Module):
             *self.config.hidden_dims,
             self.config.output_dim,
         )
-        self._layers = nn.ModuleList(_linear_stack(dims, self.config.init_scale))
+        self._layers = nn.ModuleList(
+            _linear_stack(dims, self.config.init_scale, self.config.init_scheme)
+        )
         # Add recurrent weight for the last hidden layer
         if len(self.config.hidden_dims) > 0 and self._recurrent_weight is None:
             hidden_dim = self.config.hidden_dims[-1]
@@ -1263,17 +1305,27 @@ class GraphGeometry(nn.Module):
         # Build layers
         c_in = config.input_dim
         hidden_dims = config.hidden_dims if config.hidden_dims else (64,)
+        width = hidden_dims[0]
+        num_hidden = len(hidden_dims)
         for i, c_out in enumerate(hidden_dims):
-            weight = nn.Parameter(torch.randn(c_out, c_in) * (1.0 / c_in) ** 0.5)
-            if config.init_scale != _DEFAULT_INIT_SCALE:
-                weight.data.mul_(config.init_scale / _DEFAULT_INIT_SCALE)
+            weight = nn.Parameter(torch.randn(c_out, c_in))
+            if config.init_scheme == "mupc":
+                nn.init.normal_(weight)
+                weight.data.mul_(1.0 / (width * num_hidden) ** 0.5)
+            else:
+                weight.data.mul_((1.0 / c_in) ** 0.5)
+                if config.init_scale != _DEFAULT_INIT_SCALE:
+                    weight.data.mul_(config.init_scale / _DEFAULT_INIT_SCALE)
             self._layer_weights[f"layer_{i}"] = weight
             self._layer_biases[f"layer_{i}"] = nn.Parameter(torch.zeros(c_out))
             c_in = c_out
 
         # Classifier head
         self._head = nn.Linear(c_in, config.output_dim)
-        if config.init_scale != _DEFAULT_INIT_SCALE:
+        if config.init_scheme == "mupc":
+            nn.init.normal_(self._head.weight)
+            self._head.weight.data.mul_(1.0 / width)
+        elif config.init_scale != _DEFAULT_INIT_SCALE:
             self._head.weight.data.mul_(config.init_scale / _DEFAULT_INIT_SCALE)
 
         self._set_param_names()
@@ -1294,6 +1346,18 @@ class GraphGeometry(nn.Module):
         deg = torch.zeros(num_nodes, dtype=torch.long)
         deg.scatter_add_(0, row, torch.ones_like(row))
         self.register_buffer("_deg", deg.clamp(min=1), persistent=False)
+
+    @property
+    def num_nodes(self) -> int:
+        return int(self._edge_index.max().item()) + 1
+
+    def node_depths(self, metric: DepthMetric) -> Tensor:
+        """Per-node effective depth under ``metric`` (R11.3.13).
+
+        Depth-scaled (μPC) studies on graph topologies key off this instead
+        of layer counts, which understate path length on non-layered graphs.
+        """
+        return metric.per_node(self.num_nodes)
 
     def _move_edge_index(self, device: torch.device) -> None:
         """Move edge_index and degree buffer to device."""

@@ -64,7 +64,7 @@ def track_5_neural_cube(verifier) -> TrackResult:
 
 The 3D lattice topology capability requires a new Geometry axis (e.g., "SpatialGeometry")
 which is explicitly deferred per TODO7.md Phase C decision. The family-coverage benchmark,
-Goldilocks map, and M-axis science run on feedforward/recurrent/tile at MLP scale.
+Goldilocks map, and P-axis science run on feedforward/recurrent/tile at MLP scale.
 
 **Note**: If science roadmap needs vision/graph/attention workloads, build `ConvGeometry`
 or `SpatialGeometry` first.

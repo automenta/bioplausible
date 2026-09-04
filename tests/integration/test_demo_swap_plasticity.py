@@ -1,4 +1,4 @@
-"""D3 — The M-axis swap matters, seen.
+"""D3 — The P-axis swap matters, seen.
 
 Null vs RoutingPlasticity walk the same segmented switching stream
 (A→B, segment-keyed stationary teachers): θ accumulates, ψ adapts. The

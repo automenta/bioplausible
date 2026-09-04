@@ -51,7 +51,7 @@ Schema is closed (`METRIC_SCHEMA`); a bare `accuracy` key must never reappear.
 | `adaptation_time` (L1), `migration_time` (L3.5) | threshold = first epoch with training CE < 0.5 | training-batch CE on target-free forward logits — label-conditioned threshold, state-clean | no (labels set the bar) | diagnostic — measures training-fit crossing, not held-out adaptation; any adaptation *claim* must re-define the trigger on a target-free probe metric first |
 | `phase_a/b_final_loss`, `a0/a1_losses` | L1/L3.5 | training CE | no | diagnostic |
 | `theta_change` | L3.5 | direct ‖θ_after − θ_before‖ | n/a | **claim-grade** (exact invariance check) |
-| `active_routes`, `gate_entropy` | L2 | gate logits (`no_grad`) | yes | **claim-grade** — the one genuine M-axis discriminator |
+| `active_routes`, `gate_entropy` | L2 | gate logits (`no_grad`) | yes | **claim-grade** — the one genuine P-axis discriminator |
 | `dense_flops`/`effective_flops`/`flops_reduction` | L2 | structural estimate | n/a | **claim-grade** (structural) |
 | `pre_damage_accuracy`/`initial_accuracy`/`final_accuracy` (L3) | eval + `no_grad` | yes | **claim-grade** (imp-42 fixed degenerate pre-damage) |
 | `recovery_ratio` | L3 | ratio of two target-free evals | yes | **claim-grade** (same semantics both sides) |
@@ -81,5 +81,5 @@ Schema is closed (`METRIC_SCHEMA`); a bare `accuracy` key must never reappear.
 - `nudged_fit_accuracy`: metadata/diagnostic only — excluded from all claims (locked).
 - Pre-fix r5b_b/r51c resource records: quarantined for **resource claims** (imp-45).
 - Stability axis fields: saturated — not discriminating (imp-36 data); quarantined for stability claims.
-- L1/L3 M-arm means: identical across plasticity primitives (imp-43) — no M-axis claim until ψ engagement locks pass.
+- L1/L3 M-arm means: identical across plasticity primitives (imp-43) — no P-axis claim until ψ engagement locks pass.
 - Task-loss attribution: **provisional → upgraded to claim-grade by this census** for the campaign chain (strict free reads, closed schema, locks pinned). Suite-level training-loss-threshold metrics (adaptation/migration time) remain diagnostics.

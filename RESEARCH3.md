@@ -12,7 +12,7 @@
 
 ## Z3 Fixed Weights (Level 4)
 
-**Question:** *Can frozen $\theta$ solve multiple tasks via $\psi$-mediated rule selection?* No direct analogue exists in the literature (see the ICL-bridge item for the nearest competitor and why it differs). Tests the thesis that elevating the computational rule to a dynamical variable (the M-axis) yields a qualitatively different capability.
+**Question:** *Can frozen $\theta$ solve multiple tasks via $\psi$-mediated rule selection?* No direct analogue exists in the literature (see the ICL-bridge item for the nearest competitor and why it differs). Tests the thesis that elevating the computational rule to a dynamical variable (the P-axis) yields a qualitatively different capability.
 
 **Framing:** the Zuse analogy (`Z3.md`) carries any introduction: fixed relays = $\theta$, punched tape = $\psi$. Switching must emerge from differentiable arithmetic masking,
 $$T_t = \sum_k g_k(\psi_t)\, T_k, \qquad g_k(\psi_t) = \mathrm{softmax}(\text{controller}(\psi_t, x_t)),$$
@@ -118,7 +118,7 @@ Two implemented-but-unplanned suites complete the benchmark staircase below Z3; 
 
 ## AutoScientist M-Axis Ablation Campaign
 
-**Goal:** turn any single manual result into a frontier by sweeping the M-axis with the other five axes pinned.
+**Goal:** turn any single manual result into a frontier by sweeping the P-axis with the other five axes pinned.
 
 **Design:**
 1. Pin S/G/D/C/U at the flagship coordinate; sweep M ∈ {Null, Routing, FastWeight, RuleState}. One axis at a time — an ablation, not a search.
@@ -148,7 +148,7 @@ $$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \
 
 **Acceptance:** false-kill rate <5% on known-good set; unstable-coordinate kill rate >95%; guard overhead <10% of iteration wall-clock.
 
-**Deliverables:** working guard; manifesto-as-dataset — "where does the joint system go unstable?" is a standalone empirical contribution about the M-axis's stability cost.
+**Deliverables:** working guard; manifesto-as-dataset — "where does the joint system go unstable?" is a standalone empirical contribution about the P-axis's stability cost.
 
 **Stretch:** manifest-derived *a priori* instability predictor (classify configs before running) feeding back into the proposer's acceptance sampling.
 
@@ -158,7 +158,7 @@ $$\mathcal{C} = (\text{compute}, \text{memory}, \text{energy}, \text{latency}, \
 
 **Problem:** backprop + SGD overwrites old knowledge; replay buffers are the dominant patch.
 
-**Hypothesis (falsifiable):** M-axis decoupling (ψ fast states vs. θ consolidation) matches-or-beats EWC on backward transfer without any replay buffer, on Split-MNIST.
+**Hypothesis (falsifiable):** P-axis decoupling (ψ fast states vs. θ consolidation) matches-or-beats EWC on backward transfer without any replay buffer, on Split-MNIST.
 
 **Design:**
 1. Split-MNIST (5 binary tasks); arms: FastWeightPlasticity, ElasticConsolidationUpdate, backprop+SGD control, replay buffer baseline at matched memory. Task-free variant (no task boundaries signaled) as second protocol.
@@ -437,7 +437,7 @@ flowchart TD
     CHEAP -->|machinery validated| Z3
     CHEAP -->|known-good/bad configs| PR5[PR-5 Guard calibration]
     CHEAP -->|smoke-scale configs| PR9[PR-9 Campaign commissioning]
-    Z3 -->|flagship result| FRONTIER[AutoScientist M-axis campaign]
+    Z3 -->|flagship result| FRONTIER[AutoScientist P-axis campaign]
     PR5 --> FRONTIER
     PR9 --> FRONTIER
     PR9 --> DISCOVERY[Algorithm discovery]
@@ -477,7 +477,7 @@ Then fan-out, all gated only on CP-A's tail:
 - **Algorithm discovery** (needs campaign infra + manifesto priors + PR-6)
 - **Continual learning proof** (needs forgetting baselines from shakedown/Z3 — largely free by then)
 
-This is the longest chain and the one that gates the two highest-leverage strategic outputs. Its single biggest schedule risk is **Z3 non-convergence**; the built-in fallback is structural: if Z3 falsifies, L1's clean adaptation figure substitutes as the campaign seed, CP-A continues degraded-but-intact, and the negative result becomes an M-axis boundary-condition publication.
+This is the longest chain and the one that gates the two highest-leverage strategic outputs. Its single biggest schedule risk is **Z3 non-convergence**; the built-in fallback is structural: if Z3 falsifies, L1's clean adaptation figure substitutes as the campaign seed, CP-A continues degraded-but-intact, and the negative result becomes an P-axis boundary-condition publication.
 
 ### CP-B — Verification Spine *(parallel to CP-A)*
 
@@ -499,7 +499,7 @@ Everything except procurement is software-side and can begin immediately; the bo
 
 ### CP-E — Independent Tracks
 
-- **Physics proof:** depends only on PR-0 + scientific-domain dynamics; zero coupling to the M-axis storyline.
+- **Physics proof:** depends only on PR-0 + scientific-domain dynamics; zero coupling to the P-axis storyline.
 - **Biological twin:** depends only on ontology + public connectome data; zero coupling to everything above. Pure parallel capacity when CP-A is blocked.
 
 ---

@@ -884,6 +884,16 @@ class TestSAxisSubstrateCertification:
 
         from computronium.ontology import BackpropCredit
 
+        if substrate_name == "ternary":
+            pytest.xfail(
+                "ternary substrate quantizes substrate-owned latent weights: "
+                "the forward graph is severed from the geometry parameters "
+                "by design, so no autograd gradient can reach them "
+                "(GradientCredit fail-loud, R11.2). Ternary learning routes "
+                "through the substrate update operator instead; pairing it "
+                "with gradient credit was only ever silent zeros."
+            )
+
         credit = BackpropCredit(CreditAssignmentConfig.gradient())
         sys, geometry, _substrate, _dynamics, _ = _make_system_for_credit(
             credit,

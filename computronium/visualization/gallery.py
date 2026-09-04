@@ -125,7 +125,7 @@ def _fig_plasticity_swap(record: dict) -> Figure:
     chance_line(ax, record["data"]["chance"], "chance")
     ax.set_xticks([0, 1], ["after segment A", "after segment B"])
     ax.set_ylabel("segment-A probe accuracy")
-    ax.set_title("D3 — the M-axis swap: routing retains what null forgets")
+    ax.set_title("D3 — the P-axis swap: routing retains what null forgets")
     ax.legend()
     apply_style(fig)
     return fig

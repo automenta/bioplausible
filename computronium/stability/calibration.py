@@ -53,7 +53,7 @@ STATISTIC_KINDS: tuple[StatisticKind, ...] = ("fast_proxy", "windowed_growth")
 
 # The demo-suite coordinate family, expressed in campaign-builder syntax:
 # D1/D2 (recurrent settling + credit arms), D6 (substrate arms), D7 (spike
-# settle), D3-family M-axis arms, and the quickstart instantaneous arm.
+# settle), D3-family P-axis arms, and the quickstart instantaneous arm.
 DEMO_GOOD_COORDINATES: tuple[str, ...] = (
     "digital/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean",
     "digital/recurrent/energy_minimization/null/gradient/euclidean",

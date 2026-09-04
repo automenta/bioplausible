@@ -1,7 +1,7 @@
 """R8.3 stationary pilot: variance estimate for the R8.4 power gate.
 
 Runs the accumulation-capable claim chain at smoke scale: persistent-θ arms
-(M-axis contrast null / fast_weights / routing at matched lr, plus the
+(P-axis contrast null / fast_weights / routing at matched lr, plus the
 planted lr=0 ``frozen`` control) walk the stationary-teacher stream — fresh
 inputs each episode, one fixed teacher per (campaign, coordinate, seed) —
 through the real ``evaluate_episode(stationary_teacher=True)`` path. The
@@ -180,7 +180,7 @@ def _walk_arm(
 
 @dataclass(frozen=True, slots=True)
 class PilotResult:
-    """Pilot outcome bundle: arms, M-axis contrasts, control verdict, prereg."""
+    """Pilot outcome bundle: arms, P-axis contrasts, control verdict, prereg."""
 
     config: dict[str, object]
     arms: dict[str, PilotArm]

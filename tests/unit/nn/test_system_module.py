@@ -84,3 +84,12 @@ def test_train_mode_propagates_to_geometry() -> None:
     assert model.system.geometry.training is False
     model.train()
     assert model.system.geometry.training is True
+
+
+def test_to_moves_geometry_to_target_device() -> None:
+    model = _module()
+    target = "cuda" if torch.cuda.is_available() else "cpu"
+    out = model.to(target)
+    assert out is model
+    for p in model.system.geometry.params.values():
+        assert p.device.type == target

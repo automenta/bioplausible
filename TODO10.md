@@ -197,7 +197,7 @@ demonstrate itself.
 |---|------------|-----------|----------------------|------------------------------------------------|
 | D1 | Six-axis composition is real | `test_demo_compose_6axis.py` | A system composed from all six axes trains; its config round-trips to an identical system; the null-plasticity forward matches the 5-D path | EqProp parity & energy proofs (L4-locked continuously) |
 | D2 | One trainer, every credit rule | `test_demo_swap_credit.py` | Three credit rules through byte-identical wiring except one constructor argument — all three learn | Deep-credit registered study |
-| D3 | The M-axis swap matters | `test_demo_swap_plasticity.py` | Routing visibly retains what null forgets across a task switch — designed so the gap is seen, not computed | Retention registered study (16 seeds) |
+| D3 | The P-axis swap matters | `test_demo_swap_plasticity.py` | Routing visibly retains what null forgets across a task switch — designed so the gap is seen, not computed | Retention registered study (16 seeds) |
 | D4 | The memory profiler is honest | `test_demo_memory_budget.py` | The backprop-profiled arm simply **cannot run** under a tight budget (walled, deterministically); the O(1)-memory arm runs | Memory-budget registered study |
 | D5 | Frozen θ is a guarantee, bitwise | `test_demo_z3_frozen_theta.py` | θ's hash identical across the whole freeze→adapt→switch→restore run; restored ψ reproduces stage-A accuracy *exactly* | Z3 registered study |
 | D6 | The substrate axis is physical | `test_demo_substrate_swap.py` | One swapped substrate through identical wiring: digital learns, mild IR-drop learns less, severe IR-drop walls at chance — differential-pair conductances (int8 STE) carrying the signed weights | — |
@@ -389,7 +389,7 @@ regresses, *or the demonstration stops being visible*.
   wiring. Shows: all three learn; the wiring code is byte-identical across
   arms except the constructor argument. *The comparison is one line.* Emits
   the D2 run record.
-- [x] **R10.2.4** `test_demo_swap_plasticity.py` — the M-axis swap, seen. Null
+- [x] **R10.2.4** `test_demo_swap_plasticity.py` — the P-axis swap, seen. Null
   vs RoutingPlasticity on the segmented switching stream (R8.3 machinery:
   `create_switching_task` in `experiments/joint/adaptation_efficiency.py`,
   segment-keyed stationary teachers via `evaluate_episode(segment=…)` in
@@ -562,7 +562,7 @@ condition. A sprint that ships none of these is a sprint to question.
    from checkpoint 1's harvest (<5% false-kill on known-good, >95% kill
    rate, <10% overhead) — unattended campaigns become safe to launch, and
    the failure manifesto starts accumulating as a dataset.
-5. **The first research-shaped result (AutoScientist M-axis frontier):** a
+5. **The first research-shaped result (AutoScientist P-axis frontier):** a
    Pareto frontier over the resource vector 𝒞, one axis swept at a time,
    annotated with which M primitive owns each knee — the first figure that
    is a *finding*, not a demonstration.

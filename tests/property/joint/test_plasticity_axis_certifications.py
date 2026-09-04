@@ -1,4 +1,4 @@
-"""Property tests for Plasticity Axis (M-axis) certifications.
+"""Property tests for Plasticity Axis (P-axis) certifications.
 
 Tests verify that each plasticity primitive passes axis certification:
 - NullPlasticity (Zero-Extension)

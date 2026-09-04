@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Self
 
+import torch
 from torch import Tensor, nn
 
 if TYPE_CHECKING:
@@ -47,4 +48,35 @@ class SystemModule(nn.Module):
         super().train(mode)
         if hasattr(self.system.geometry, "train"):
             self.system.geometry.train(mode)
+        return self
+
+    def to(  # type: ignore[override]
+        self,
+        *args: torch.device | str | int,
+        device: torch.device | str | int | None = None,
+        dtype: torch.dtype | None = None,
+        non_blocking: bool = False,
+    ) -> Self:
+        """Move the wrapped system's geometry to the target device/dtype.
+
+        Mirrors SystemTrainer's device convention (``geometry.to(device)``):
+        the substrate reads its device from its config, the geometry owns
+        the parameters.
+        """
+        if args and isinstance(args[0], torch.dtype):
+            dtype = args[0]
+            args = ()
+        elif args:
+            device = args[0]
+            args = ()
+        move: dict[str, object] = {"non_blocking": non_blocking}
+        if device is not None:
+            move["device"] = torch.device(device)
+        if dtype is not None:
+            move["dtype"] = dtype
+        if move:
+            super().to(**move)  # type: ignore[arg-type]
+        target = device if device is not None else None
+        if target is not None and hasattr(self.system.geometry, "to"):
+            self.system.geometry.to(torch.device(target))
         return self

@@ -153,7 +153,7 @@ for name, credit in CREDIT_ARMS:
     print(f"{name}: {metrics['train_acc']:.1%}")
 ```
 
-The M-axis swaps the same way: pass `RoutingPlasticity(...)` / `FastWeightPlasticity(...)` / `SubstrateCoupledPlasticity(...)` (see [Plasticity](#-plasticity-metadynamics) in the axis table) as the `plasticity` argument of `compose_joint_system` — the null swap that retains what `NullPlasticity` forgets is demonstrated in `test_demo_swap_plasticity.py`.
+The P-axis swaps the same way: pass `RoutingPlasticity(...)` / `FastWeightPlasticity(...)` / `SubstrateCoupledPlasticity(...)` (see [Plasticity](#-plasticity-metadynamics) in the axis table) as the `plasticity` argument of `compose_joint_system` — the null swap that retains what `NullPlasticity` forgets is demonstrated in `test_demo_swap_plasticity.py`.
 
 Formerly hardcoded model families (`optical_looped_mlp`, `quantized_looped_mlp`, `crossbar_looped_mlp`, `eqprop_transformer`, `neural_cube`, `sparse_equilibrium`, `momentum_equilibrium`, TileNet variants) are now **expressed as coordinates/compositions** in this 6-axis space. These 5-D systems are recovered as the `M = NullPlasticity` slice.
 
@@ -451,7 +451,7 @@ The joint dynamical system elevates the computational rule to a dynamical variab
 - **StateVariable** — lifecycle metadata: `persistent`, `fast_plastic`, `substrate_owned`, `consolidatable`
 - **StateRegistry** — registers variables, validates lifecycle, provides lifecycle groups; resolves ontological overlaps where one physical variable serves multiple roles (e.g., memristive conductance as both substrate state and plastic medium)
 - **CoupledTransition** — linchpin protocol: `step(z, context) -> CompositeState` executing `z_{t+1} = F_θ(z_t; G, S)`
-- **PlasticityPrimitive** — M-axis protocol: `step(psi, z, context) -> updated psi`
+- **PlasticityPrimitive** — P-axis protocol: `step(psi, z, context) -> updated psi`
 - **StabilityMonitor** — `spectral_radius`, `lyapunov_exponent` estimation
 
 **Key Architectural Rule**: *Plasticity must not become a weight preprocessor.* Plasticity receives the full joint state `z = (x, ψ, σ)`, returns updated plastic state (not modified weights), and the joint transition remains `z_{t+1} = F_θ(z_t; G, S)`. Credit assignment receives the full trajectory `τ = [z_0, ..., z_T]`. Parameter update touches only `persistent`/`consolidatable` variables.
@@ -548,7 +548,7 @@ A passing invariant or numerical-equivalence test demonstrates **implementation 
 | **D-axis** | SpikeIntegration Lyapunov (membrane bounded, non-diverging spike process); LazyStateDynamics | Spike counts tracked per (layer, settle step); bounded activations |
 | **C-axis** | TemporalTrace STDP window (causal +, anti-causal -, antisymmetric, exponential decay); surrogate objectives | Sign matches timing; W(Δt) = -W(-Δt); FD cosine ≥ 0.95 |
 | **U-axis** | Muon orthogonalizes gradient (G^T G ≈ I); SpectralConstrained SVD ≤ 1.0; Natural whitens; Elastic moves toward old params | Newton-Schulz converges; diagonal Fisher whitening; δ·(w-old_w) < 0 |
-| **M-axis** | NullPlasticity Zero-Extension (`F_θ^Null = D_θ`); RoutingPlasticity gate entropy; FastWeightPlasticity decay bounds | Null ≡ 5-D; gate entropy ≥ 0; decay ∈ [0,1] |
+| **P-axis** | NullPlasticity Zero-Extension (`F_θ^Null = D_θ`); RoutingPlasticity gate entropy; FastWeightPlasticity decay bounds | Null ≡ 5-D; gate entropy ≥ 0; decay ∈ [0,1] |
 | **J1** | NullPlasticity preserves 5-D dynamics (Zero-Extension Invariant) | `F_θ^Null = D_θ` within numerical tolerance |
 | **J2** | Persistent θ not mutated during intra-episode steps | θ data_ptr() unchanged during CoupledTransition.step |
 | **J3** | fast_plastic variables mutate only through plasticity projection | ψ updates only via PlasticityPrimitive.step |

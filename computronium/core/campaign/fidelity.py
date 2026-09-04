@@ -541,7 +541,7 @@ def _check_plasticity(joint, parts: list[str]) -> AxisCheck:
             value,
             "fail",
             "plasticity.step never invoked by the episode pipeline "
-            "(run_train_step takes no M-axis and initial_psi's ψ is "
+            "(run_train_step takes no P-axis and initial_psi's ψ is "
             "discarded) — plasticity cannot modulate activity or credit",
         )
     delta = _psi_max_delta(*trace[-1]) if trace else 0.0

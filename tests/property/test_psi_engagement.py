@@ -1,8 +1,8 @@
-"""R7 probe #3 (imp-43): ψ-engagement locks — the hard gate for M-axis claims.
+"""R7 probe #3 (imp-43): ψ-engagement locks — the hard gate for P-axis claims.
 
 The benchmark harnesses (L1/L3) construct ψ but their adaptation/recovery
 timing is θ-optimizer-driven, so plasticity cannot express itself in the
-measured metrics — bit-identical M-arm means. Before any M-axis claim, the
+measured metrics — bit-identical M-arm means. Before any P-axis claim, the
 engagement chain must hold end-to-end at the ontology-pipeline level
 (``run_train_step`` with plasticity+ψ wiring, the path imp-22 opened):
 
@@ -77,7 +77,7 @@ def test_psi_moves_under_task_input(coordinate: str) -> None:
     )
     psi1 = plasticity.step(psi0, z, system.context)
     assert not torch.equal(_key_tensor(psi0), _key_tensor(psi1)), (
-        "ψ is constant under task input — M-axis inert"
+        "ψ is constant under task input — P-axis inert"
     )
 
 
@@ -116,5 +116,5 @@ def test_metrics_respond_to_frozen_psi_control(coordinate: str) -> None:
 
     assert stepped["free_loss"] != pytest.approx(frozen["free_loss"]), (
         "metrics identical under frozen vs stepped ψ — suite cannot measure "
-        "M-axis effects"
+        "P-axis effects"
     )

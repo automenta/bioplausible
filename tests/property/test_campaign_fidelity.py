@@ -229,7 +229,7 @@ class TestPlasticityFidelity:
 
     @pytest.mark.parametrize("plasticity", ["routing", "fast_weights"])
     def test_nonnull_plasticity_steps_and_modulates(self, plasticity: str) -> None:
-        """M-axis lock (upgraded, TODO8 Execution Order 9.v): plasticity.step
+        """P-axis lock (upgraded, TODO8 Execution Order 9.v): plasticity.step
         is invoked by the episode pipeline AND ψ actually changes across the
         step; primitives with a modulate hook must produce ψ-sensitive
         activity (zeroed-ψ ≠ stepped-ψ)."""
@@ -243,7 +243,7 @@ class TestPlasticityFidelity:
         assert "ψ-sensitive" in m.detail
 
     def test_fast_weights_psi_receives_target_activity(self) -> None:
-        """Regression pin: the pipeline's M-axis step must expose x AND y in
+        """Regression pin: the pipeline's P-axis step must expose x AND y in
         z.activity — the FastWeight Hebbian update was silent-dead while only
         x was threaded (caught by the ψ non-const assertion)."""
         verdict = check_coordinate_fidelity(
@@ -274,7 +274,10 @@ class TestCapabilityManifest:
             c
             for c in GRID
             if "/energy_minimization/" in c
-            or ("/instantaneous/" in c and ("/random_projections/" in c or "/local_goodness/" in c))
+            or (
+                "/instantaneous/" in c
+                and ("/random_projections/" in c or "/local_goodness/" in c)
+            )
         }
         assert passing == expected, (
             f"Passing: {sorted(passing)}, Expected: {sorted(expected)}"

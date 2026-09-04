@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 from computronium.visualization.gallery import (
-    _FACTORIES,
+    DEMOS,
     RECORDS_DIRNAME,
     render_gallery,
 )
@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
 
     records_dir = FIGURES_DIR / RECORDS_DIRNAME
     missing = sorted(
-        name for name in _FACTORIES if not any(records_dir.glob(f"*_{name}.json"))
+        name for name in DEMOS if not any(records_dir.glob(f"*_{name}.json"))
     )
     if missing:
         print(

@@ -1,4 +1,4 @@
-"""R9.1 forgetting trial: the M-axis catastrophic-forgetting stress test.
+"""R9.1 forgetting trial: the P-axis catastrophic-forgetting stress test.
 
 Hypothesis: ψ-mediated plasticity (routing / fast_weights) retains segment A
 while learning segment B; Null collapses toward chance on A. The walk is the

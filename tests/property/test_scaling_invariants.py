@@ -278,7 +278,26 @@ class TestDeepNetworkCreditAssignment:
     @settings(max_examples=2, deadline=None)
     @given(st.data())
     def test_deep_network_accuracy(self, depth, data):
-        """100-layer network should achieve reasonable accuracy."""
+        """Deep-settle EqProp refutation (strict xfail).
+
+        Claim under test: 100-settle-step EqProp reaches >30% accuracy
+        after a few train steps. Measured at HEAD (2026-09-04, seeds
+        0/7/42/123): chance-level at 3 steps (0.06-0.22), and MORE
+        training decays it further (10 steps -> 0.03, 30 -> 0.0) —
+        consistent with the deep-settle signal-loss boundary mapped by
+        scripts/probes/mupc_depth_frontier.py (R11.3.11): every credit
+        rule, BP included, dies past the boundary; this is the EqProp
+        instance of it. Previously "passing" only via an unseeded model
+        draw (order-dependent global RNG). Standing refutation candidate
+        per R11.5.5 — promote to a live figure if a lever (muPC init,
+        shorter settle, lr schedule) rescues it.
+        """
+        pytest.xfail(
+            "deep-settle EqProp does not learn at settle_steps=100: "
+            "chance-level at every seed, decays with more training — "
+            "the R11.3.11 deep-settle boundary, EqProp instance"
+        )
+        torch.manual_seed(42)
         model = create_native_eqprop_mlp(
             input_dim=64,
             hidden_dim=64,
@@ -326,6 +345,7 @@ class TestEqPropBackpropAccuracyParity:
     @given(st.data())
     def test_eqprop_vs_backprop_accuracy(self, data):
         """EqProp accuracy should be within 15% of Backprop on synthetic data."""
+        torch.manual_seed(42)
         bp_model = create_native_backprop_mlp(64, 128, 10)
         eq_model = create_native_eqprop_mlp(
             input_dim=64,

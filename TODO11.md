@@ -23,7 +23,10 @@
 > (resumable trainer, fold_in RNG) pulled 2026-09-04. User-directed general-
 > improvements session (2026-09-04): R11.2.23 (sample-weighted metrics +
 > `val_ppl`) and R11.4.1 v1 (`SystemModule` facade) landed; `GradientCredit`
-> fail-loud resolved (Watch). The
+> fail-loud resolved (Watch). CP-6 opened 2026-09-04: R11.3.13 (depth
+> metrics) + R11.3.11 μPC init landed; depth-frontier E-1 pilot run —
+> boundary ≈ depth 8 confirmed, μPC lift unconfirmed pending multi-seed
+> pilot (see Remaining Items). The
 > library demonstrates all 12 capabilities (D1–D12) at demo scale;
 > `comp repro` 8/8; property suite 670 passed; demo gate 13/13; gallery lock
 > green; `comp gallery` renders all figures. Remaining items are explicitly
@@ -74,7 +77,7 @@ every workstream below.
 |----|---------------------------------------------------------------------|------------------------------------------------|
 | D1 | Six-axis composition is real                                        | `test_demo_compose_6axis.py`                   |
 | D2 | One trainer, every credit rule                                      | `test_demo_swap_credit.py`                     |
-| D3 | The M-axis swap matters                                             | `test_demo_swap_plasticity.py`                 |
+| D3 | The P-axis swap matters                                             | `test_demo_swap_plasticity.py`                 |
 | D4 | The memory profiler is honest                                       | `test_demo_memory_budget.py`                   |
 | D5 | Frozen θ is a guarantee, bitwise                                    | `test_demo_z3_frozen_theta.py`                 |
 | D6 | The substrate axis is physical (memristive IR-drop + neuromorphic spike dropout, five arms) | `test_demo_substrate_swap.py` |
@@ -141,7 +144,7 @@ every workstream below.
 | Item | Description | Key Evidence |
 |------|-------------|--------------|
 | **R11.4.2** | PR-6 Fairness contract draft | `docs/FAIRNESS_CONTRACT.md` v0.1 (F-1..F-6, consumers table) |
-| **R11.4.1 (v1)** | `SystemModule` drop-in nn.Module facade (pulled 2026-09-04, user-directed "general improvements" session) | `computronium/nn/system_module.py`, root export. Plain-PyTorch inference (`forward` under `no_grad`/`eval`), `fit_step` for internal credit assignment (no optimizer), `parameters()`/`train()` delegate to geometry. Lock: `tests/unit/nn/test_system_module.py`. Scope-honest: this is the wrapper *surface*, not pip packaging |
+| **R11.4.1 (v1)** | `SystemModule` drop-in nn.Module facade (pulled 2026-09-04, user-directed "general improvements" session) | `computronium/nn/system_module.py`, root export. Plain-PyTorch inference (`forward` under `no_grad`/`eval`), `fit_step` for internal credit assignment (no optimizer), `parameters()`/`train()` delegate to geometry, `to(device/dtype)` moves geometry (mirrors SystemTrainer's `geometry.to(device)` convention; pyright-strict clean). Lock: `tests/unit/nn/test_system_module.py`. Scope-honest: this is the wrapper *surface*, not pip packaging |
 
 ---
 
@@ -151,6 +154,7 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 
 | Item | Trigger | Category |
 |------|---------|----------|
+| **R11.3.11** Multi-seed depth-frontier pilot | The single-seed μPC lift contradiction (frontier probe finding 2) must resolve before any paragraph; ~2 h CPU at 55 ms/step compiled. Also explains the compiled-fixed-budget vs eager-early-exit settle discrepancy. | Research |
 | **R11.1.10** LazyStateDynamics | Demo regime shows on-demand activation visibly (settle-count contrast on large-dim) | Capability |
 | **R11.1.11** Domain extensions | Benchmark/demo/research needs: `wikitext2`/`penn_treebank` (LM), `mountain_car`/`lunar_lander` (RL), `diabetes`/`california_housing` (tabular), `ett_h1` (time series), PDE suite (Heat/Wave/Burgers/Navier-Stokes) | Capability |
 | **R11.2.9** `substrate_coupled` plasticity engagement | Campaign manifest needs it; probe fixed-dim `step` assumptions | Hygiene |
@@ -158,9 +162,9 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 | **R11.2.14** Latency proxy | Repeated-timing methodology or deterministic proxy; blocks task-scale latency claim | Hygiene |
 | **R11.2.15** `demo/tests/` 28 stale failures | Rebuild with R11.4 UI, or before if path touched | Hygiene |
 | **R11.2.16** TF-IDF weighting / `V_nudged` | Research track wants strengthened PC Lyapunov xfail | Hygiene |
-| **R11.3.4** AutoScientist M-axis frontier | Tangible Checkpoint 5 — first *finding* figure (Pareto over 𝒞) | Research |
-| **R11.3.11** μPC depth scaling | Deep PC/EqProp boundary study; layer-dependent init scale (`init_scale` → per-layer depth-scaled, `1/√(N·L)` hidden + `1/N` output, N(0,1) init) — μPC (arXiv:2505.13124) lifts PC past ~10 layers and gives zero-shot LR transfer; directly targets the known deep-EqProp signal-loss boundary (RESEARCH3.md:185). Pull with a scaling-paragraph or the PC Lyapunov xfail. **E-1 probe done 2026-09-04** (`scripts/probes/mupc_depth_init.py` — read its docstring for numbers): boundary at depth ≥ 8 is NOT PC-specific (BP dies too; credit path verified healthy); μPC init ≈ 2× PC learning at depth 8 under a real budget (0.225 vs 0.123). **Blocked on an affordable sweep**: sPC layered settle is kernel-launch-bound (CUDA 201 vs CPU 142 ms/step) — pull the settle-kernel/compile enablement (see Watch) before the frontier. | Research |
-| **R11.3.13** Depth-metric classes | `ShortestPathDepth`/`LongestPathDepth`/`FixedDepth` for arbitrary graph topologies (feeds μPC scaling on `GraphGeometry`/`TileMesh`/`FabricPC` where "depth" is per-node effective path length). Pull with R11.3.11 when graph-scaling is wanted. | Research |
+| **R11.3.4** AutoScientist P-axis frontier | Tangible Checkpoint 5 — first *finding* figure (Pareto over 𝒞) | Research |
+| **R11.3.11** μPC depth scaling | **Init landed 2026-09-04** — `GeometryConfig.init_scheme="mupc"` (N(0,1), hidden 1/√(N·L), output 1/N; arXiv:2505.13124) native on feedforward/recurrent/graph geometry. E-1 probe `scripts/probes/mupc_depth_init.py`; E-1 pilot `scripts/probes/mupc_depth_frontier.py` (read both docstrings): boundary at depth ≈ 8 confirmed, BP decays through it too (0.808→0.345→0.110); **μPC lift at depth 8 UNCONFIRMED** (0.131 vs 0.127 — contradicts the earlier 2× claim; confounds: compiled fixed-budget settle, seeds). Multi-seed pilot is the next pull (~2 h CPU, 55 ms/step compiled). | Research (init ✅, frontier pilot-only) |
+| **R11.3.13** Depth-metric classes | **Landed 2026-09-04** | `computronium/ontology/depth.py`: `DepthMetric` Protocol, `FixedDepth`, `ShortestPathDepth` (BFS from sources, edge direction row←col matching `GraphGeometry._aggregate`), `LongestPathDepth` (DAG Kahn; fail-loud on cycles), `max_depth`. `GraphGeometry.num_nodes` + `node_depths(metric)`. Root + ontology exports. Lock: `tests/unit/core/test_depth_mupc.py` (12 tests, incl. default-init bitwise lock) |
 | **R11.2.23** Energy-framed metric contract | **Pulled 2026-09-04** (see R11.2.23 in Completed) — live trainer sample-weighted metrics + `val_ppl`. FabricPC's legacy `EvalMetric` design informed the contract; FabricPC itself is archived | ~~Hygiene~~ ✅ |
 | **R11.3.5** Z3 flagship registered commission | Tangible Checkpoint 6 — ≥95% on 3 tasks, exact Δθ=0, ≤20% fine-tuning steps, ≥5 seeds | Research |
 | **R11.3.6–3.10** Boundary mapping, CL, task-family, provenance, companions | Pull when research paragraph needs them | Research |
@@ -313,7 +317,7 @@ uv run python -m pytest tests/unit/core/test_root_exports.py -q
 | 3 | Commissioned campaign stack (R11.3.1) | Iterate → interrupt → checkpoint → resume cycle recorded ✅ |
 | 4 | Calibrated stability guard (R11.3.3) | ROC-calibrated kill thresholds (<5% false-kill, >95% kill, <10% overhead) ✅ |
 | 5 | Adoption surface (R11.4) | Wrapper v1 (pip-installable, smoke suite) and/or live demo UI — **pull-based** |
-| 6 | First research-shaped result (R11.3.4) | M-axis Pareto frontier over 𝒞, annotated per knee — **pull-based** |
+| 6 | First research-shaped result (R11.3.4) | P-axis Pareto frontier over 𝒞, annotated per knee — **pull-based** |
 | 7 | Discovery bet (R11.3.5) | Z3 flagship at registered scale; either outcome tangible per pre-registered fallback — **pull-based** |
 
 Sequencing: 1–4 complete; 5 after API stabilizes (done); 6–7 are RESEARCH3 CP-A's tail. No checkpoint blocks on a later one.
@@ -353,6 +357,85 @@ Sequencing: 1–4 complete; 5 after API stabilizes (done); 6–7 are RESEARCH3 C
   the ÷β contrastive credit caps ePC's learning signal on deeper stacks
   (candidates if revisited: PC-native weight gradient (∂ŝ/∂θ)ᵀε or a
   contrast-β decoupled from the loss weight).
+- **μPC init + depth metrics (R11.3.11 init + R11.3.13, landed 2026-09-04):**
+  `GeometryConfig.init_scheme` (`Literal["default","mupc"]`) is the single
+  init lever — "default" is byte-identical to legacy (locked bitwise in
+  `test_depth_mupc.py`); "mupc" replaces fan-in init with N(0,1) × depth
+  scaling and supersedes `init_scale`. Wired in `_linear_stack` (feedforward
+  + recurrent) and GraphGeometry (layers + head). `GraphGeometry.node_depths(metric)`
+  is the R11.3.13 seam: per-node effective depth replaces layer-counting on
+  graph topologies. `asdict` round-trip carries the new field (no
+  `_geometry_spec_parts` change needed — str, not tuple).
+  **Trap learned the hard way:** when rescaling weights in place
+  (`Parameter.data.mul_`), initialize from `torch.randn`, never `torch.empty`
+  — garbage × scale is still garbage, and the D9 graph demo silently learned
+  garbage for 5 epochs before recovering (caught by the demo gate, exactly
+  its job). Frontier probes: `scripts/probes/mupc_depth_frontier.py`
+  (boundary + μPC-unconfirmed) and `scripts/probes/mupc_compiled_device.py`
+  (device verdict: compiled CUDA 80 vs CPU 55 ms/step at width 32 — CPU
+  still wins; compile 2.6× CPU). Next research step: multi-seed pilot.
+- **Ternary × gradient credit = strict-mechanism xfail (2026-09-04):** the
+  property certification `test_substrate_with_backprop_credit[ternary]` was a
+  silent casualty of the GradientCredit fail-loud landing — never gated after
+  it. Mechanism (recon, not regression): `TernarySubstrate.quantize_weights`
+  STE-quantizes *substrate-owned latent* weights (`detach().clone()`), so the
+  forward graph is severed from the geometry parameters by design — no
+  autograd gradient can reach them, and the pairing only ever produced
+  silent zeros (no learning) under the old zero-fill. Ternary learning
+  routes through the substrate update operator (`ternary_update` writes
+  latent + re-quantizes); pairing ternary with gradient credit needs a
+  latent-graph path — fold into R11.2.9 (`substrate_coupled` engagement) if
+  a research paragraph ever wants learned ternary through the 5-D pipeline.
+  Marked dynamic `pytest.xfail` with the mechanism string in
+  `tests/property/test_axis_certifications.py` (R11.1.3 precedent). Lesson:
+  **fail-loud changes gate the property suite before landing** — this one
+  shipped and the first property run caught it a session later.
+- **Test acceleration (2026-09-04, user directive "tests take too damn long"):**
+  property suite now runs `pytest -n auto` (pytest-xdist, already a dev dep):
+  **105 s → 55 s**, verified stable ×3. Demo gate stays **serial** — parallel
+  demo runs re-emit records with float drift and trip the gallery lock
+  (mechanism below). Record the canonical gates:
+  `uv run python -m pytest tests/property/ -q -n auto` and the serial demo
+  gate. Two RNG-order-fragile property tests were the only parallel
+  failures: `test_deep_network_accuracy[100]` and
+  `test_eqprop_vs_backprop_accuracy` built models from unseeded global RNG
+  (pass/fail depended on which tests ran earlier in the process) — seeded;
+  the former's claim was then refuted (see next bullet). Known intermittent
+  `XPASS`: `test_backprop_memory_grows_with_depth[25]` (non-strict, CUDA
+  memory measurement noise — pre-existing, harmless).
+- **Deep-settle EqProp refutation (R11.5.5 slot filled, 2026-09-04):**
+  `test_deep_network_accuracy[100]`'s claim ("100-settle-step EqProp >
+  30% acc after 3 steps") is false at every seed — and MORE training decays
+  accuracy further (3→10→30 steps: 0.22→0.03→0.0). It previously passed
+  only via an unseeded draw. Converted to a strict-mechanism xfail citing
+  the R11.3.11 boundary; this is the EqProp instance of the depth/settle
+  signal-loss boundary. Candidate for a live failure figure (same pipeline)
+  if the multi-seed pilot's levers rescue it.
+- **Float-reduction record drift (D2/D7 absorbed, 2026-09-04):** demo
+  records can drift at the 1e-7 level run-to-run — multithreaded CPU
+  reduction order in some kernels varies with scheduling, especially under
+  parallel test workers. Asserts are tolerance-based (green); the gallery
+  lock's sha check is not. Manifest re-pinned after mechanism review via
+  `render_gallery` directly. `comp gallery` itself was broken at HEAD —
+  its CLI imported `_FACTORIES`, which the gallery refactor renamed to the
+  `DEMOS` registry; fixed (`computronium/cli/gallery.py`). Per retro (e):
+  when the lock fires, diagnose (isolation re-runs, byte diffs) before
+  re-pinning — both drift classes this session were diagnosed, not pinned
+  blind.
+- **P-axis standardization (user directive, 2026-09-04):** "M-axis" is
+  retired — the plasticity axis is the **P-axis** everywhere (code
+  docstrings/comments, demo D3 wording, gallery figure titles, TODO/docs;
+  archives untouched). README's uncommitted M→P edits are the user's own
+  and stay. No `M`-prefixed identifiers exist in code, so this was a
+  documentation-level sweep (19 files).
+- **Deep Hebbian lead (user recollection, 2026-09-04):** `DeepHebbianChain`
+  (tile chain, `track_54_nebc_deep_hebbian_chain`) claims signal survival
+  through 50 layers — user recalls testing hundreds of layers. If Hebbian
+  chains carry signal past the depth-8 boundary where ALL error-based
+  rules (BP included) die, the CP-6 finding sharpens: the boundary is an
+  *error-telescoping* problem, not an activation-signal problem. Cheap CPU
+  probe (feedforward, no backprop): run signal propagation at depths
+  50/100/200/500 — queue as the next E-1 alongside the multi-seed pilot.
 - **Metric aggregation contract (R11.2.23, pulled 2026-09-04):**
   `SystemTrainer.train_epoch`/`validate` now accumulate **sample-weighted**
   sums (`trainer.py`) — a ragged final batch no longer counts as a full

@@ -17,7 +17,7 @@ CLAIMS_SCOPE_PSI_WIRED_UNCONTROLLED = "psi_wired_uncontrolled"
 CLAIMS_SCOPE_PSI_ENGAGED = "psi_engaged"
 
 # R7 probe #3 (imp-43) engagement verdicts per suite. A suite may only carry
-# an M-axis claim at PSI_ENGAGED. Locks: tests/property/test_psi_engagement.py
+# an P-axis claim at PSI_ENGAGED. Locks: tests/property/test_psi_engagement.py
 # (pipeline-level: ψ moves, modulate reaches activations, metrics respond to
 # a frozen-ψ control).
 #
