@@ -153,7 +153,7 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 | **R11.2.15** `demo/tests/` 28 stale failures | Rebuild with R11.4 UI, or before if path touched | Hygiene |
 | **R11.2.16** TF-IDF weighting / `V_nudged` | Research track wants strengthened PC Lyapunov xfail | Hygiene |
 | **R11.3.4** AutoScientist M-axis frontier | Tangible Checkpoint 5 — first *finding* figure (Pareto over 𝒞) | Research |
-| **R11.3.11** μPC depth scaling | Deep PC/EqProp boundary study; layer-dependent init scale (`init_scale` → per-layer depth-scaled, `1/√(N·L)` hidden + `1/N` output, N(0,1) init) — μPC (arXiv:2505.13124) lifts PC past ~10 layers and gives zero-shot LR transfer; directly targets the known deep-EqProp signal-loss boundary (RESEARCH3.md:185). Pull with a scaling-paragraph or the PC Lyapunov xfail. | Research |
+| **R11.3.11** μPC depth scaling | Deep PC/EqProp boundary study; layer-dependent init scale (`init_scale` → per-layer depth-scaled, `1/√(N·L)` hidden + `1/N` output, N(0,1) init) — μPC (arXiv:2505.13124) lifts PC past ~10 layers and gives zero-shot LR transfer; directly targets the known deep-EqProp signal-loss boundary (RESEARCH3.md:185). Pull with a scaling-paragraph or the PC Lyapunov xfail. **E-1 probe done 2026-09-04** (`scripts/probes/mupc_depth_init.py` — read its docstring for numbers): boundary at depth ≥ 8 is NOT PC-specific (BP dies too; credit path verified healthy); μPC init ≈ 2× PC learning at depth 8 under a real budget (0.225 vs 0.123). **Blocked on an affordable sweep**: sPC layered settle is kernel-launch-bound (CUDA 201 vs CPU 142 ms/step) — pull the settle-kernel/compile enablement (see Watch) before the frontier. | Research |
 | **R11.3.13** Depth-metric classes | `ShortestPathDepth`/`LongestPathDepth`/`FixedDepth` for arbitrary graph topologies (feeds μPC scaling on `GraphGeometry`/`TileMesh`/`FabricPC` where "depth" is per-node effective path length). Pull with R11.3.11 when graph-scaling is wanted. | Research |
 | **R11.2.23** Energy-framed metric contract | FabricPC's `EvalMetric(value, weight) + finalize` weighted aggregation — correct ragged-batch / per-token vs per-sample normalization, `perplexity = exp(mean CE)` (not mean of per-batch exp). Upgrade to Computronium's metric reporting. | Hygiene |
 | **R11.3.5** Z3 flagship registered commission | Tangible Checkpoint 6 — ≥95% on 3 tasks, exact Δθ=0, ≤20% fine-tuning steps, ≥5 seeds | Research |
@@ -246,6 +246,19 @@ uv run python -m pytest tests/unit/core/test_root_exports.py -q
 
 ## 👁️ Watch (Live Items Only)
 
+- **Settle-loop cost is the CP-6 bottleneck (measured 2026-09-04):** the sPC
+  layered settle is a per-layer Python loop of small launches — CUDA measured
+  *slower* than CPU at registered PC scale (201 vs 142 ms/train_step, depth 8,
+  60 settle steps, batch 64), extending the demo-suite CPU verdict. A depth
+  frontier over `PredictiveSettlingDynamics` (R11.3.11) is unaffordable until
+  the layered settle is vectorized/compiled: candidates are `SubstrateSettleKernel`
+  (R11.1.4 precedent, tile family), `torch.compile` over whole-settle, or
+  batch-per-step 4–8× (fewer steps, same samples — cheapest, no code change).
+  This enablement is R11.5.6-justified by CP-6: it is the sweep's cost floor.
+- **`GradientCredit` silently zero-fills unused grads** (`allow_unused=True`,
+  `credit.py`) — probe verified the PC/BP graph reaches every layer today,
+  but any future dynamics that detaches activations would degrade silently
+  to last-layer-only learning. Candidate fail-loud upgrade (as-touch).
 - **`uv run pytest` resolves the USER-site pytest (2026-09-04):** the launcher
   at `~/.local/bin/pytest` (shebang `/usr/bin/python`) shadows the venv's,
   importing protobuf 6.33.6 from user site against gencode 7.35.1 stubs →
@@ -406,6 +419,12 @@ calibrated and idle. Demo-scale machinery + registered-scale GPU (conv
 speedup measured) is exactly the sweep CP-6 needs. CP-7 rides CP-6's
 findings; CP-5 stays pull-based until a finding gives people a reason to
 adopt.
+
+**Decision (2026-09-04, user): proceed with CP-6 first — and all three
+options will eventually be built.** Sequencing commitment: CP-6 → CP-5 →
+CP-7, with each door pulled when its predecessor lands a reason. First
+concrete step: R11.3.11 + R11.3.13 as one landing (μPC init + depth
+metrics), probe-first per RESEARCH3 E-1.
 
 ---
 
