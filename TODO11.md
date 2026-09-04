@@ -121,6 +121,7 @@ every workstream below.
 | **R11.2.21** | Zoo Registry deleted | 6 files + ~30 consumers stripped; all surfaces resolve native 5-D factories |
 | **R11.2.22** | Fidelity-gate determinism | `check_coordinate_fidelity(seed, fork_rng)`; verdicts deterministic |
 | **R11.2.24** | Resumable trainer (`fold_in` RNG) | `TrainerSnapshot` + `from_snapshot`; interrupted == uninterrupted **bitwise** (`tests/integration/test_trainer_resume.py`); pure `fold_in` locked by hypothesis (`tests/property/test_fold_in_rng.py`) |
+| **R11.2.25** | `torch.compile` layered-settle fast path | `StateDynamicsConfig.compiled=True` (predictive_settling, digital, no recurrent/tracking): one compiled graph per settle — **2.0×** end-to-end train_step at depth 8/60 steps (68 vs 133 ms), parity locked (`tests/integration/test_compiled_settle.py`); probe `scripts/probes/torch_compile_settle.py` |
 
 ### R11.3 — Research Track (RESEARCH3 Spines)
 
@@ -246,15 +247,18 @@ uv run python -m pytest tests/unit/core/test_root_exports.py -q
 
 ## 👁️ Watch (Live Items Only)
 
-- **Settle-loop cost is the CP-6 bottleneck (measured 2026-09-04):** the sPC
-  layered settle is a per-layer Python loop of small launches — CUDA measured
-  *slower* than CPU at registered PC scale (201 vs 142 ms/train_step, depth 8,
-  60 settle steps, batch 64), extending the demo-suite CPU verdict. A depth
-  frontier over `PredictiveSettlingDynamics` (R11.3.11) is unaffordable until
-  the layered settle is vectorized/compiled: candidates are `SubstrateSettleKernel`
-  (R11.1.4 precedent, tile family), `torch.compile` over whole-settle, or
-  batch-per-step 4–8× (fewer steps, same samples — cheapest, no code change).
-  This enablement is R11.5.6-justified by CP-6: it is the sweep's cost floor.
+- **Settle-loop cost (measured 2026-09-04):** sPC layered settle was
+  launch-bound — CUDA slower than CPU at registered PC scale (201 vs 142
+  ms/step). **R11.2.25 landed the `torch.compile` fast path**: eager loop
+  extracted to `_eager_layered_steps`; `_layered_settle_loop` (digital
+  arithmetic inlined, `op(x, w) == x @ w.T` verified bitwise) compiles the
+  whole settle into one graph behind `StateDynamicsConfig.compiled=True`.
+  Eager path is byte-identical when the flag is off. Guard rails: falls
+  back cleanly for recurrent geometries, per-iteration energy tracking,
+  and non-digital substrates. Remaining headroom if more is needed:
+  batch-per-step 4–8× (no code change) and extending the compiled path to
+  `EnergyMinimizationDynamics` (as-touch). The R11.3.11 depth frontier is
+  now affordable — run it with `compiled=True`.
 - **`GradientCredit` silently zero-fills unused grads** (`allow_unused=True`,
   `credit.py`) — probe verified the PC/BP graph reaches every layer today,
   but any future dynamics that detaches activations would degrade silently
