@@ -15,6 +15,7 @@ from computronium.ontology import (
     DigitalSubstrate,
     ElasticConsolidationUpdate,
     EnergyMinimizationDynamics,
+    ErrorPredictiveCodingDynamics,
     EuclideanUpdate,
     FeedforwardGeometry,
     GeometryConfig,
@@ -230,6 +231,8 @@ def compose_system[  # ruff: ignore[complex-structure]
                 dynamics = EnergyMinimizationDynamics(dynamics_cfg)
             elif dynamics_type == "predictive_settling":
                 dynamics = PredictiveSettlingDynamics(dynamics_cfg)
+            elif dynamics_type == "error_predictive_coding":
+                dynamics = ErrorPredictiveCodingDynamics(dynamics_cfg)
             elif dynamics_type == "spike_integration":
                 dynamics = SpikeIntegrationDynamics(dynamics_cfg)
             elif dynamics_type == "diffusion":

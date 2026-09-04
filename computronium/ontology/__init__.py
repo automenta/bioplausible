@@ -33,6 +33,7 @@ from computronium.ontology.credit import (
 from computronium.ontology.dynamics import (
     DiffusionDynamics,
     EnergyMinimizationDynamics,
+    ErrorPredictiveCodingDynamics,
     InstantaneousDynamics,
     LazyStateDynamics,
     PredictiveSettlingDynamics,
@@ -150,6 +151,7 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "StateDynamics",
     "EnergyMinimizationDynamics",
     "PredictiveSettlingDynamics",
+    "ErrorPredictiveCodingDynamics",
     "SpikeIntegrationDynamics",
     "InstantaneousDynamics",
     "DiffusionDynamics",

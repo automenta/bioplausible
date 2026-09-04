@@ -417,6 +417,42 @@ def _fig_spatial_lattice_geometry_swap(record: dict) -> Figure:
     return fig
 
 
+def _fig_epc_fast_settle(record: dict) -> Figure:
+    import matplotlib.pyplot as plt
+
+    data = record["data"]
+    arms = data["arms"]
+    names = list(arms)
+    fig, (ax_acc, ax_dev) = plt.subplots(1, 2, figsize=(9, 4))
+    accs = [arms[name]["train_acc"] for name in names]
+    ax_acc.bar(names, accs, color=[COLOR_CONTRAST, COLOR_ARM])
+    ax_acc.set_ylim(0, 1)
+    chance_line(ax_acc, 1 / 10, "chance (0.1)")
+    ax_acc.set_ylabel("train accuracy")
+    ax_acc.set_title("D12 — one wiring, one swapped D-axis (ePC)")
+    for i, (name, acc) in enumerate(zip(names, accs, strict=True)):
+        budget = arms[name]["settle_budget"]
+        ax_acc.text(
+            i, acc, f"{acc:.2f}\n({budget} steps)", ha="center", va="bottom", fontsize=9
+        )
+    for name, color in zip(names, [COLOR_CONTRAST, COLOR_ARM], strict=True):
+        devs = arms[name]["nudged_layer_deviations"]
+        ax_dev.plot(
+            range(len(devs)),
+            devs,
+            marker="o",
+            color=color,
+            label=name,
+        )
+    ax_dev.set_yscale("symlog", linthresh=1e-4)
+    ax_dev.set_xlabel("layer (input → hidden → output)")
+    ax_dev.set_ylabel("|nudged − free| (max, per layer)")
+    ax_dev.set_title("the output-error signal reaches every layer in ePC")
+    ax_dev.legend()
+    apply_style(fig)
+    return fig
+
+
 _FACTORIES: dict[str, Callable[[dict], Figure]] = {
     "compose_6axis": _fig_compose_train,
     "swap_credit": _fig_credit_swap,
@@ -429,6 +465,7 @@ _FACTORIES: dict[str, Callable[[dict], Figure]] = {
     "graph_geometry_swap": _fig_graph_geometry_swap,
     "attention_geometry_swap": _fig_attention_geometry_swap,
     "spatial_lattice_geometry_swap": _fig_spatial_lattice_geometry_swap,
+    "epc_fast_settle": _fig_epc_fast_settle,
 }
 
 

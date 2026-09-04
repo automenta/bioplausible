@@ -143,6 +143,10 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
         "computronium.ontology.dynamics",
         "PredictiveSettlingDynamics",
     ),
+    "ErrorPredictiveCodingDynamics": (
+        "computronium.ontology.dynamics",
+        "ErrorPredictiveCodingDynamics",
+    ),
     "QuantumSubstrate": ("computronium.ontology.substrate", "QuantumSubstrate"),
     "QuantizedSubstrate": ("computronium.ontology.substrate", "QuantizedSubstrate"),
     "RandomProjectionsCredit": (
@@ -343,6 +347,7 @@ __all__ = [
     "DigitalSubstrate",
     "ElasticConsolidationUpdate",
     "EnergyMinimizationDynamics",
+    "ErrorPredictiveCodingDynamics",
     "EuclideanUpdate",
     "ExperimentConfig",
     "FastWeightPlasticity",

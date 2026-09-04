@@ -427,7 +427,10 @@ class SystemConfig:
 
         # Predictive settling dynamics requires compatible credit
         # PC uses local errors, works with thermodynamic contrast or local goodness
-        if self.dynamics.dynamics_type == "predictive_settling":  # ruff: ignore[collapsible-if]
+        if self.dynamics.dynamics_type in (  # ruff: ignore[literal-membership, collapsible-if]
+            "predictive_settling",
+            "error_predictive_coding",
+        ):
             if self.credit.credit_type not in (  # ruff: ignore[literal-membership]
                 "thermodynamic_contrast",
                 "equilibrium",
@@ -435,8 +438,9 @@ class SystemConfig:
                 "forward_only",
             ):
                 raise ValueError(
-                    f"Predictive settling dynamics requires thermodynamic_contrast, "
-                    f"local_goodness, or forward_only credit, got {self.credit.credit_type!r}"
+                    f"{self.dynamics.dynamics_type} dynamics requires "
+                    f"thermodynamic_contrast, local_goodness, or forward_only credit, "
+                    f"got {self.credit.credit_type!r}"
                 )
 
         # Energy minimization with momentum requires compatible update

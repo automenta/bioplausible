@@ -177,7 +177,7 @@ class StateDynamicsConfig:
 
     Attributes:
         dynamics_type: "energy_minimization", "predictive_settling",
-            "spike_integration", "instantaneous", "diffusion"
+            "error_predictive_coding", "spike_integration", "instantaneous", "diffusion"
         max_steps: Maximum settling iterations
         convergence_threshold: Early stopping threshold
         convergence_start: Step to start checking convergence
@@ -326,6 +326,36 @@ class StateDynamicsConfig:
             track_free_energy_per_iter=track_free_energy_per_iter,
         )
 
+    @classmethod
+    def error_predictive_coding(
+        cls,
+        *,
+        max_steps: int = 10,
+        convergence_threshold: float = 1e-4,
+        convergence_start: int = 1,
+        step_size: float = 0.1,
+        beta: float = 0.5,
+        momentum: float = 0.0,
+        track_free_energy_per_iter: bool = False,
+    ) -> StateDynamicsConfig:
+        """Error-parameterized PC (ePC, Goemaere et al., arXiv:2505.20137, ICML 2026).
+
+        Reparameterizes PC dynamics in terms of prediction errors εᵢ instead of
+        states sᵢ. The state is sᵢ = ŝᵢ + εᵢ where ŝᵢ = f_θᵢ(sᵢ₋₁). Reverse-mode AD
+        carries the output-loss gradient to all errors simultaneously — no signal
+        decay — reaching the same PC equilibrium as sPC in a handful of steps.
+        """
+        return cls(
+            dynamics_type="error_predictive_coding",
+            max_steps=max_steps,
+            convergence_threshold=convergence_threshold,
+            convergence_start=convergence_start,
+            step_size=step_size,
+            beta=beta,
+            momentum=momentum,
+            track_free_energy_per_iter=track_free_energy_per_iter,
+        )
+
 
 # ============================================================
 # StateDynamics Protocol
@@ -401,7 +431,11 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
     """
     tile_energy = getattr(geometry, "hopfield_energy", None)
     block_count = getattr(geometry, "block_act_count", None)
-    if callable(tile_energy) and block_count is not None and len(all_acts) == block_count:
+    if (
+        callable(tile_energy)
+        and block_count is not None
+        and len(all_acts) == block_count
+    ):
         return tile_energy(all_acts)
 
     if not all_acts or len(all_acts) < 2:
@@ -803,7 +837,11 @@ class PredictiveSettlingDynamics:
 
         # Initialize layer states from a feedforward pass
         # This gives us the correct shapes for each layer
-        init_acts = geometry.forward_with_intermediates(x, substrate) if hasattr(geometry, "forward_with_intermediates") else None
+        init_acts = (
+            geometry.forward_with_intermediates(x, substrate)
+            if hasattr(geometry, "forward_with_intermediates")
+            else None
+        )
         if init_acts is not None and len(init_acts) == len(layered.weights) + 1:
             # Use feedforward activations as initial states
             acts = list(init_acts)  # [input, hidden1, hidden2, ..., output]
@@ -818,7 +856,9 @@ class PredictiveSettlingDynamics:
                 acts.append(h)
 
         # Track free energy per iteration across all layers
-        layer_free_energy: list[float] = [] if self.config.track_free_energy_per_iter else None
+        layer_free_energy: list[float] = (
+            [] if self.config.track_free_energy_per_iter else None
+        )
 
         # Predictive coding settling: top-down prediction, bottom-up error correction
         # We settle all layers simultaneously for max_steps iterations
@@ -827,7 +867,9 @@ class PredictiveSettlingDynamics:
             # Bottom-up: errors propagate up to update layer states
             new_acts = [acts[0]]  # Input layer is clamped
 
-            for i, (weight, bias) in enumerate(zip(layered.weights, layered.biases, strict=True)):
+            for i, (weight, bias) in enumerate(
+                zip(layered.weights, layered.biases, strict=True)
+            ):
                 # Layer i+1 predicts layer i's activity
                 # acts[i+1] is current state of layer i+1
                 # weight maps from layer i to layer i+1: W_{i+1} @ acts[i] ≈ acts[i+1]
@@ -849,7 +891,10 @@ class PredictiveSettlingDynamics:
                 h_upper_new = h_upper + self.config.step_size * op(error, weight)
                 new_acts.append(h_upper_new)
 
-                if self.config.track_free_energy_per_iter and layer_free_energy is not None:
+                if (
+                    self.config.track_free_energy_per_iter
+                    and layer_free_energy is not None
+                ):
                     layer_free_energy.append(error.pow(2).sum().item())
 
             # Apply recurrent connection if present (for RecurrentGeometry)
@@ -859,14 +904,18 @@ class PredictiveSettlingDynamics:
                 hidden_idx = len(new_acts) - 2  # Second to last (last hidden)
                 h_hidden = new_acts[hidden_idx]
                 # Recurrent update: h = h + step * op(h, W_rec)
-                h_hidden_new = h_hidden + self.config.step_size * op(h_hidden, layered.recurrent_weight)
+                h_hidden_new = h_hidden + self.config.step_size * op(
+                    h_hidden, layered.recurrent_weight
+                )
                 new_acts[hidden_idx] = h_hidden_new
 
             acts = new_acts
 
         if target is not None:
             # Nudge the output layer toward the target
-            acts[-1] = acts[-1] + self.config.beta * (_one_hot(target, acts[-1]) - acts[-1])
+            acts[-1] = acts[-1] + self.config.beta * (  # ruff: ignore[non-augmented-assignment]
+                _one_hot(target, acts[-1]) - acts[-1]
+            )
 
         if self.config.track_free_energy_per_iter and layer_free_energy is not None:
             self._free_energy_history = layer_free_energy
@@ -910,13 +959,11 @@ class PredictiveSettlingDynamics:
                 ):
                     pred = new_acts[i] @ w.T
                     if b is not None:
-                        pred = pred + b
+                        pred = pred + b  # ruff: ignore[non-augmented-assignment]
                     fe += (new_acts[i + 1] - pred).pow(2).sum().item()
                 self._free_energy_history.append(fe)
             if step >= self.config.convergence_start:
-                delta = torch.dist(
-                    new_acts[-1], all_acts[-1], p=float("inf")
-                ).item()
+                delta = torch.dist(new_acts[-1], all_acts[-1], p=float("inf")).item()
                 if delta < self.config.convergence_threshold:
                     all_acts = new_acts
                     break
@@ -954,6 +1001,169 @@ class PredictiveSettlingDynamics:
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
         return _energy_tensor(_state_energy_vector(state)).pow(2).sum()
+
+
+class ErrorPredictiveCodingDynamics:
+    """Error-parameterized predictive coding (ePC) — Goemaere et al., "ePC: Fast
+    and Deep Predictive Coding in Digital Simulation", arXiv:2505.20137 (ICML 2026).
+
+    sPC's state dynamics attenuate the output-loss signal exponentially with depth
+    (each layer traversal compounds a λ<1 attenuation), stalling deep networks.
+    ePC reparameterizes the dynamics in terms of prediction errors εᵢ: the state
+    at layer i is sᵢ = ŝᵢ + εᵢ with ŝᵢ = f_θᵢ(sᵢ₋₁), so the predicted output is a
+    function of every error directly. Reverse-mode AD carries the output-loss
+    gradient to all errors simultaneously — unattenuated — reaching the same PC
+    equilibrium as sPC in a handful of steps instead of hundreds. Weight updates
+    remain the same PC rule (Eq. 3): Δθᵢ ∝ (∂ŝᵢ/∂θᵢ)ᵀ εᵢ.
+
+    Not biologically local (a digital-simulation device): trading locality for
+    propagation reach is exactly the ePC trade-off — see the paper's §4.2.
+    """
+
+    def __init__(self, config: StateDynamicsConfig | None = None):
+        self.config = config or StateDynamicsConfig.error_predictive_coding()
+        self._last_errors: list[Tensor] | None = None
+
+    @staticmethod
+    def _transitions(
+        layers: torch.nn.ModuleList,
+    ) -> list[tuple[Tensor, Tensor | None, tuple[torch.nn.Module, ...]]]:
+        """Group the module stack into (weight, bias, activations) transitions.
+
+        Each Linear opens a transition; consecutive non-Linear modules close
+        it as the transition's activation chain. Deep-linear stacks yield
+        empty activation chains — error injection still applies.
+        """
+        transitions: list[
+            tuple[Tensor, Tensor | None, tuple[torch.nn.Module, ...]]
+        ] = []
+        current: tuple[Tensor, Tensor | None, tuple[torch.nn.Module, ...]] | None = None
+        for module in layers:
+            if isinstance(module, torch.nn.Linear):
+                if current is not None:
+                    transitions.append(current)
+                current = (module.weight, module.bias, ())
+            elif current is not None:
+                current = (current[0], current[1], (*current[2], module))
+        if current is not None:
+            transitions.append(current)
+        return transitions
+
+    def _build_forward_with_errors(
+        self,
+        x: Tensor,
+        transitions: list[tuple[Tensor, Tensor | None, tuple[torch.nn.Module, ...]]],
+        substrate: Substrate,
+        eps: list[Tensor],
+    ) -> tuple[list[Tensor], Tensor]:
+        """Feedforward pass with error perturbations: sᵢ = ŝᵢ + εᵢ.
+
+        Returns (states, ŷ) where states = [x, s₀, ..., s_{L-2}, ŷ]; hidden
+        states carry their error, the output carries none (Algorithm 2).
+        """
+        op = substrate.get_forward_operator()
+        h = x.flatten(1) if x.dim() > 2 else x
+        states = [h]
+        last = len(transitions) - 1
+        for i, (weight, bias, activations) in enumerate(transitions):
+            h = op(h, weight)
+            if bias is not None:
+                h = h + bias  # ruff: ignore[non-augmented-assignment]
+            for activation in activations:
+                h = activation(h)
+            if i < last:
+                if i < len(eps):
+                    h = h + eps[i]  # ruff: ignore[non-augmented-assignment]
+                states.append(h)
+        states.append(h)
+        return states, h
+
+    def settle(
+        self,
+        state: CompositeState,
+        geometry: Geometry,
+        substrate: Substrate,
+        target: Tensor | None = None,
+    ) -> CompositeState:
+        x = _get_state_x(state)
+        if x is None:
+            raise ValueError("State must contain input 'x'")
+
+        layers = layer_stack(geometry)
+        if layers is None:
+            raise TypeError("ePC settling requires a layer-structured geometry")
+        transitions = self._transitions(layers)
+        if not transitions:
+            raise TypeError("ePC settling requires at least one Linear transition")
+
+        xf = x.flatten(1) if x.dim() > 2 else x
+        with torch.no_grad():
+            probe_states, _ = self._build_forward_with_errors(
+                xf, transitions, substrate, []
+            )
+        eps = [
+            torch.zeros(s.shape, device=s.device, dtype=s.dtype).requires_grad_(True)
+            for s in probe_states[1:-1]
+        ]
+
+        for step in range(self.config.max_steps):
+            with torch.enable_grad():
+                states, y_hat = self._build_forward_with_errors(
+                    xf, transitions, substrate, eps
+                )
+                # PC energy (Algorithm 2): ½ Σ ‖εᵢ‖² + β·ℒ(ŷ, y)
+                energy = torch.zeros((), device=xf.device, dtype=xf.dtype)
+                for e in eps:
+                    energy = (  # ruff: ignore[non-augmented-assignment]
+                        energy + 0.5 * e.pow(2).sum()
+                    )
+                if target is not None:
+                    energy = (  # ruff: ignore[non-augmented-assignment]
+                        energy
+                        + self.config.beta
+                        * torch.nn.functional.cross_entropy(y_hat, target)
+                    )
+                # ∇εⱼE = εⱼ + (∂ŷ/∂εⱼ)ᵀ ∇ŷℒ — one reverse-mode sweep, unattenuated
+                grads = torch.autograd.grad(energy, eps, allow_unused=True)
+
+            new_eps = [
+                e
+                - self.config.step_size * (g if g is not None else torch.zeros_like(e))
+                for e, g in zip(eps, grads, strict=True)
+            ]
+            with torch.no_grad():
+                delta = max(
+                    (new - old).abs().max().item()
+                    for new, old in zip(new_eps, eps, strict=True)
+                )
+            eps = [e.detach().requires_grad_(True) for e in new_eps]
+
+            if (
+                step >= self.config.convergence_start
+                and delta < self.config.convergence_threshold
+            ):
+                break
+
+        states, _ = self._build_forward_with_errors(xf, transitions, substrate, eps)
+        self._last_errors = eps
+
+        if target is None:
+            state.free_state = states
+        else:
+            state.nudged_state = states
+        state.activations = states
+        return state
+
+    def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
+        """PC energy of the last settle: ½ Σ ‖εᵢ‖²."""
+        if self._last_errors is None:
+            return torch.tensor(0.0)
+        energy = torch.zeros((), device=self._last_errors[0].device)
+        for e in self._last_errors:
+            energy = (  # ruff: ignore[non-augmented-assignment]
+                energy + 0.5 * e.pow(2).sum()
+            )
+        return energy
 
 
 class SpikeIntegrationDynamics:
@@ -1299,6 +1509,7 @@ class LazyStateDynamics:
 __all__ = [
     "DiffusionDynamics",
     "EnergyMinimizationDynamics",
+    "ErrorPredictiveCodingDynamics",
     "InstantaneousDynamics",
     "LazyStateDynamics",
     "PredictiveSettlingDynamics",

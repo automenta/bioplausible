@@ -7,6 +7,7 @@
 > **all remaining TODO10 work**: Register B capability pulls, the Register C
 > hygiene pass, the carried registers, and the research-track spine's
 > open prerequisites. Research catalog: [RESEARCH3.md](RESEARCH3.md).
+> Landing-cost / wiring-hygiene work moved to [TODO.md](TODO.md) (2026-09-04).
 >
 > **Identity (reaffirmed from R10 v4):** Computronium is an ML library whose
 > every claim is a live demonstration. Tests are the evidence system. A claim
@@ -18,11 +19,12 @@
 > history or hypothesis.*
 >
 > **State: CORE COMPLETE (2026-09-04).** All planned R11 capability pulls and
-> hygiene items landed at HEAD. The library demonstrates all 11 capabilities
-> (D1–D11) at demo scale; `comp repro` 8/8; property suite 670 passed; demo
-> gate 11/11; gallery lock green; `comp gallery --run` renders all figures.
-> Remaining items are explicitly **pull-based** or **deprioritized** — they
-> land only when a demo, campaign, or research paragraph needs them.
+> hygiene items landed at HEAD; R11.3.12 (ePC, D12) pulled 2026-09-04. The
+> library demonstrates all 12 capabilities (D1–D12) at demo scale;
+> `comp repro` 8/8; property suite 670 passed; demo gate 13/13; gallery lock
+> green; `comp gallery` renders all figures. Remaining items are explicitly
+> **pull-based** or **deprioritized** — they land only when a demo,
+> campaign, or research paragraph needs them.
 
 ---
 
@@ -62,7 +64,7 @@ every workstream below.
 
 ---
 
-## 🎯 The Demonstration Table (D1–D11)
+## 🎯 The Demonstration Table (D1–D12)
 
 | #  | Capability                                                          | Demo test                                      |
 |----|---------------------------------------------------------------------|------------------------------------------------|
@@ -77,6 +79,7 @@ every workstream below.
 | D9 | The G-axis is a swap (capacity-matched graph vs flat, structural generalization) | `test_demo_graph_geometry_swap.py` |
 | D10| The G-axis is a swap (capacity-matched attention vs flat, permutation sensitivity) | `test_demo_attention_geometry_swap.py` |
 | D11| The G-axis is a swap (capacity-matched 3D lattice vs flat, spatial noise robustness) | `test_demo_spatial_lattice_geometry_swap.py` |
+| D12| The D-axis settles without signal decay (ePC: free equilibrium = feedforward bitwise, nudged signal reaches every layer, 1/3 settle budget) | `test_demo_epc_fast_settle.py` |
 
 ---
 
@@ -124,6 +127,7 @@ every workstream below.
 | **R11.3.1** | PR-9 Campaign commissioning | Smoke kill→resume cycle at HEAD; unbuffered pre-kill trail; `records/episodes.json` |
 | **R11.3.2** | PR-2 θ-audit harness | `theta_audit()` context manager; SHA-256 over name+device+dtype+bytes |
 | **R11.3.3** | PR-5 Calibrated stability guard | Demo-harvest ROC within 0.005% of deployed τ; `fast_proxy` calibration-only; artifact + live lock |
+| **R11.3.12** | ePC fast-settling solver (D12) | `ErrorPredictiveCodingDynamics` — error reparameterization per Goemaere et al. (arXiv:2505.20137, ICML 2026); free equilibrium = feedforward bitwise, nudged signal reaches every hidden layer (sPC's reaches none), trains at 1/3 budget; demo + gallery figure + round-trip |
 
 ### R11.4 — Adoption Surface
 
@@ -148,7 +152,6 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 | **R11.2.16** TF-IDF weighting / `V_nudged` | Research track wants strengthened PC Lyapunov xfail | Hygiene |
 | **R11.3.4** AutoScientist M-axis frontier | Tangible Checkpoint 5 — first *finding* figure (Pareto over 𝒞) | Research |
 | **R11.3.11** μPC depth scaling | Deep PC/EqProp boundary study; layer-dependent init scale (`init_scale` → per-layer depth-scaled, `1/√(N·L)` hidden + `1/N` output, N(0,1) init) — μPC (arXiv:2505.13124) lifts PC past ~10 layers and gives zero-shot LR transfer; directly targets the known deep-EqProp signal-loss boundary (RESEARCH3.md:185). Pull with a scaling-paragraph or the PC Lyapunov xfail. | Research |
-| **R11.3.12** ePC fast-settling solver | Error-parameterized PC (Goemaere et al. arXiv:2505.20137) — output error traverses full depth each inference step, reaching equilibrium in a few steps vs sPC's hundreds; maps to a new StateDynamics or settle-acceleration in the D-axis. Pull when a deep-PC demo or settling-speed claim needs it. | Research |
 | **R11.3.13** Depth-metric classes | `ShortestPathDepth`/`LongestPathDepth`/`FixedDepth` for arbitrary graph topologies (feeds μPC scaling on `GraphGeometry`/`TileMesh`/`FabricPC` where "depth" is per-node effective path length). Pull with R11.3.11 when graph-scaling is wanted. | Research |
 | **R11.2.23** Energy-framed metric contract | FabricPC's `EvalMetric(value, weight) + finalize` weighted aggregation — correct ragged-batch / per-token vs per-sample normalization, `perplexity = exp(mean CE)` (not mean of per-batch exp). Upgrade to Computronium's metric reporting. | Hygiene |
 | **R11.2.24** Resumable trainer (`fold_in` RNG) | `train` returns `(params, opt_state, step)`; resume = pass back + `start_epoch`. RNG = `fold_in(base, epoch, batch)` — a pure function, so interrupted == uninterrupted bitwise. Strengthens campaign checkpoint/resume (R11.3.1). | Hygiene |
@@ -213,25 +216,49 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 # Property locks (fast CI gate) — 670 passed
 uv run pytest tests/property/ -q
 
-# Demo gate (D1–D11) — 11/11 passed, ~115s
-uv run pytest tests/integration/ -k "demo or gallery_lock" -q
+# Demo gate (D1–D12) — 13/13 passed (12 demos + gallery lock), ~145s
+# NOTE: invoke as `python -m pytest` — see Watch (user-site pytest drift)
+uv run python -m pytest tests/integration/ -k "demo or gallery_lock" -q
 
 # Gallery lock — figure data checksums match manifest
-uv run pytest tests/integration/test_gallery_lock.py -q
+uv run python -m pytest tests/integration/test_gallery_lock.py -q
 
 # Reproducibility — 8/8 native families bitwise identical
 uv run comp repro --seed 42 --device cpu
 
-# Full gallery regeneration
-uv run comp gallery --run
+# Gallery re-render from on-disk records (deliberate re-pin; `--run` re-runs
+# the demo suite first and needs >2min)
+uv run comp gallery
 
 # Root exports
-uv run pytest tests/unit/core/test_root_exports.py -q
+uv run python -m pytest tests/unit/core/test_root_exports.py -q
 ```
 
 ---
 
 ## 👁️ Watch (Live Items Only)
+
+- **`uv run pytest` resolves the USER-site pytest (2026-09-04):** the launcher
+  at `~/.local/bin/pytest` (shebang `/usr/bin/python`) shadows the venv's,
+  importing protobuf 6.33.6 from user site against gencode 7.35.1 stubs →
+  `VersionError` at gRPC test collection. Invoke tests as
+  **`uv run python -m pytest`** (guaranteed venv python, protobuf 7.36.1).
+  Gate commands above updated accordingly.
+- **Plain `uv sync` strips dev extras (2026-09-04):** a bare `uv sync
+  --upgrade` re-syncs the venv to main-deps-only, silently removing
+  optuna/scipy/torchvision (they live in the `dev` extra group, not main
+  deps). Symptom: sudden ModuleNotFoundError at import. Durable fix:
+  `uv sync --dev --all-extras`. pyproject was briefly double-listing
+  optuna/scipy in main deps during triage — reverted; groups are canonical.
+- **D1/D8 record drift absorbed 2026-09-04:** `comp gallery` (render-only
+  re-pin) flagged compose_6axis/geometry_swap data changed vs the old
+  manifest — same class as the 2026-09-03 sweep-regime note. Manifest
+  re-pinned from current on-disk records; demo gate + gallery lock green
+  after. If the lock fires again: check test asserts first, then re-render.
+- **Demo-gate budget drifted past R11.5.7's ≤90 s (now ~145 s at 12 demos +
+  lock):** D8–D12 additions grew the gate before this note; not a failure —
+  re-baseline the standing rule when the suite next gets a dedicated
+  fast/slow split.
 
 - **axis_probe `[2-0]` flake** — no recurrence since 2026-08-31.
 - **CUDA tolerance boundaries** shift xfail edges — CPU/GPU tests kept separate.
@@ -264,7 +291,9 @@ Sequencing: 1–4 complete; 5 after API stabilizes (done); 6–7 are RESEARCH3 C
 
 ## 📝 Notes for the Next Editor (2026-09-04)
 
-- **All core R11 items complete** — D1–D11 at demo scale; `comp repro` 8/8; property 670 passed; demo gate 11/11; gallery lock green.
+- **All core R11 items complete; R11.3.12 (ePC/D12) pulled 2026-09-04** —
+  D1–D12 at demo scale; `comp repro` 8/8; property 670 passed; demo gate
+  13/13; gallery lock green.
 - **Registry is gone — never re-add it** (2026-09-03). Ontology is the composition surface; models resolve through native factories and `compose_*`. `KernelRegistry` (acceleration/) is unrelated and stays.
 - **README is never edited** (2026-09-03). No sunset condition.
 - **Ontology package layout (R11.1.8):** implementations in `_`-prefixed modules (`dynamics/_dynamics.py`, `substrate/_substrate.py`); `__init__.py` = docstrings + re-exports only.
@@ -275,7 +304,25 @@ Sequencing: 1–4 complete; 5 after API stabilizes (done); 6–7 are RESEARCH3 C
 - **PR-5 instrument (R11.3.3):** `calibrate_demo_harvest` (stability/calibration.py) single calibration surface; artifact `docs/figures/registered/stability_guard_pr5.json`. Known-bad = manufactured explosive family — re-calibrate against real diverged runs when failure manifesto accumulates. Deploying kill switch = wiring `probe_interval_for_overhead` (102 episodes) into AutoScientist loop.
 - **Demo-test record determinism (D8):** seed *before* materializing loader batches; workers spawn per loader *iteration*, so materialize once and share. Match parameter counts and assert parity for fairness.
 - **`equitile` deprecated (2026-09-03):** canonical key is `"tile"`. Residual mentions cosmetic (test names, model names, benchmark variables, docstrings) — rename on next touch, never as sweep.
-- **Remaining pull-based items:** R11.1.10, R11.1.11, R11.2.9/13/14/16, R11.3.4–3.10, R11.4.1/4.3/4.4. Land only when demo/campaign/research needs them.
+- **ePC single source (R11.3.12 / D12, 2026-09-04):** `ErrorPredictiveCodingDynamics`
+  lives in `dynamics/_dynamics.py` next to `PredictiveSettlingDynamics`.
+  Attribution: Goemaere et al., "ePC: Fast and Deep Predictive Coding in
+  Digital Simulation", arXiv:2505.20137 (ICML 2026) — class + config
+  docstrings carry it. Surfaces wired: `dynamics/__init__`, ontology
+  `__init__`, root `_LAZY` + `__all__`, `StateDynamicsConfig.error_predictive_coding()`,
+  `from_spec` branch (factory.py), `SystemConfig.validate()` predictive-settling
+  credit branch (accepts both PC dynamics). Free-phase equilibrium =
+  feedforward pass bitwise (zero-init errors are the fixed point); nudged
+  phase = β·CE driven through full-graph reverse-mode AD (requires
+  `torch.enable_grad()` inside settle — pipeline runs no_grad for
+  ThermodynamicContrast). Out-of-place adds only in the error forward —
+  in-place adds pin the autograd graph (same CUDA-leak rule as geometry.py).
+  Demo claims are structural (equilibrium, propagation, budget) — accuracy
+  parity is NOT claimed: ePC ≈ 0.44 vs sPC ≈ 0.55 at (32,32)/150 batches;
+  the ÷β contrastive credit caps ePC's learning signal on deeper stacks
+  (candidates if revisited: PC-native weight gradient (∂ŝ/∂θ)ᵀε or a
+  contrast-β decoupled from the loss weight).
+- **Remaining pull-based items:** R11.1.10, R11.1.11, R11.2.9/13/14/16, R11.3.4–3.11, R11.3.13, R11.4.1/4.3/4.4. Land only when demo/campaign/research needs them.
 - **Lint/type debt deprioritized:** ruff clean passively; pyright on new modules only. Legacy findings carry per-line noqa markers that self-flag on touch.
 
 ### Sprint Retro (2026-09-03, binding for future sessions)

@@ -33,6 +33,7 @@ EXPECTED = {
     "graph_geometry_swap": "D9",
     "attention_geometry_swap": "D10",
     "spatial_lattice_geometry_swap": "D11",
+    "epc_fast_settle": "D12",
 }
 
 
