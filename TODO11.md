@@ -33,7 +33,9 @@
 > Registry deleted), **R11.1.6** (_TaskTrainer scheduler/tracker/safety
 > wiring; verified GPU), **R11.1.7** (diffusion target term — nudged-Langevin
 > energy functional now target-responsive; fidelity probe passes),
-> Registry deleted: `core/registry.py`, `core/audit.py`, `core/model_spec.py`,
+> **R11.1.9** (timing-asymmetric STDP wired to 5-D pipeline; spike rasters,
+> eligibility traces, configurable threshold), Registry deleted:
+> `core/registry.py`, `core/audit.py`, `core/model_spec.py`,
 > `mep/_registration.py`, `models/native/registration.py`,
 > `ontology/credit_registration.py` + ~30 consumer files stripped; all
 > surfaces resolve native 5-D factories now; registry-era tests replaced by
@@ -305,20 +307,21 @@ sequencing below is the expected order, not a mandate.
   now handles the full `ActivityValue` union (list→last tensor, dict→zeros)
   fixing the pyright return-type error. Ruff + pyright clean on all touched
   modules.
-- [ ] **R11.1.9 Timing-asymmetric STDP wired to the 5-D pipeline** (from the
-  `create_spiking_snn_mlp` Register-C row; the D-axis's remaining depth).
-  The pipeline-facing rate-coded surrogate (TemporalTraceCredit) has no error
-  signal (chance on MNIST); genuine STDP lives unwired in
-  `core/local_learning/rules/spiking.py`. This is also the standing
-  **R10.3.5 refutation candidate**: a visible refutation demo (Hebbian-only
-  plateau) ships with the same pipeline as any success. **Note (2026-09-03):**
-  The LocalGoodnessCredit pipeline path (used by `create_hebbian_mlp` and
-  `create_snn_mlp`) now works since nudging was fixed in
-  `InstantaneousDynamics` — params move and learning occurs. The refutation
-  candidate specifically targets `create_spiking_snn_mlp` with
-  SpikeIntegrationDynamics + TemporalTraceCredit. Pull when the SNN family is
-  next touched or a research paragraph needs it; a learning claim additionally
-  needs the trace-based rule in the pipeline.
+- [x] **R11.1.9 Timing-asymmetric STDP wired to the 5-D pipeline** ✅ **LANDED 2026-09-03.**
+  The pipeline-facing rate-coded surrogate (TemporalTraceCredit) now uses
+  per-neuron per-step spike rasters from ``SpikeIntegrationDynamics`` to compute
+  eligibility traces (pre/post traces) and applies the canonical STDP update:
+  ``Δw ∝ a_plus * post^T @ pre_trace - a_minus * post_trace^T @ pre``.
+  ``SpikeIntegrationDynamics`` now produces ``spike_rasters`` (per-layer
+  per-step spike patterns) and ``spike_counts`` in ``SystemState``.
+  ``TemporalTraceCredit.compute_pseudo_gradient`` uses timing-asymmetric STDP
+  when rasters are available, falling back to rate-coded surrogate otherwise.
+  Configurable spike ``threshold`` added to ``StateDynamicsConfig.spike_integration``
+  (default 1.0; ``create_spiking_snn_mlp`` uses 0.5 for more spikes).
+  ``CreditAssignmentConfig.temporal_trace`` gains ``tau_pre``/``tau_post`` for
+  trace decay constants. Params move (verified in ``test_params_moved``) but
+  supervised classification plateaus at chance — the expected refutation demo
+  (Hebbian-only, no error signal).
 - [ ] **R11.1.10 LazyStateDynamics at demo scale** (the D-axis's other
   remaining depth). Research-track/register material until a visible regime
   exists — pull only when a demo regime shows on-demand activation visibly

@@ -39,7 +39,9 @@ class CreditAssignmentConfig:
         feedback_scale: Scaling factor for feedback matrices
         a_plus: STDP potentiation amplitude (for temporal_trace)
         a_minus: STDP depression amplitude (for temporal_trace)
-        tau: STDP time constant (for temporal_trace)
+        tau: STDP time constant (for temporal_trace, legacy)
+        tau_pre: STDP pre-synaptic trace time constant (for timing-asymmetric STDP)
+        tau_post: STDP post-synaptic trace time constant (for timing-asymmetric STDP)
         homeostatic_target: Target activation norm for homeostatic scaling
     """
 
@@ -52,6 +54,8 @@ class CreditAssignmentConfig:
     a_plus: float = 1.0
     a_minus: float = 1.0
     tau: float = 20.0
+    tau_pre: float = 0.9
+    tau_post: float = 0.9
     homeostatic_target: float = 1.0
 
     @classmethod
@@ -123,11 +127,18 @@ class CreditAssignmentConfig:
         a_plus: float = 1.0,
         a_minus: float = 0.5,
         tau: float = 20.0,
+        tau_pre: float = 0.9,
+        tau_post: float = 0.9,
     ) -> CreditAssignmentConfig:
         """Potentiation/depression weights must differ: the rate-coded
         surrogate correlates the same (pre, post) activity pair in both
         directions, so ``a_plus == a_minus`` yields an identically-zero
-        pseudo-gradient."""
+        pseudo-gradient.
+
+        For timing-asymmetric STDP (when spike rasters are available),
+        ``tau_pre`` and ``tau_post`` control the exponential decay of the
+        pre- and post-synaptic eligibility traces.
+        """
         return cls(
             credit_type="temporal_trace",
             beta=beta,
@@ -138,6 +149,8 @@ class CreditAssignmentConfig:
             a_plus=a_plus,
             a_minus=a_minus,
             tau=tau,
+            tau_pre=tau_pre,
+            tau_post=tau_post,
         )
 
     @classmethod
@@ -644,12 +657,15 @@ class LocalGoodnessCredit:
 class TemporalTraceCredit:
     """Spike-timing correlations (STDP).
 
-    Rate-coded surrogate: the settled (pre, post) activity pair enters as a
-    weighted Hebbian correlation —-(a_plus - a_minus) * post^T@pre / batch —
-    since correlating one activity pair in both temporal orders yields the
-    same matrix. Potentiation must outweigh depression (a_plus > a_minus)
-    for a non-zero pseudo-gradient; the trace-based STDP rule with genuine
-    timing asymmetry lives in ``core/local_learning/rules/spiking.py``.
+    Supports two modes:
+    - Rate-coded surrogate: uses settled (pre, post) activity pairs as
+      weighted Hebbian correlation. This is the fallback when spike timing
+      data is unavailable.
+    - Timing-asymmetric STDP: uses per-neuron per-step spike rasters from
+      ``SpikeIntegrationDynamics`` to compute eligibility traces (pre/post
+      traces) and applies the canonical STDP update:
+        Δw ∝ a_plus * post^T @ pre_trace - a_minus * post_trace^T @ pre
+      where traces are exponential filters over spike history.
     """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE,)
@@ -676,28 +692,105 @@ class TemporalTraceCredit:
         if not weight_names:
             return []
 
+        # Check if spike rasters are available for timing-asymmetric STDP
+        spike_rasters = getattr(free_state, "spike_rasters", None)
+        use_timing_stdp = (
+            spike_rasters is not None
+            and len(spike_rasters) > 0
+            and isinstance(spike_rasters[0], list)
+        )
+
         batch = acts[0].shape[0]
         grads = []
-        for pair, name in zip(
-            _weight_acts(weight_names, acts, geometry), weight_names, strict=True
-        ):
-            if pair is None:
-                grads.append(torch.zeros_like(geometry.params[name]))
-                continue
-            pre, post = pair
 
-            # Causal correlation: post^T @ pre -> [out_dim, in_dim] (matches weight shape)
-            causal = post.T @ pre / batch
-            # Anti-causal: pre^T @ post -> [in_dim, out_dim], transpose for weight shape
-            anticausal = pre.T @ post / batch
-            anticausal_w = anticausal.T
+        if use_timing_stdp:
+            # Timing-asymmetric STDP using eligibility traces
+            # spike_rasters[layer][step] = [batch, neurons] for that layer's output
+            tau_pre = getattr(self.config, "tau_pre", 0.9)
+            tau_post = getattr(self.config, "tau_post", 0.9)
+            a_plus = self.config.a_plus
+            a_minus = self.config.a_minus
 
-            # STDP: potentiate causal, depress anti-causal
-            # Pseudo-gradient descended: -(a_plus * causal - a_minus * anticausal_w)
-            stdp_grad = -(
-                self.config.a_plus * causal - self.config.a_minus * anticausal_w
-            )
-            grads.append(stdp_grad)
+            # For each weight layer, we need pre and post spike rasters
+            # Weight i connects acts[i] (pre) -> acts[i+1] (post)
+            # Post-synaptic spikes for weight i: spike_rasters[i] (output of layer i)
+            # Pre-synaptic spikes for weight i: spike_rasters[i-1] (output of layer i-1)
+            # For i=0 (first layer), pre-synaptic is the input - rate encode it
+            for w_idx, name in enumerate(weight_names):
+                if w_idx >= len(spike_rasters):
+                    grads.append(torch.zeros_like(geometry.params[name]))
+                    continue
+
+                post_rasters = spike_rasters[w_idx]  # [step] -> [batch, post_neurons]
+                if not post_rasters:
+                    grads.append(torch.zeros_like(geometry.params[name]))
+                    continue
+
+                # Get pre-synaptic spikes
+                if w_idx == 0:
+                    # First layer: rate-encode input as pre-synaptic spikes
+                    # Input is acts[0] = x, shape [batch, in_dim]
+                    # We need to encode it as spikes for each time step
+                    # Use the same encoding as STDPLearningRule: sigmoid + Bernoulli
+                    x = acts[0]
+                    probs = torch.sigmoid(x)
+                    # Generate spikes for each time step (same pattern each step for rate coding)
+                    pre_rasters = [
+                        (torch.rand_like(probs) < probs).float()
+                        for _ in range(len(post_rasters))
+                    ]
+                else:
+                    pre_rasters = spike_rasters[w_idx - 1]
+
+                if not pre_rasters or len(pre_rasters) != len(post_rasters):
+                    grads.append(torch.zeros_like(geometry.params[name]))
+                    continue
+
+                # Compute eligibility traces
+                # pre_trace accumulates pre-synaptic spikes with exponential decay
+                pre_trace = torch.zeros_like(pre_rasters[0])  # [batch, pre_neurons]
+                for pre_spikes in pre_rasters:
+                    pre_trace = tau_pre * pre_trace + pre_spikes
+
+                # post_trace accumulates post-synaptic spikes with exponential decay
+                post_trace = torch.zeros_like(post_rasters[0])  # [batch, post_neurons]
+                for post_spikes in post_rasters:
+                    post_trace = tau_post * post_trace + post_spikes
+
+                # STDP update: pot = a_plus * post^T @ pre_trace, dep = a_minus * post_trace^T @ pre
+                # We need the final pre and post activity (last time step or average)
+                pre_final = pre_rasters[-1]  # [batch, pre_neurons]
+                post_final = post_rasters[-1]  # [batch, post_neurons]
+
+                # Potentiation: post^T @ pre_trace -> [post, pre]
+                pot = a_plus * (post_final.T @ pre_trace) / batch
+                # Depression: post_trace^T @ pre -> [post, pre]
+                dep = a_minus * (post_trace.T @ pre_final) / batch
+
+                stdp_grad = -(pot - dep)
+                grads.append(stdp_grad)
+        else:
+            # Rate-coded surrogate (fallback)
+            for pair, name in zip(
+                _weight_acts(weight_names, acts, geometry), weight_names, strict=True
+            ):
+                if pair is None:
+                    grads.append(torch.zeros_like(geometry.params[name]))
+                    continue
+                pre, post = pair
+
+                # Causal correlation: post^T @ pre -> [out_dim, in_dim] (matches weight shape)
+                causal = post.T @ pre / batch
+                # Anti-causal: pre^T @ post -> [in_dim, out_dim], transpose for weight shape
+                anticausal = pre.T @ post / batch
+                anticausal_w = anticausal.T
+
+                # STDP: potentiate causal, depress anti-causal
+                # Pseudo-gradient descended: -(a_plus * causal - a_minus * anticausal_w)
+                stdp_grad = -(
+                    self.config.a_plus * causal - self.config.a_minus * anticausal_w
+                )
+                grads.append(stdp_grad)
 
         return grads
 

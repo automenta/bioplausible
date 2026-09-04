@@ -724,6 +724,7 @@ def create_spiking_snn_mlp(
     device: str = "cpu",
     max_steps: int = 30,
     beta: float = 0.1,
+    threshold: float = 0.5,
 ) -> System:
     """Create a true Spiking Neural Network MLP with SpikeIntegrationDynamics and TemporalTraceCredit.
 
@@ -743,6 +744,7 @@ def create_spiking_snn_mlp(
         device: Target device
         max_steps: Number of simulation time steps
         beta: Nudge strength for nudged phase
+        threshold: Spike threshold (lower = more spikes)
 
     Returns:
         A composed 5-D System with FeedforwardGeometry + SpikeIntegrationDynamics
@@ -754,9 +756,13 @@ def create_spiking_snn_mlp(
         StateDynamicsConfig.spike_integration(
             max_steps=max_steps,
             beta=beta,
+            threshold=threshold,
         )
     )
-    credit = TemporalTraceCredit(CreditAssignmentConfig.temporal_trace())
+    credit = TemporalTraceCredit(CreditAssignmentConfig.temporal_trace(
+        tau_pre=0.9,
+        tau_post=0.9,
+    ))
     update = _default_update(lr)
 
     return compose_system(substrate, geometry, dynamics, credit, update)

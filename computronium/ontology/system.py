@@ -65,6 +65,8 @@ class SystemState:
         loss: Current loss value
         metrics: Accumulated metrics dict
         spike_counts: Per-step per-neuron spike counts (for spiking dynamics)
+        spike_rasters: Per-layer per-step spike rasters [layer][step] = [batch, neurons]
+            (for timing-asymmetric STDP credit assignment)
     """
 
     x: Tensor | None = None
@@ -77,6 +79,7 @@ class SystemState:
     loss: Tensor | float | None = None
     metrics: dict[str, float] = None  # type: ignore[assignment]
     spike_counts: list[Tensor] | None = None
+    spike_rasters: list[list[Tensor]] | None = None
 
     def __post_init__(self):
         if self.metrics is None:

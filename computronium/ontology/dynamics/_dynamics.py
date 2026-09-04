@@ -97,6 +97,7 @@ def _create_output_state(
     nudged_state: list[Tensor] | Tensor | None = None,
     activations: list[Tensor] | Tensor | None = None,
     spike_counts: list[Tensor] | None = None,
+    spike_rasters: list[list[Tensor]] | None = None,
 ) -> CompositeState:
     """Create a new state of the same type with updated fields.
 
@@ -125,6 +126,8 @@ def _create_output_state(
             activity["activations"] = activations
         if spike_counts is not None:
             activity["spike_counts"] = spike_counts
+        if spike_rasters is not None:
+            activity["spike_rasters"] = spike_rasters
         result: dict[str, ActivityValue] = activity
         return CompositeState(
             activity=result,
@@ -156,6 +159,9 @@ def _create_output_state(
                 spike_counts=spike_counts
                 if spike_counts is not None
                 else getattr(state, "spike_counts", None),
+                spike_rasters=spike_rasters
+                if spike_rasters is not None
+                else getattr(state, "spike_rasters", None),
             ),
         )
 
@@ -178,6 +184,7 @@ class StateDynamicsConfig:
         step_size: Learning rate for state updates
         beta: Nudge strength for energy-based methods
         momentum: Momentum coefficient for heavy-ball dynamics (energy_minimization)
+        threshold: Spike threshold for spike_integration dynamics
         track_free_energy_per_iter: Record free energy at each iteration
             for Control-Lyapunov analysis
         gradient_checkpointing: Use gradient checkpointing to trade compute
@@ -192,6 +199,7 @@ class StateDynamicsConfig:
     beta: float
     momentum: float
     track_free_energy_per_iter: bool
+    threshold: float = 1.0
     gradient_checkpointing: bool = False
 
     @classmethod
@@ -252,6 +260,7 @@ class StateDynamicsConfig:
         step_size: float = 0.1,
         beta: float = 0.5,
         momentum: float = 0.0,
+        threshold: float = 1.0,
         track_free_energy_per_iter: bool = False,
     ) -> StateDynamicsConfig:
         return cls(
@@ -262,6 +271,7 @@ class StateDynamicsConfig:
             step_size=step_size,
             beta=beta,
             momentum=momentum,
+            threshold=threshold,
             track_free_energy_per_iter=track_free_energy_per_iter,
         )
 
@@ -957,10 +967,12 @@ class SpikeIntegrationDynamics:
     single-membrane loop routed through ``Geometry.route``.
     """
 
-    _SPIKE_THRESHOLD = 1.0
-
     def __init__(self, config: StateDynamicsConfig | None = None):
         self.config = config or StateDynamicsConfig.spike_integration()
+
+    @property
+    def _spike_threshold(self) -> float:
+        return getattr(self.config, "threshold", 1.0)
 
     def settle(
         self,
@@ -989,7 +1001,8 @@ class SpikeIntegrationDynamics:
         h = substrate.initial_state(x)
 
         spike_counts: list[Tensor] = []
-        threshold = self._SPIKE_THRESHOLD
+        spike_rasters: list[Tensor] = []
+        threshold = self._spike_threshold
 
         for _step in range(self.config.max_steps):
             # LIF dynamics: tau * dh/dt = -h + I_syn
@@ -998,6 +1011,7 @@ class SpikeIntegrationDynamics:
             # Count spikes: neurons where membrane potential crosses threshold
             spikes = (h > threshold).float()
             spike_counts.append(spikes.sum(dim=1))  # [batch]
+            spike_rasters.append(spikes)  # [batch, neurons] per step
             # Reset spiking neurons
             h = torch.where(h > threshold, torch.zeros_like(h), h)
 
@@ -1009,6 +1023,7 @@ class SpikeIntegrationDynamics:
             nudged_state=[h] if target is not None else None,
             activations=[h],
             spike_counts=spike_counts,
+            spike_rasters=[spike_rasters],  # Single layer: wrap in list
         )
 
         return new_state
@@ -1038,23 +1053,27 @@ class SpikeIntegrationDynamics:
 
         acts = [h]
         spike_counts: list[Tensor] = []
-        threshold = self._SPIKE_THRESHOLD
+        spike_rasters: list[list[Tensor]] = []  # [layer][step] = [batch, neurons]
+        threshold = self._spike_threshold
 
         for weight, bias in zip(layered.weights, layered.biases, strict=True):
             I_syn = op(h, weight)
             if bias is not None:
                 I_syn = I_syn + bias  # ruff: ignore[non-augmented-assignment]
             v = torch.zeros_like(I_syn)
+            layer_rasters: list[Tensor] = []
             for _step in range(self.config.max_steps):
                 v = v + self.config.step_size * (-v + I_syn)  # ruff: ignore[non-augmented-assignment]
                 spikes = v > threshold
                 spike_counts.append(spikes.float().sum(dim=1))
+                layer_rasters.append(spikes.float())  # [batch, neurons]
                 v = torch.where(spikes, torch.zeros_like(v), v)
+            spike_rasters.append(layer_rasters)
             h = v
             acts.append(h)
 
         if nudge_beta is not None and target is not None:
-            h = h + nudge_beta * (_one_hot(target, h) - h)
+            h += nudge_beta * (_one_hot(target, h) - h)
             acts[-1] = h
 
         return _create_output_state(
@@ -1065,6 +1084,7 @@ class SpikeIntegrationDynamics:
             nudged_state=acts if target is not None else None,
             activations=acts,
             spike_counts=spike_counts,
+            spike_rasters=spike_rasters,
         )
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
