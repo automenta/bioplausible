@@ -259,12 +259,19 @@ class SystemConfig:
                     f"requires energy_minimization dynamics, got {self.dynamics.dynamics_type!r}"
                 )
 
-        # Thermodynamic contrast credit requires energy-based dynamics
+        # Thermodynamic contrast credit requires energy-based or PC-family
+        # dynamics (R5.2: the PC family — sPC/ePC — consumes thermo contrast
+        # legitimately; the dormant contradiction with the predictive-settling
+        # branch below is reconciled by whitelisting it here).
         if self.credit.credit_type in ("thermodynamic_contrast", "equilibrium"):  # ruff: ignore[literal-membership, collapsible-if]
-            if self.dynamics.dynamics_type != "energy_minimization":
+            if self.dynamics.dynamics_type not in (  # ruff: ignore[literal-membership]
+                "energy_minimization",
+                "predictive_settling",
+                "error_predictive_coding",
+            ):
                 raise ValueError(
                     f"Thermodynamic contrast credit (credit_type={self.credit.credit_type!r}) "
-                    f"requires energy_minimization dynamics, got {self.dynamics.dynamics_type!r}"
+                    f"requires energy-based or PC-family dynamics, got {self.dynamics.dynamics_type!r}"
                 )
 
         # Spiking dynamics requires temporal trace or STDP credit

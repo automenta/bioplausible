@@ -139,10 +139,16 @@ def _normalize_vision_name(base_name: str) -> str:  # ruff: ignore[too-many-retu
             return base_name
 
 
-def create_task(  # ruff: ignore[too-many-return-statements]
+def create_task(  # ruff: ignore[too-many-return-statements, complex-structure]
     task_name: str, device: str = "cpu", quick_mode: bool = False, **kwargs
 ) -> TaskProtocol:
-    """Factory function for tasks. Maps string names to Task classes via heuristics."""
+    """Factory function for tasks. Maps string names to Task classes via heuristics.
+
+    ``quick_mode=True`` defaults DataLoader ``num_workers`` to 0 (forkserver
+    race mitigation, D7 precedent) unless overridden via kwargs.
+    """
+    if quick_mode and "num_workers" not in kwargs:
+        kwargs["num_workers"] = 0
     match task_name:
         case "char_ngram":
             return CharNGramTask(name=task_name, device=device, quick_mode=quick_mode)

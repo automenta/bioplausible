@@ -453,19 +453,29 @@ def _fig_epc_fast_settle(record: dict) -> Figure:
     return fig
 
 
-_FACTORIES: dict[str, Callable[[dict], Figure]] = {
-    "compose_6axis": _fig_compose_train,
-    "swap_credit": _fig_credit_swap,
-    "swap_plasticity": _fig_plasticity_swap,
-    "memory_budget": _fig_memory_wall,
-    "substrate_swap": _fig_substrate_swap,
-    "spike_settle": _fig_spike_settle,
-    "z3_frozen_theta": _fig_frozen_theta,
-    "geometry_swap": _fig_geometry_swap,
-    "graph_geometry_swap": _fig_graph_geometry_swap,
-    "attention_geometry_swap": _fig_attention_geometry_swap,
-    "spatial_lattice_geometry_swap": _fig_spatial_lattice_geometry_swap,
-    "epc_fast_settle": _fig_epc_fast_settle,
+@dataclass(frozen=True, slots=True)
+class DemoSpec:
+    """One gallery demo: capability id and its figure factory (R1.3)."""
+
+    capability_id: str
+    factory: Callable[[dict], Figure]
+
+
+DEMOS: dict[str, DemoSpec] = {
+    "compose_6axis": DemoSpec("D1", _fig_compose_train),
+    "swap_credit": DemoSpec("D2", _fig_credit_swap),
+    "swap_plasticity": DemoSpec("D3", _fig_plasticity_swap),
+    "memory_budget": DemoSpec("D4", _fig_memory_wall),
+    "substrate_swap": DemoSpec("D6", _fig_substrate_swap),
+    "spike_settle": DemoSpec("D7", _fig_spike_settle),
+    "z3_frozen_theta": DemoSpec("D5", _fig_frozen_theta),
+    "geometry_swap": DemoSpec("D8", _fig_geometry_swap),
+    "graph_geometry_swap": DemoSpec("D9", _fig_graph_geometry_swap),
+    "attention_geometry_swap": DemoSpec("D10", _fig_attention_geometry_swap),
+    "spatial_lattice_geometry_swap": DemoSpec(
+        "D11", _fig_spatial_lattice_geometry_swap
+    ),
+    "epc_fast_settle": DemoSpec("D12", _fig_epc_fast_settle),
 }
 
 
@@ -478,10 +488,10 @@ def render_gallery(records_dir: Path, out_dir: Path) -> list[FigureMeta]:
     metas: list[FigureMeta] = []
     for record in _records(records_dir):
         capability_name = record["capability_name"]
-        factory = _FACTORIES.get(capability_name)
+        factory = DEMOS.get(capability_name)
         if factory is None or not Path(record["demo_test"]).exists():
             continue
-        fig = factory(record)
+        fig = factory.factory(record)
         png = out_dir / f"{record['capability'].lower()}_{capability_name}.png"
         save(fig, png)
         plt_close(fig)

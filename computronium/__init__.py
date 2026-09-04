@@ -89,7 +89,141 @@ Some algorithms (FF, PEPITA, TargetProp, PCN) inherently require model-level
 control and are exposed as models, not propagators.
 """
 
+from typing import TYPE_CHECKING
+
 __version__ = "1.0.0"
+
+if TYPE_CHECKING:
+    from computronium.config.experiment import (
+        DataConfig,
+        ExperimentConfig,
+        HardwareConfig,
+        ModelConfig,
+        TrainingConfig,
+        make_graph_preset,
+        make_lm_preset,
+        make_rl_preset,
+        make_timeseries_preset,
+        make_vision_preset,
+    )
+    from computronium.core.joint.transition import CoupledTransition
+    from computronium.core.plasticity import NullPlasticity
+    from computronium.core.presets import (
+        create_backprop_mlp,
+        create_eqprop_mlp,
+        create_fa_mlp,
+        create_fast_weight_mlp,
+        create_ff_mlp,
+        create_hebbian_mlp,
+        create_memristive_mlp,
+        create_neuromorphic_mlp,
+        create_pc_mlp,
+        create_pepita_mlp,
+        create_routing_mlp,
+        create_snn_mlp,
+        create_spiking_snn_mlp,
+        create_tile_mlp,
+        create_tp_mlp,
+    )
+    from computronium.core.system_trainer import (
+        SystemTrainer,
+        SystemTrainerConfig,
+        compose_joint_system,
+        compose_joint_system_from_configs,
+        compose_system,
+        compose_system_from_configs,
+        create_backprop_system,
+        create_eqprop_system,
+        create_fa_system,
+        extract_config,
+    )
+    from computronium.core.theta_audit import theta_audit
+    from computronium.domains.factory import create_task
+    from computronium.mep.presets import muon_backprop, smep, smep_fast
+    from computronium.models.native import (
+        native_backprop_mlp,
+        native_diffusion_eqprop,
+        native_directed_ep,
+        native_eqprop_mlp,
+        native_fa_mlp,
+        native_finite_nudge_ep,
+        native_holomorphic_ep,
+        native_momentum_eqprop,
+        native_pepita_mlp,
+        native_sparse_eqprop,
+        native_ternary_eqprop,
+        native_tile_ep,
+        native_tile_fa,
+        native_tile_snn,
+        native_tile_tp,
+    )
+    from computronium.nn import (
+        ComputroniumLinear,
+        CreditRule,
+        CreditRuleConfig,
+        PlasticityType,
+        replace_linear_with_computronium,
+    )
+    from computronium.ontology.credit import (
+        BackpropCredit,
+        CreditAssignmentConfig,
+        LocalGoodnessCredit,
+        RandomProjectionsCredit,
+        TargetInversionCredit,
+        TemporalTraceCredit,
+        ThermodynamicContrast,
+        ThermodynamicContrastCredit,
+    )
+    from computronium.ontology.dynamics import (
+        DiffusionDynamics,
+        EnergyMinimizationDynamics,
+        ErrorPredictiveCodingDynamics,
+        InstantaneousDynamics,
+        PredictiveSettlingDynamics,
+        SpikeIntegrationDynamics,
+        StateDynamicsConfig,
+    )
+    from computronium.ontology.geometry import (
+        AttentionGeometry,
+        ConvGeometry,
+        FeedforwardGeometry,
+        GeometryConfig,
+        GraphGeometry,
+        RecurrentGeometry,
+        SpatialLattice3DGeometry,
+        TileGeometry,
+    )
+    from computronium.ontology.plasticity import (
+        FastWeightPlasticity,
+        RoutingPlasticity,
+        RuleStatePlasticity,
+        SubstrateCoupledPlasticity,
+    )
+    from computronium.ontology.substrate import (
+        AnalogSubstrate,
+        DigitalSubstrate,
+        MemristiveSubstrate,
+        NeuromorphicSubstrate,
+        OpticalSubstrate,
+        QuantizedSubstrate,
+        QuantumSubstrate,
+        SubstrateConfig,
+    )
+    from computronium.ontology.system import System, SystemConfig, SystemState
+    from computronium.ontology.update import (
+        ElasticConsolidationUpdate,
+        EuclideanUpdate,
+        NaturalGradientUpdate,
+        ParameterUpdateConfig,
+        RiemannianOrthogonalUpdate,
+        SpectralConstrainedUpdate,
+    )
+    from computronium.state import (
+        CompositeState,
+        PlasticityConfig,
+        StateRegistry,
+        SystemContext,
+    )
 
 # Lazy imports for heavy dependencies (zoo, experiment, config, core components)
 # Name -> (submodule_path, attr_or_None). attr None returns the submodule itself.
@@ -107,6 +241,10 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
         "CreditAssignmentConfig",
     ),
     "DigitalSubstrate": ("computronium.ontology.substrate", "DigitalSubstrate"),
+    "DiffusionDynamics": (
+        "computronium.ontology.dynamics",
+        "DiffusionDynamics",
+    ),
     "ElasticConsolidationUpdate": (
         "computronium.ontology.update",
         "ElasticConsolidationUpdate",
@@ -344,6 +482,7 @@ __all__ = [
     "CreditRule",
     "CreditRuleConfig",
     "DataConfig",
+    "DiffusionDynamics",
     "DigitalSubstrate",
     "ElasticConsolidationUpdate",
     "EnergyMinimizationDynamics",

@@ -58,10 +58,21 @@
 *   **Exceptions**: Define a small custom hierarchy per domain. Always chain: `raise DomainError("msg") from original_exception`. Use `except*` (PEP 654) for concurrent independent failures.
 *   **Resources**: Use context managers (`with` / `async with`) for all resource lifecycles.
 
+## Environment (binding)
+*   **Test invocation**: always `uv run python -m pytest` — never bare `pytest`
+    (user-site pytest shadowing breaks collection on protobuf gencode skew).
+*   **Env restore**: `uv sync --dev --all-extras` — bare `uv sync` strips dev
+    extras and produces `ModuleNotFoundError` mid-landing.
+*   **Dev-env smoke** (run before any gate): `uv run python -c "import optuna, scipy, torchvision, pytest"` —
+    a stripped env fails here in seconds instead of mid-gate.
+*   **`UV_LINK_MODE=copy`**: set in the shell env (or `.env`) on this
+    filesystem layout — the uv cache hardlink falls back to copy with a
+    warning on every `uv run` otherwise (cosmetic, R4.3).
+
 ## Testing
 *   **pytest + pytest-cov**: Coverage is opt-in (`--cov`); no floor until the API stabilizes.
 *   **Test execution tiers** — run the cheapest tier that can catch your change; always show output + walltime (never truncate failures):
-    1. **Targeted** (default): only tests touching changed modules (`uv run pytest tests/<path> -k <signature> -q`).
+    1. **Targeted** (default): only tests touching changed modules (`uv run python -m pytest tests/<path> -k <signature> -q`).
     2. **Fast gate** (demo/gallery/lock-adjacent changes): demo gate (`pytest tests/integration/ -k "demo or gallery_lock" -q`) + drift locks + property suite.
     3. **Full suite**: round close or explicit request — never a per-commit habit.
 *   **hypothesis**: Use for property-based tests on pure logic.
@@ -76,6 +87,7 @@
 
 ## Agent Commit Checklist
 **Per commit — scoped and fast:**
+- [ ] Dev-env smoke (see Environment): `uv run python -c "import optuna, scipy, torchvision, pytest"`
 - [ ] `ruff format` && `ruff check --fix` on changed files
 - [ ] `pyright` on changed files (strict for new modules)
 - [ ] Targeted tests for touched modules — output + walltime visible
@@ -83,3 +95,30 @@
 **Deferred — hygiene pass / round close (never per-commit):**
 - [ ] Repo-wide `ruff check` / `pyright` (Register C scope)
 - [ ] Full `pytest` run; `--cov`; `pip-audit`
+
+## Checklist: Adding a New Ontology Primitive
+
+1. **Registry row** — add the class to the layer's single-source registry
+   (`DYNAMICS_REGISTRY` in `computronium/ontology/dynamics/__init__.py` for
+   StateDynamics). Two wiring edits total: class def + registry entry.
+2. **Config classmethod** — `StateDynamicsConfig.<primitive>()` returns a
+   config whose `dynamics_type` matches the registry key.
+3. **Run the wiring lockstep lock** — `tests/property/test_dynamics_wiring_lock.py`
+   proves registry ↔ config classmethods ↔ root `__all__`/`_LAZY` ↔ root
+   `TYPE_CHECKING` imports stay in sync. Fix what it flags; never bypass it.
+4. **Export surfaces** — root `__all__` + `_LAZY` (and the `TYPE_CHECKING`
+   import block), `ontology/__init__.py` imports + `__all__`.
+5. **Contract invariants** — read the `StateDynamics` Protocol docstring
+   (activation layout, settle mutation/autograd contract, free/nudged
+   semantics) before writing `settle`/`compute_energy`.
+6. **Validation** — if `SystemConfig.validate()` needs a new compatibility
+   branch, whitelist the new `dynamics_type` consistently in *all* credit/
+   substrate branches (see R5.2 retro: the PC family divergence).
+7. **Demo (if shipping one)** — demo test follows the static `_ARMS` table
+   pattern (module scope, `_train_arm`/`_probe_arm` extracted, walltime
+   printed never recorded), one `DEMOS` registry row in
+   `computronium/visualization/gallery.py`, then re-pin
+   `docs/figures/manifest.json` via the gallery lock.
+8. **Probe conventions** — throwaway probe scripts live in `scripts/probes/`
+   with their measured-regime numbers and a docstring citing the demo they
+   informed.

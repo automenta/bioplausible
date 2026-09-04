@@ -31,6 +31,7 @@ from computronium.ontology.credit import (
     ThermodynamicContrast,
 )
 from computronium.ontology.dynamics import (
+    DYNAMICS_REGISTRY,
     DiffusionDynamics,
     EnergyMinimizationDynamics,
     ErrorPredictiveCodingDynamics,
@@ -40,6 +41,7 @@ from computronium.ontology.dynamics import (
     SpikeIntegrationDynamics,
     StateDynamics,
     StateDynamicsConfig,
+    dynamics_from_config,
 )
 
 # Utility functions
@@ -149,6 +151,8 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     # StateDynamics
     "StateDynamicsConfig",
     "StateDynamics",
+    "DYNAMICS_REGISTRY",
+    "dynamics_from_config",
     "EnergyMinimizationDynamics",
     "PredictiveSettlingDynamics",
     "ErrorPredictiveCodingDynamics",

@@ -11,26 +11,23 @@ from torch import Tensor, nn
 from computronium.core.utils.device import get_device
 from computronium.ontology import (
     CreditAssignmentConfig,
-    DiffusionDynamics,
     DigitalSubstrate,
     ElasticConsolidationUpdate,
     EnergyMinimizationDynamics,
-    ErrorPredictiveCodingDynamics,
     EuclideanUpdate,
     FeedforwardGeometry,
     GeometryConfig,
     InstantaneousDynamics,
     NaturalGradientUpdate,
     ParameterUpdateConfig,
-    PredictiveSettlingDynamics,
     RecurrentGeometry,
     RiemannianOrthogonalUpdate,
     SpectralConstrainedUpdate,
-    SpikeIntegrationDynamics,
     StateDynamicsConfig,
     SubstrateConfig,
     System,
     ThermodynamicContrast,
+    dynamics_from_config,
     geometry_from_config,
     substrate_from_config,
 )
@@ -193,7 +190,7 @@ def compose_system[  # ruff: ignore[complex-structure]
             }
 
         @classmethod
-        def from_spec(cls, spec: dict) -> System:  # ruff: ignore[complex-structure, too-many-branches]
+        def from_spec(cls, spec: dict) -> System:
             """Reconstruct a System from a specification dictionary.
 
             Args:
@@ -224,23 +221,8 @@ def compose_system[  # ruff: ignore[complex-structure]
 
             _restore_geometry_params(geometry, serialized_params)
 
-            # Reconstruct dynamics
-            dynamics_cfg = StateDynamicsConfig(**spec["dynamics"])
-            dynamics_type = dynamics_cfg.dynamics_type.lower()
-            if dynamics_type == "energy_minimization":
-                dynamics = EnergyMinimizationDynamics(dynamics_cfg)
-            elif dynamics_type == "predictive_settling":
-                dynamics = PredictiveSettlingDynamics(dynamics_cfg)
-            elif dynamics_type == "error_predictive_coding":
-                dynamics = ErrorPredictiveCodingDynamics(dynamics_cfg)
-            elif dynamics_type == "spike_integration":
-                dynamics = SpikeIntegrationDynamics(dynamics_cfg)
-            elif dynamics_type == "diffusion":
-                dynamics = DiffusionDynamics(dynamics_cfg)
-            elif dynamics_type == "instantaneous":
-                dynamics = InstantaneousDynamics(dynamics_cfg)
-            else:
-                raise ValueError(f"Unknown dynamics_type: {dynamics_type!r}")
+            # Reconstruct dynamics (single-source registry lookup)
+            dynamics = dynamics_from_config(StateDynamicsConfig(**spec["dynamics"]))
 
             # Reconstruct credit
             credit_cfg = CreditAssignmentConfig(**spec["credit"])
@@ -584,7 +566,7 @@ def extract_config(system: System) -> dict[str, object]:
     }
 
 
-def compose_system_from_configs(  # ruff: ignore[complex-structure]
+def compose_system_from_configs(
     substrate: SubstrateConfig,
     geometry: GeometryConfig,
     dynamics: StateDynamicsConfig,
@@ -613,20 +595,8 @@ def compose_system_from_configs(  # ruff: ignore[complex-structure]
     # Instantiate geometry from config
     geometry_instance = geometry_from_config(geometry)
 
-    # Instantiate dynamics from config
-    dynamics_type = dynamics.dynamics_type.lower()
-    if dynamics_type == "energy_minimization":
-        dynamics_instance = EnergyMinimizationDynamics(dynamics)
-    elif dynamics_type == "predictive_settling":
-        dynamics_instance = PredictiveSettlingDynamics(dynamics)
-    elif dynamics_type == "spike_integration":
-        dynamics_instance = SpikeIntegrationDynamics(dynamics)
-    elif dynamics_type == "diffusion":
-        dynamics_instance = DiffusionDynamics(dynamics)
-    elif dynamics_type == "instantaneous":
-        dynamics_instance = InstantaneousDynamics(dynamics)
-    else:
-        raise ValueError(f"Unknown dynamics_type: {dynamics_type!r}")
+    # Instantiate dynamics from config (single-source registry lookup)
+    dynamics_instance = dynamics_from_config(dynamics)
 
     # Instantiate credit from config
     credit_instance = _credit_from_config(credit)

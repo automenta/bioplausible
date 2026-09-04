@@ -12,7 +12,7 @@ mathematical transpose operations, not physical substrate processes.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import torch
 from torch import Tensor
@@ -27,13 +27,43 @@ class LayeredParams:
     """Extracted linear layer parameters from a geometry.
 
     Used by the settle kernel to route forward passes through the
-    substrate's forward operator.
+    substrate's forward operator. ``transitions`` is the interleaved
+    ``(weight, bias, activation chain)`` schedule (R3.1) — populated only
+    when the geometry exposes its raw module stack; assembled block views
+    (tile meshes) leave it empty.
     """
 
     weights: tuple[Tensor, ...]
     biases: tuple[Tensor | None, ...]
     activations: tuple[torch.nn.Module, ...]
     recurrent_weight: Tensor | None
+    transitions: tuple[
+        tuple[Tensor, Tensor | None, tuple[torch.nn.Module, ...]], ...
+    ] = ()
+
+
+def group_transitions(
+    modules: list[torch.nn.Module],
+) -> tuple[tuple[Tensor, Tensor | None, tuple[torch.nn.Module, ...]], ...]:
+    """Group a module stack into ``(weight, bias, activations)`` transitions.
+
+    Each ``nn.Linear`` opens a transition; consecutive non-Linear modules
+    close it as the transition's activation chain. Deep-linear stacks yield
+    empty activation chains — error injection still applies (R3.1, moved
+    from ePC's private ``_transitions``).
+    """
+    transitions: list[tuple[Tensor, Tensor | None, tuple[torch.nn.Module, ...]]] = []
+    current: tuple[Tensor, Tensor | None, tuple[torch.nn.Module, ...]] | None = None
+    for module in modules:
+        if isinstance(module, torch.nn.Linear):
+            if current is not None:
+                transitions.append(current)
+            current = (module.weight, module.bias, ())
+        elif current is not None:
+            current = (current[0], current[1], (*current[2], module))
+    if current is not None:
+        transitions.append(current)
+    return tuple(transitions)
 
 
 def extract_layered_params(geometry: Geometry) -> LayeredParams | None:
@@ -54,10 +84,11 @@ def extract_layered_params(geometry: Geometry) -> LayeredParams | None:
             biases=tuple(layer.bias for layer in linears),
             activations=tuple(activations),
             recurrent_weight=recurrent if isinstance(recurrent, Tensor) else None,
+            transitions=group_transitions(modules),
         )
     assembler = getattr(geometry, "layered_params", None)
     if callable(assembler):
-        return assembler()
+        return cast("LayeredParams", assembler())
     return None
 
 

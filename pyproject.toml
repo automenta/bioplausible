@@ -224,6 +224,12 @@ ignore = [
 "computronium/__init__.py" = [
     "undefined-export", # __all__ names resolve through the _LAZY import map
 ]
+"computronium/ontology/dynamics/__init__.py" = [
+    "non-empty-init-module", # DYNAMICS_REGISTRY lives beside its classes (R1.1)
+]
+"computronium/ontology/dynamics/_dynamics.py" = [
+    "non-augmented-assignment", # out-of-place adds are the settle graph-safety idiom (R5.3)
+]
 "tests/**/*.py" = [
     "assert",   # assert in tests
     "no-self-use", # no-self-use in test methods

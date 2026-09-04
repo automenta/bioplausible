@@ -81,13 +81,15 @@ def build_block_view(graph: TileGraph) -> TileBlockView:
             )
         d_off, d_n = _locate(layer_spans[dst.layer_id], dst_id)
         s_off, s_n = _locate(layer_spans[src.layer_id], src_id)
-        per_layer.setdefault(dst.layer_id, []).append(
-            (f"tile_weight.{src_id}_{dst_id}", d_off, d_n, s_off, s_n)
-        )
+        per_layer.setdefault(dst.layer_id, []).append((
+            f"tile_weight.{src_id}_{dst_id}",
+            d_off,
+            d_n,
+            s_off,
+            s_n,
+        ))
 
-    edge_slots = tuple(
-        tuple(per_layer.get(k, ())) for k in range(1, len(layer_spans))
-    )
+    edge_slots = tuple(tuple(per_layer.get(k, ())) for k in range(1, len(layer_spans)))
     return TileBlockView(
         layer_spans=tuple(layer_spans),
         layer_widths=tuple(sum(n for _, _, n in spans) for spans in layer_spans),
@@ -96,9 +98,7 @@ def build_block_view(graph: TileGraph) -> TileBlockView:
     )
 
 
-def _locate(
-    spans: tuple[tuple[int, int, int], ...], tid: int
-) -> tuple[int, int]:
+def _locate(spans: tuple[tuple[int, int, int], ...], tid: int) -> tuple[int, int]:
     for span_tid, offset, neurons in spans:
         if span_tid == tid:
             return offset, neurons

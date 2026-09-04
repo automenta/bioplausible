@@ -1080,9 +1080,7 @@ class TileGeometry(nn.Module):
         """Initial block activities for settling: [x, z_0..z_{L-1}, output]."""
         return settle_block_acts(self._block_view, self, x, substrate)
 
-    def assemble_blocks(
-        self, named: dict[str, Tensor]
-    ) -> tuple[Tensor, ...]:
+    def assemble_blocks(self, named: dict[str, Tensor]) -> tuple[Tensor, ...]:
         """Per-transition block matrices from a name->tensor mapping."""
         return assemble_transition_blocks(self._block_view, named)
 

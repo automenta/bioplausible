@@ -15,26 +15,15 @@ import hashlib
 import json
 from pathlib import Path
 
-from computronium.visualization.gallery import render_gallery
+from computronium.visualization.gallery import DEMOS, render_gallery
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIGURES_DIR = REPO_ROOT / "docs" / "figures"
 RECORDS_DIR = FIGURES_DIR / "run_records"
 
-EXPECTED = {
-    "compose_6axis": "D1",
-    "swap_credit": "D2",
-    "swap_plasticity": "D3",
-    "memory_budget": "D4",
-    "substrate_swap": "D6",
-    "spike_settle": "D7",
-    "z3_frozen_theta": "D5",
-    "geometry_swap": "D8",
-    "graph_geometry_swap": "D9",
-    "attention_geometry_swap": "D10",
-    "spatial_lattice_geometry_swap": "D11",
-    "epc_fast_settle": "D12",
-}
+# Single-source demo registry (R1.3): the lock's expectation table is
+# derived from `DEMOS` so a new demo is one registry row + a re-pin.
+EXPECTED = {name: spec.capability_id for name, spec in DEMOS.items()}
 
 
 def _records() -> dict[str, dict]:

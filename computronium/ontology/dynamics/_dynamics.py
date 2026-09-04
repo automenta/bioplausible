@@ -368,10 +368,46 @@ class StateDynamics(Protocol):
 
     Encapsulates the differential equation or iterative map governing state
     evolution: energy minimization (EqProp), predictive settling (PC), spike
-    integration (LIF), or instantaneous pass (backprop/FF).
+    integration (LIF), or instantaneous pass (backprop/FF). The StateDynamics
+    uses Geometry.route() and Substrate operators to evolve the state. It
+    produces free and nudged states for CreditAssignment.
 
-    The StateDynamics uses Geometry.route() and Substrate operators to evolve
-    the state. It produces free and nudged states for CreditAssignment.
+    Canonical contract (read this before writing ``settle``/``compute_energy``;
+    consolidated from the ePC landing retro, TODO.md R2.1):
+
+    Activation layout:
+        Layered states are ``[input, hidden1, ..., hiddenN, output]`` — the
+        input tensor is element 0 and the network output is element -1.
+        Consumers: ``_state_energy_vector`` (output-energy reads element -1),
+        ``SubstrateSettleKernel.step`` (alignment 1:1 with
+        ``extract_layered_params`` transitions), and CreditAssignment's
+        per-layer correlation walks.
+
+    Phase loop and energy timing:
+        ``settle`` runs the free phase when ``target is None`` and the nudged
+        phase otherwise. ``compute_energy`` is called by the pipeline *after*
+        settle returns, reading the settled state — never mid-settle.
+
+    Autograd context:
+        Settle runs under the caller's ``no_grad`` by default. Implementations
+        needing internal differentiation (ePC error gradients, diffusion
+        Langevin steps) open ``with torch.enable_grad():`` around the reverse
+        sweep and detach before returning. Out-of-place tensor adds are the
+        graph-safety idiom — do not use ``+=`` on state tensors.
+
+    Input flattening:
+        Implementations flatten non-2-D inputs themselves
+        (``x.flatten(1) if x.dim() > 2``); geometry may hand over raw
+        image-shaped inputs.
+
+    Free/nudged target semantics:
+        ``target is None`` → write the settled acts to ``free_state``;
+        ``target`` provided → nudge toward it (``beta * (one_hot - out)`` at
+        the output layer) and write to ``nudged_state``. Both phases also
+        populate ``activations``. Metrics schema: imp-46.
+
+    The mutation contract below is enforced by the caller census AST lock
+    (``tests/property/test_settle_caller_census.py``).
     """
 
     config: StateDynamicsConfig
@@ -400,8 +436,7 @@ class StateDynamics(Protocol):
             returns the state to use — implementations may rebuild rather
             than mutate. Callers must bind and use the returned state;
             reading the input state after the call reads pre-settle
-            activations. Enforced by the caller census AST lock
-            (``tests/property/test_settle_caller_census.py``).
+            activations.
         """
         ...
 
@@ -471,7 +506,7 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
     for i in range(len(acts)):
         h = acts[i]
         # 0.5 * ||h||^2
-        total_energy = total_energy + 0.5 * (h**2).sum()  # ruff: ignore[non-augmented-assignment]
+        total_energy = total_energy + 0.5 * (h**2).sum()
 
     # Subtract interaction terms: h^T * W * h_prev
     for i in range(len(acts)):
@@ -497,7 +532,7 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
             if W.shape[0] != h.shape[-1] or W.shape[1] != h_prev.shape[-1]:
                 continue  # ragged pairing (e.g. per-edge tile weights)
             interaction = (h @ W @ h_prev.T).trace()
-            total_energy = total_energy - interaction  # ruff: ignore[non-augmented-assignment]
+            total_energy = total_energy - interaction
 
     # Subtract bias terms (exclude recurrent bias if any)
     bias_names = [
@@ -521,7 +556,7 @@ def _compute_hopfield_energy(all_acts: list[Tensor], geometry: Geometry) -> Tens
             b = params[bias_names[bias_idx]]
             if b.shape[0] != h.shape[-1]:
                 continue
-            total_energy = total_energy - (h @ b).sum()  # ruff: ignore[non-augmented-assignment]
+            total_energy = total_energy - (h @ b).sum()
 
     # Return mean per sample
     batch_size = acts[0].size(0)
@@ -796,7 +831,7 @@ class PredictiveSettlingDynamics:
                         prediction.device
                     )
             error = x - prediction
-            h = h + self.config.step_size * op(  # ruff: ignore[non-augmented-assignment]
+            h = h + self.config.step_size * op(
                 error,
                 geometry.params.get("weight", torch.eye(h.shape[-1], device=h.device)),
             )
@@ -913,7 +948,7 @@ class PredictiveSettlingDynamics:
 
         if target is not None:
             # Nudge the output layer toward the target
-            acts[-1] = acts[-1] + self.config.beta * (  # ruff: ignore[non-augmented-assignment]
+            acts[-1] = acts[-1] + self.config.beta * (
                 _one_hot(target, acts[-1]) - acts[-1]
             )
 
@@ -959,7 +994,7 @@ class PredictiveSettlingDynamics:
                 ):
                     pred = new_acts[i] @ w.T
                     if b is not None:
-                        pred = pred + b  # ruff: ignore[non-augmented-assignment]
+                        pred = pred + b
                     fe += (new_acts[i + 1] - pred).pow(2).sum().item()
                 self._free_energy_history.append(fe)
             if step >= self.config.convergence_start:
@@ -1024,35 +1059,12 @@ class ErrorPredictiveCodingDynamics:
         self.config = config or StateDynamicsConfig.error_predictive_coding()
         self._last_errors: list[Tensor] | None = None
 
-    @staticmethod
-    def _transitions(
-        layers: torch.nn.ModuleList,
-    ) -> list[tuple[Tensor, Tensor | None, tuple[torch.nn.Module, ...]]]:
-        """Group the module stack into (weight, bias, activations) transitions.
-
-        Each Linear opens a transition; consecutive non-Linear modules close
-        it as the transition's activation chain. Deep-linear stacks yield
-        empty activation chains — error injection still applies.
-        """
-        transitions: list[
-            tuple[Tensor, Tensor | None, tuple[torch.nn.Module, ...]]
-        ] = []
-        current: tuple[Tensor, Tensor | None, tuple[torch.nn.Module, ...]] | None = None
-        for module in layers:
-            if isinstance(module, torch.nn.Linear):
-                if current is not None:
-                    transitions.append(current)
-                current = (module.weight, module.bias, ())
-            elif current is not None:
-                current = (current[0], current[1], (*current[2], module))
-        if current is not None:
-            transitions.append(current)
-        return transitions
-
     def _build_forward_with_errors(
         self,
         x: Tensor,
-        transitions: list[tuple[Tensor, Tensor | None, tuple[torch.nn.Module, ...]]],
+        transitions: tuple[
+            tuple[Tensor, Tensor | None, tuple[torch.nn.Module, ...]], ...
+        ],
         substrate: Substrate,
         eps: list[Tensor],
     ) -> tuple[list[Tensor], Tensor]:
@@ -1068,12 +1080,12 @@ class ErrorPredictiveCodingDynamics:
         for i, (weight, bias, activations) in enumerate(transitions):
             h = op(h, weight)
             if bias is not None:
-                h = h + bias  # ruff: ignore[non-augmented-assignment]
+                h = h + bias
             for activation in activations:
                 h = activation(h)
             if i < last:
                 if i < len(eps):
-                    h = h + eps[i]  # ruff: ignore[non-augmented-assignment]
+                    h = h + eps[i]
                 states.append(h)
         states.append(h)
         return states, h
@@ -1089,12 +1101,10 @@ class ErrorPredictiveCodingDynamics:
         if x is None:
             raise ValueError("State must contain input 'x'")
 
-        layers = layer_stack(geometry)
-        if layers is None:
+        layered = extract_layered_params(geometry)
+        if layered is None or not layered.transitions:
             raise TypeError("ePC settling requires a layer-structured geometry")
-        transitions = self._transitions(layers)
-        if not transitions:
-            raise TypeError("ePC settling requires at least one Linear transition")
+        transitions = layered.transitions
 
         xf = x.flatten(1) if x.dim() > 2 else x
         with torch.no_grad():
@@ -1114,11 +1124,9 @@ class ErrorPredictiveCodingDynamics:
                 # PC energy (Algorithm 2): ½ Σ ‖εᵢ‖² + β·ℒ(ŷ, y)
                 energy = torch.zeros((), device=xf.device, dtype=xf.dtype)
                 for e in eps:
-                    energy = (  # ruff: ignore[non-augmented-assignment]
-                        energy + 0.5 * e.pow(2).sum()
-                    )
+                    energy = energy + 0.5 * e.pow(2).sum()
                 if target is not None:
-                    energy = (  # ruff: ignore[non-augmented-assignment]
+                    energy = (
                         energy
                         + self.config.beta
                         * torch.nn.functional.cross_entropy(y_hat, target)
@@ -1160,9 +1168,7 @@ class ErrorPredictiveCodingDynamics:
             return torch.tensor(0.0)
         energy = torch.zeros((), device=self._last_errors[0].device)
         for e in self._last_errors:
-            energy = (  # ruff: ignore[non-augmented-assignment]
-                energy + 0.5 * e.pow(2).sum()
-            )
+            energy = energy + 0.5 * e.pow(2).sum()
         return energy
 
 
@@ -1217,7 +1223,7 @@ class SpikeIntegrationDynamics:
         for _step in range(self.config.max_steps):
             # LIF dynamics: tau * dh/dt = -h + I_syn
             I_syn = geometry.route(h)
-            h = h + self.config.step_size * (-h + I_syn)  # ruff: ignore[non-augmented-assignment]
+            h = h + self.config.step_size * (-h + I_syn)
             # Count spikes: neurons where membrane potential crosses threshold
             spikes = (h > threshold).float()
             spike_counts.append(spikes.sum(dim=1))  # [batch]
@@ -1269,11 +1275,11 @@ class SpikeIntegrationDynamics:
         for weight, bias in zip(layered.weights, layered.biases, strict=True):
             I_syn = op(h, weight)
             if bias is not None:
-                I_syn = I_syn + bias  # ruff: ignore[non-augmented-assignment]
+                I_syn = I_syn + bias
             v = torch.zeros_like(I_syn)
             layer_rasters: list[Tensor] = []
             for _step in range(self.config.max_steps):
-                v = v + self.config.step_size * (-v + I_syn)  # ruff: ignore[non-augmented-assignment]
+                v = v + self.config.step_size * (-v + I_syn)
                 spikes = v > threshold
                 spike_counts.append(spikes.float().sum(dim=1))
                 layer_rasters.append(spikes.float())  # [batch, neurons]
