@@ -12,14 +12,17 @@ from computronium.core.tile.topology import TileGraph
 from computronium.models.native.tile_native import (
     create_native_tile_ep,
     create_native_tile_fa,
-    create_native_tile_tp,
-    create_native_tile_snn,
+    create_native_tile_gnn,
     create_native_tile_hebbian,
     create_native_tile_pc,
-    create_native_tile_gnn,
+    create_native_tile_snn,
+    create_native_tile_tp,
 )
 from computronium.ontology import DigitalSubstrate
-from computronium.ontology._tile_blocks import build_block_view, assemble_transition_blocks
+from computronium.ontology._tile_blocks import (
+    assemble_transition_blocks,
+    build_block_view,
+)
 
 
 def _make_tile_graph():
@@ -84,10 +87,6 @@ def test_block_vs_per_edge_equivalence(block_view, tile_graph):
 
 def test_free_vs_nudged_contrast():
     """Settled nudged state differs from free at the output layer."""
-    from computronium.ontology.dynamics._dynamics import (
-        EnergyMinimizationDynamics,
-        StateDynamicsConfig,
-    )
     from computronium.ontology.system import SystemState
 
     m = create_native_tile_ep(

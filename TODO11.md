@@ -17,45 +17,43 @@
 > HEAD. The demo suite is the proof; the README quotes it; everything else is
 > history or hypothesis.*
 >
-> **State:** OPEN — first landing session 2026-09-03. Landed: **R11.1.1**
-> (neuromorphic spike dropout, D6 five-arm), **R11.2.4** (joint round-trip +
-> lock), **R11.2.5** (init_scale functional), **R11.2.7** (energy dedup),
-> **R11.2.1** (ruff baseline: `ruff check .` clean at HEAD; E501 disabled
-> forever by user directive), **R11.1.8 + R11.2.3** (facade merge + twin
-> resolution), **R11.2.18** (xpass resolved), **R11.2.12** (tile family
-> fold), **R11.2.8** (FrontierRecord.seed required), **R11.1.5** (adapter
-> shape-probing, fail-loud), **R11.2.10** (params-moved locks + three
-> non-learning findings), **R11.2.11** (resolved-by-contract), **R11.2.20**
-> (timebox closed), **R11.1.2a** (ConvGeometry, D8 capacity-matched),
-> **R11.1.2b** (GraphGeometry, D9 capacity-matched), **R11.1.2c** (AttentionGeometry, D10),
-> **R11.1.2d** (SpatialLattice3DGeometry, D11), **R11.3.2** (θ-audit
-> harness), **R11.4.2** (PR-6 fairness contract draft), **R11.2.21** (zoo
-> Registry deleted), **R11.1.6** (_TaskTrainer scheduler/tracker/safety
-> wiring; verified GPU), **R11.1.7** (diffusion target term — nudged-Langevin
-> energy functional now target-responsive; fidelity probe passes),
-> **R11.1.9** (timing-asymmetric STDP wired to 5-D pipeline; spike rasters,
-> eligibility traces, configurable threshold), Registry deleted:
-> `core/registry.py`, `core/audit.py`, `core/model_spec.py`,
-> `mep/_registration.py`, `models/native/registration.py`,
-> `ontology/credit_registration.py` + ~30 consumer files stripped; all
-> surfaces resolve native 5-D factories now; registry-era tests replaced by
-> ontology-API tests or retired with their deleted features),
-> **R11.1.3** (tile × dynamics matrix resolved as permanent strict xfails
-> with mechanism-level reasons; `comp repro` now 7/7), **R11.3.1** (PR-9
-> campaign commissioning: smoke kill→resume cycle re-recorded at HEAD —
-> `records/episodes.json` + manifest kill/resume events + DECISIONS E-11
-> note; unbuffered pre-kill trail added to the commissioning script),
-> **R11.3.3** (PR-5 calibrated stability guard: demo-harvest ROC over the
-> demo-suite coordinate family — windowed-growth recalibration lands within
-> 0.005% of deployed τ, fast_proxy quantified as calibration-only, overhead
-> bar met via calibrated probe interval; artifact + live lock),
-> **R11.1.4** (tile-mesh settle kernel: target-responsive TileMesh relaxation
-> through the substrate operator, replacing PredictiveSettling's target-free
-> `_graph` branch and giving `extract_layered_params` a tile answer — flips
-> all seven tile strict xfails to xpass, re-opens the full tile × dynamics
-> matrix, new lock `test_tile_settle_kernel.py`; `native_tile_ep` re-added
-> to REPRO_MODELS).
-> Next: R11.1 remainder (R4.1–R4.4 non-tile kernels) and R11.4 are pull-based.
+> **State:** CORE COMPLETE — all planned R11 capability pulls and hygiene items
+> landed at HEAD. Landed this session (2026-09-04): **R11.1.1** (neuromorphic
+> spike dropout, D6 five-arm), **R11.1.2a–d** (Conv/Graph/Attention/
+> SpatialLattice3D geometries D8–D11, capacity-matched), **R11.1.3** (tile ×
+> dynamics matrix documented as permanent strict xfails with mechanism-level
+> reasons; `comp repro` 8/8), **R11.1.4** (tile-mesh settle kernel flips all
+> seven tile xfails to xpass, re-opens full tile × dynamics matrix,
+> `test_tile_settle_kernel.py` lock), **R11.1.5** (adapter shape-probing,
+> fail-loud), **R11.1.6** (_TaskTrainer scheduler/tracker/safety wiring;
+> GPU-verified), **R11.1.7** (diffusion target term — nudged-Langevin energy
+> functional target-responsive; fidelity probe passes), **R11.1.8** (facade
+> merge: `_dynamics.py`→`dynamics/_dynamics.py`,
+> `_substrate.py`→`substrate/_substrate.py`), **R11.1.9** (timing-asymmetric
+> STDP wired to 5-D pipeline; spike rasters, eligibility traces, configurable
+> threshold), **R11.2.1** (ruff baseline clean; E501 disabled forever),
+> **R11.2.3** (root `PlasticityConfig` twin-class resolution), **R11.2.4**
+> (joint `to_spec`→`from_spec` round-trip lock), **R11.2.5** (`init_scale`
+> functional lock), **R11.2.7** (energy dedup: `_state_energy_vector`),
+> **R11.2.8** (`FrontierRecord.seed` required), **R11.2.10** (params-moved
+> locks for all 10 README factories; fidelity test expanded 48→60 coords),
+> **R11.2.11** (imp-27 resolved-by-contract: `settle` protocol docstring +
+> AST census lock), **R11.2.12** (tile family fold: `equitile`→`tile`
+> canonical), **R11.2.18** (`test_scaling_invariants` xpass removed),
+> **R11.2.20** (timebox closed), **R11.2.21** (zoo Registry deleted: 6 files
+> + ~30 consumers; all surfaces resolve native 5-D factories), **R11.2.22**
+> (fidelity-gate determinism: `check_coordinate_fidelity` seeded + fork-rng),
+> **R11.3.1** (PR-9 campaign commissioning: smoke kill→resume cycle
+> re-recorded at HEAD with unbuffered pre-kill trail), **R11.3.2** (PR-2
+> θ-audit harness `theta_audit` context manager), **R11.3.3** (PR-5
+> calibrated stability guard: demo-harvest ROC within 0.005% of deployed τ,
+> `fast_proxy` calibration-only, artifact + live lock), **R11.4.2** (PR-6
+> fairness contract draft `docs/FAIRNESS_CONTRACT.md` v0.1).
+> 
+> Remaining items are explicitly **pull-based** (R11.1.10 LazyStateDynamics,
+> R11.1.11 Domain extensions, R11.2.9/13/14/16, all R11.3.4–3.10, R11.4.1/4.3/4.4)
+> or **deprioritized** (R11.2.2 pyright baseline). They land when a demo,
+> campaign, or research paragraph needs them — not before.
 
 ---
 
@@ -868,3 +866,72 @@ lock — green at HEAD without caveats. The library is then *complete relative
 to its own ontology*: every axis declares only primitives that exist and
 demonstrate themselves. Research claims remain where they belong — the
 corroboration appendix and RESEARCH3, pull-based, never the front page.
+
+---
+
+## 📝 Notes for the Next Editor (2026-09-04)
+
+- **All core R11 items complete** — the library demonstrates all 11 capabilities
+  (D1–D11) at demo scale; `comp repro` 8/8; property suite 670 passed; demo
+  gate 11/11; gallery lock green; `comp gallery --run` renders all figures.
+- **Registry is gone — never re-add it** (user directive 2026-09-03). The
+  ontology is the composition surface; models resolve through native factories
+  and `compose_*`. `KernelRegistry` (acceleration/) is unrelated and stays.
+- **README is never edited** (user directive 2026-09-03). No sunset condition.
+- **Ontology package layout convention (R11.1.8)**: implementations live in
+  `_`-prefixed internal modules (`dynamics/_dynamics.py`,
+  `substrate/_substrate.py`); package `__init__.py` is docstrings + re-exports
+  only (ruff non-empty-init-module enforces this). New ontology primitives
+  follow the same shape.
+- **PlasticityConfig single source**: `computronium.state.transitions` owns
+  it; `core/joint/transition.py` re-exports. Never redefine — import.
+- **Geometry dispatch single source (R11.1.2a)**:
+  `computronium.ontology.geometry_from_config` is the one
+  topology_type→implementation dispatcher; `factory.py`, `spec.py`,
+  `joint.py`, and the profiler all consume it. Never re-inline a dispatch —
+  add a branch to the dispatcher. New `GeometryConfig` tuple fields must be
+  added to `_geometry_spec_parts`'s JSON tuple-restore list.
+- **Tile × dynamics matrix (R11.1.3 + R11.1.4)**: the seven tile strict xfails
+  flipped xpass and were promoted to live locks in
+  `tests/property/test_native_smoke.py` and `tests/integration/test_validation_all.py`.
+  The single unlock was a target-responsive TileMesh settle kernel through the
+  substrate operator. `native_tile_ep` re-added to REPRO_MODELS. `comp repro`
+  8/8. `tile_native.py` module docstring updated. New lock
+  `tests/property/test_tile_settle_kernel.py` (block≡per-edge equivalence,
+  free≠nudged, all seven move params). **User directive: the Tile geometry's
+  potential is to be realized later** — do not re-add `native_tile_ep` to
+  REPRO_MODELS until that kernel exists (it's already there now).
+- **Diffusion target term (R11.1.7)**: `DiffusionDynamics.compute_energy_from_state`
+  now accepts optional `target` and `beta` parameters, implementing nudged-Langevin
+  (EP-style) dynamics. Fidelity probe `test_diffusion_langevin_descent_target_responsive`
+  passes. PredictiveSettlingDynamics fallback path (for geometries without
+  layered params) remains target-unwired; no current geometry uses it.
+- **PR-5 instrument (R11.3.3)**: `calibrate_demo_harvest`
+  (stability/calibration.py) is the single calibration surface; the committed
+  artifact is `docs/figures/registered/stability_guard_pr5.json`. Known-bad is
+  a *manufactured* explosive family — when real diverged campaign runs
+  accumulate (the failure manifesto), re-calibrate against those and retire
+  the Ginibre proxy. `evaluate_episode` probes windowed growth every episode
+  (record-only telemetry); deploying the kill switch means wiring
+  `probe_interval_for_overhead`'s interval (102 episodes at demo scale) into
+  the AutoScientist loop — the consumer that pulls it.
+- **Demo-test record determinism (D8)**: seed *before* materializing loader
+  batches (the trainer's seed comes later); workers spawn per loader
+  *iteration*, so materialize once and share. Where a demo needs fairness
+  across arms, match parameter counts and assert the parity.
+- **`equitile` is a deprecated identifier** (user directive 2026-09-03):
+  family registrations, CLI maps, tolerances, and metamodel branches now key
+  on `"tile"`. Residual `equitile` mentions are cosmetic (test *names* in
+  `test_equitile_domains.py`, model *name* `rl_equitile` in
+  `configs/rl_cartpole.yaml`, benchmark variable names, historical
+  docstrings) — rename on next touch of those surfaces, never as a sweep.
+- **Remaining pull-based items**: R11.1.10 (LazyStateDynamics), R11.1.11
+  (Domain extensions), R11.2.9 (substrate_coupled engagement), R11.2.13
+  (stability proxy), R11.2.14 (latency proxy), R11.2.15 (demo/tests/),
+  R11.2.16 (TF-IDF), R11.3.4–3.10 (research track), R11.4.1 (PyTorch
+  wrapper), R11.4.3 (Live demo UI), R11.4.4 (Hygiene sweep). These land
+  only when a demo, campaign, or research paragraph needs them.
+- **Lint/type debt is deprioritized**: ruff sits clean and stays clean
+  passively; pyright runs only on genuinely new modules when it adds signal.
+  Legacy findings carry per-line noqa markers that self-flag on touch.
+  Real development progress is the priority.

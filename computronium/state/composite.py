@@ -62,7 +62,7 @@ class CompositeState:
         if value is None:
             self.activity.pop("activations", None)
         else:
-            self.activity["activations"] = value
+            self.activity["activations"] = value  # pyright: ignore[reportAttributeAccessIssue]
 
     @property
     def free_state(self) -> list[Tensor] | Tensor | None:
@@ -76,7 +76,7 @@ class CompositeState:
         if value is None:
             self.activity.pop("free_state", None)
         else:
-            self.activity["free_state"] = value
+            self.activity["free_state"] = value  # pyright: ignore[reportAttributeAccessIssue]
 
     @property
     def nudged_state(self) -> list[Tensor] | Tensor | None:
@@ -90,7 +90,7 @@ class CompositeState:
         if value is None:
             self.activity.pop("nudged_state", None)
         else:
-            self.activity["nudged_state"] = value
+            self.activity["nudged_state"] = value  # pyright: ignore[reportAttributeAccessIssue]
 
     @property
     def loss(self) -> Tensor | float | None:

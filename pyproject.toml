@@ -148,6 +148,7 @@ markers = [
     "llm: requires a real LLM provider; skipped in CI",
     "integration: integration tests requiring external deps or long runtime",
     "filterwarnings: builtin, registered for --strict-markers compat",
+    "timeout: marks tests with a timeout (requires pytest-timeout)",
 ]
 addopts = "--strict-markers --durations=25 -m 'not slow and not benchmark and not llm' -p no:warnings"
 faulthandler_timeout = 120

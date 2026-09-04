@@ -8,7 +8,7 @@
       "figure_png": "d10_attention_geometry_swap.png",
       "provenance": {
         "config_sha256": "9b0e97c8e2afa5c0345b447194b72a0ba43174f73b05b04373119d583d64ebbb",
-        "git_commit": "a187a2a19684a406dc62b4f776a2c2fad47bb722"
+        "git_commit": "82b69546fd74f6b694c31494ae464495a63cb0e1"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -20,19 +20,19 @@
       "figure_png": "d11_spatial_lattice_geometry_swap.png",
       "provenance": {
         "config_sha256": "08052fdabb338ce8c70539eae11e92d18ef64cc37bccd14c7144b2b65c3f12bf",
-        "git_commit": "a187a2a19684a406dc62b4f776a2c2fad47bb722"
+        "git_commit": "82b69546fd74f6b694c31494ae464495a63cb0e1"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
     {
       "capability_id": "D1",
       "capability_name": "compose_6axis",
-      "data_sha256": "589a600a372b629e25c1b4f30a1383242704c9b34f4561f9540b51fe9010b42e",
+      "data_sha256": "78d10f846dd304501d49ad0659b316afb93e9c1d065c47f9d91cfbb16189c1ce",
       "demo_test": "tests/integration/test_demo_compose_6axis.py",
       "figure_png": "d1_compose_6axis.png",
       "provenance": {
-        "config_sha256": "589a600a372b629e25c1b4f30a1383242704c9b34f4561f9540b51fe9010b42e",
-        "git_commit": "a187a2a19684a406dc62b4f776a2c2fad47bb722"
+        "config_sha256": "78d10f846dd304501d49ad0659b316afb93e9c1d065c47f9d91cfbb16189c1ce",
+        "git_commit": "82b69546fd74f6b694c31494ae464495a63cb0e1"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -44,7 +44,7 @@
       "figure_png": "d2_swap_credit.png",
       "provenance": {
         "config_sha256": "5e3b812ca7a5b3de4d1555064e9f6c32162ab003f3f27edd7b63c81b2ca64b9d",
-        "git_commit": "a187a2a19684a406dc62b4f776a2c2fad47bb722"
+        "git_commit": "82b69546fd74f6b694c31494ae464495a63cb0e1"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -56,7 +56,7 @@
       "figure_png": "d3_swap_plasticity.png",
       "provenance": {
         "config_sha256": "11617524a3bf0e9a136bc3233e9f8a14a72d3241318c255956a3e666719a4f2e",
-        "git_commit": "a187a2a19684a406dc62b4f776a2c2fad47bb722"
+        "git_commit": "82b69546fd74f6b694c31494ae464495a63cb0e1"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -68,7 +68,7 @@
       "figure_png": "d4_memory_budget.png",
       "provenance": {
         "config_sha256": "e1b90bf9efc6080ce7d177331d74896e02395bb762f171a872844b8b1caca746",
-        "git_commit": "a187a2a19684a406dc62b4f776a2c2fad47bb722"
+        "git_commit": "82b69546fd74f6b694c31494ae464495a63cb0e1"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -80,7 +80,7 @@
       "figure_png": "d5_z3_frozen_theta.png",
       "provenance": {
         "config_sha256": "4538685f139762a34709769c01ddb5ea1206419896a4120d2243a475a9d4c2ad",
-        "git_commit": "a187a2a19684a406dc62b4f776a2c2fad47bb722"
+        "git_commit": "82b69546fd74f6b694c31494ae464495a63cb0e1"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -92,7 +92,7 @@
       "figure_png": "d6_substrate_swap.png",
       "provenance": {
         "config_sha256": "8d57a86280ac8af98b43449c74d77313df1390c3945039279ec338f88b31cfcc",
-        "git_commit": "a187a2a19684a406dc62b4f776a2c2fad47bb722"
+        "git_commit": "82b69546fd74f6b694c31494ae464495a63cb0e1"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -104,19 +104,19 @@
       "figure_png": "d7_spike_settle.png",
       "provenance": {
         "config_sha256": "10ae122fec226fbb92642fc3b35240fc86756bb5e6bb6d889887fe1839e7e01c",
-        "git_commit": "a187a2a19684a406dc62b4f776a2c2fad47bb722"
+        "git_commit": "82b69546fd74f6b694c31494ae464495a63cb0e1"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
     {
       "capability_id": "D8",
       "capability_name": "geometry_swap",
-      "data_sha256": "dee1612257043c5851fdb8e3ab6c97f5ae7236d350052de551c20effae69ba69",
+      "data_sha256": "d451778d77a503b13098bca6750ce69a161f2709d689f983c4e3db041000610c",
       "demo_test": "tests/integration/test_demo_geometry_swap.py",
       "figure_png": "d8_geometry_swap.png",
       "provenance": {
-        "config_sha256": "dee1612257043c5851fdb8e3ab6c97f5ae7236d350052de551c20effae69ba69",
-        "git_commit": "a187a2a19684a406dc62b4f776a2c2fad47bb722"
+        "config_sha256": "d451778d77a503b13098bca6750ce69a161f2709d689f983c4e3db041000610c",
+        "git_commit": "82b69546fd74f6b694c31494ae464495a63cb0e1"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -128,7 +128,7 @@
       "figure_png": "d9_graph_geometry_swap.png",
       "provenance": {
         "config_sha256": "cb1b95043e7b12ab2f298cd84336e8399e86fb587f0d2bbb4a8c5a53b5565a6f",
-        "git_commit": "a187a2a19684a406dc62b4f776a2c2fad47bb722"
+        "git_commit": "82b69546fd74f6b694c31494ae464495a63cb0e1"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     }

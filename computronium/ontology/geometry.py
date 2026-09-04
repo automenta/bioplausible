@@ -9,17 +9,18 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 import torch
 from torch import Tensor, nn
 
-import torch
-from torch import Tensor, nn
-
 from computronium.core.tile.topology import TileGraph
 from computronium.ontology._tile_blocks import (
     TileBlockView,
     assemble_transition_blocks,
     build_block_view,
-    scatter_block_grads as _scatter_block_grads,
     tile_hopfield_energy,
     tile_layered_params,
+)
+from computronium.ontology._tile_blocks import (
+    scatter_block_grads as _scatter_block_grads,
+)
+from computronium.ontology._tile_blocks import (
     tile_settle_block_acts as settle_block_acts,
 )
 
@@ -1290,7 +1291,7 @@ class GraphGeometry(nn.Module):
 
     def _compute_degrees(self) -> None:
         """Pre-compute neighbor counts for mean aggregation."""
-        num_nodes = self._edge_index.max().item() + 1
+        num_nodes = int(self._edge_index.max().item()) + 1
         row, _ = self._edge_index
         deg = torch.zeros(num_nodes, dtype=torch.long)
         deg.scatter_add_(0, row, torch.ones_like(row))
