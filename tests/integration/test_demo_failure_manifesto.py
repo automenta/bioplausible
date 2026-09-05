@@ -12,9 +12,12 @@ live at demo scale, same pipeline, same terms:
    under our layered settle is last-layer-only training — per-layer
    credit norms are exactly zero for every hidden weight matrix
    (asserted live) — and budget softens it (0.21 at 60 settle steps).
-   Treat the wall as the random-feature readout boundary of this
-   instrument regime, not settled depth physics: whether a hidden-layer
-   contrast is achievable in a layered settle at all is OPEN.
+   **The wall survives known fix #1** (2026-09-05 audit): ePC's error
+   reparameterization DOES reach every hidden layer at depth 8 (credit
+   norms > 0, asserted live) yet still walls — the contrastive signal
+   decays geometrically through depth. Candidate real wall; verdict
+   OPEN pending fix #2, the jpc-faithful trainer regime (Adam, β grid,
+   steps=H).
 2. **μPC no lift under our trainer:** depth-scaled init (``mupc``)
    rescues nothing at any depth under the computronium trainer —
    0.124 vs 0.105 at depth 8. The honest statement: no lift, OPEN
@@ -44,6 +47,7 @@ from computronium import (
     BackpropCredit,
     CreditAssignmentConfig,
     DigitalSubstrate,
+    ErrorPredictiveCodingDynamics,
     EuclideanUpdate,
     FeedforwardGeometry,
     GeometryConfig,
@@ -71,6 +75,8 @@ LR = 0.2
 BETA = 0.5
 RUNAWAY_DEPTHS = (10, 50, 100)
 OJA_DEPTHS = (1, 10, 50, 100)
+EPC_DEPTHS = (2, 8)
+EPC_SETTLE_STEPS = 5  # 1/3 of SETTLE_STEPS — the D12 budget regime
 CHANCE = 0.1
 
 InitScheme = Literal["default", "mupc"]
@@ -216,6 +222,60 @@ def _local_arm_record(name: str, init: str, train_accs: dict[str, list[float]]) 
     }
 
 
+def _epc_arm(loader, substrate, config) -> dict:
+    """ePC depth sweep (2026-09-05 audit, plan item 2): the wall survives
+    its first known fix. ePC's error reparameterization DOES reach every
+    hidden layer (min credit norm > 0 at depth 8 — the sPC pathology is
+    gone) yet learning still walls at depth 8 — the contrastive credit
+    decays geometrically through depth. Verdict stays OPEN pending the
+    jpc-faithful trainer regime (Adam, β grid, steps=H)."""
+    out: dict = {"depths": [], "train_acc": [], "min_hidden_credit_norm": []}
+    for depth in EPC_DEPTHS:
+        torch.manual_seed(0)
+        train_data = list(_flatten(loader, BATCH_CAP))
+        geometry = FeedforwardGeometry(
+            GeometryConfig.feedforward(
+                input_dim=784, output_dim=10, hidden_dims=(WIDTH,) * depth
+            )
+        )
+        system = compose_system(
+            substrate=substrate,
+            geometry=geometry,
+            dynamics=ErrorPredictiveCodingDynamics(
+                StateDynamicsConfig.error_predictive_coding(
+                    max_steps=EPC_SETTLE_STEPS, step_size=0.5, beta=BETA
+                )
+            ),
+            credit=ThermodynamicContrast(
+                CreditAssignmentConfig.thermodynamic_contrast(beta=BETA)
+            ),
+            update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=LR)),
+        )
+        acc = SystemTrainer(system=system, config=config, train_data=train_data).fit()[
+            -1
+        ]["train_acc"]
+        x, y = train_data[0]
+        free = system.dynamics.settle(
+            SystemState(x=x), geometry, substrate, target=None
+        )
+        nudged = system.dynamics.settle(SystemState(x=x), geometry, substrate, target=y)
+        grads = system.credit.compute_pseudo_gradient(
+            {Phase.FREE: free, Phase.NUDGED: nudged}, None, geometry
+        )
+        norms = [g.norm().item() for g in grads]
+        out["depths"].append(depth)
+        out["train_acc"].append(acc)
+        out["min_hidden_credit_norm"].append(min(norms[:-1]))
+        print(f"depth {depth:>2} {'epc':>8}: {acc:.3f}")
+    return out
+
+
+def _oja_arm() -> list[float]:
+    generator = torch.Generator().manual_seed(1)
+    x_train, targets, x_eval, eval_targets = _direction_task(generator)
+    return [_oja_readout(d, x_train, targets, x_eval, eval_targets) for d in OJA_DEPTHS]
+
+
 def test_demo_failure_manifesto(emit_run_record) -> None:
     task = create_task("mnist", device="cpu", quick_mode=True, num_workers=0)
     task.setup()
@@ -231,17 +291,16 @@ def test_demo_failure_manifesto(emit_run_record) -> None:
     credit_norms = _spc_credit_norms(spc_system, substrate, loader)
     record["arms"]["spc"]["credit_norms"] = credit_norms
 
+    epc = _epc_arm(loader, substrate, config)
+    record["arms"]["epc"] = epc
+
     ratios = [_runaway_ratio(d) for d in RUNAWAY_DEPTHS]
     record["arms"]["hebbian_runaway"] = {
         "depths": list(RUNAWAY_DEPTHS),
         "norm_ratio": ratios,
     }
 
-    generator = torch.Generator().manual_seed(1)
-    x_train, targets, x_eval, eval_targets = _direction_task(generator)
-    readouts = [
-        _oja_readout(d, x_train, targets, x_eval, eval_targets) for d in OJA_DEPTHS
-    ]
+    readouts = _oja_arm()
     record["arms"]["oja_collapse"] = {
         "depths": list(OJA_DEPTHS),
         "readout_acc": readouts,
@@ -249,10 +308,10 @@ def test_demo_failure_manifesto(emit_run_record) -> None:
 
     emit_run_record("F1", "failure_manifesto", record)
 
-    _assert_manifesto(train_accs, ratios, readouts, credit_norms)
+    _assert_manifesto(train_accs, ratios, readouts, credit_norms, epc)
 
 
-def _assert_manifesto(acc, ratios, readouts, credit_norms) -> None:
+def _assert_manifesto(acc, ratios, readouts, credit_norms, epc) -> None:
     accmap = {
         name: dict(zip(TRAIN_DEPTHS, accs, strict=True)) for name, accs in acc.items()
     }
@@ -273,6 +332,21 @@ def _assert_manifesto(acc, ratios, readouts, credit_norms) -> None:
             f"μPC shows no lift at depth {depth} under our trainer (OPEN, not refuted)"
         )
     assert accmap["spc_mupc"][8] < 0.2
+
+    # ePC audit (2026-09-05): the known fix #1 (error reparameterization)
+    # repairs the MECHANISM but not the wall — the verdict is a candidate
+    # real wall, pending the jpc-faithful trainer regime (fix #2).
+    epcmap = dict(zip(epc["depths"], epc["train_acc"], strict=True))
+    epc_norms = dict(zip(epc["depths"], epc["min_hidden_credit_norm"], strict=True))
+    assert epc_norms[8] > 0, (
+        "ePC's credit must reach the hidden layers at depth 8 — "
+        "the sPC last-layer-only pathology is the thing ePC fixes"
+    )
+    assert epcmap[2] > 0.3, "ePC must learn at shallow depth (positive control)"
+    assert epcmap[8] <= accmap["spc"][8] + 0.05, (
+        "ePC also walls at depth 8 — the wall survives fix #1; verdict "
+        "OPEN pending the jpc-faithful trainer regime (Adam, β grid, steps=H)"
+    )
 
     assert ratios[2] > ratios[1] > ratios[0], (
         "runaway gain compounds super-exponentially"

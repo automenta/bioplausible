@@ -393,7 +393,7 @@ def create_eqprop_system(
             credit_type="thermodynamic_contrast",
             beta=beta,
             feedback_matrix=None,
-            local_objective="mse",
+            local_objective="ff",
             orthogonal_init=False,
             feedback_scale=0.01,
         )
@@ -461,7 +461,7 @@ def create_backprop_system(
             credit_type="gradient",
             beta=0.5,
             feedback_matrix=None,
-            local_objective="mse",
+            local_objective="ff",
             orthogonal_init=False,
             feedback_scale=0.01,
         )
@@ -530,7 +530,7 @@ def create_fa_system(
             credit_type="random_projections",
             beta=0.5,
             feedback_matrix=None,
-            local_objective="mse",
+            local_objective="ff",
             orthogonal_init=False,
             feedback_scale=feedback_scale,
         )

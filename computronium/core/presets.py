@@ -546,7 +546,9 @@ def create_pepita_mlp(
     substrate = _default_substrate(device)
     geometry = _mlp_geometry(input_dim, hidden_dims, output_dim, init_scale)
     dynamics = InstantaneousDynamics(StateDynamicsConfig.instantaneous())
-    credit = LocalGoodnessCredit(CreditAssignmentConfig.local_goodness())
+    credit = LocalGoodnessCredit(
+        CreditAssignmentConfig.local_goodness(local_objective="pepita")
+    )
     update = _default_update(lr)
 
     return compose_system(substrate, geometry, dynamics, credit, update)
@@ -759,10 +761,12 @@ def create_spiking_snn_mlp(
             threshold=threshold,
         )
     )
-    credit = TemporalTraceCredit(CreditAssignmentConfig.temporal_trace(
-        tau_pre=0.9,
-        tau_post=0.9,
-    ))
+    credit = TemporalTraceCredit(
+        CreditAssignmentConfig.temporal_trace(
+            tau_pre=0.9,
+            tau_post=0.9,
+        )
+    )
     update = _default_update(lr)
 
     return compose_system(substrate, geometry, dynamics, credit, update)

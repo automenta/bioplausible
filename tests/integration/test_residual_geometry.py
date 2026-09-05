@@ -139,3 +139,45 @@ def test_residual_rejects_non_feedforward() -> None:
     )
     with pytest.raises(ValueError, match="feedforward"):
         config.validate()
+
+
+def test_residual_epc_free_equilibrium_is_feedforward_bitwise() -> None:
+    """D12's invariant under residual: ePC's free-phase equilibrium is the
+    residual feedforward pass bitwise (zero errors are the fixed point),
+    and the nudged signal reaches every hidden layer through the skip path
+    (the R11.3.11 instrument gap — ePC must express the paper's residual
+    regime for the jpc-faithful re-test)."""
+    from computronium import ErrorPredictiveCodingDynamics
+
+    torch.manual_seed(0)
+    geometry = FeedforwardGeometry(
+        GeometryConfig.feedforward(
+            input_dim=16, output_dim=5, hidden_dims=(8, 8), residual=True
+        )
+    )
+    substrate = DigitalSubstrate(SubstrateConfig.digital(device="cpu"))
+    dynamics = ErrorPredictiveCodingDynamics(
+        StateDynamicsConfig.error_predictive_coding(
+            max_steps=5, step_size=0.5, beta=10.0
+        )
+    )
+    x = torch.randn(4, 16)
+    y = torch.randint(0, 5, (4,))
+
+    ff = geometry.forward_with_intermediates(x, substrate)
+    free = dynamics.settle(SystemState(x=x), geometry, substrate, None)
+    for a, b in zip(ff, free.activations, strict=True):
+        assert torch.equal(a, b), (
+            "ePC free equilibrium must equal the residual feedforward pass "
+            "bitwise (zero-error fixed point)"
+        )
+
+    nudged = dynamics.settle(SystemState(x=x), geometry, substrate, y)
+    devs = [
+        (n - f).abs().max().item()
+        for f, n in zip(free.activations, nudged.activations, strict=True)
+    ]
+    assert min(devs[1:-1]) > 1e-4, (
+        "the nudged signal must reach every hidden layer through the "
+        f"residual skip path (deviations {devs})"
+    )

@@ -627,7 +627,7 @@ def create_routing_eqprop_system(
             credit_type="thermodynamic_contrast",
             beta=beta,
             feedback_matrix=None,
-            local_objective="mse",
+            local_objective="ff",
             orthogonal_init=False,
             feedback_scale=0.01,
         )
@@ -717,7 +717,7 @@ def create_fast_weight_eqprop_system(
             credit_type="thermodynamic_contrast",
             beta=beta,
             feedback_matrix=None,
-            local_objective="mse",
+            local_objective="ff",
             orthogonal_init=False,
             feedback_scale=0.01,
         )

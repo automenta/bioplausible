@@ -59,8 +59,27 @@ def _records(records_dir: Path) -> Iterator[dict]:
         yield record
 
 
+def canonicalize_floats(value: object, *, digits: int = 6) -> object:
+    """Round every float in a JSON-like structure to ``digits`` decimals.
+
+    The gallery lock must detect a demo CHANGING WHAT IT DEMONSTRATES,
+    not multithreaded CPU reduction order — measured record drift sits at
+    the 1e-7 level run-to-run while semantic changes move at 1e-3+.
+    Hash the canonical projection, not the raw bytes."""
+    if isinstance(value, float):
+        rounded = round(value, digits)
+        return 0.0 if rounded == 0 else rounded  # normalize -0.0
+    if isinstance(value, dict):
+        return {k: canonicalize_floats(v, digits=digits) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [canonicalize_floats(v, digits=digits) for v in value]
+    return value
+
+
 def _sha256_data(record: dict) -> str:
-    payload = json.dumps(record["data"], sort_keys=True, separators=(",", ":"))
+    payload = json.dumps(
+        canonicalize_floats(record["data"]), sort_keys=True, separators=(",", ":")
+    )
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
@@ -540,43 +559,13 @@ def _fig_spiking_plateau(record: dict) -> Figure:
     return fig
 
 
-def _fig_uaxis_muon_swap(record: dict) -> Figure:
-    import matplotlib.pyplot as plt
+def _fig_declared(record: dict) -> Figure:
+    """Generic renderer for records declaring ``data["figure"]`` — the
+    common demo API. New demos register this and declare panels in the
+    record; bespoke factories remain for legacy records."""
+    from computronium.visualization._demo_api import declared_figure
 
-    arms = record["data"]["arms"]
-    credits = ("bp", "ff", "pepita")
-    fig, ax = plt.subplots(figsize=(7.5, 4.5))
-    x = range(len(credits))
-    width = 0.38
-    eu = [arms[f"{c}/euclidean"] for c in credits]
-    mu = [arms[f"{c}/muon"] for c in credits]
-    ax.bar(
-        [i - width / 2 for i in x],
-        eu,
-        width,
-        color=COLOR_WALLED,
-        label=f"euclidean (lr {record['data']['lr_euclid']})",
-    )
-    ax.bar(
-        [i + width / 2 for i in x],
-        mu,
-        width,
-        color=COLOR_ARM,
-        label=f"muon (lr {record['data']['lr_muon']})",
-    )
-    for i, (e, m) in enumerate(zip(eu, mu, strict=True)):
-        ax.text(i - width / 2, e, f"{e:.2f}", ha="center", va="bottom", fontsize=9)
-        ax.text(i + width / 2, m, f"{m:.2f}", ha="center", va="bottom", fontsize=9)
-    ax.set_xticks(list(x), credits)
-    ax.set_ylim(0, 1)
-    chance_line(ax, 0.1, "chance (0.1)")
-    ax.set_ylabel("train accuracy")
-    ax.set_title(
-        "D13 — the U-axis is a swap: orthogonalized updates rescue local credit"
-    )
-    ax.legend()
-    apply_style(fig)
-    return fig
+    return declared_figure(record)
 
 
 @dataclass(frozen=True, slots=True)
@@ -604,7 +593,8 @@ DEMOS: dict[str, DemoSpec] = {
     "epc_fast_settle": DemoSpec("D12", _fig_epc_fast_settle),
     "failure_manifesto": DemoSpec("F1", _fig_failure_manifesto),
     "spiking_plateau": DemoSpec("F2", _fig_spiking_plateau),
-    "uaxis_muon_swap": DemoSpec("D13", _fig_uaxis_muon_swap),
+    "uaxis_muon_swap": DemoSpec("D13", _fig_declared),
+    "jpc_faithful_depth": DemoSpec("D14", _fig_declared),
 }
 
 

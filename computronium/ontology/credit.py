@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import zlib
 from abc import abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, ClassVar, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, ClassVar, Literal, Protocol, runtime_checkable
 
 import torch
 from torch import Tensor
@@ -34,7 +35,11 @@ class CreditAssignmentConfig:
         beta: Nudge strength (for thermodynamic contrast)
         feedback_matrix: Optional fixed feedback matrix
             (for random projections)
-        local_objective: Layer-local loss type (for local goodness)
+        local_objective: Local-credit algorithm selection (for
+            local_goodness): "ff" runs the Forward-Forward layer-local
+            goodness contrast (no inverse pass); "pepita" runs the
+            PEPITA error-modulated update (output differential routed
+            through fixed random inverse projections)
         orthogonal_init: Initialize feedback matrices with orthogonal weights
         feedback_scale: Scaling factor for feedback matrices
         a_plus: STDP potentiation amplitude (for temporal_trace)
@@ -42,13 +47,17 @@ class CreditAssignmentConfig:
         tau: STDP time constant (for temporal_trace, legacy)
         tau_pre: STDP pre-synaptic trace time constant (for timing-asymmetric STDP)
         tau_post: STDP post-synaptic trace time constant (for timing-asymmetric STDP)
-        homeostatic_target: Target activation norm for homeostatic scaling
+    homeostatic_target: Target row-norm for homeostatic synaptic
+        scaling (timing-asymmetric STDP)
+    homeostatic_scaling: Gate the homeostatic synaptic-scaling term on
+        the timing-asymmetric STDP path (False = naive unconstrained
+        rule, F2's collapse regime)
     """
 
     credit_type: str
     beta: float
     feedback_matrix: Tensor | None
-    local_objective: str
+    local_objective: Literal["ff", "pepita"]
     orthogonal_init: bool
     feedback_scale: float
     a_plus: float = 1.0
@@ -57,6 +66,7 @@ class CreditAssignmentConfig:
     tau_pre: float = 0.9
     tau_post: float = 0.9
     homeostatic_target: float = 1.0
+    homeostatic_scaling: bool = False
 
     @classmethod
     def thermodynamic_contrast(
@@ -64,7 +74,7 @@ class CreditAssignmentConfig:
         *,
         beta: float = 0.5,
         feedback_matrix: Tensor | None = None,
-        local_objective: str = "mse",
+        local_objective: Literal["ff", "pepita"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
     ) -> CreditAssignmentConfig:
@@ -83,7 +93,7 @@ class CreditAssignmentConfig:
         *,
         beta: float = 0.5,
         feedback_matrix: Tensor | None = None,
-        local_objective: str = "mse",
+        local_objective: Literal["ff", "pepita"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
     ) -> CreditAssignmentConfig:
@@ -102,7 +112,7 @@ class CreditAssignmentConfig:
         *,
         beta: float = 0.5,
         feedback_matrix: Tensor | None = None,
-        local_objective: str = "mse",
+        local_objective: Literal["ff", "pepita"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
     ) -> CreditAssignmentConfig:
@@ -116,12 +126,12 @@ class CreditAssignmentConfig:
         )
 
     @classmethod
-    def temporal_trace(
+    def temporal_trace(  # ruff: ignore[too-many-arguments] (config mirrors the STDP knobs)
         cls,
         *,
         beta: float = 0.5,
         feedback_matrix: Tensor | None = None,
-        local_objective: str = "mse",
+        local_objective: Literal["ff", "pepita"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
         a_plus: float = 1.0,
@@ -129,6 +139,8 @@ class CreditAssignmentConfig:
         tau: float = 20.0,
         tau_pre: float = 0.9,
         tau_post: float = 0.9,
+        homeostatic_scaling: bool = False,
+        homeostatic_target: float = 1.0,
     ) -> CreditAssignmentConfig:
         """Potentiation/depression weights must differ: the rate-coded
         surrogate correlates the same (pre, post) activity pair in both
@@ -151,6 +163,8 @@ class CreditAssignmentConfig:
             tau=tau,
             tau_pre=tau_pre,
             tau_post=tau_post,
+            homeostatic_scaling=homeostatic_scaling,
+            homeostatic_target=homeostatic_target,
         )
 
     @classmethod
@@ -159,7 +173,7 @@ class CreditAssignmentConfig:
         *,
         beta: float = 0.5,
         feedback_matrix: Tensor | None = None,
-        local_objective: str = "mse",
+        local_objective: Literal["ff", "pepita"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
     ) -> CreditAssignmentConfig:
@@ -178,7 +192,7 @@ class CreditAssignmentConfig:
         *,
         beta: float = 0.5,
         feedback_matrix: Tensor | None = None,
-        local_objective: str = "mse",
+        local_objective: Literal["ff", "pepita"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
     ) -> CreditAssignmentConfig:
@@ -197,7 +211,7 @@ class CreditAssignmentConfig:
         *,
         beta: float = 0.5,
         feedback_matrix: Tensor | None = None,
-        local_objective: str = "mse",
+        local_objective: Literal["ff", "pepita"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
     ) -> CreditAssignmentConfig:
@@ -584,10 +598,25 @@ class RandomProjectionsCredit:
 
 
 class LocalGoodnessCredit:
-    """Layer-local contrastive objective (Forward-Forward, PEPITA).
+    """Layer-local contrastive credit — two realized algorithms.
 
-    Goodness G_l = mean(acts_l^2) per layer. The pseudo-gradient descends
-    (G_free - G_nudged) so nudged goodness increases, free goodness decreases.
+    ``local_objective="ff"`` (Forward-Forward, Hinton 2022): layer-local
+    goodness G_l = mean(acts_l^2); the pseudo-gradient descends
+    (G_free − G_nudged) so nudged goodness increases, free goodness
+    decreases. Layer-local loss, no inverse pass.
+
+    ``local_objective="pepita"`` (Dellaferrera & Kreiman 2022): the
+    output-layer differential e₁ = nudged_out − free_out is routed back
+    through fixed random inverse projections (orthogonal rows, scaled by
+    ``feedback_scale``) and each weight receives ΔW ∝ −(e₁ @ Bᵀ)ᵀ a_pre
+    from the modulated (nudged) pass — forward differential + inverse
+    propagation modulation, closed form, no autograd through the settle.
+
+    The two are genuinely different algorithms: FF's gradient is the
+    autograd derivative of the per-layer goodness contrast; PEPITA's is a
+    fixed-random-feedback error modulation. They are NOT interchangeable
+    (the D13 record's byte-identical numbers were the defect this
+    realization fixes).
     """
 
     phases: ClassVar[tuple[Phase, ...]] = (Phase.FREE, Phase.NUDGED)
@@ -595,6 +624,63 @@ class LocalGoodnessCredit:
 
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.local_goodness()
+        self._feedback: dict[tuple[str, tuple[int, int], str, str], Tensor] = {}
+
+    def _inverse_projection(
+        self, name: str, width: int, out_dim: int, device: str, dtype
+    ) -> Tensor:
+        """Fixed random inverse projection B: (out_dim, width)."""
+        key = (name, (out_dim, width), str(device), str(dtype))
+        if key not in self._feedback:
+            gen = torch.Generator(device=device)
+            gen.manual_seed(zlib.crc32(name.encode()))
+            b = torch.empty(out_dim, width, device=device, dtype=torch.float32)
+            if self.config.orthogonal_init:
+                torch.nn.init.orthogonal_(b, generator=gen)
+            else:
+                b.normal_(generator=gen)
+            self._feedback[key] = b.to(dtype) * self.config.feedback_scale
+        return self._feedback[key]
+
+    def _pepita_gradient(
+        self,
+        free_state: SystemState,
+        free_acts: list[Tensor],
+        nudged_acts: list[Tensor],
+        weight_names: list[str],
+        geometry: Geometry,
+    ) -> list[Tensor]:
+        n_trans = min(len(free_acts), len(nudged_acts)) - 1
+        out = free_acts[-1].detach()
+        y = free_state.y
+        if y is None:
+            return [torch.zeros_like(geometry.params[n]) for n in weight_names]
+        num_classes = out.shape[-1]
+        onehot = torch.nn.functional.one_hot(y, num_classes).to(out.dtype)
+        # Probability-space output error (PEPITA's e = y − ŷ). The raw
+        # nudged differential is β·(onehot − logits) under
+        # InstantaneousDynamics — dominated by the constant one-hot term,
+        # which carries no per-sample error information.
+        e1 = (onehot - torch.softmax(out, dim=-1)).detach()
+        out_dim = e1.shape[1]
+        batch = e1.shape[0]
+        grads: list[Tensor] = []
+        for k, name in enumerate(weight_names):
+            if k >= n_trans:
+                # Surplus weights (recurrent self-connections): no route.
+                grads.append(torch.zeros_like(geometry.params[name]))
+                continue
+            width = geometry.params[name].shape[0]
+            b = self._inverse_projection(
+                name,
+                width,
+                out_dim,
+                str(e1.device),
+                e1.dtype,
+            )
+            err = e1 @ b  # (batch, width)
+            grads.append(-(err.T @ nudged_acts[k].detach()) / batch)
+        return grads
 
     def compute_pseudo_gradient(
         self,
@@ -615,6 +701,11 @@ class LocalGoodnessCredit:
         weight_names = _learnable_weight_names(geometry.params)
         if not weight_names:
             return []
+
+        if self.config.local_objective == "pepita":
+            return self._pepita_gradient(
+                free_state, free_acts, nudged_acts, weight_names, geometry
+            )
 
         # Layer-local goodness objective summed over act transitions
         # (surplus weights — recurrent self-connections — receive their
@@ -768,6 +859,17 @@ class TemporalTraceCredit:
                 dep = a_minus * (post_trace.T @ pre_final) / batch
 
                 stdp_grad = -(pot - dep)
+                if self.config.homeostatic_scaling:
+                    # Synaptic scaling (gain control): pull each incoming
+                    # row toward the target norm. Descent on this term is
+                    # zero exactly at ||row|| = target — the equilibrium
+                    # that stops runaway potentiation (F2 audit).
+                    w = geometry.params[name].detach()
+                    row_norms = w.norm(dim=1, keepdim=True)
+                    scale = w * (
+                        1 - self.config.homeostatic_target / (row_norms + 1e-8)
+                    )
+                    stdp_grad += scale
                 grads.append(stdp_grad)
         else:
             # Rate-coded surrogate (fallback)

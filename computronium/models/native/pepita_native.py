@@ -70,6 +70,7 @@ def create_native_pepita_mlp(
     credit = LocalGoodnessCredit(
         CreditAssignmentConfig.local_goodness(
             feedback_scale=0.01,
+            local_objective="pepita",
         )
     )
     update = EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=lr))

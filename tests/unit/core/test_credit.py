@@ -628,7 +628,62 @@ class TestSettlingConvergence:
                 n_converged += 1
 
         assert n_decreased == 5, f"Only {n_decreased}/5 trials decreased energy"
-        assert n_converged == 5, f"Only {n_converged}/5 trials converged"
+        assert n_converged == 5, f"Only {n_decreased}/5 trials converged"
+
+
+class TestLocalGoodnessRealization:
+    """FF and PEPITA are distinct algorithms (local_objective is wired).
+
+    Ratchet for the D13 audit defect: both factory entries used to run
+    byte-identical pseudo-gradients because no credit read
+    ``local_objective``."""
+
+    @staticmethod
+    def _grads(local_objective: str, device) -> list[Tensor]:
+        from computronium.ontology import LocalGoodnessCredit
+
+        torch.manual_seed(0)
+        geometry = FeedforwardGeometry(
+            GeometryConfig.feedforward(input_dim=20, output_dim=4, hidden_dims=(16, 16))
+        ).to(device)
+        substrate = DigitalSubstrate(SubstrateConfig.digital(device=str(device)))
+        x = torch.randn(8, 20, device=device)
+        y = torch.randint(0, 4, (8,), device=device)
+        acts = geometry.forward_with_intermediates(x, substrate)
+        free = SystemState(x=x, y=y)
+        free.activations = acts
+        nudged = SystemState(x=x, y=y)
+        nudged.activations = [
+            *acts[:-1],
+            acts[-1] + 0.5 * (F.one_hot(y, 4).float() - acts[-1]),
+        ]
+        credit = LocalGoodnessCredit(
+            CreditAssignmentConfig.local_goodness(
+                feedback_scale=0.01, local_objective=local_objective
+            )
+        )
+        return credit.compute_pseudo_gradient(
+            {Phase.FREE: free, Phase.NUDGED: nudged}, None, geometry
+        )
+
+    def test_ff_and_pepita_differ(self, device):
+        ff = self._grads("ff", device)
+        pepita = self._grads("pepita", device)
+        assert len(ff) == len(pepita) > 0
+        for g_ff, g_pep in zip(ff, pepita, strict=True):
+            assert not torch.allclose(g_ff, g_pep), (
+                "FF and PEPITA pseudo-gradients must differ — identical "
+                "numbers mean local_objective is dead config again"
+            )
+
+    def test_pepita_deterministic_and_nonzero(self, device):
+        a = self._grads("pepita", device)
+        b = self._grads("pepita", device)
+        for g_a, g_b in zip(a, b, strict=True):
+            assert g_a.abs().sum() > 0, "PEPITA gradient must be nonzero"
+            assert torch.equal(g_a, g_b), (
+                "PEPITA feedback projections must be deterministic"
+            )
 
 
 if __name__ == "__main__":

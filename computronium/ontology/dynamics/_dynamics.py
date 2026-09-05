@@ -1208,8 +1208,15 @@ class ErrorPredictiveCodingDynamics:
         ],
         substrate: Substrate,
         eps: list[Tensor],
+        residual: bool = False,
     ) -> tuple[list[Tensor], Tensor]:
         """Feedforward pass with error perturbations: sᵢ = ŝᵢ + εᵢ.
+
+        With ``residual`` (``GeometryConfig.residual``), a transition whose
+        output width matches its input width adds its input activity back —
+        ``a_ℓ = a_{ℓ−1} + φ(W_ℓ a_{ℓ−1} + b_ℓ)``, mirroring
+        ``FeedforwardGeometry._apply_stack``; the skip is part of the
+        prediction ŝᵢ, so εᵢ rides on top of it.
 
         Returns (states, ŷ) where states = [x, s₀, ..., s_{L-2}, ŷ]; hidden
         states carry their error, the output carries none (Algorithm 2).
@@ -1219,11 +1226,14 @@ class ErrorPredictiveCodingDynamics:
         states = [h]
         last = len(transitions) - 1
         for i, (weight, bias, activations) in enumerate(transitions):
+            h_in = h
             h = op(h, weight)
             if bias is not None:
                 h = h + bias
             for activation in activations:
                 h = activation(h)
+            if residual and h.shape == h_in.shape:
+                h = h + h_in
             if i < last:
                 if i < len(eps):
                     h = h + eps[i]
@@ -1250,7 +1260,7 @@ class ErrorPredictiveCodingDynamics:
         xf = x.flatten(1) if x.dim() > 2 else x
         with torch.no_grad():
             probe_states, _ = self._build_forward_with_errors(
-                xf, transitions, substrate, []
+                xf, transitions, substrate, [], residual=layered.residual
             )
         eps = [
             torch.zeros(s.shape, device=s.device, dtype=s.dtype).requires_grad_(True)
@@ -1260,7 +1270,7 @@ class ErrorPredictiveCodingDynamics:
         for step in range(self.config.max_steps):
             with torch.enable_grad():
                 states, y_hat = self._build_forward_with_errors(
-                    xf, transitions, substrate, eps
+                    xf, transitions, substrate, eps, residual=layered.residual
                 )
                 # PC energy (Algorithm 2): ½ Σ ‖εᵢ‖² + β·ℒ(ŷ, y)
                 energy = torch.zeros((), device=xf.device, dtype=xf.dtype)
@@ -1293,7 +1303,9 @@ class ErrorPredictiveCodingDynamics:
             ):
                 break
 
-        states, _ = self._build_forward_with_errors(xf, transitions, substrate, eps)
+        states, _ = self._build_forward_with_errors(
+            xf, transitions, substrate, eps, residual=layered.residual
+        )
         self._last_errors = eps
 
         if target is None:

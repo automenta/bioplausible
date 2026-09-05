@@ -124,11 +124,8 @@ class TestValidationAll:
         )
         self._train_system_and_assert_learns(model, self.x, self.y, "native_fa_mlp")
 
-    @pytest.mark.xfail(
-        reason="PEPITA LocalGoodnessCredit returns empty pseudo-gradients - known issue"
-    )
     def test_native_pepita_mlp(self):
-        """Native PEPITA MLP learns - XFAIL: LocalGoodnessCredit.compute_pseudo_gradient not implemented."""
+        """Native PEPITA MLP learns (realized local_objective="pepita")."""
         model = create_native_pepita_mlp(
             self.input_dim, 16, self.output_dim, num_layers=2, lr=1e-3
         )

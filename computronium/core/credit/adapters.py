@@ -350,7 +350,7 @@ class ThermodynamicToHomeostaticAdapter(CreditAdapter):
             credit_type="homeostatic",
             beta=source_credit.config.beta,
             feedback_matrix=None,
-            local_objective="mse",
+            local_objective="ff",
             orthogonal_init=False,
             feedback_scale=0.01,
         )

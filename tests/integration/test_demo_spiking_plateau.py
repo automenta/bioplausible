@@ -25,7 +25,12 @@ confounded. Two live, separated claims:
       nearest-centroid readout on the settled hidden membranes drops
       0.58 (random init) → 0.19 (STDP-trained) — the runaway-gain
       positive-feedback pathology (F1 face 3), spiking edition: no gain
-      control in the Hebbian rule.
+      control in the Hebbian rule. **The collapse survives known fix #1**
+      (2026-09-05 audit): homeostatic synaptic scaling holds hidden row
+      norms at their init value, yet the readout still collapses — the
+      STDP fixed point itself destroys class structure, not gain growth.
+      OPEN pending the supervised-error-term audit (reward-modulated
+      STDP); no boundary verdict before then (R11.5.5a).
 
 This is the honest-failure slot, filled: the plateau is real but for
 sharper reasons than history claimed, and the instrument now
@@ -70,7 +75,7 @@ def _flatten(loader, cap):
         yield x.view(x.size(0), -1), y
 
 
-def _build(depth: int, init_scale: float):
+def _build(depth: int, init_scale: float, homeostatic_target: float | None = None):
     torch.manual_seed(0)
     return compose_system(
         substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
@@ -85,9 +90,22 @@ def _build(depth: int, init_scale: float):
         dynamics=SpikeIntegrationDynamics(
             StateDynamicsConfig.spike_integration(max_steps=SETTLE_STEPS)
         ),
-        credit=TemporalTraceCredit(CreditAssignmentConfig.temporal_trace()),
+        credit=TemporalTraceCredit(
+            CreditAssignmentConfig.temporal_trace(
+                homeostatic_scaling=homeostatic_target is not None,
+                homeostatic_target=homeostatic_target or 1.0,
+            )
+        ),
         update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=LR)),
     )
+
+
+def _row_norms(system) -> list[float]:
+    return [
+        float(p.norm(dim=1).mean())
+        for n, p in system.geometry.params.items()
+        if "weight" in n and p.ndim == 2
+    ]
 
 
 def _settle(system, x):
@@ -126,6 +144,31 @@ def _centroid_readout(system, train_data, eval_data) -> float:
     return (torch.cdist(e, centroids).argmin(1) == ye).float().mean().item()
 
 
+def _homeostatic_arm(healthy, config, train_data, eval_data) -> dict:
+    """Homeostatic-scaling audit (2026-09-05, plan item 3): synaptic
+    scaling (known fix #1) is LIVE — row norms held at the target —
+    yet the readout still collapses. The STDP fixed point itself
+    destroys class structure; gain control does not rescue it. Verdict
+    OPEN pending the supervised-error-term audit (reward-modulated
+    STDP) — no boundary verdict before then (R11.5.5a)."""
+    h_target = _row_norms(healthy)[1]  # hold hidden rows at their init norm
+    h_system = _build(DEPTH, 1.0, homeostatic_target=h_target)
+    SystemTrainer(system=h_system, config=config, train_data=train_data).fit()
+    return {
+        "target": h_target,
+        "row_norms": _row_norms(h_system),
+        "readout": _centroid_readout(h_system, train_data, eval_data),
+    }
+
+
+def _stdp_readout_arm(healthy, config, train_data, eval_data) -> dict:
+    readout = {"random_init": _centroid_readout(healthy, train_data, eval_data)}
+    stdp_system = _build(DEPTH, 1.0)
+    SystemTrainer(system=stdp_system, config=config, train_data=train_data).fit()
+    readout["stdp_trained"] = _centroid_readout(stdp_system, train_data, eval_data)
+    return readout
+
+
 def test_demo_spiking_plateau(emit_run_record) -> None:
     task = create_task("mnist", device="cpu", quick_mode=True, num_workers=0)
     task.setup()
@@ -157,11 +200,12 @@ def test_demo_spiking_plateau(emit_run_record) -> None:
     ).fit()[-1]["train_acc"]
     record["supervised_train_acc"] = supervised
 
-    readout = {"random_init": _centroid_readout(healthy, train_data, eval_data)}
-    stdp_system = _build(DEPTH, 1.0)
-    SystemTrainer(system=stdp_system, config=config, train_data=train_data).fit()
-    readout["stdp_trained"] = _centroid_readout(stdp_system, train_data, eval_data)
+    readout = _stdp_readout_arm(healthy, config, train_data, eval_data)
     record["feature_readout"] = readout
+
+    record["homeostatic_audit"] = _homeostatic_arm(
+        healthy, config, train_data, eval_data
+    )
 
     emit_run_record("F2", "spiking_plateau", record)
 
@@ -183,4 +227,17 @@ def test_demo_spiking_plateau(emit_run_record) -> None:
     )
     assert readout["stdp_trained"] < readout["random_init"] - 0.1, (
         "unsupervised STDP must degrade the readout (runaway gain)"
+    )
+
+    homeo = record["homeostatic_audit"]
+    assert all(
+        abs(n - homeo["target"]) < 0.5 * homeo["target"] for n in homeo["row_norms"][1:]
+    ), (
+        "synaptic scaling must hold hidden row norms at the target "
+        f"(got {homeo['row_norms']}) — the fix must be live, not a no-op"
+    )
+    assert homeo["readout"] < readout["random_init"] - 0.1, (
+        "collapse must persist under homeostatic scaling — the STDP fixed "
+        "point itself destroys class structure (OPEN pending the "
+        "reward-modulated STDP audit; no wall verdict before then)"
     )

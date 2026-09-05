@@ -35,6 +35,16 @@ def _canonical(payload: object) -> str:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
+def _config_sha(data: dict) -> str:
+    """Provenance hash over the CANONICAL projection of the data (floats
+    rounded to 1e-6): stable across the documented 1e-7 multithreaded
+    reduction churn, sensitive to semantic changes. Same convention as
+    the gallery lock's data sha (gallery.canonicalize_floats)."""
+    from computronium.visualization.gallery import canonicalize_floats
+
+    return hashlib.sha256(_canonical(canonicalize_floats(data)).encode()).hexdigest()
+
+
 @pytest.fixture()
 def emit_run_record(request: pytest.FixtureRequest) -> Callable[[str, str, dict], Path]:
     """Return an emitter writing ``docs/figures/run_records/<capability>.json``.
@@ -50,7 +60,7 @@ def emit_run_record(request: pytest.FixtureRequest) -> Callable[[str, str, dict]
             "demo_test": demo_test,
             "provenance": {
                 "git_commit": _git_commit(),
-                "config_sha256": hashlib.sha256(_canonical(data).encode()).hexdigest(),
+                "config_sha256": _config_sha(data),
             },
             "data": data,
         }

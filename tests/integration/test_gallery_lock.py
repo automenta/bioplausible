@@ -15,7 +15,11 @@ import hashlib
 import json
 from pathlib import Path
 
-from computronium.visualization.gallery import DEMOS, render_gallery
+from computronium.visualization.gallery import (
+    DEMOS,
+    canonicalize_floats,
+    render_gallery,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIGURES_DIR = REPO_ROOT / "docs" / "figures"
@@ -45,7 +49,11 @@ def test_figure_lock(tmp_path: Path) -> None:
             f"stale record for {name}: demo test deleted, claim must retire"
         )
         data_sha = hashlib.sha256(
-            json.dumps(record["data"], sort_keys=True, separators=(",", ":")).encode()
+            json.dumps(
+                canonicalize_floats(record["data"]),
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
         ).hexdigest()
         assert data_sha == record["provenance"]["config_sha256"], (
             f"record for {name} was tampered with or the emitter changed"

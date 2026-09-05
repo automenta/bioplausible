@@ -46,6 +46,45 @@
 > Later 2026-09-04: **F2** (spiking plateau, audited) and **D13** (local
 > credit × Muon, single-seed) landed — demo gate 18/18, ~163 s.
 > **Next-session plan queued 2026-09-05** (see "The Next-Session Plan").
+> **2026-09-05 session: plan items 1–4 landed.** Item 1 — D13 multi-seed
+> probe (`scripts/probes/d13_multiseed.py`): the Muon lift HOLDS across
+> seeds 0–4 (FF×Muon 0.838±0.009 vs FF×Euclid 0.568±0.041, per-seed
+> min +0.241); multi-seed grid promoted into the D13 demo test with
+> variance-aware asserts — the lift claim is multi-seed verified and
+> quotable. Item 4 — **FF/PEPITA realized as distinct algorithms**
+> (`local_objective` wired: "ff" = goodness contrast, legacy path
+> byte-identical; "pepita" = softmax output error × fixed random inverse
+> projections, closed form); realized PEPITA learns slowly at demo
+> budget (0.23 Muon / 0.11 Euclid, 1 epoch), asserted as
+> lift-over-own-baseline only; unit ratchet locks ff ≠ pepita gradients.
+> Item 2 — **F1 ePC depth audit: the wall survives fix #1.** ePC's
+> credit reaches every hidden layer at depth 8 (norms > 0 — the sPC
+> last-layer-only pathology is gone) yet still walls (0.108 ≈ chance);
+> the signal decays geometrically through depth
+> (`scripts/probes/f1_epc_depth.py`). Candidate REAL wall; verdict OPEN
+> pending the jpc-faithful trainer regime. Item 3 — **F2 homeostatic
+> audit: the collapse survives fix #1.** Synaptic scaling
+> (`homeostatic_scaling=True`) holds row norms at target yet the readout
+> still collapses (0.36 → 0.18) — the STDP fixed point destroys class
+> structure, not norm growth. OPEN pending reward-modulated STDP.
+> Demo gate green after deliberate manifest re-pins; property suite
+> 679 passed. **2026-09-05 (continued): Path A EXECUTED — the jpc-faithful
+> regime landed as D14, and BOTH open verdicts resolved positive.** ePC
+> now expresses residual geometry (free equilibrium = residual feedforward
+> bitwise — the D12 invariant holds through the skip path); the PC-native
+> weight gradient (Δθᵢ ∝ (∂sᵢ/∂θᵢ)ᵀ εᵢ, settled errors frozen, one
+> reverse-mode sweep) + Adam + β grid + inference steps = H compose the
+> paper regime. At depth 20 / width 128 residual: **μPC+β=10 generalizes
+> (test 0.69–0.83 over seeds 0–2; D14 asserts live) while default init
+> memorizes (train 1.00 / test ≤ 0.24)** — the μPC lift is REAL, the
+> earlier "no lift" verdicts were trainer-regime artifacts — and the F1
+> depth wall DISSOLVES (0.8 test at depth 20 where sPC/thermo/Euclid
+> walled at chance from depth 8). The "candidate real wall" upgrade from
+> earlier this session was premature in the other direction: the wall was
+> regime-bound all along. F1 figure re-framed (regime boundary, not
+> physics); D14 is the first composed-regime capability (D14 row).
+> β=1e3 lands in the memorization corner at this scale — β is a working
+> knob, not a monotone dial.
 
 ---
 
@@ -59,7 +98,7 @@ current regime, not physics — the "failure manifesto" posture is retired
 until a wall survives its known fixes. Four workstreams gate CP-6, in
 this order:
 
-### 1. Critical vulnerability first: secure the D13 Muon claim (multi-seed audit)
+### 1. Critical vulnerability first: secure the D13 Muon claim (multi-seed audit) — ✅ LANDED 2026-09-05, outcome (a)
 
 **Risk:** D13's 3.2× lift (≈ 0.85 vs ≈ 0.26) is the largest positive claim
 in the repository and rests on ONE seed — exactly the failure mode the
@@ -72,13 +111,15 @@ Throwaway probe first (`scripts/probes/d13_multiseed.py`); promote into
 the demo test (per-seed record fields + variance-aware asserts) only if
 the lift holds.
 
-**Outcomes:** (a) lift holds across seeds → headline capability, U-axis
-redefined, quote freely; (b) collapses/high variance → OPEN defect
-question (instability of orthogonal updates under local credit), audited
-per R11.5.5a before any boundary verdict. **Standing constraint until
-done: the 0.85 number is quoted nowhere outside RESULTS.md.**
+**Outcome: (a) — the lift holds.** FF×Muon 0.838 ± 0.009 vs FF×Euclid
+0.568 ± 0.041 across seeds 0–4; per-seed lift min +0.241 (never below
+the demo assert margin). BP×Muon 0.843 ± 0.013. The multi-seed grid for
+the local arms is promoted into `test_demo_uaxis_muon_swap.py`
+(`record["multi_seed"]`, asserts: min per-seed FF lift > 0.15, mean
+PEPITA lift > 0.05). **Standing constraint lifted: the lift number is
+multi-seed verified and quotable.**
 
-### 2. F1 audit-fix: does ePC close the sPC depth wall?
+### 2. F1 audit-fix: does ePC close the sPC depth wall? — ✅ LANDED 2026-09-05, outcome (b): the wall survives fix #1
 
 **Reframe:** F1's "depth wall" is sPC-specific — our layered settle traps
 the nudge (hidden contrast exactly 0.00), which is precisely the pathology
@@ -100,7 +141,19 @@ walls → the first candidate *real* wall — but only after the jpc-faithful
 trainer regime (plan item 4A) is also applied. **F1's RESULTS.md/figure
 framing is re-pinned after this audit, not before.**
 
-### 3. F2 audit-fix: does homeostatic scaling stop the STDP collapse?
+**Measured (probe `scripts/probes/f1_epc_depth.py`, promoted into the F1
+test as `record["arms"]["epc"]`):** ePC depth 2 learns (0.443) with
+credit at every layer; depth 8 walls (0.108 ≈ sPC's 0.098) DESPITE credit
+reaching every hidden layer (min hidden norm 2.96e-05 > 0 — the
+last-layer-only pathology is gone); at depth 20 the signal decays
+geometrically to exact 0.0 at layer 1 (~4×/layer compounding). The wall
+is upgraded from "solver inadequacy" to **candidate real wall**, with
+fix #2 (jpc-faithful trainer: Adam, β grid, steps=H) the remaining
+instrument gap. Asserts: ePC hidden norms > 0 at depth 8 (mechanism
+live), ePC depth-2 > 0.3 (positive control), ePC depth-8 ≤ sPC + 0.05
+(wall persists, OPEN message). RESULTS.md F1 paragraph re-pinned.
+
+### 3. F2 audit-fix: does homeostatic scaling stop the STDP collapse? — ✅ LANDED 2026-09-05, outcome (b): the collapse survives fix #1
 
 **Reframe:** F2's silent-network confound was an implementation defect
 (fixed); the remaining "collapse" is the known pathology of *naive,
@@ -121,7 +174,18 @@ controlled rule. Collapse persists under homeostasis → a real candidate
 finding, but only alongside the supervised-error-term audit (reward-
 modulated STDP) — no boundary verdict before then.
 
-### 4. Ontology debt: realize FF vs PEPITA (byte-identity gap)
+**Measured (promoted into the F2 test as `record["homeostatic_audit"]`):**
+synaptic scaling implemented on the timing-STDP path
+(`CreditAssignmentConfig.temporal_trace(homeostatic_scaling=True,
+homeostatic_target=...)` — descent zero exactly at ||row|| = target).
+Scaling is LIVE (row norms held at target: 5.94 vs target 5.7, 7.15 vs
+8.0) yet the centroid readout still collapses 0.36 → 0.18 at every
+target tried (0.5/1.0/2.0/init-norm/8.0). Gain control is necessary but
+not sufficient: the STDP fixed point itself destroys class structure.
+Verdict stays OPEN pending the reward-modulated STDP audit. RESULTS.md
+F2 paragraph re-pinned.
+
+### 4. Ontology debt: realize FF vs PEPITA (byte-identity gap) — ✅ LANDED 2026-09-05
 
 **Problem:** D13's audit found `local_objective` is dead config — no
 credit reads it, so FF and PEPITA run byte-identical pseudo-gradients.
@@ -140,7 +204,29 @@ something; property suite gates the change (credit semantics change).
 Muon's lift apply to both local mechanisms, or is it specific to one?
 That answer is itself D-table material.
 
-### 5. CP-6 path choice: close the jpc loop (A) or commission the P-axis campaign (B)
+**Landed 2026-09-05:** `local_objective` is now
+`Literal["ff","pepita"]` and is READ by `LocalGoodnessCredit`:
+- **"ff"** = the legacy autograd goodness-contrast path (byte-identical
+  to the old behavior; default everywhere, so existing records hold);
+- **"pepita"** = closed-form error-modulated update: e = onehot(y) −
+  softmax(free_out); per-layer err = e @ B (B: fixed random orthogonal
+  (out,width), crc32(name)-seeded, scaled by `feedback_scale`); grad =
+  −errᵀ @ nudged_pre / batch. PEPITA's e = y − ŷ in probability space is
+  load-bearing — the raw nudged differential β·(onehot − logits) is
+  dominated by the constant one-hot term and learns nothing.
+- Surfaces: `create_pepita_mlp` + `create_native_pepita_mlp` now pass
+  "pepita" (parity test green); the stale
+  `test_native_pepita_mlp` xfail ("returns empty pseudo-gradients")
+  removed — it XPASSes live. D13 demo `_CREDITS` uses the realized
+  rules; new ratchet asserts `ff/euclid − pepita/euclid > 0.2` (fires if
+  the two ever re-collapse to identical numbers).
+- Re-run D13 multi-seed over realized rules: the Muon lift is FF-specific
+  in magnitude — FF 0.838 vs realized-PEPITA 0.226 (Muon, 1 epoch; 0.30
+  at 3 epochs). Realized PEPITA learns (beats its Euclid baseline by
+  +0.12 mean) but is far slower at demo budget — asserted only as
+  lift-over-own-baseline, never FF-parity. D-table material recorded.
+
+### 5. CP-6 path choice: close the jpc loop (A) or commission the P-axis campaign (B) — RECOMMENDATION RECORDED 2026-09-05: Path A
 
 With F1 landed, CP-6's doctrine offers two doors — **decide explicitly,
 don't drift**:
@@ -168,6 +254,18 @@ what "local credit" means before any registered-scale claim uses it; the
 A/B decision is orthogonal to both and can be made while 1–2 run. Check
 `RESEARCH3.md` protocol (E-1 smoke → pilot → full) governs whichever
 campaign path is chosen.
+
+**2026-09-05 session recommendation (recorded, user ratifies): Path A —
+close the jpc loop.** Items 2 and 3 both ended at "the wall/collapse
+survives known fix #1; the remaining gap is the jpc-faithful trainer
+regime." One landing now resolves TWO OPEN verdicts (μPC lift AND the
+depth wall) with the same instrument. Path B (P-axis Pareto) stays the
+CP-6 deliverable and follows immediately — with F1/F2 verdicts final,
+the failure figure is grounded before the campaign commissions.
+Concretely next: `JPCFaithfulTrainer` or `SystemTrainer` config support
+(Adam on weights + activity GD, β grid 1e3→1e-2, inference steps = H,
+width 512 residual), then the depth-8 sweep; check the output
+premultiplier a_L = N^{-1} CE-softmax subtlety first (see Notes).
 
 ---
 
@@ -223,7 +321,24 @@ every workstream below.
 | D10| The G-axis is a swap (capacity-matched attention vs flat, permutation sensitivity) | `test_demo_attention_geometry_swap.py` |
 | D11| The G-axis is a swap (capacity-matched 3D lattice vs flat, spatial noise robustness) | `test_demo_spatial_lattice_geometry_swap.py` |
 | D12| The D-axis settles without signal decay (ePC: free equilibrium = feedforward bitwise, nudged signal reaches every layer, 1/3 settle budget) | `test_demo_epc_fast_settle.py` |
-| D13| The U-axis is a swap (local credit × Muon: FF/PEPITA×Muon ≈ 0.85 vs ≈ 0.26–0.61 on Euclidean; SVD polar factor + momentum-orthogonalization locked) | `test_demo_uaxis_muon_swap.py` |
+| D13| The U-axis is a swap (local credit × Muon: FF×Muon 0.838±0.009 over 5 seeds vs 0.568±0.041 on Euclidean; FF and realized PEPITA are distinct algorithms; SVD polar factor + momentum-orthogonalization locked) | `test_demo_uaxis_muon_swap.py` |
+| D14| Depth 20 trains under the jpc-faithful regime (ePC + PC-native weight gradient + Adam + β grid + steps=H): μPC generalizes (test ≈ 0.83) where default init memorizes (train 1.00 / test ≤ 0.24); the F1 depth wall is regime-bound | `test_demo_jpc_faithful_depth.py` |
+
+---
+
+## ✅ Completed This Session (2026-09-05 — plan items 1–4)
+
+| Item | Description | Key Evidence |
+|------|-------------|--------------|
+| **Item 1** | D13 multi-seed audit — **outcome (a): the Muon lift holds** | `scripts/probes/d13_multiseed.py` (seeds 0–4 × 6 arms): FF×Muon 0.838±0.009 vs FF×Euclid 0.568±0.041, per-seed lift min +0.241; BP×Muon 0.843±0.013. Multi-seed grid promoted into the D13 demo test (`record["multi_seed"]`, variance-aware asserts) |
+| **Item 2** | F1 ePC depth audit — **the wall survives fix #1** | `scripts/probes/f1_epc_depth.py` + `record["arms"]["epc"]` in the F1 test: ePC credit reaches every hidden layer at depth 8 (norms > 0) yet walls (0.108 ≈ chance); signal decays ~4×/layer. Candidate real wall; OPEN pending jpc-faithful regime |
+| **Item 3** | F2 homeostatic audit — **the collapse survives fix #1** | `CreditAssignmentConfig.temporal_trace(homeostatic_scaling=True, homeostatic_target=…)` implements synaptic scaling on the timing-STDP path; `record["homeostatic_audit"]`: norms held at target (5.94 vs 5.7), readout still collapses 0.36→0.18 at every target tried. OPEN pending reward-modulated STDP |
+| **Item 4** | FF/PEPITA realized as distinct algorithms | `local_objective: Literal["ff","pepita"]` READ by `LocalGoodnessCredit` — "ff" = legacy goodness contrast (byte-identical); "pepita" = softmax output error × fixed random inverse projections (crc32(name)-seeded, `feedback_scale`-scaled), closed form. `create_pepita_mlp`/`create_native_pepita_mlp` wired; stale pepita xfail removed (XPASSes live); unit ratchet `TestLocalGoodnessRealization` (ff ≠ pepita, deterministic feedback); D13 ratchet `ff/euclid − pepita/euclid > 0.2`. Realized-PEPITA D13 multi-seed: 0.226 Muon / 0.106 Euclid (1 epoch) |
+| **Item 5** | CP-6 Path A EXECUTED — **jpc-faithful regime landed as D14; both open verdicts resolved positive** | ePC residual support (`_build_forward_with_errors` now carries the skip; lock: residual free-eq == feedforward bitwise + nudged reaches all hidden layers, `test_residual_geometry.py` 6 tests). Manual jpc loop: ePC settles (steps = H, β grid) → PC-native weight gradient with frozen ε → Adam. Smoke (depth 8): 1.000 train at β ≥ 100 both inits. Pilot (depth 20, seeds 0–2): μPC β=10 test 0.686/0.828/0.831 (train 0.91–0.92) vs default β=10 test 0.142/0.237/0.234 (train 0.997 — memorization) and β=1e3 degenerate (test ≈ 0.09–0.36). Probe: `scripts/probes/jpc_faithful.py`. Demo: `test_demo_jpc_faithful_depth.py` (~107 s, timeout 600) with gallery `DEMOS["jpc_faithful_depth"]` + `_fig_jpc_faithful_depth`. μPC-lift verdict: **REAL at depth 20 under the faithful regime**; F1 depth wall: **regime-bound, dissolved**. Property 679 passed; demo gate + gallery lock green after re-pin |
+
+Property suite 679 passed; demo gate 17/18 + gallery lock green after
+deliberate manifest re-pins (D13/F1/F2 record changes are intended);
+credit-semantics change gated by the full property suite.
 
 ---
 
@@ -279,9 +394,9 @@ every workstream below.
 | **R11.3.12** | ePC fast-settling solver (D12) | `ErrorPredictiveCodingDynamics` — error reparameterization per Goemaere et al. (arXiv:2505.20137, ICML 2026); free equilibrium = feedforward bitwise, nudged signal reaches every hidden layer (sPC's reaches none), trains at 1/3 budget; demo + gallery figure + round-trip |
 | **R11.3.11** | Multi-seed depth-frontier pilot (E-1, pulled 2026-09-04; **superseded by the in-regime re-test, see below**) | `scripts/probes/mupc_multiseed_frontier.py`: depths 4/8 × seeds 0–3 × spc/default vs spc/mupc, compiled settle, 477 s. μPC lift at depth 8 absent (0.135 vs 0.133). **Instrument audit finding:** the pilot applied μPC init to a plain MLP — outside the paper's tested domain (arXiv:2505.13124 Table 1 is specified and tested on residual networks; skip connections are load-bearing for the (N·L)^{-1/2} hidden scale) |
 | **R11.3.14** | Deep Hebbian chain with per-layer activity normalization (pulled 2026-09-04, user-directed plan-and-fix) | `computronium/models/native/deep_hebbian_native.py`: `DeepHebbianChain` — spectral renorm (unit gain at init) + tanh + batch Oja decay + unit-RMS activity renorm per layer; plain-torch local learning (no backprop, no nudging). Per-layer pre-renorm signal norms O(1) at depth 10/50/100 (the tile-chain runaway-gain/NaN pathology is structurally fixed); unnormalized control decays to ~1e-14. Dominant-direction 2-class readout 1.000 at every depth. **Honest boundary (R11.5.5):** 10 direction-coded classes → L1 1.00 / L10 0.52 / L100 0.20 (> 0.1 chance): activity covariance effective rank collapses 5.1→1.5 through the chain under compounding tanh distortion + renorm + Oja spectral sharpening — Sanger, gain scaling, and per-step spectral renorm do NOT rescue it. Lock: `tests/integration/test_deep_hebbian_chain.py` (8 tests, ~7 s) |
-| **F1 (R11.5.5 manifesto)** | The depth-boundary figure — **demoted to OPEN engineering-defect audit 2026-09-05 (R11.5.5a)**: the sPC wall is a solver inadequacy (ePC exists precisely for it) until the ePC depth sweep says otherwise (plan item 2). Landed 2026-09-04 as a *finding*, CP-6; audit-revised same day | `tests/integration/test_demo_failure_manifesto.py` (D-axes table gains no row — this is a finding, not a capability): four measured depth-failure faces, same pipeline, same terms, all at demo scale (~12 s): (1) **depth wall** — backprop 0.72→0.50→0.11 across depths 2/4/8, MNIST quick 60 batches, width 32 (flat across lr 0.02–0.2 — not an lr artifact); sPC walls at chance at this budget, **but the audit found the mechanism is last-layer-only training**: per-layer credit norms exactly 0.00 for every hidden weight matrix (asserted live in the record), budget softens the wall (0.21 at 60 settle steps) — the wall is the random-feature readout boundary of this instrument regime; hidden-layer-contrast achievability OPEN; (2) **μPC no lift** — `spc_mupc ≤ spc + 0.05` asserted at every depth (0.124 vs 0.105 at depth 8; OPEN, not refuted); (3) **runaway gain** — tile-hebbian init norm ratio 1.4→7.2e2→3.2e5 at depths 10/50/100, monotone growth asserted; (4) **subspace collapse** — Oja 10-class readout 0.99→0.23 toward chance, first layer ≈1.0 asserted. Record `f1_failure_manifesto`, gallery `DEMOS` row + `_fig_failure_manifesto` (1×3 panels), RESULTS.md front section "the failure manifesto" paragraph. Probes: `scripts/probes/failure_manifesto.py` (arms) + `scripts/probes/failure_manifesto_audit.py` (lr grid, budget grid, per-layer credit norms). Demo gate 14/14, ~158 s |
-| **F2 (R11.5.5 spiking)** | The spiking plateau figure — **demoted to OPEN engineering-defect audit 2026-09-05 (R11.5.5a)**: the collapse is the known pathology of naive unconstrained STDP until the homeostatic-scaling audit says otherwise (plan item 3). Landed 2026-09-04, user direction: look beyond PC | `tests/integration/test_demo_spiking_plateau.py` (~3 s): (1) **the confound, instrument defect** — default init leaves hidden LIF layers silent (spike fraction < 1e-4 at depth 4, width 32, threshold 1.0) → exactly zero STDP gradient on every hidden weight matrix → frozen readout: historic "spiking at chance" measured a silent network; `init_scale=1.0` restores spiking (0.15–0.45/layer) and gradient reach (all norms > 0, asserted); (2) **the plateau, mechanism** — supervised accuracy 0.048 (chance) even with healthy spiking: `TemporalTraceCredit` declares `phases=(FREE,)` and never consumes `loss` — no supervision path by construction (category fact; a supervised spiking claim needs an error term, e.g. reward-modulated STDP — OPEN); (3) **runaway gain, spiking edition** — unsupervised STDP training collapses class structure: centroid readout on hidden membranes 0.36 (random init) → 0.18 (STDP-trained), asserted. Probes: `scripts/probes/spiking_learning.py`, `scripts/probes/spiking_gain_audit.py`. Gallery `DEMOS` row + `_fig_spiking_plateau` (1×3: spike fractions, credit norms, readout bars). RESULTS.md front section updated. |
-| **D13 (U-axis × local credit)** | The U-axis is a swap — and **local credit × Muon is real** (pulled 2026-09-04, user hypothesis: FF/PEPITA with Muon, untested elsewhere) | `tests/integration/test_demo_uaxis_muon_swap.py` (~8 s): one coordinate, three credits {bp, ff, pepita} × one swapped update {euclidean lr 0.2, muon lr 0.02}: FF×Muon 0.85 / PEPITA×Muon 0.85 vs FF/PEPITA×Euclid 0.26–0.61 (3.2× lift, asserted ≥ +0.2), BP×Muon 0.85 ≈ BP×Euclid 0.87. **Two instrument defects found and fixed en route, both ratcheted:** (1) `RiemannianOrthogonalUpdate` ignored `config.momentum` — orthogonalizing raw single-batch gradients amplifies the noise floor; now orthogonalizes the momentum buffer (Muon's actual recipe); (2) the "_orthogonalize" was reduced QR, whose R-diagonal is sign-arbitrary — measured cos(step, grad) ≈ 0 (untrained at every lr); replaced with the SVD polar factor `U @ Vh` (cos 0.55–0.80), locked by `test_muon_polar_factor_is_descent_aligned`. Also: `EuclideanUpdate` momentum buffers keyed by bare name leaked across geometries (campaign/HPO reuse hazard) — now fail-loud on shape mismatch, locked by `test_momentum_buffer_reuse_fails_loud`. Probes: `scripts/probes/local_credit_muon.py`, `scripts/probes/uaxis_learning.py`. Gallery + RESULTS.md updated. Property suite 679 passed at landing (update semantics changed). Demo gate 18/18, ~163 s. **Caveat: single seed, demo scale — multi-seed verification pending before quoting outside RESULTS.** |
+| **F1 (R11.5.5 manifesto)** | The depth-boundary figure — **upgraded to candidate REAL wall 2026-09-05** (ePC depth audit, plan item 2: the wall survives known fix #1 — ePC's credit reaches every hidden layer at depth 8 yet still walls; remaining gap = jpc-faithful trainer). Demoted from *finding* to OPEN audit 2026-09-05 (R11.5.5a); landed 2026-09-04 as a *finding*, CP-6 | `tests/integration/test_demo_failure_manifesto.py` (D-axes table gains no row — this is a finding, not a capability): four measured depth-failure faces, same pipeline, same terms, all at demo scale (~18 s incl. the ePC arm): (1) **depth wall** — backprop 0.72→0.50→0.11 across depths 2/4/8, MNIST quick 60 batches, width 32 (flat across lr 0.02–0.2 — not an lr artifact); sPC walls at chance at this budget, **but the audit found the mechanism is last-layer-only training**: per-layer credit norms exactly 0.00 for every hidden weight matrix (asserted live in the record), budget softens the wall (0.21 at 60 settle steps); **ePC arm (2026-09-05)**: depth 2 learns 0.443, depth 8 walls 0.108 despite hidden credit norms > 0 — signal decays ~4×/layer, exact 0.0 at layer 1 by depth 20; asserts: ePC hidden norms > 0 at depth 8, ePC depth-2 > 0.3, ePC depth-8 ≤ sPC + 0.05 (OPEN pending jpc-faithful regime); (2) **μPC no lift** — `spc_mupc ≤ spc + 0.05` asserted at every depth (0.124 vs 0.105 at depth 8; OPEN, not refuted); (3) **runaway gain** — tile-hebbian init norm ratio 1.4→7.2e2→3.2e5 at depths 10/50/100, monotone growth asserted; (4) **subspace collapse** — Oja 10-class readout 0.99→0.23 toward chance, first layer ≈1.0 asserted. Record `f1_failure_manifesto` (+`arms.epc`), gallery `DEMOS` row + `_fig_failure_manifesto` (1×3 panels), RESULTS.md paragraph re-pinned 2026-09-05. Probes: `scripts/probes/failure_manifesto.py`, `scripts/probes/failure_manifesto_audit.py`, `scripts/probes/f1_epc_depth.py` |
+| **F2 (R11.5.5 spiking)** | The spiking plateau figure — **collapse verified robust to known fix #1, 2026-09-05** (homeostatic audit, plan item 3: synaptic scaling holds norms yet the readout still collapses — the STDP fixed point destroys class structure; OPEN pending reward-modulated STDP). Demoted from *finding* to OPEN audit 2026-09-05 (R11.5.5a); landed 2026-09-04 | `tests/integration/test_demo_spiking_plateau.py` (~10 s): (1) **the confound, instrument defect** — default init leaves hidden LIF layers silent (spike fraction < 1e-4 at depth 4, width 32, threshold 1.0) → exactly zero STDP gradient on every hidden weight matrix → frozen readout: historic "spiking at chance" measured a silent network; `init_scale=1.0` restores spiking (0.15–0.45/layer) and gradient reach (all norms > 0, asserted); (2) **the plateau, mechanism** — supervised accuracy 0.048 (chance) even with healthy spiking: `TemporalTraceCredit` declares `phases=(FREE,)` and never consumes `loss` — no supervision path by construction (category fact; a supervised spiking claim needs an error term, e.g. reward-modulated STDP — OPEN); (3) **runaway gain, spiking edition** — unsupervised STDP training collapses class structure: centroid readout on hidden membranes 0.36 (random init) → 0.18 (STDP-trained), asserted; **homeostatic audit (2026-09-05)** — `homeostatic_scaling=True` holds hidden row norms at target (live, asserted) yet readout still collapses (record `homeostatic_audit`). Probes: `scripts/probes/spiking_learning.py`, `scripts/probes/spiking_gain_audit.py`. Gallery `DEMOS` row + `_fig_spiking_plateau` (1×3). RESULTS.md re-pinned 2026-09-05. |
+| **D13 (U-axis × local credit)** | The U-axis is a swap — and **local credit × Muon is real, multi-seed verified** (pulled 2026-09-04, user hypothesis; multi-seed promotion + FF/PEPITA realization 2026-09-05, plan items 1+4) | `tests/integration/test_demo_uaxis_muon_swap.py` (~15 s): one coordinate, three credits {bp, ff, pepita} × one swapped update {euclidean lr 0.2, muon lr 0.02}: FF×Muon **0.838 ± 0.009 over seeds 0–4** vs FF×Euclid 0.568 ± 0.041 (per-seed lift min +0.241, asserted per seed); BP×Muon 0.843. **FF and realized PEPITA are distinct algorithms** (ratchet: ff/euclid − pepita/euclid > 0.2 fires if the byte-identity defect ever returns); realized PEPITA (softmax error × fixed random inverse projections) learns slowly at demo budget — 0.226 Muon vs 0.106 Euclid, asserted as mean lift > 0.05 only. **Instrument history:** (1) `RiemannianOrthogonalUpdate` now orthogonalizes the momentum buffer (Muon's recipe); (2) the polar factor is the SVD `U @ Vh` (reduced QR is sign-arbitrary, cos ≈ 0), locked by `test_muon_polar_factor_is_descent_aligned`; (3) `EuclideanUpdate` momentum buffers fail loud on cross-geometry reuse. Multi-seed probe: `scripts/probes/d13_multiseed.py`. Property suite 679 passed; demo gate green (manifest deliberately re-pinned). |
 
 ### R11.4 — Adoption Surface
 
@@ -308,7 +423,8 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 | **R11.2.15** `demo/tests/` 28 stale failures | Rebuild with R11.4 UI, or before if path touched | Hygiene |
 | **R11.2.16** TF-IDF weighting / `V_nudged` | Research track wants strengthened PC Lyapunov xfail | Hygiene |
 | **R11.3.4** AutoScientist P-axis frontier | Tangible Checkpoint 5 — first *finding* figure (Pareto over 𝒞) | Research |
-| **R11.3.11** μPC depth scaling | **Init landed 2026-09-04** — `GeometryConfig.init_scheme="mupc"` (N(0,1), hidden 1/√(N·L), output 1/N; arXiv:2505.13124) native on feedforward/recurrent/graph geometry. E-1 probe `scripts/probes/mupc_depth_init.py`; E-1 pilot `scripts/probes/mupc_depth_frontier.py` (read both docstrings): boundary at depth ≈ 8 confirmed, BP decays through it too (0.808→0.345→0.110); **μPC lift at depth 8 UNCONFIRMED** (0.131 vs 0.127 — contradicts the earlier 2× claim; confounds: compiled fixed-budget settle, seeds). Multi-seed pilot is the next pull (~2 h CPU, 55 ms/step compiled). | Research (init ✅, frontier pilot-only) |
+| **R11.3.11** μPC depth scaling | **RESOLVED 2026-09-05 (D14): the μPC lift is REAL** at depth 20 under the jpc-faithful regime (test 0.69–0.83 vs default 0.14–0.24, seeds 0–2) — the earlier "no lift" verdicts were trainer-regime artifacts (Euclidean SGD, β=0.5, fixed 60 steps). Init landed 2026-09-04 (`GeometryConfig.init_scheme="mupc"`); regime landed 2026-09-05 (D14). Probe history: `scripts/probes/jpc_faithful.py` | ~~Research~~ ✅ (verdict: lift real, depth-dependent — saturated/invisible at depth 8, decisive at depth 20) |
+| **Path A: jpc-faithful trainer** | **LANDED 2026-09-05 as D14** (see Completed). Remaining tail (pull-based): promote the manual jpc loop into a `JPCFaithfulTrainer`/`SystemTrainer` regime config if a registered-scale sweep needs it; wider width 512 replication; the a_L = N^{-1} CE-softmax subtlety never bit us at width 128 (CE on 1/N-scaled logits trained fine) — revisit only at width 512 | ~~Research~~ ✅ core |
 | **R11.3.13** Depth-metric classes | **Landed 2026-09-04** | `computronium/ontology/depth.py`: `DepthMetric` Protocol, `FixedDepth`, `ShortestPathDepth` (BFS from sources, edge direction row←col matching `GraphGeometry._aggregate`), `LongestPathDepth` (DAG Kahn; fail-loud on cycles), `max_depth`. `GraphGeometry.num_nodes` + `node_depths(metric)`. Root + ontology exports. Lock: `tests/unit/core/test_depth_mupc.py` (12 tests, incl. default-init bitwise lock) |
 | **R11.2.23** Energy-framed metric contract | **Pulled 2026-09-04** (see R11.2.23 in Completed) — live trainer sample-weighted metrics + `val_ppl`. FabricPC's legacy `EvalMetric` design informed the contract; FabricPC itself is archived | ~~Hygiene~~ ✅ |
 | **R11.3.5** Z3 flagship registered commission | Tangible Checkpoint 6 — ≥95% on 3 tasks, exact Δθ=0, ≤20% fine-tuning steps, ≥5 seeds | Research |
@@ -482,6 +598,184 @@ uv run python -m pytest tests/unit/core/test_root_exports.py -q
 | 7 | Discovery bet (R11.3.5) | Z3 flagship at registered scale; either outcome tangible per pre-registered fallback — **pull-based** |
 
 Sequencing: 1–4 complete; 5 after API stabilizes (done); 6–7 are RESEARCH3 CP-A's tail. No checkpoint blocks on a later one.
+
+---
+
+- **Graph/tree panels + ergonomic builders landed (2026-09-05, second
+  slice):** ``graph_panel``/``tree_panel`` add structural charts —
+  layouts ``layered`` (y = longest-path depth, the R11.3.13 notion),
+  ``tree`` (root-hierarchical, x by leaf order), ``circle``, ``spring``
+  (deterministic, seeded; numpy-only, no networkx dep). ``node_values``
+  colors nodes by a metric (per-node depth, activation norm) with a
+  colorbar; ``edge_weights`` scale line widths; arrows when
+  ``directed``. Author specs with the builder family (``figure_spec``,
+  ``bars_panel``, ``lines_panel``, ``scatter_panel``, ``heatmap_panel``,
+  ``graph_panel``, ``tree_panel``) — keyword-completable, exported from
+  ``computronium.visualization``. Decision table in ``_demo_api.py``'s
+  docstring: comparisons → bars; curves → lines; frontiers → scatter;
+  matrices → heatmap; structure → graph. 15 unit locks in
+  ``tests/unit/visualization/test_demo_api.py`` (incl. layered-depth
+  ordering, tree hierarchy, fail-loud layouts). Demo-side convention:
+  ``record["figure"] = figure_spec("D# — claim", panel(...), ...)``.
+
+---
+
+## 📈 Demo API — Publishability Roadmap (planned 2026-09-05, pull-based)
+
+Honest verdict from the final check: the declared-in-record API delivers
+*consistency* and *reproducibility* (one renderer, spec checksummed with
+the data, drift-immune lock) but NOT yet *publication polish*. The gaps,
+planned in dependency order — each lands when a figure needs it (R11.5.6),
+except item 1 which is a tracked migration:
+
+1. **Migrate the 14 legacy figure factories to declared specs**
+   (D1–D12, F1, F2). Migration ratchet: a lock that walks `DEMOS` and
+   asserts every record declares `data["figure"]` — write it as a tally
+   test now (reports 14 undeclared), flip to strict when the count hits
+   zero. After this, bespoke factories are dead code and delete.
+2. **Seed variance on the page.** Multi-seed claims (D13's ±0.009, the
+   D14 probe's per-seed spreads) live in record fields but the figures
+   can't show them: add `yerr` to `bars` (from per-seed arrays: mean ±
+   range) and a mean±band mode to `lines`. Error bars are the single
+   biggest publishability gap — a claim without visible variance invites
+   the single-seed skepticism the μPC audit earned.
+3. **Vector export.** `save()` is PNG@150 only; publication needs PDF/SVG.
+   `render_gallery(..., formats=("png", "pdf"))` + `comp gallery` flag;
+   manifest lists per-format files. Cheap, unblocks docs/paper embeds.
+4. **Captions on the figure.** Record-level `caption` (regime summary,
+   one-line reading guide, chance note) rendered as a figure footnote and
+   reused verbatim in RESULTS.md's figure table — one source of truth for
+   what the figure claims, provenance visible without opening the record.
+5. **Label polish.** Smart bar-label offsets (labels currently clip at
+   ylim=1.0), per-series `fmt`, a diverging-cmap helper for signed
+   heatmaps (credit/contrast matrices), `legend_loc` defaults per panel
+   type tuned once.
+6. **Graph polish** (when a structural demo is pulled): curved/multi-edge
+   routing, community/group shading, a labeled colorbar title for
+   `node_values` ("node depth" vs unlabeled color).
+7. **Cookbook docs.** `docs/DEMO_API.md`: the decision table, one minimal
+   worked example per panel (lift from the unit locks), and the record →
+   gallery → lock data flow. The stranger's path from "I measured
+   something" to "it's in the gallery, locked" in one page.
+8. **D9/D11 migration exemplars** (first consumers of `graph_panel`):
+   migrate the graph-geometry and lattice demos to declared specs with
+   node_values = per-node depth (R11.3.13's `node_depths` metric — the
+   API and the metric finally meet on the same figure).
+
+Sequencing note: 1 is the ratchet and unblocks deleting ~300 lines of
+hand-styling; 2–4 are the publishability core; 5–8 ride on touch. The
+demo gate (~300 s) argues for the fast/slow split BEFORE adding more
+demos — D14's three depth-20 arms are the natural first slow-tier
+resident (carried from the session notes).
+
+---
+
+## 📝 Notes for the Next Editor (2026-09-05 session, demo API + re-pin fix)
+
+- **The common demo API landed (`computronium/visualization/_demo_api.py`):**
+  figures are DECLARED IN THE RECORD — a demo test puts a ``figure`` spec
+  under ``data["figure"]`` next to the measured data, and ONE generic
+  renderer (``gallery._fig_declared``, registered for D13/D14) produces
+  the gallery figure. Consistency (labels, chance lines, palettes, value
+  labels) is by construction. Panel vocabulary:
+  ``bars`` (grouped, ``horizontal``, ``series_colors``/``series_labels``,
+  ``fmt``), ``lines`` (``x``, ``xticklabels``, ``log_y``/``symlog_thresh``,
+  ``annotate``, ``vline`` for depth boundaries), ``scatter`` (the
+  Pareto/frontier panel: ``connect``, ``point_labels`` — built for the
+  CP-6 P-axis trade-off figure), ``heatmap`` (annotated grids — tile ×
+  dynamics matrices). Common keys: ``title`` per panel, ``chance``,
+  ``legend_loc``; figure keys: ``title``, ``figsize``, ``layout`` grid.
+  D13's record shows the color-coding pattern: shape the declaration as
+  groups = credit rule × series = update rule and the renderer colors +
+  legends automatically. Unit locks: ``tests/unit/visualization/test_demo_api.py``
+  (10 tests — value labels, chance lines, per-series colors, fail-loud on
+  unknown types). Legacy hand factories keep working; migrate on touch.
+- **The gallery re-pin hassle is FIXED: the lock is now drift-immune.**
+  Root cause: the lock hashed raw record floats, so documented 1e-7
+  multithreaded reduction churn tripped it spuriously.
+  ``gallery.canonicalize_floats`` (round to 1e-6, normalize −0.0) is now
+  the single hashing convention for the lock's data sha, the emitter's
+  provenance ``config_sha256`` (conftest), and the lock's
+  emitter-consistency check (which previously DUPLICATED the hashing
+  inline — the duplication is what broke first). Proven: demo re-run →
+  record re-emitted → lock stays green WITHOUT re-pin. The lock now
+  fires only when a demo changes what it demonstrates — exactly its job.
+  One-time cost: all records re-emitted once under the new convention
+  (full demo suite run 2026-09-05, 19 passed).
+
+---
+
+## 📝 Notes for the Next Editor (2026-09-05 session, Path A)
+
+- **D14 / jpc-faithful regime (Path A landing):** the manual loop is the
+  reference implementation until a trainer config is pulled:
+  1. ePC settle free (steps = H, `convergence_threshold=0.0` forces the
+     fixed budget — no early exit) and nudged (β from the grid);
+  2. **PC-native weight gradient**: rebuild the forward with the settled
+     errors FROZEN (`eps = [e.detach() for e in dynamics._last_errors]`),
+     take d(β·CE)/dθ — this equals the paper's Δθᵢ ∝ (∂sᵢ/∂θᵢ)ᵀ εᵢ (the
+     reverse-mode sweep carries the propagated error to each weight);
+  3. `torch.optim.Adam(weights, lr=1e-3)` on the transition weights.
+  `ErrorPredictiveCodingDynamics._build_forward_with_errors` now takes
+  `residual=` and applies the `_apply_stack` skip semantics
+  (h = h_in + φ(W h_in + b) when widths match); ε rides ON TOP of the
+  skip (skip is part of the prediction). Lock:
+  `test_residual_geometry.py::test_residual_epc_free_equilibrium_is_feedforward_bitwise`.
+- **β is a working-regime knob, not a monotone dial.** At depth 20 /
+  width 128 / 150 batches: β=10 generalizes (mupc test 0.78 mean),
+  β=1e3 lands in the memorization corner (train 1.00, test 0.09–0.36 —
+  including one arm BELOW chance). When a result looks impossible
+  (test < chance), get the train/test breakdown before suspecting the
+  instrument: train 1.000 + test 0.089 = memorization, not a broken
+  evaluator. Audit lesson applied in both directions this session.
+- **The μPC lift is depth-dependent:** invisible at depth 8 (both inits
+  saturate ≈ 1.0 train under the faithful regime), decisive at depth 20.
+  Depth-of-the-lift-question must match depth-of-the-claim — the depth-8
+  "no lift" verdicts were asking the question where no answer exists.
+- **Demo gate is now ~300 s** (D14 ≈ 107 s added). Still serial. The
+  fast/slow split (R11.5.7 re-baseline) is now clearly due — D14's
+  three depth-20 arms are the first demo that could live in a slow tier.
+- **Probes carry the multi-seed evidence:** `scripts/probes/jpc_faithful.py`
+  docstring + run history (smoke grid + depth-20 pilot); the D14 demo
+  single-seed asserts use comparative margins inside the measured
+  per-seed gaps (≥ 0.54).
+
+---
+
+## 📝 Notes for the Next Editor (2026-09-05 session)
+
+- **2026-09-05 landings (plan items 1–4):** see the session table above.
+  Carry these forward:
+  - **PEPITA's error must be in probability space.** The raw nudged
+    differential under `InstantaneousDynamics` is β·(onehot − logits) —
+    dominated by the constant one-hot term, so every sample yields
+    nearly the same update and nothing is learned (measured: 0.10 at
+    every lr/scale). e = onehot(y) − softmax(free_out) is the signal.
+  - **PEPITA feedback determinism:** `LocalGoodnessCredit._inverse_projection`
+    caches B per (name, shape, device, dtype), seeded `zlib.crc32(name)`
+    — deterministic across runs and process order; orthogonal init when
+    `orthogonal_init=True`, scaled by `feedback_scale` (0.01 default;
+    scale is irrelevant to Muon arms, which normalize the update).
+  - **The φ′ (tanh derivative) mask HURTS realized PEPITA** (0.165 vs
+    0.226 with Muon) — do not add it.
+  - **`homeostatic_scaling` is a separate gate** from
+    `homeostatic_target` — the latter is shared with `HomeostaticCredit`
+    (default 1.0) and could not be repurposed without changing that
+    default. Scaling descent is zero exactly at ||row|| = target.
+  - **Demo gate is now ~180 s** (D13 multi-seed promotion + F1 ePC arm +
+    F2 homeostatic arm). Still serial (record drift under xdist).
+    Re-baseline R11.5.7's ≤90 s rule when the fast/slow split happens.
+  - **Manifest re-pinned 2026-09-05** for D13/F1/F2 — all three diagnosed
+    as intended record changes (new fields/arms), per retro (e).
+  - **ruff's repo config PREFERS `# ruff: ignore[...]` over `# noqa`**
+    (a repo-local `noqa-comments` rule fires on `# noqa` and the
+    suppression DOES apply — contradicting the 2026-09-04 note below;
+    that note's RUF103 concern applies to *invalid rule names*, not the
+    mechanism). New suppressions in touched code used
+    `# ruff: ignore[<name>]`. Verify suppression applies when adding one.
+  - **`test_ontology_parity.py` is `pytestmark = [slow]`** — invisible to
+    the default addopts `-m 'not slow...'`; run with `-m slow -k pepita`
+    to exercise the FF/PEPITA preset-parity locks.
 
 ---
 
@@ -827,21 +1121,20 @@ Sequencing: 1–4 complete; 5 after API stabilizes (done); 6–7 are RESEARCH3 C
 ### New Improvement Opportunities (opened 2026-09-04, pull-based)
 
 - **FF / PEPITA as distinct algorithms (capability gap, opened by the D13
-  audit):** `local_objective` in `CreditAssignmentConfig` is never read —
-  the two factory-table entries run byte-identical pseudo-gradients.
-  Realizing them means: FF = per-layer goodness threshold (layer-local
-  loss, no inverse pass) and PEPITA = forward differential + inverse
-  propagation modulation; both as `LocalGoodnessCredit` branches (or
-  separate credits) reading `local_objective`. Then re-run the D13 grid —
-  the ×Muon question is open per realized rule.
+  audit):** **LANDED 2026-09-05** — `local_objective` is wired as
+  `Literal["ff","pepita"]` and read by `LocalGoodnessCredit`; see plan
+  item 4 for the measured outcome and ratchets.
 
 - **R11.5.5 failure-manifesto paragraph (CP-6 candidate):** **LANDED
-  2026-09-04, DEMOTED 2026-09-05 (R11.5.5a)** — the manifesto claims are
-  OPEN engineering-defect audits, not boundaries: F1 awaits the ePC depth
-  sweep (plan item 2), F2 awaits homeostatic scaling (plan item 3). The
-  wall verdict comes only when known fixes fail. Figure + tests stay at
-  HEAD (they are honest, regime-scoped records); framing is re-pinned
-  after the audits.
+  2026-09-04, audited 2026-09-05 — CLOSED as a physics claim.** F1's
+  depth wall dissolved under the jpc-faithful regime (D14: depth 20
+  trains to ≈ 0.8 test); F2's STDP collapse survives homeostatic scaling
+  and stays OPEN pending reward-modulated STDP (a real candidate finding,
+  properly conditioned). The F1 figure remains at HEAD as the measured
+  boundary of the sPC/thermo/Euclid instrument — regime-scoped, never
+  physics. The three-session arc (finding → audit → resolution) is the
+  R11.5.5a doctrine working as designed in BOTH directions: the μPC audit
+  stopped a false positive, the D14 audit stopped a false negative.
 - **Suppression-system repair (Register C):** convert the repo's invalid
   `# ruff: ignore[x]` comments to working `# noqa` codes (they currently
   suppress nothing). One-time sweep; unlocks the "self-flag on touch"
