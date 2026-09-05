@@ -20,6 +20,7 @@ __all__ = [
     "SavedActivationBytes",
     "analyze_joint_system",
     "count_flops",
+    "estimate_train_step_flops",
     "get_gpu_memory_mb",
     "measure_saved_activation_bytes",
     "profile_run",
@@ -127,6 +128,47 @@ def _estimate_activation_sparsity(  # ruff: ignore[complex-structure]
     all_acts = torch.cat(activations)
     zero_frac = (all_acts.abs() < threshold).float().mean().item()
     return zero_frac
+
+
+_SETTLE_MATMUL_MULTIPLIER: dict[str, float] = {
+    # matmul rounds per weight matrix per train_step, from the dynamics'
+    # settle structure (deterministic, measured from the settle loops)
+    "instantaneous": 1.0,
+    "spike_integration": 1.0,  # one substrate matmul per layer; LIF steps are elementwise
+    "predictive_settling": -1.0,  # replaced by config.max_steps at runtime
+    "error_predictive_coding": -1.0,
+    "energy_minimization": -1.0,
+}
+
+# One train_step = settle (free [+ nudged]) + credit + update; the credit
+# and update passes touch the same weight matrices roughly once more each.
+_TRAIN_STEP_MULTIPLIER = 3.0
+
+
+def estimate_train_step_flops(system, batch_size: int) -> int:
+    """Deterministic FLOP estimate for one ``train_step`` (latency proxy).
+
+    Structure-derived only — no measurement, no RNG, no device dependence:
+    for each weight matrix, ``2 * batch * fan_in * fan_out`` FLOPs per
+    matmul round, scaled by the dynamics' settle structure. Intended as a
+    *relative* comparator between systems (ordering, ratios); absolute
+    latency needs the repeated-timing path in :func:`analyze_joint_system`.
+    """
+    from computronium.ontology._settle_kernel import extract_layered_params
+
+    layered = extract_layered_params(system.geometry)
+    if layered is None:
+        raise ValueError("estimate_train_step_flops requires a layered geometry")
+    dynamics_type = system.dynamics.config.dynamics_type
+    multiplier = _SETTLE_MATMUL_MULTIPLIER.get(dynamics_type)
+    if multiplier is None:
+        raise ValueError(f"no settle matmul model for {dynamics_type!r}")
+    if multiplier < 0:
+        multiplier = float(system.dynamics.config.max_steps)
+    forward = sum(
+        2 * batch_size * int(w.shape[0]) * int(w.shape[1]) for w in layered.weights
+    )
+    return int(forward * multiplier * _TRAIN_STEP_MULTIPLIER)
 
 
 def count_flops(model: nn.Module, input_shape: tuple[int, ...]) -> int:

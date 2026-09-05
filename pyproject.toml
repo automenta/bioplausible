@@ -7,7 +7,9 @@ computronium_stability = "computronium/stability"
 
 [tool.setuptools]
 include-package-data = true
-packages = ["computronium", "computronium_stability"]
+
+[tool.setuptools.packages.find]
+include = ["computronium*", "computronium_stability*"]
 
 [project]
 name = "computronium"

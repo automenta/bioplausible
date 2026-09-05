@@ -273,6 +273,7 @@ class StateDynamicsConfig:
         momentum: float = 0.0,
         threshold: float = 1.0,
         track_free_energy_per_iter: bool = False,
+        compiled: bool = False,
     ) -> StateDynamicsConfig:
         return cls(
             dynamics_type="spike_integration",
@@ -284,6 +285,7 @@ class StateDynamicsConfig:
             momentum=momentum,
             threshold=threshold,
             track_free_energy_per_iter=track_free_energy_per_iter,
+            compiled=compiled,
         )
 
     @classmethod
@@ -397,6 +399,36 @@ def _layered_settle_loop(
 
 
 _compiled_layered_settle = torch.compile(_layered_settle_loop, dynamic=False)
+
+
+# ============================================================
+# Compiled LIF layer loop (spike_integration fast path)
+# ============================================================
+
+
+def _lif_layer_loop(
+    I_syn: Tensor,
+    step_size: float,
+    threshold: float,
+    n_steps: int,
+) -> tuple[Tensor, Tensor]:
+    """LIF membrane integration for one layer, whole loop as one graph.
+
+    Bitwise-equal to the eager per-step collection (verified by the
+    compiled-settle lock): membrane trajectory, per-step spike rasters
+    stacked as ``[n_steps, batch, neurons]``.
+    """
+    v = torch.zeros_like(I_syn)
+    rasters: list[Tensor] = []
+    for _ in range(n_steps):
+        v = v + step_size * (-v + I_syn)
+        spikes = v > threshold
+        rasters.append(spikes.float())
+        v = torch.where(spikes, torch.zeros_like(v), v)
+    return v, torch.stack(rasters)
+
+
+_compiled_lif_layer = torch.compile(_lif_layer_loop, dynamic=False)
 
 
 # ============================================================
@@ -1344,25 +1376,46 @@ class SpikeIntegrationDynamics:
         h = substrate.initial_state(x)
         h = h.flatten(1) if h.dim() > 2 else h
 
+        layer_params = list(zip(layered.weights, layered.biases, strict=True))
+        # Compiled fast path (R11.2.25 recipe): whole LIF loop per layer as
+        # one graph; fixed step budget, digital arithmetic inlined. Guard
+        # keeps it on the eager path's common case (biases present, no
+        # tile-mesh nudged-phase clamp).
+        use_compiled = (
+            self.config.compiled
+            and nudge_beta is None
+            and type(substrate).__name__ == "DigitalSubstrate"
+            and all(b is not None for _, b in layer_params)
+        )
+
         acts = [h]
         spike_counts: list[Tensor] = []
         spike_rasters: list[list[Tensor]] = []  # [layer][step] = [batch, neurons]
         threshold = self._spike_threshold
 
-        for weight, bias in zip(layered.weights, layered.biases, strict=True):
-            I_syn = op(h, weight)
-            if bias is not None:
-                I_syn = I_syn + bias
-            v = torch.zeros_like(I_syn)
-            layer_rasters: list[Tensor] = []
-            for _step in range(self.config.max_steps):
-                v = v + self.config.step_size * (-v + I_syn)
-                spikes = v > threshold
-                spike_counts.append(spikes.float().sum(dim=1))
-                layer_rasters.append(spikes.float())  # [batch, neurons]
-                v = torch.where(spikes, torch.zeros_like(v), v)
-            spike_rasters.append(layer_rasters)
-            h = v
+        for weight, bias in layer_params:
+            if use_compiled:
+                assert bias is not None  # guarded: compiled requires biases  # ruff: ignore[assert]
+                I_syn = h @ weight.T + bias
+                h, rasters = _compiled_lif_layer(
+                    I_syn, self.config.step_size, threshold, self.config.max_steps
+                )
+                spike_counts.extend(r.sum(dim=1) for r in rasters.unbind(0))
+                spike_rasters.append(list(rasters.unbind(0)))
+            else:
+                I_syn = op(h, weight)
+                if bias is not None:
+                    I_syn = I_syn + bias
+                v = torch.zeros_like(I_syn)
+                layer_rasters: list[Tensor] = []
+                for _step in range(self.config.max_steps):
+                    v = v + self.config.step_size * (-v + I_syn)
+                    spikes = v > threshold
+                    spike_counts.append(spikes.float().sum(dim=1))
+                    layer_rasters.append(spikes.float())  # [batch, neurons]
+                    v = torch.where(spikes, torch.zeros_like(v), v)
+                spike_rasters.append(layer_rasters)
+                h = v
             acts.append(h)
 
         if nudge_beta is not None and target is not None:

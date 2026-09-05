@@ -105,6 +105,15 @@ class TileAlgorithmConfig(LocalLearningConfigProtocol):
     # Algorithm-specific extras (forwarded to dynamics)
     extra: dict[str, object] = field(default_factory=dict)
 
+    # Gain control (recovered from the legacy zoo DeepHebbianChain, which
+    # ran 100+ layers stably): spectral normalization bounds each layer's
+    # operator norm to 1; Oja's rule adds the anti-Hebbian decay term that
+    # keeps local updates from runaway strengthening. Off by default —
+    # legacy deployments keep their recorded trajectories bitwise.
+    use_spectral_norm: bool = False
+    use_oja: bool = False
+    spectral_norm_power_iterations: int = 5
+
 
 class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):  # ruff: ignore[too-many-public-methods]
     """Generic tile-based local learning model.
@@ -157,6 +166,12 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):  # ruff: ig
         self._build_io_projections()
         self._build_tile_weights()
         self._build_importance_params()
+
+        # Gain control from construction: the first settle runs on the
+        # init weights, so an unnormalized chain would overflow before
+        # the first update's cap could apply.
+        if config.use_spectral_norm:
+            self._renormalize_gains()
 
         # Resolve dynamics
         self._feedback = feedback_fn or self._resolve_feedback()
@@ -242,6 +257,19 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):  # ruff: ig
                 bound = 1.0 / math.sqrt(src.neurons) if src.neurons > 0 else 0.0
                 w = torch.empty(tile.neurons, src.neurons).uniform_(-bound, bound)
                 self._tile_weights[self._weight_key(src_id, tid)] = nn.Parameter(w)
+        self._spectral_vs: dict[str, Tensor] = {}
+        self._spectral_sigmas: dict[str, Tensor] = {}
+
+    def _spectral_sigma_tile(self, tid: int, summed: Tensor) -> Tensor:
+        """Exact operator norm of a tile's summed incoming operator
+        (Σ Wᵢ) — the quantity that bounds the layer gain when several
+        edges feed one tile. Exact (``svdvals`` max) rather than power-
+        iteration: an underestimated σ makes the gain cap porous, and the
+        matrices are small enough that SVD is cheap at update rate.
+        """
+        with torch.no_grad():
+            sigma = torch.linalg.matrix_norm(summed, ord=2)
+        return sigma.detach()
 
     @staticmethod
     def _weight_key(src_id: int, dst_id: int) -> str:
@@ -331,6 +359,37 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):  # ruff: ig
         if acc is None:
             return None
         return acc + self._tile_biases[str(tid)].unsqueeze(0).expand(acc.shape[0], -1)
+
+    def _renormalize_gains(self) -> None:
+        """Cap each tile's summed incoming operator norm at 1 (gain control).
+
+        Hebbian strengthening grows weights without bound; scaling the
+        weights themselves (not a use-time division) keeps the forward
+        gain ≤ 1 by construction, so growth cannot compound across
+        updates — the mechanism that let the legacy DeepHebbianChain run
+        100+ layers. Only caps (never amplifies): healthy small weights
+        are untouched.
+        """
+        for layer_tiles in self.graph.layer_ids[1:]:
+            for tid in layer_tiles:
+                tile = self.graph.tiles[tid]
+                src_ids = list(tile.bwd_neighbors)
+                if not src_ids:
+                    continue
+                weights = [
+                    self._tile_weights[self._weight_key(s, tid)] for s in src_ids
+                ]
+                # Edges see different input slices, so the forward operator
+                # is the horizontal concatenation [W1|W2|...] — cap that.
+                summed = (
+                    weights[0] if len(weights) == 1 else torch.cat(weights, dim=1)
+                )
+                sigma = self._spectral_sigma_tile(tid, summed)
+                if sigma > 1.0:
+                    scale = 1.0 / sigma
+                    with torch.no_grad():
+                        for w in weights:
+                            w.mul_(scale)
 
     def _clamp_input(self, x: Tensor, *, detach_input: bool = True) -> None:
         """Set input-tile activities to the projected input."""
@@ -449,6 +508,16 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):  # ruff: ig
                 )
                 self._tile_weights[self._weight_key(src_id, dst_id)].sub_(w_up)
                 self._tile_biases[str(dst_id)].sub_(b_up)
+                dst_free = _f(dst_id)
+                if self.config.use_oja and dst_free is not None:
+                    # Oja decay: w -= lr * mean(dst²)ᵀ * w — the anti-Hebbian
+                    # term that keeps local updates from runaway strengthening
+                    # (legacy DeepHebbianChain semantics).
+                    y_sq = dst_free.pow(2).mean(dim=0, keepdim=True).T
+                    key = self._weight_key(src_id, dst_id)
+                    self._tile_weights[key].sub_(
+                        self.config.learning_rate * y_sq * self._tile_weights[key]
+                    )
 
             # W_out: free-phase gradient from (free - nudged) output statistics.
             # The nudged output is clamped to the target, so free - nudged
@@ -464,6 +533,9 @@ class TileAlgorithm(nn.Module, MultiOptimizerMixin, SettleProtocol):  # ruff: ig
             )
             self.W_out.weight.sub_(w_out_up)
             self.W_out.bias.sub_(b_out_up)
+
+        if self.config.use_spectral_norm:
+            self._renormalize_gains()
 
     # ── SettleProtocol Implementation (Family B: activations list) ───────────
 

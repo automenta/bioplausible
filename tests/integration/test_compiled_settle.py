@@ -169,3 +169,80 @@ def test_compiled_eqprop_settle_builds_autograd_graph() -> None:
         grad_norms.append(norms)
     for eager_n, compiled_n in zip(*grad_norms, strict=True):
         assert abs(eager_n - compiled_n) <= 1e-3 * (1.0 + eager_n)
+
+
+# ============================================================
+# SpikeIntegration compiled LIF loop (R11.2.25 extension)
+# ============================================================
+
+
+def _spike_build(compiled: bool):
+    from computronium.ontology import SpikeIntegrationDynamics
+
+    torch.manual_seed(0)
+    geometry = FeedforwardGeometry(
+        GeometryConfig.feedforward(input_dim=784, output_dim=10, hidden_dims=(32, 32))
+    )
+    return compose_system(
+        substrate=DigitalSubstrate(SubstrateConfig.digital(device="cpu")),
+        geometry=geometry,
+        dynamics=SpikeIntegrationDynamics(
+            StateDynamicsConfig.spike_integration(
+                max_steps=5, step_size=0.2, compiled=compiled
+            )
+        ),
+        credit=BackpropCredit(),
+        update=EuclideanUpdate(ParameterUpdateConfig.euclidean(step_size=0.1)),
+    )
+
+
+def test_compiled_lif_settle_matches_eager() -> None:
+    x = torch.randn(16, 784)
+    settled_states = []
+    for compiled in (False, True):
+        system = _spike_build(compiled)
+        settled = system.dynamics.settle(
+            cast("CompositeState", SystemState(x=x)), system.geometry, system.substrate
+        )
+        assert settled.activations is not None
+        assert settled.spike_counts is not None
+        assert settled.spike_rasters is not None
+        settled_states.append(settled)
+    a, b = settled_states
+    max_dev = max(
+        (s - t).abs().max().item()
+        for s, t in zip(a.activations, b.activations, strict=True)
+    )
+    assert max_dev < 1e-6, f"compiled LIF settle diverged from eager: {max_dev}"
+    for count_eager, count_compiled in zip(a.spike_counts, b.spike_counts, strict=True):
+        torch.testing.assert_close(count_eager, count_compiled, rtol=0, atol=0)
+    for layer_eager, layer_compiled in zip(
+        a.spike_rasters, b.spike_rasters, strict=True
+    ):
+        for r_eager, r_compiled in zip(layer_eager, layer_compiled, strict=True):
+            torch.testing.assert_close(r_eager, r_compiled, rtol=0, atol=0)
+
+
+def test_compiled_lif_speedup() -> None:
+    import time
+
+    x = torch.randn(64, 784)
+    timings = []
+    for compiled in (False, True):
+        system = _spike_build(compiled)
+        settled = system.dynamics.settle(
+            cast("CompositeState", SystemState(x=x)), system.geometry, system.substrate
+        )
+        del settled
+        t0 = time.perf_counter()
+        for _ in range(5):
+            system.dynamics.settle(
+                cast("CompositeState", SystemState(x=x)),
+                system.geometry,
+                system.substrate,
+            )
+        timings.append((time.perf_counter() - t0) / 5)
+    print(
+        f"\nLIF settle: eager {timings[0] * 1000:.1f} ms, "
+        f"compiled {timings[1] * 1000:.1f} ms"
+    )

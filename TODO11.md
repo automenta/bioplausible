@@ -154,12 +154,13 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 
 | Item | Trigger | Category |
 |------|---------|----------|
+| **R11.3.14** Deep Hebbian fix: per-layer activity normalization | **User directive: plan and fix.** Local Hebbian learning currently does NOT work at any depth — signal decays at ~0.5/layer through σ-normalized weights, so layers ≥2 receive ~zero input and never learn (probe: `scripts/probes/deep_hebbian_chain.py`; legacy `DeepHebbianChain` was `status:broken` in the zoo, and the user's "100-layer" recollection came from autograd training, not local Hebbian). **Planned fix: per-layer activity normalization** — renormalize activations to fixed norm (unit RMS) after every layer (homeostatic gain control, as in cortex): amplitude becomes a constant carrier at every depth, the *direction* carries the information, and Hebbian+Oja learns on normalized activities so every layer receives a meaningful update regardless of depth. Recipe: spectral renorm (bounds W) + tanh (nonlinearity) + Oja decay (stability) + activity renorm (carrier) + linear readout for evaluation (standard for local-learning feature demos). **Acceptance: depth 10/50/100 chain on synthetic or MNIST, signal norm O(1) at every layer, Hebbian features + linear readout > chance** — then a lock test. Implementation home: native model in `computronium/models/native/` (simple chain, not the tile graph — the tile graph's per-edge/concat σ caps interact badly with full connectivity). Legacy recipe reference: `spectral_norm` + `tanh_()` + Oja `addcmul_(y_sq, W, -lr)` in `computronium/zoo/models/hebbian.py@8d8de04b^`. | Capability |
 | **R11.3.11** Multi-seed depth-frontier pilot | The single-seed μPC lift contradiction (frontier probe finding 2) must resolve before any paragraph; ~2 h CPU at 55 ms/step compiled. Also explains the compiled-fixed-budget vs eager-early-exit settle discrepancy. | Research |
 | **R11.1.10** LazyStateDynamics | Demo regime shows on-demand activation visibly (settle-count contrast on large-dim) | Capability |
 | **R11.1.11** Domain extensions | Benchmark/demo/research needs: `wikitext2`/`penn_treebank` (LM), `mountain_car`/`lunar_lander` (RL), `diabetes`/`california_housing` (tabular), `ett_h1` (time series), PDE suite (Heat/Wave/Burgers/Navier-Stokes) | Capability |
-| **R11.2.9** `substrate_coupled` plasticity engagement | Campaign manifest needs it; probe fixed-dim `step` assumptions | Hygiene |
+| **R11.2.14** Latency proxy | **Landed 2026-09-04** — `estimate_train_step_flops` (`core/profiling.py`): deterministic structure-derived FLOPs per train_step (matmul rounds per weight matrix × settle structure from `dynamics_type`, incl. the spike-substrate one-matmul-per-layer subtlety); intended as a *relative* comparator — absolute latency stays with the repeated-timing path in `analyze_joint_system`. Lock: `tests/unit/core/test_latency_proxy.py` (determinism, depth/settle-step scaling, **proxy ordering matches measured walltime**, non-layered rejection) | ~~Hygiene~~ ✅ |
+| **R11.2.9** `substrate_coupled` plasticity engagement | Campaign manifest needs it; probe fixed-dim `step` assumptions; now also the home of any future latent-graph ternary learning path (see Notes) | Hygiene |
 | **R11.2.13** Campaign stability proxy | Cheap per-episode proxy for stability axis | Hygiene |
-| **R11.2.14** Latency proxy | Repeated-timing methodology or deterministic proxy; blocks task-scale latency claim | Hygiene |
 | **R11.2.15** `demo/tests/` 28 stale failures | Rebuild with R11.4 UI, or before if path touched | Hygiene |
 | **R11.2.16** TF-IDF weighting / `V_nudged` | Research track wants strengthened PC Lyapunov xfail | Hygiene |
 | **R11.3.4** AutoScientist P-axis frontier | Tangible Checkpoint 5 — first *finding* figure (Pareto over 𝒞) | Research |
@@ -428,14 +429,38 @@ Sequencing: 1–4 complete; 5 after API stabilizes (done); 6–7 are RESEARCH3 C
   archives untouched). README's uncommitted M→P edits are the user's own
   and stay. No `M`-prefixed identifiers exist in code, so this was a
   documentation-level sweep (19 files).
-- **Deep Hebbian lead (user recollection, 2026-09-04):** `DeepHebbianChain`
-  (tile chain, `track_54_nebc_deep_hebbian_chain`) claims signal survival
-  through 50 layers — user recalls testing hundreds of layers. If Hebbian
-  chains carry signal past the depth-8 boundary where ALL error-based
-  rules (BP included) die, the CP-6 finding sharpens: the boundary is an
-  *error-telescoping* problem, not an activation-signal problem. Cheap CPU
-  probe (feedforward, no backprop): run signal propagation at depths
-  50/100/200/500 — queue as the next E-1 alongside the multi-seed pilot.
+- **#2–#5 session (2026-09-04):**
+  - **Deep Hebbian probe** (`scripts/probes/deep_hebbian_chain.py` — read
+    its docstring): the hebbian tile chain *explodes* at depth, not
+    decays — per-layer gain ~1.2–1.5× at init compounds to inf by depth
+    500, and one Hebbian local_update NaNs the activities (positive
+    feedback, no gain control). Track 54's "maintains signal through 50
+    layers" is unverifiable at HEAD — its
+    `measure_signal_propagation` method no longer exists. Sharpened CP-6
+    thesis: the depth bottleneck is **structural gain control** —
+    error-based rules die by telescoping decay, unnormalized local chains
+    by runaway gain, μPC's parameterization IS the normalization. Next
+    lever: unit-layer-gain init or homeostatic scaling on the tile chain.
+  - **Compiled LIF settle (R11.2.25 extension):** `spike_integration(..., compiled=True)`
+    runs the per-layer LIF loop as one graph — bitwise parity on
+    membranes, spike counts, and rasters (`test_compiled_settle.py`, now
+    7 locks). **Demos stay eager**: flipping D7 to compiled busts its
+    60 s timeout (compile warmup ~60 s vs 0.3 ms/step saved at demo
+    scale) — compiled settle paths are registered-scale levers only.
+  - **Wheel acceptance (R11.4.1/CP-5):** pyproject's flat `packages`
+    list shipped only top-level modules — fixed with
+    `packages.find` (subpackages verified in the wheel). New
+    `tests/integration/test_wheel_acceptance.py`: builds the wheel,
+    installs into a fresh venv (torch via `--system-site-packages`),
+    runs the stranger's first minute (import → compose → `SystemModule`
+    forward → `fit_step`). CP-5's pip-packaging door is now demonstrably
+    open.
+- **Deep Hebbian lead — SUPERSEDED by the probe (2026-09-04):** the
+  "hundreds of layers" recollection is not realized by the current
+  `DeepHebbianChain` implementation (see probe findings above). The lead
+  survives as the gain-control thesis; track 54's evidence string is
+  orphaned history — retire or re-home it on next touch of
+  `nebc_tracks.py`.
 - **Metric aggregation contract (R11.2.23, pulled 2026-09-04):**
   `SystemTrainer.train_epoch`/`validate` now accumulate **sample-weighted**
   sums (`trainer.py`) — a ragged final batch no longer counts as a full

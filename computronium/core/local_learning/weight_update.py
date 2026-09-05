@@ -57,13 +57,24 @@ def hebbian_weight_update(  # dynamics contract signature  # ruff: ignore[too-ma
     batch_size: int,
     importance: float,
 ) -> tuple[Tensor, Tensor]:
-    """Pure local Hebbian: importance * avg(src_free x dst_free)."""
+    """Pure local Hebbian: importance * lr * avg(src_free x dst_free).
+
+    The legacy DeepHebbianChain scaled its update by ``hebbian_lr``;
+    omitting the factor here made ``learning_rate`` a silent no-op on this
+    path — full-strength correlations every update, which slams
+    gain-controlled weights into the cap and accumulates biases without
+    bound at depth.
+    """
     if src_free is None or dst_free is None:
         return torch.zeros(dst_neurons, src_neurons), torch.zeros(dst_neurons)
     w_up, b_up = compute_hebbian_update(
         src_act=src_free, dst_err=dst_free, importance=importance, batch_size=batch_size
     )
-    return w_up.T, b_up
+    # Negated: the builder applies updates as ``w -= w_up`` (a descent
+    # convention shared with the contrastive rules), but pure Hebbian
+    # learning potentiates — w += lr * corr(src, dst) — matching the
+    # legacy DeepHebbianChain's ``addmm_(y.T, x, alpha=lr)``.
+    return -learning_rate * w_up.T, -learning_rate * b_up
 
 
 __all__ = [
