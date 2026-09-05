@@ -259,6 +259,16 @@ class SystemConfig:
                     f"requires energy_minimization dynamics, got {self.dynamics.dynamics_type!r}"
                 )
 
+        # Residual skips are implemented for the feedforward stack only
+        if (
+            getattr(self.geometry, "residual", False)
+            and self.geometry.topology_type != "feedforward"
+        ):
+            raise ValueError(
+                f"Residual connections (residual=True) require feedforward geometry, "
+                f"got topology_type={self.geometry.topology_type!r}"
+            )
+
         # Thermodynamic contrast credit requires energy-based or PC-family
         # dynamics (R5.2: the PC family — sPC/ePC — consumes thermo contrast
         # legitimately; the dormant contradiction with the predictive-settling
@@ -268,6 +278,7 @@ class SystemConfig:
                 "energy_minimization",
                 "predictive_settling",
                 "error_predictive_coding",
+                "lazy",
             ):
                 raise ValueError(
                     f"Thermodynamic contrast credit (credit_type={self.credit.credit_type!r}) "

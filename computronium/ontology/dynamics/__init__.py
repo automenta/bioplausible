@@ -21,6 +21,7 @@ DYNAMICS_REGISTRY: Final[dict[str, type[StateDynamics]]] = {
     "spike_integration": SpikeIntegrationDynamics,
     "instantaneous": InstantaneousDynamics,
     "diffusion": DiffusionDynamics,
+    "lazy": LazyStateDynamics,
 }
 
 

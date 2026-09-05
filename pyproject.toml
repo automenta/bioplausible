@@ -208,41 +208,41 @@ select = [
     "SIM",  # flake8-simplify
 ]
 ignore = [
-    "line-too-long",  # disabled forever (user directive 2026-09-03): formatter handles what it can, the rest is noise
-    "magic-value-comparison", # numeric research thresholds (0.5, 1e-4, ...) are the domain's first-class objects
-    "no-self-use", # protocol implementations keep a uniform method surface (self unused by design)
-    "invalid-argument-name",    # math notation (W, G, V, X) is the domain's naming convention
-    "non-lowercase-variable-in-function",    # ditto for local math variables
-    "raise-vanilla-args",  # long messages in raise calls are the sanctioned error style (AGENTS.md)
-    "unused-function-argument",  # the family-neutral pipeline passes uniform args; primitives ignore some by design
-    "unused-method-argument",
-    "ambiguous-unicode-character-docstring",  # Greek/math symbols (β, θ, ≈) in docstrings are the domain language
-    "ambiguous-unicode-character-comment",
-    "ambiguous-unicode-character-string",
-    "float-equality-comparison",  # exact float equality is load-bearing (bitwise L5 locks), not a bug
+    "E501",  # disabled forever (user directive 2026-09-03): formatter handles what it can, the rest is noise
+    "PLR2004", # numeric research thresholds (0.5, 1e-4, ...) are the domain's first-class objects
+    "PLR6301", # protocol implementations keep a uniform method surface (self unused by design)
+    "N803",    # math notation (W, G, V, X) is the domain's naming convention
+    "N806",    # ditto for local math variables
+    "RSE102",  # long messages in raise calls are the sanctioned error style (AGENTS.md)
+    "ARG001",  # the family-neutral pipeline passes uniform args; primitives ignore some by design
+    "ARG002",
+    "RUF002",  # Greek/math symbols (β, θ, ≈) in docstrings are the domain language
+    "RUF001",
+    "RUF003",
+    "PLR0133",  # exact float equality is load-bearing (bitwise L5 locks), not a bug
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "computronium/__init__.py" = [
-    "undefined-export", # __all__ names resolve through the _LAZY import map
+    "F822", # __all__ names resolve through the _LAZY import map
 ]
 "computronium/ontology/dynamics/__init__.py" = [
-    "non-empty-init-module", # DYNAMICS_REGISTRY lives beside its classes (R1.1)
+    "INP001", # DYNAMICS_REGISTRY lives beside its classes (R1.1)
 ]
 "computronium/ontology/dynamics/_dynamics.py" = [
-    "non-augmented-assignment", # out-of-place adds are the settle graph-safety idiom (R5.3)
+    "PLR6104", # out-of-place adds are the settle graph-safety idiom (R5.3)
 ]
 "computronium/ontology/_settle_kernel.py" = [
-    "non-augmented-assignment", # out-of-place adds are the settle graph-safety idiom (R5.3)
+    "PLR6104", # out-of-place adds are the settle graph-safety idiom (R5.3)
 ]
 "tests/**/*.py" = [
-    "assert",   # assert in tests
-    "no-self-use", # no-self-use in test methods
-    "suspicious-subprocess-import",   # subprocess CLI smoke tests
-    "subprocess-without-shell-equals-true",   # subprocess.run with fixed args
-    "start-process-with-partial-path",   # partial-path executables (uv)
-    "suspicious-non-cryptographic-random-usage",   # random.Random in test samplers/fixtures
-    "magic-value-comparison", # literal expected values in assertions
+    "S101",   # assert in tests
+    "PLR6301", # no-self-use in test methods
+    "S606",   # subprocess CLI smoke tests
+    "S603",   # subprocess.run with fixed args
+    "S607",   # partial-path executables (uv)
+    "S311",   # random.Random in test samplers/fixtures
+    "PLR2004", # literal expected values in assertions
 ]
 
 [tool.ruff.lint.flake8-type-checking]

@@ -180,6 +180,7 @@ if TYPE_CHECKING:
         EnergyMinimizationDynamics,
         ErrorPredictiveCodingDynamics,
         InstantaneousDynamics,
+        LazyStateDynamics,
         PredictiveSettlingDynamics,
         SpikeIntegrationDynamics,
         StateDynamicsConfig,
@@ -251,6 +252,10 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     "DiffusionDynamics": (
         "computronium.ontology.dynamics",
         "DiffusionDynamics",
+    ),
+    "LazyStateDynamics": (
+        "computronium.ontology.dynamics",
+        "LazyStateDynamics",
     ),
     "ElasticConsolidationUpdate": (
         "computronium.ontology.update",
@@ -509,6 +514,7 @@ __all__ = [
     "GraphGeometry",
     "HardwareConfig",
     "InstantaneousDynamics",
+    "LazyStateDynamics",
     "LocalGoodnessCredit",
     "LongestPathDepth",
     "MemristiveSubstrate",

@@ -40,6 +40,7 @@ class LayeredParams:
     transitions: tuple[
         tuple[Tensor, Tensor | None, tuple[torch.nn.Module, ...]], ...
     ] = ()
+    residual: bool = False
 
 
 def group_transitions(
@@ -85,6 +86,7 @@ def extract_layered_params(geometry: Geometry) -> LayeredParams | None:
             activations=tuple(activations),
             recurrent_weight=recurrent if isinstance(recurrent, Tensor) else None,
             transitions=group_transitions(modules),
+            residual=bool(getattr(geometry, "residual", False)),
         )
     assembler = getattr(geometry, "layered_params", None)
     if callable(assembler):
@@ -119,6 +121,7 @@ class SubstrateSettleKernel:
         params: LayeredParams,
         step_size: float,
         momentum: float = 0.0,
+        residual: bool = False,
     ) -> None:
         self.substrate = substrate
         self._op = substrate.get_forward_operator()
@@ -126,6 +129,7 @@ class SubstrateSettleKernel:
         self.params = params
         self.step_size = step_size
         self.momentum = momentum
+        self.residual = residual
 
     def _bottom_up(self, x: Tensor, idx: int) -> Tensor:
         """Bottom-up pass: x @ W.T + b (substrate forward operator + bias)."""
@@ -165,6 +169,8 @@ class SubstrateSettleKernel:
             top_down = self._top_down(all_acts[i + 2], p.weights[i + 1])
 
             total = pre + top_down
+            if self.residual and i > 0 and all_acts[i].shape == all_acts[i + 1].shape:
+                total = total + all_acts[i]
 
             if new_velocity is not None and velocity is not None:
                 total = self.momentum * velocity[i] + total
@@ -240,13 +246,15 @@ def _eqprop_settle_loop(
     beta: float,
     target: Tensor | None,
     n_steps: int,
+    residual: bool = False,
 ) -> list[Tensor]:
     """Functional replica of the kernel relaxation loop (digital substrate).
 
     Mirrors ``SubstrateSettleKernel.step`` exactly for the common case —
     no recurrent weight, no momentum, digital forward operator
-    (``op(x, w) == x @ w.T + b``) — including the per-step output nudge.
-    Compiled whole (one graph per settle) by ``_compiled_eqprop_settle``.
+    (``op(x, w) == x @ w.T + b``) — including the per-step output nudge
+    and the residual skip (``residual``). Compiled whole (one graph per
+    settle) by ``_compiled_eqprop_settle``.
     """
     for _ in range(n_steps):
         new_acts: list[Tensor] = [acts[0]]
@@ -257,6 +265,8 @@ def _eqprop_settle_loop(
             if b is not None:
                 out = out + b
             total = out + acts[i + 2] @ weights[i + 1]
+            if residual and i > 0 and acts[i].shape == acts[i + 1].shape:
+                total = total + acts[i]
             target_h = activations[i](total) if i < len(activations) else total
             new_acts.append(acts[i + 1] + step_size * (target_h - acts[i + 1]))
         out = new_acts[-1] @ weights[len(weights) - 1].T

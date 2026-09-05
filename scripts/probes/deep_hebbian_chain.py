@@ -35,14 +35,20 @@ tiles/layer 4, batch 4):
    be structural. Error-based rules die by telescoping decay (R11.3.11);
    unnormalized local chains die by runaway gain; muPC's depth-scaled
    init/LR parameterization IS the normalization that lets PC survive.
-   Biophysical analog: cortical gain control / homeostatic normalization.
-   Next lever if this arm continues: add weight/gain normalization to the
-   tile chain (unit-layer-gain init or homeostatic activity scaling) and
-   re-probe — prediction: signal stays O(1) at depth 500.
+    Biophysical analog: cortical gain control / homeostatic normalization.
+    Next lever if this arm continues: add weight/gain normalization to the
+    tile chain (unit-layer-gain init or homeostatic activity scaling) and
+    re-probe — prediction: signal stays O(1) at depth 500.
+
+    → Lever pulled 2026-09-04: `computronium/models/native/
+    deep_hebbian_native.py` (R11.3.14) — activity renorm kills the
+    runaway gain at every depth, and exposes a second boundary
+    (subspace collapse) on rank>1 class codes.
 
 The probe file is throwaway; any landing re-demonstrates claims in tests.
 """
 
+import math
 import time
 
 import torch
@@ -102,7 +108,9 @@ def _probe(depth: int, *, use_spectral_norm: bool, use_oja: bool) -> None:
     def rel(norms: list[float]) -> str:
         head = norms[0] or 1.0
         vals = [f"{n / head:.1e}" for n in norms[1:][-4:]]
-        return "/".join(vals) + ("  [NaN!]" if any(n != n for n in norms) else "")
+        return "/".join(vals) + (
+            "  [NaN!]" if any(math.isnan(n) for n in norms) else ""
+        )
 
     tag = f"sn={int(use_spectral_norm)},oja={int(use_oja)}"
     print(

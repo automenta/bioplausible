@@ -178,7 +178,8 @@ class StateDynamicsConfig:
 
     Attributes:
         dynamics_type: "energy_minimization", "predictive_settling",
-            "error_predictive_coding", "spike_integration", "instantaneous", "diffusion"
+            "error_predictive_coding", "spike_integration", "instantaneous",
+            "diffusion", "lazy"
         max_steps: Maximum settling iterations
         convergence_threshold: Early stopping threshold
         convergence_start: Step to start checking convergence
@@ -336,6 +337,35 @@ class StateDynamicsConfig:
             step_size=step_size,
             beta=beta,
             momentum=momentum,
+            track_free_energy_per_iter=track_free_energy_per_iter,
+        )
+
+    @classmethod
+    def lazy(
+        cls,
+        *,
+        max_steps: int = 30,
+        convergence_threshold: float = 1e-4,
+        convergence_start: int = 5,
+        step_size: float = 0.1,
+        beta: float = 0.5,
+        track_free_energy_per_iter: bool = False,
+    ) -> StateDynamicsConfig:
+        """Sequential (Gauss–Seidel) EqProp settle — lazy per-layer activation.
+
+        Same symmetric-energy fixed point as energy_minimization, reached in
+        systematically fewer sweeps: layers update one at a time per sweep,
+        each reading its freshest neighbors. Layer-structured geometry
+        required (fail-loud otherwise); no momentum.
+        """
+        return cls(
+            dynamics_type="lazy",
+            max_steps=max_steps,
+            convergence_threshold=convergence_threshold,
+            convergence_start=convergence_start,
+            step_size=step_size,
+            beta=beta,
+            momentum=0.0,
             track_free_energy_per_iter=track_free_energy_per_iter,
         )
 
@@ -690,6 +720,7 @@ class EnergyMinimizationDynamics:
             params=params,
             step_size=self.config.step_size,
             momentum=self.config.momentum,
+            residual=params.residual,
         )
 
         # Number of hidden layers (excluding input and output)
@@ -784,6 +815,7 @@ class EnergyMinimizationDynamics:
                     beta,
                     target,
                     self.config.max_steps,
+                    params.residual,
                 )
             )
         elif use_checkpointing:
@@ -1567,20 +1599,46 @@ class DiffusionDynamics:
 
 
 class LazyStateDynamics:
-    """Lazy per-step state dynamics (Lazy EqProp variant).
+    """Sequential (Gauss–Seidel) EqProp settle — lazy per-layer activation.
 
-    Computes activations on-demand during settling, deferring computation
-    until the energy/contrastive step requires them. This implements the
-    "lazy" evaluation strategy from LazyEqProp where intermediate states
-    are materialized only when needed for the pseudo-gradient computation.
+    The Jacobi settle (EnergyMinimization family) updates every hidden
+    layer simultaneously from the previous step's activations; this
+    dynamics updates layers one at a time within a sweep, each reading
+    the freshest neighbor values — the same symmetric-energy fixed point
+    reached in systematically fewer sweeps (Gauss–Seidel vs Jacobi).
+    On-demand activation: a layer is recomputed only when its turn comes,
+    so the sweep-count contrast against an equivalent Jacobi settle is
+    directly measurable on large-dim builds.
 
-    The dynamics mimics EquilibriumMLP.forward_dynamics but with lazy
-    activation caching — useful for memory-constrained substrates.
+    Settles through the Substrate operator API (bottom-up passes via
+    ``get_forward_operator()``; top-down reads are mathematical
+    transposes). Requires a layer-structured geometry without recurrent
+    weights — fail-loud otherwise. No momentum (the sequential sweep
+    already carries fresh information per layer).
+
+    Canonical contract (StateDynamics Protocol): settle runs the free
+    phase when ``target is None`` and the nudged phase otherwise (output
+    nudge applied each sweep, mirroring ``SubstrateSettleKernel.step``);
+    compute_energy is the shared Hopfield energy of the settled acts.
     """
 
     def __init__(self, config: StateDynamicsConfig | None = None):
-        self.config = config or StateDynamicsConfig.energy_minimization()
-        self._activation_cache: dict[int, Tensor] = {}
+        self.config = config or StateDynamicsConfig.lazy()
+        self._activation_cache: dict[int, list[Tensor]] = {}
+
+    def _layered(self, geometry: Geometry) -> LayeredParams:
+        params = extract_layered_params(geometry)
+        if params is None or not params.weights:
+            raise TypeError(
+                f"LazyStateDynamics requires a layer-structured geometry, "
+                f"got {type(geometry).__name__}"
+            )
+        if params.recurrent_weight is not None:
+            raise TypeError(
+                "LazyStateDynamics does not support recurrent geometry "
+                "(SystemConfig.validate() already rejects the pairing)"
+            )
+        return params
 
     def settle(
         self,
@@ -1589,56 +1647,73 @@ class LazyStateDynamics:
         substrate: Substrate,
         target: Tensor | None = None,
     ) -> CompositeState:
-        """Settle with lazy activation computation."""
-        h = _get_state_activations(state)
-        if h is None:
+        """Sequential per-layer settle (Gauss–Seidel sweeps)."""
+        params = self._layered(geometry)
+        op = substrate.get_forward_operator()
+        weights, biases, activations = (
+            params.weights,
+            params.biases,
+            params.activations,
+        )
+        if state.x is None:
             return state
-        if isinstance(h, list):
-            h = h[-1]  # Use last layer for single-tensor routing
+        acts = list(geometry.forward_with_intermediates(state.x, substrate))
+        beta = self.config.beta if target is not None else 0.0
 
-        # Lazy evaluation: only compute when actually settling
-        for step in range(self.config.max_steps):
-            h_new = geometry.route(h)
-            h_new = substrate.inject_state_noise(h_new)
+        for sweep in range(self.config.max_steps):  # ruff: ignore[used-dummy-variable]
+            max_delta = 0.0
+            for i in range(len(acts) - 2):
+                pre = op(acts[i], weights[i])
+                b = biases[i]
+                if b is not None:
+                    pre = pre + b
+                total = pre + acts[i + 2] @ weights[i + 1]
+                if params.residual and i > 0 and acts[i].shape == acts[i + 1].shape:
+                    total = total + acts[i]
+                target_h = activations[i](total) if i < len(activations) else total
+                h_new = acts[i + 1] + self.config.step_size * (target_h - acts[i + 1])
+                max_delta = max(
+                    max_delta, torch.dist(h_new, acts[i + 1], p=float("inf")).item()
+                )
+                acts[i + 1] = h_new
+            out = op(acts[-2], weights[-1])
+            b = biases[-1]
+            if b is not None:
+                out = out + b
+            if beta > 0 and target is not None:
+                out = out + beta * (_one_hot(target, out) - out)
+            max_delta = max(max_delta, torch.dist(out, acts[-1], p=float("inf")).item())
+            acts[-1] = out
 
-            # Cache activations lazily at convergence check points
-            if step >= self.config.convergence_start:
-                self._activation_cache[step] = h_new.clone()
-
-            if step >= self.config.convergence_start:
-                delta = torch.dist(h_new, h, p=float("inf")).item()
-                if delta < self.config.convergence_threshold:
-                    h = h_new
+            if sweep >= self.config.convergence_start:
+                self._activation_cache[sweep] = [a.clone() for a in acts]
+                if max_delta < self.config.convergence_threshold:
                     break
-            h = h_new
 
         new_state = _create_output_state(
             state,
-            output=h,
-            free_state=[h] if target is None else None,
-            nudged_state=[h] if target is not None else None,
-            activations=[h],
+            output=acts[-1],
+            free_state=acts if target is None else None,
+            nudged_state=acts if target is not None else None,
+            activations=acts,
         )
-
         return new_state
 
     def compute_energy(self, state: CompositeState, geometry: Geometry) -> Tensor:
-        """Compute energy using cached activations if available."""
+        """Hopfield energy of the settled state (shared with the EqProp family)."""
         acts = _get_state_free_state(state)
         if acts is None:
             acts = _get_state_activations(state)
-        if acts is None:
+        if acts is None or isinstance(acts, Tensor):
             return torch.tensor(0.0)
-        if isinstance(acts, list):
-            acts = acts[-1]
-        return (acts**2).mean()
+        return _compute_hopfield_energy(list(acts), geometry)
 
-    def get_cached_activations(self) -> dict[int, Tensor]:
-        """Return lazily cached activations for inspection."""
+    def get_cached_activations(self) -> dict[int, list[Tensor]]:
+        """Return the per-sweep activation snapshots recorded during settling."""
         return self._activation_cache
 
     def clear_cache(self) -> None:
-        """Clear the lazy activation cache."""
+        """Clear the per-sweep activation cache."""
         self._activation_cache.clear()
 
 

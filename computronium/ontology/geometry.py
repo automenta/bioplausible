@@ -101,6 +101,12 @@ class GeometryConfig:
             feedforward stack only — recurrent weight matrices keep the
             EqProp small-recurrent convention (init_scale × 0.1) under
             both schemes, whose stability depends on the 0.1 sub-scale)
+        residual: Skip connections between equal-width hidden layers
+            (a_ℓ = a_{ℓ−1} + φ(W_ℓ a_{ℓ−1} + b_ℓ)); the paper regime for
+            μPC init (Table 1 is specified and tested on residual nets,
+            arXiv:2505.13124). Applied only where a Linear is square
+            (hidden→hidden); the input and output projections stay
+            unscaled single paths
         conv_channels: Output channels per convolution layer (conv topology)
         kernel_size: Convolution kernel edge length (conv topology)
         in_channels: Input channel count (conv topology)
@@ -125,6 +131,7 @@ class GeometryConfig:
     recurrent_weight: list[list[float]] | None
     init_scale: float = _DEFAULT_INIT_SCALE
     init_scheme: InitScheme = "default"
+    residual: bool = False
     conv_channels: tuple[int, ...] = ()
     kernel_size: int = 3
     in_channels: int = 1
@@ -147,6 +154,7 @@ class GeometryConfig:
         hidden_dims: tuple[int, ...],
         init_scale: float = 0.1,
         init_scheme: InitScheme = "default",
+        residual: bool = False,
     ) -> GeometryConfig:
         return cls(
             input_dim=input_dim,
@@ -158,6 +166,7 @@ class GeometryConfig:
             recurrent_weight=None,
             init_scale=init_scale,
             init_scheme=init_scheme,
+            residual=residual,
         )
 
     @classmethod
@@ -446,6 +455,7 @@ class FeedforwardGeometry(nn.Module):
     ):
         super().__init__()
         self.config = config
+        self.residual = config.residual
         self._layers = nn.ModuleList(layers) if layers else nn.ModuleList()
         if not self._layers:
             self._build_layers()
@@ -473,15 +483,30 @@ class FeedforwardGeometry(nn.Module):
     def params(self) -> dict[str, Tensor]:
         return dict(self._layers.named_parameters())  # type: ignore[return-value]
 
-    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
+    def _apply_stack(
+        self,
+        x: Tensor,
+        substrate: Substrate | None,
+        intermediates: list[Tensor] | None = None,
+    ) -> Tensor:
+        """Route through the layer stack with optional residual skips.
+
+        Skip arithmetic (when ``self.residual``): a hidden Linear whose
+        in/out features match adds its input activity to the activated
+        branch output — ``a_ℓ = a_{ℓ−1} + φ(W_ℓ a_{ℓ−1} + b_ℓ)``. The
+        input projection and the output readout are never skipped.
+        """
         if substrate is None:
             from computronium.ontology.substrate import DigitalSubstrate
 
             substrate = DigitalSubstrate()
         op = substrate.get_forward_operator()
         h = x.flatten(1) if x.dim() > 2 else x
+        if intermediates is not None:
+            intermediates.append(h)
         for layer in self._layers:
             if isinstance(layer, nn.Linear):
+                h_in = h
                 h = op(h, layer.weight)
                 if layer.bias is not None:
                     # Out-of-place add: in-place adds on grad-tracking tensors
@@ -489,7 +514,16 @@ class FeedforwardGeometry(nn.Module):
                     h = h + layer.bias  # ruff: ignore[non-augmented-assignment]
             else:
                 h = layer(h)
+                if self.residual and h.shape == h_in.shape:
+                    h = h + h_in
+                if intermediates is not None:
+                    # Add after activation function and skip (post-skip
+                    # activities align with settle-kernel acts)
+                    intermediates.append(h)
         return h
+
+    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
+        return self._apply_stack(x, substrate)
 
     def forward_with_intermediates(
         self, x: Tensor, substrate: Substrate | None = None
@@ -498,26 +532,11 @@ class FeedforwardGeometry(nn.Module):
 
         Returns:
             List of activations [input, layer1_out, layer2_out, ..., output]
-            where layer outputs are after activation functions (ReLU).
+            where layer outputs are after activation functions and any
+            residual skip.
         """
-        if substrate is None:
-            from computronium.ontology.substrate import DigitalSubstrate
-
-            substrate = DigitalSubstrate()
-        op = substrate.get_forward_operator()
-        h = x.flatten(1) if x.dim() > 2 else x
-        acts = [h]  # Include input
-        for layer in self._layers:
-            if isinstance(layer, nn.Linear):
-                h = op(h, layer.weight)
-                if layer.bias is not None:
-                    # Out-of-place add: in-place adds on grad-tracking tensors
-                    # pin the whole downstream settle graph (CUDA leak)
-                    h = h + layer.bias  # ruff: ignore[non-augmented-assignment]
-            else:
-                h = layer(h)
-                # Add after activation functions (ReLU, etc.)
-                acts.append(h)
+        acts: list[Tensor] = []
+        h = self._apply_stack(x, substrate, acts)
         # Add final output if last layer was Linear (no trailing activation)
         if self._layers and isinstance(self._layers[-1], nn.Linear):
             acts.append(h)
@@ -528,12 +547,15 @@ class FeedforwardGeometry(nn.Module):
         h = activations
         for layer in self._layers:
             if isinstance(layer, nn.Linear):
+                h_in = h
                 h = h @ layer.weight.T  # ruff: ignore[non-augmented-assignment]
                 if layer.bias is not None:
-                    # Out-of-place add: in-place adds break autograd
+                    # Out-of-place adds on autograd break
                     h = h + layer.bias  # ruff: ignore[non-augmented-assignment]
             else:
                 h = layer(h)
+                if self.residual and h.shape == h_in.shape:
+                    h = h + h_in  # ruff: ignore[non-augmented-assignment]
         return h
 
     def update_params(self, new_params: dict[str, Tensor]) -> None:

@@ -4,6 +4,7 @@ from computronium.models.native.backprop_native import (
     create_native_backprop_mlp,
     native_backprop_mlp,
 )
+from computronium.models.native.deep_hebbian_native import DeepHebbianChain
 from computronium.models.native.diffusion_eqprop_native import (
     create_native_diffusion_eqprop,
     native_diffusion_eqprop,
@@ -58,6 +59,7 @@ from computronium.models.native.tile_native import (
 )
 
 __all__ = [
+    "DeepHebbianChain",
     "create_native_backprop_mlp",
     "create_native_diffusion_eqprop",
     "create_native_directed_ep",

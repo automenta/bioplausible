@@ -29,9 +29,17 @@
 > pilot (see Remaining Items). The
 > library demonstrates all 12 capabilities (D1–D12) at demo scale;
 > `comp repro` 8/8; property suite 670 passed; demo gate 13/13; gallery lock
-> green; `comp gallery` renders all figures. Remaining items are explicitly
-> **pull-based** or **deprioritized** — they land only when a demo,
-> campaign, or research paragraph needs them.
+> green; `comp gallery` renders all figures. Session 2026-09-04 (continued):
+> R11.3.14 (deep Hebbian chain) pulled with a live subspace-collapse
+> boundary; R11.1.10 (LazyStateDynamics) pulled with a measured
+> settle-count refutation. R11.3.11 audit-driven revision: μPC verdict
+> downgraded from "refuted" to OPEN after an instrument audit found two
+> regime mismatches (plain-MLP vs paper's residual architecture; Euclidean
+> SGD vs paper's Adam/β-grid); residual geometry landed as a capability
+> and the in-regime re-test still shows no lift under our trainer —
+> the jpc-faithful port is the remaining gap. Remaining items are
+> explicitly **pull-based** or **deprioritized** — they land only when a
+> demo, campaign, or research paragraph needs them.
 
 ---
 
@@ -108,6 +116,8 @@ every workstream below.
 | **R11.1.7** | Diffusion target term (nudged-Langevin) | `compute_energy_from_state(target, beta)`; fidelity probe passes |
 | **R11.1.8** | Ontology facade merge | `_dynamics.py`→`dynamics/_dynamics.py`, `_substrate.py`→`substrate/_substrate.py` |
 | **R11.1.9** | Timing-asymmetric STDP wired to 5-D pipeline | Spike rasters, eligibility traces, configurable threshold |
+| **R11.3.11b** | Residual feedforward geometry + in-regime μPC re-test (pulled 2026-09-04, audit-driven) | **Capability landed:** `GeometryConfig.residual` (skip between equal-width hidden layers, `a_ℓ = a_{ℓ−1} + φ(W_ℓ a_{ℓ−1} + b_ℓ)`; input/output projections unscaled) — forward, `route`, settle kernel (`SubstrateSettleKernel` + compiled `_eqprop_settle_loop`), and spec round-trip all carry it. Lock: `tests/integration/test_residual_geometry.py` (5 tests): manual-trace bitwise match, eager≡compiled parity (bitwise; the initial parity "failure" was a test-side RNG-order bug — built both systems from one seed), spec round-trip, fail-loud on non-feedforward. **In-regime re-test** (`scripts/probes/mupc_residual_regime.py`): residual depth-8/width-128 MNIST, seeds 0–2, μPC 0.137 vs default 0.139 — **still no lift under our trainer**. Verdict downgraded from "refuted" to OPEN: architecture family now matches the paper, but the trainer regime still does not (paper: Adam weights, activity step β ∈ {1e3..1e-2} tuned per run, inference steps = H, width 512; ours: Euclidean SGD, β=0.5, 60 fixed settle steps). Next pull for a clean answer: jpc-faithful port (Adam on weights, large-β activity GD, steps=H) |
+| **R11.1.10** | LazyStateDynamics (pulled 2026-09-04) | Rewritten as a real sequential (Gauss–Seidel) EqProp settle: per-layer in-place updates reading freshest neighbors, substrate forward-operator bottom-up, per-sweep activation cache, fail-loud on non-layered/recurrent. Wired per the primitive checklist: registry `"lazy"`, `StateDynamicsConfig.lazy()`, root `__all__`+`_LAZY`+TYPE_CHECKING, thermo-contrast validate whitelist. Lock: `tests/integration/test_lazy_dynamics.py` (5 tests, ~5 s): monotone per-sweep Hopfield energy, nudge pulls output toward target, MNIST quick-mode 150-batch training > 2.5× chance, fail-loud non-layered/recurrent, sweep-count observable. **Measured refutation:** the plan's "settle-count contrast" expected Gauss–Seidel to win in sweeps — it does NOT at demo scale (34 sweeps vs Jacobi 21 at 256→64×6→10, τ=1e-2, step 0.05); no dominance claimed |
 
 ### R11.2 — Hygiene Pass (Register C)
 
@@ -138,6 +148,8 @@ every workstream below.
 | **R11.3.2** | PR-2 θ-audit harness | `theta_audit()` context manager; SHA-256 over name+device+dtype+bytes |
 | **R11.3.3** | PR-5 Calibrated stability guard | Demo-harvest ROC within 0.005% of deployed τ; `fast_proxy` calibration-only; artifact + live lock |
 | **R11.3.12** | ePC fast-settling solver (D12) | `ErrorPredictiveCodingDynamics` — error reparameterization per Goemaere et al. (arXiv:2505.20137, ICML 2026); free equilibrium = feedforward bitwise, nudged signal reaches every hidden layer (sPC's reaches none), trains at 1/3 budget; demo + gallery figure + round-trip |
+| **R11.3.11** | Multi-seed depth-frontier pilot (E-1, pulled 2026-09-04; **superseded by the in-regime re-test, see below**) | `scripts/probes/mupc_multiseed_frontier.py`: depths 4/8 × seeds 0–3 × spc/default vs spc/mupc, compiled settle, 477 s. μPC lift at depth 8 absent (0.135 vs 0.133). **Instrument audit finding:** the pilot applied μPC init to a plain MLP — outside the paper's tested domain (arXiv:2505.13124 Table 1 is specified and tested on residual networks; skip connections are load-bearing for the (N·L)^{-1/2} hidden scale) |
+| **R11.3.14** | Deep Hebbian chain with per-layer activity normalization (pulled 2026-09-04, user-directed plan-and-fix) | `computronium/models/native/deep_hebbian_native.py`: `DeepHebbianChain` — spectral renorm (unit gain at init) + tanh + batch Oja decay + unit-RMS activity renorm per layer; plain-torch local learning (no backprop, no nudging). Per-layer pre-renorm signal norms O(1) at depth 10/50/100 (the tile-chain runaway-gain/NaN pathology is structurally fixed); unnormalized control decays to ~1e-14. Dominant-direction 2-class readout 1.000 at every depth. **Honest boundary (R11.5.5):** 10 direction-coded classes → L1 1.00 / L10 0.52 / L100 0.20 (> 0.1 chance): activity covariance effective rank collapses 5.1→1.5 through the chain under compounding tanh distortion + renorm + Oja spectral sharpening — Sanger, gain scaling, and per-step spectral renorm do NOT rescue it. Lock: `tests/integration/test_deep_hebbian_chain.py` (8 tests, ~7 s) |
 
 ### R11.4 — Adoption Surface
 
@@ -154,9 +166,9 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 
 | Item | Trigger | Category |
 |------|---------|----------|
-| **R11.3.14** Deep Hebbian fix: per-layer activity normalization | **User directive: plan and fix.** Local Hebbian learning currently does NOT work at any depth — signal decays at ~0.5/layer through σ-normalized weights, so layers ≥2 receive ~zero input and never learn (probe: `scripts/probes/deep_hebbian_chain.py`; legacy `DeepHebbianChain` was `status:broken` in the zoo, and the user's "100-layer" recollection came from autograd training, not local Hebbian). **Planned fix: per-layer activity normalization** — renormalize activations to fixed norm (unit RMS) after every layer (homeostatic gain control, as in cortex): amplitude becomes a constant carrier at every depth, the *direction* carries the information, and Hebbian+Oja learns on normalized activities so every layer receives a meaningful update regardless of depth. Recipe: spectral renorm (bounds W) + tanh (nonlinearity) + Oja decay (stability) + activity renorm (carrier) + linear readout for evaluation (standard for local-learning feature demos). **Acceptance: depth 10/50/100 chain on synthetic or MNIST, signal norm O(1) at every layer, Hebbian features + linear readout > chance** — then a lock test. Implementation home: native model in `computronium/models/native/` (simple chain, not the tile graph — the tile graph's per-edge/concat σ caps interact badly with full connectivity). Legacy recipe reference: `spectral_norm` + `tanh_()` + Oja `addcmul_(y_sq, W, -lr)` in `computronium/zoo/models/hebbian.py@8d8de04b^`. | Capability |
-| **R11.3.11** Multi-seed depth-frontier pilot | The single-seed μPC lift contradiction (frontier probe finding 2) must resolve before any paragraph; ~2 h CPU at 55 ms/step compiled. Also explains the compiled-fixed-budget vs eager-early-exit settle discrepancy. | Research |
-| **R11.1.10** LazyStateDynamics | Demo regime shows on-demand activation visibly (settle-count contrast on large-dim) | Capability |
+| **R11.3.14** Deep Hebbian fix: per-layer activity normalization | **LANDED 2026-09-04** (see Completed below) | ~~Capability~~ ✅ |
+| **R11.3.11** Multi-seed depth-frontier pilot | **Pulled 2026-09-04; verdict downgraded** (see R11.3.11b in Completed). No μPC lift under our trainer even in-regime (residual); the clean answer needs a jpc-faithful trainer port — **pull-based** | Research (architecture ✅, trainer regime OPEN) |
+| **R11.1.10** LazyStateDynamics | **Landed 2026-09-04** (see Completed) | ~~Capability~~ ✅ |
 | **R11.1.11** Domain extensions | Benchmark/demo/research needs: `wikitext2`/`penn_treebank` (LM), `mountain_car`/`lunar_lander` (RL), `diabetes`/`california_housing` (tabular), `ett_h1` (time series), PDE suite (Heat/Wave/Burgers/Navier-Stokes) | Capability |
 | **R11.2.14** Latency proxy | **Landed 2026-09-04** — `estimate_train_step_flops` (`core/profiling.py`): deterministic structure-derived FLOPs per train_step (matmul rounds per weight matrix × settle structure from `dynamics_type`, incl. the spike-substrate one-matmul-per-layer subtlety); intended as a *relative* comparator — absolute latency stays with the repeated-timing path in `analyze_joint_system`. Lock: `tests/unit/core/test_latency_proxy.py` (determinism, depth/settle-step scaling, **proxy ordering matches measured walltime**, non-layered rejection) | ~~Hygiene~~ ✅ |
 | **R11.2.9** `substrate_coupled` plasticity engagement | Campaign manifest needs it; probe fixed-dim `step` assumptions; now also the home of any future latent-graph ternary learning path (see Notes) | Hygiene |
@@ -375,6 +387,95 @@ Sequencing: 1–4 complete; 5 after API stabilizes (done); 6–7 are RESEARCH3 C
   (boundary + μPC-unconfirmed) and `scripts/probes/mupc_compiled_device.py`
   (device verdict: compiled CUDA 80 vs CPU 55 ms/step at width 32 — CPU
   still wins; compile 2.6× CPU). Next research step: multi-seed pilot.
+- **R11.3.14 deep Hebbian chain (landed 2026-09-04):** implementation home
+  is `computronium/models/native/deep_hebbian_native.py` — a plain-torch
+  chain, deliberately NOT the tile graph (its per-edge σ caps interact badly
+  with full connectivity). Recipe: spectral renorm at init + tanh + batch
+  Oja (`w += lr·(yᵀa/n − E[y²]·w)`) + unit-RMS activity renorm per layer.
+  Key measured findings (module docstring carries them):
+  (1) the primary pathology was runaway per-layer gain (1.2–1.5×/layer
+  compounding → inf/NaN); activity renorm fixes it structurally;
+  (2) the trained chain transmits its *dominant direction* indefinitely
+  (2-class readout 1.000 at depth 100);
+  (3) a rank-10 class subspace decays (L1 1.00 → L100 0.20 > 0.1 chance):
+  activity covariance effective rank collapses ~0.5/layer. Sanger (GHA),
+  gain scaling, and per-step spectral renorm do not rescue it — renorm
+  amplifies whatever the spectrum favors each layer. This is the third
+  failure mode of the depth-boundary triad (error rules: telescoping
+  decay; unnormalized local: runaway gain; normalized Oja: subspace
+  collapse) — a candidate CP-6 finding figure.
+  **Determinism trap (D8-class):** class means must be drawn ONCE per
+  trial (seeded generator passed to both train and eval draws) — the
+  first draft regenerated means per call, silently mismatching
+  train/eval geometries. Same lesson as seed-before-loader.
+  Readout convention: nearest-centroid (linear scores), NOT one-hot ridge
+  — ridge without a bias term cannot represent ordered/interval class
+  structure along a 1-D code and silently reports chance.
+- **ruff 0.16 selector migration (2026-09-04, env drift fixed):** the venv
+  ruff upgraded to 0.16.6, which dropped long-form rule names — pyproject's
+  `ignore`/`per-file-ignores` no longer parsed and EVERY ruff invocation
+  failed (`line-too-long`→E501, `magic-value-comparison`→PLR2004,
+  `no-self-use`→PLR6301, `invalid-argument-name`→N803,
+  `non-lowercase-variable-in-function`→N806, `raise-vanilla-args`→RSE102,
+  `unused-function-argument`→ARG001, `unused-method-argument`→ARG002,
+  ambiguous-unicode→RUF001/2/3, `float-equality-comparison`→PLR0133,
+  `undefined-export`→F822, `non-empty-init-module`→INP001,
+  `non-augmented-assignment`→PLR6104, subprocess/random S-codes, `assert`→
+  S101). Selector strings are canonical codes only from here on. Repo-wide
+  `ruff check` now reports ~580 findings under the (renamed but wider)
+  effective set — Register C scope, not per-commit blockers.
+- **`DeepHebbianChain` is local-only by design:** weights are
+  `requires_grad=False` nn.Parameters (in-place Oja under `no_grad`);
+  do not wire it into SystemTrainer/autograd credit — it is the local
+  feature-learning arm, evaluated via readout.
+- **LazyStateDynamics landing (2026-09-04):** the pre-existing class was a
+  stub (single-tensor routing, `(acts**2).mean()` energy, unregistered);
+  rewritten in place as a sequential Gauss–Seidel settle. Key measured
+  facts: (1) per-sweep Hopfield energy is monotone non-increasing;
+  (2) the nudged phase works like the Jacobi kernel (output nudge each
+  sweep); (3) Gauss–Seidel does NOT converge in fewer sweeps than Jacobi
+  at demo scale — measured 34 vs 21 at (256→64×6→10, τ=1e-2, step 0.05).
+  The sequential sweep's value is the on-demand/memory strategy, not
+  speed — scope-honest claim only. ReLU nets have multiple fixed points:
+  Jacobi and Gauss–Seidel legitimately land on different ones (both are
+  fixed points of the same map) — never assert fixed-point equality
+  between the two settles.
+- **Pyright ignore-comment convention (2026-09-04):** `# type: ignore`
+  comments do NOT suppress pyright errors in this repo's config
+  (pyrightconfig.json, basic mode); use `# pyright: ignore[<rule>]` placed
+  on the exact line pyright reports (for multiline calls, on the offending
+  argument's line, not the call opener). Ruff's PGH003 forbids bare
+  `# pyright: ignore` — always name the rule.
+- **Repo's `# ruff: ignore[...]` comments are invalid (2026-09-04):** ruff
+  only honors `# noqa`; the `# ruff: ignore[x]` idiom is flagged RUF103
+  under the current rule set and its suppressions are NOT applied. This
+  is why repo-wide ruff reports ~580 findings despite "per-line markers
+  self-flag on touch" — the markers never worked. Register C scope: a
+  one-time sweep converting `# ruff: ignore[` → `# noqa: ` (codes must be
+  translated to ruff names) would restore the intended suppression
+  system; do it in the hygiene pass, never per-commit.
+- **Multi-seed pilot verdict (R11.3.11, 2026-09-04 — DOWNGRADED after the
+  audit):** the initial "μPC lift refuted" was premature on two counts.
+  (1) Domain mismatch: the pilot ran plain MLPs, but the paper's Table 1
+  parameterization is specified and tested on residual networks — the
+  (N·L)^{-1/2} hidden scale assumes a skip path; without one the scaled
+  branch has nothing to correct. `GeometryConfig.residual` now makes the
+  paper's architecture family expressible (locked in
+  `test_residual_geometry.py`). (2) Trainer mismatch: the paper uses Adam
+  on weights, activity GD with β up to 100 (grid-searched), and inference
+  steps = H (not convergence); ours uses Euclidean SGD, β=0.5, fixed 60
+  settle steps. In-regime re-test (residual, width 128, seeds 0–2): μPC
+  0.137 vs default 0.139 — no lift under our trainer, but the paper's
+  optimizer/β regime is still untested. Status: OPEN, not refuted. Do not
+  quote "μPC refuted" anywhere; the honest statement is "no lift under the
+  computronium trainer; jpc-faithful port (Adam, β grid, steps=H) is the
+  remaining instrument gap."
+- **Audit lesson (2026-09-04, user-prompted):** before publishing a
+  negative verdict, check the instrument against the source paper's
+  stated regime. Two systematic mismatches (architecture family, optimizer
+  regime) hid inside a plausible "refuted" conclusion. Refutations ship
+  with the same pipeline — and that pipeline must demonstrably implement
+  the claim's own terms (R11.5.5 applied to refutations themselves).
 - **Ternary × gradient credit = strict-mechanism xfail (2026-09-04):** the
   property certification `test_substrate_with_backprop_credit[ternary]` was a
   silent casualty of the GradientCredit fail-loud landing — never gated after
@@ -502,6 +603,43 @@ Sequencing: 1–4 complete; 5 after API stabilizes (done); 6–7 are RESEARCH3 C
   resume; `fold_in` is the canonical seed derivation for any future per-batch
   keyed randomness (probes, campaign shard seeds).
 - **Lint/type debt deprioritized:** ruff clean passively; pyright on new modules only. Legacy findings carry per-line noqa markers that self-flag on touch.
+
+### New Improvement Opportunities (opened 2026-09-04, pull-based)
+
+- **R11.5.5 failure-manifesto paragraph (CP-6 candidate, recommended next
+  pull):** the depth boundary now has three *measured* failure modes —
+  error-based rules die by telescoping decay (R11.3.11 frontier), 
+  unnormalized local Hebbian chains by runaway gain (deep_hebbian_chain
+  probe), activity-normalized Oja chains by subspace collapse
+  (R11.3.14) — plus the μPC no-lift-under-our-trainer result (multi-seed
+  pilot; OPEN pending the jpc-faithful port). One
+  figure consolidating all four arms vs depth (same pipeline, same
+  terms) is the library's first *finding* figure. Deliverable: gallery
+  figure + RESULTS.md paragraph + failure-manifesto entry.
+- **Suppression-system repair (Register C):** convert the repo's invalid
+  `# ruff: ignore[x]` comments to working `# noqa` codes (they currently
+  suppress nothing). One-time sweep; unlocks the "self-flag on touch"
+  mechanism the lint directive depends on.
+- **jpc-faithful μPC trainer port (R11.3.11 tail):** the remaining gap
+  for a clean μPC verdict — Adam (or tuned-η) weight optimizer, activity
+  GD with a β grid (paper grid 1e3→1e-2), inference steps = H, width 512.
+  Reference: github.com/thebuckleylab/jpc. Also verify how jpc applies the
+  output premultiplier a_L = N^{-1} before a CE-softmax readout (the
+  paper clamps z_L to y with MSE; naive 1/N logits may underflow CE —
+  check before porting the scale to our output layer).
+- **Single-seed audit: every accuracy number quoted in probe docstrings
+  and RESULTS.md back-section is single-seed. The μPC refutation shows
+  seed noise can fake 2× effects. On next touch of any registered-scale
+  claim, add a second seed or mark it explicitly unverified.
+- **`settle`/`compute_energy` type skew:** the StateDynamics Protocol
+  declares `CompositeState` but the pipeline (and every demo) passes
+  `SystemState` — every new consumer needs pyright-ignore noise. Fix the
+  Protocol annotation to `SystemState` (or a union) on next touch of
+  `_dynamics.py`.
+- **`DeepHebbianChain` readout helper:** the deleted one-hot ridge helper
+  was the wrong evaluation for 1-D-coded classes; if a future demo needs
+  ridge readouts, add a bias term (this is why nearest-centroid is the
+  convention now).
 
 ### Sprint Retro (2026-09-03, binding for future sessions)
 
