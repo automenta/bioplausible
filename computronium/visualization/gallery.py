@@ -453,6 +453,132 @@ def _fig_epc_fast_settle(record: dict) -> Figure:
     return fig
 
 
+def _fig_failure_manifesto(record: dict) -> Figure:
+    import matplotlib.pyplot as plt
+
+    arms = record["data"]["arms"]
+    fig, (ax_acc, ax_gain, ax_collapse) = plt.subplots(1, 3, figsize=(14, 4))
+    chance = record["data"]["chance"]
+    for name, color in (
+        ("bp", COLOR_CONTRAST),
+        ("spc", COLOR_ARM),
+        ("spc_mupc", COLOR_FEASIBLE),
+    ):
+        arm = arms[name]
+        ax_acc.plot(
+            arm["depths"],
+            arm["train_acc"],
+            marker="o",
+            color=color,
+            label=name,
+        )
+    chance_line(ax_acc, chance, f"chance ({chance})")
+    ax_acc.set_ylim(0, 0.8)
+    ax_acc.set_xlabel("depth")
+    ax_acc.set_ylabel("train accuracy")
+    ax_acc.set_title(
+        "backprop decays, sPC walls (credit: last layer only), μPC no lift"
+    )
+    ax_acc.legend()
+
+    run = arms["hebbian_runaway"]
+    ax_gain.plot(run["depths"], run["norm_ratio"], marker="o", color=COLOR_WALLED)
+    ax_gain.set_yscale("log")
+    ax_gain.set_xlabel("depth")
+    ax_gain.set_ylabel("forward norm ratio (last/first)")
+    ax_gain.set_title("unnormalized hebbian chain: runaway gain")
+
+    arm = arms["oja_collapse"]
+    ax_collapse.plot(arm["depths"], arm["readout_acc"], marker="o", color=COLOR_ARM)
+    chance_line(ax_collapse, chance, f"chance ({chance})")
+    ax_collapse.set_ylim(0, 1)
+    ax_collapse.set_xlabel("depth")
+    ax_collapse.set_ylabel("10-class readout (last layer)")
+    ax_collapse.set_title("normalized Oja chain: subspace collapse")
+    apply_style(fig)
+    return fig
+
+
+def _fig_spiking_plateau(record: dict) -> Figure:
+    import matplotlib.pyplot as plt
+
+    data = record["data"]
+    layers = range(1, len(data["spike_fractions"]["default"]) + 1)
+    fig, (ax_sil, ax_grad, ax_read) = plt.subplots(1, 3, figsize=(14, 4))
+    for tag, color in (("default", COLOR_WALLED), ("init1.0", COLOR_ARM)):
+        fr = [max(f, 1e-5) for f in data["spike_fractions"][tag]]
+        ax_sil.plot(layers, fr, marker="o", color=color, label=tag)
+    ax_sil.set_yscale("log")
+    ax_sil.set_xlabel("layer")
+    ax_sil.set_ylabel("spike fraction")
+    ax_sil.set_title("the confound: default init is silent past layer 1")
+    ax_sil.legend()
+
+    for tag, color in (("default", COLOR_WALLED), ("init1.0", COLOR_ARM)):
+        norms = [max(n, 1e-6) for n in data["credit_norms"][tag]]
+        ax_grad.plot(layers, norms, marker="o", color=color, label=tag)
+    ax_grad.set_yscale("log")
+    ax_grad.set_xlabel("weight matrix")
+    ax_grad.set_ylabel("STDP credit norm")
+    ax_grad.set_title("gradients: frozen at init vs reaching every layer")
+    ax_grad.legend()
+
+    read = data["feature_readout"]
+    names = ["random_init", "stdp_trained"]
+    vals = [read[n] for n in names]
+    ax_read.bar(names, vals, color=[COLOR_ARM, COLOR_WALLED])
+    ax_read.set_ylim(0, 0.8)
+    chance_line(ax_read, data["chance"], f"chance ({data['chance']})")
+    ax_read.set_ylabel("10-class centroid readout (hidden membrane)")
+    ax_read.set_title(
+        "unsupervised STDP collapses class structure "
+        f"(supervised acc {data['supervised_train_acc']:.2f}: no error path)"
+    )
+    for i, v in enumerate(vals):
+        ax_read.text(i, v, f"{v:.2f}", ha="center", va="bottom", fontsize=9)
+    apply_style(fig)
+    return fig
+
+
+def _fig_uaxis_muon_swap(record: dict) -> Figure:
+    import matplotlib.pyplot as plt
+
+    arms = record["data"]["arms"]
+    credits = ("bp", "ff", "pepita")
+    fig, ax = plt.subplots(figsize=(7.5, 4.5))
+    x = range(len(credits))
+    width = 0.38
+    eu = [arms[f"{c}/euclidean"] for c in credits]
+    mu = [arms[f"{c}/muon"] for c in credits]
+    ax.bar(
+        [i - width / 2 for i in x],
+        eu,
+        width,
+        color=COLOR_WALLED,
+        label=f"euclidean (lr {record['data']['lr_euclid']})",
+    )
+    ax.bar(
+        [i + width / 2 for i in x],
+        mu,
+        width,
+        color=COLOR_ARM,
+        label=f"muon (lr {record['data']['lr_muon']})",
+    )
+    for i, (e, m) in enumerate(zip(eu, mu, strict=True)):
+        ax.text(i - width / 2, e, f"{e:.2f}", ha="center", va="bottom", fontsize=9)
+        ax.text(i + width / 2, m, f"{m:.2f}", ha="center", va="bottom", fontsize=9)
+    ax.set_xticks(list(x), credits)
+    ax.set_ylim(0, 1)
+    chance_line(ax, 0.1, "chance (0.1)")
+    ax.set_ylabel("train accuracy")
+    ax.set_title(
+        "D13 — the U-axis is a swap: orthogonalized updates rescue local credit"
+    )
+    ax.legend()
+    apply_style(fig)
+    return fig
+
+
 @dataclass(frozen=True, slots=True)
 class DemoSpec:
     """One gallery demo: capability id and its figure factory (R1.3)."""
@@ -476,6 +602,9 @@ DEMOS: dict[str, DemoSpec] = {
         "D11", _fig_spatial_lattice_geometry_swap
     ),
     "epc_fast_settle": DemoSpec("D12", _fig_epc_fast_settle),
+    "failure_manifesto": DemoSpec("F1", _fig_failure_manifesto),
+    "spiking_plateau": DemoSpec("F2", _fig_spiking_plateau),
+    "uaxis_muon_swap": DemoSpec("D13", _fig_uaxis_muon_swap),
 }
 
 

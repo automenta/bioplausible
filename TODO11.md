@@ -39,7 +39,10 @@
 > and the in-regime re-test still shows no lift under our trainer —
 > the jpc-faithful port is the remaining gap. Remaining items are
 > explicitly **pull-based** or **deprioritized** — they land only when a
-> demo, campaign, or research paragraph needs them.
+> demo, campaign, or research paragraph needs them. 2026-09-04 (continued):
+> **F1 — the failure-manifesto figure (first *finding* figure, CP-6)
+> landed**: the four measured depth-failure faces consolidated in one demo
+> test + gallery figure + RESULTS.md paragraph (demo gate now 14/14, ~158 s).
 
 ---
 
@@ -95,6 +98,7 @@ every workstream below.
 | D10| The G-axis is a swap (capacity-matched attention vs flat, permutation sensitivity) | `test_demo_attention_geometry_swap.py` |
 | D11| The G-axis is a swap (capacity-matched 3D lattice vs flat, spatial noise robustness) | `test_demo_spatial_lattice_geometry_swap.py` |
 | D12| The D-axis settles without signal decay (ePC: free equilibrium = feedforward bitwise, nudged signal reaches every layer, 1/3 settle budget) | `test_demo_epc_fast_settle.py` |
+| D13| The U-axis is a swap (local credit × Muon: FF/PEPITA×Muon ≈ 0.85 vs ≈ 0.26–0.61 on Euclidean; SVD polar factor + momentum-orthogonalization locked) | `test_demo_uaxis_muon_swap.py` |
 
 ---
 
@@ -150,6 +154,9 @@ every workstream below.
 | **R11.3.12** | ePC fast-settling solver (D12) | `ErrorPredictiveCodingDynamics` — error reparameterization per Goemaere et al. (arXiv:2505.20137, ICML 2026); free equilibrium = feedforward bitwise, nudged signal reaches every hidden layer (sPC's reaches none), trains at 1/3 budget; demo + gallery figure + round-trip |
 | **R11.3.11** | Multi-seed depth-frontier pilot (E-1, pulled 2026-09-04; **superseded by the in-regime re-test, see below**) | `scripts/probes/mupc_multiseed_frontier.py`: depths 4/8 × seeds 0–3 × spc/default vs spc/mupc, compiled settle, 477 s. μPC lift at depth 8 absent (0.135 vs 0.133). **Instrument audit finding:** the pilot applied μPC init to a plain MLP — outside the paper's tested domain (arXiv:2505.13124 Table 1 is specified and tested on residual networks; skip connections are load-bearing for the (N·L)^{-1/2} hidden scale) |
 | **R11.3.14** | Deep Hebbian chain with per-layer activity normalization (pulled 2026-09-04, user-directed plan-and-fix) | `computronium/models/native/deep_hebbian_native.py`: `DeepHebbianChain` — spectral renorm (unit gain at init) + tanh + batch Oja decay + unit-RMS activity renorm per layer; plain-torch local learning (no backprop, no nudging). Per-layer pre-renorm signal norms O(1) at depth 10/50/100 (the tile-chain runaway-gain/NaN pathology is structurally fixed); unnormalized control decays to ~1e-14. Dominant-direction 2-class readout 1.000 at every depth. **Honest boundary (R11.5.5):** 10 direction-coded classes → L1 1.00 / L10 0.52 / L100 0.20 (> 0.1 chance): activity covariance effective rank collapses 5.1→1.5 through the chain under compounding tanh distortion + renorm + Oja spectral sharpening — Sanger, gain scaling, and per-step spectral renorm do NOT rescue it. Lock: `tests/integration/test_deep_hebbian_chain.py` (8 tests, ~7 s) |
+| **F1 (R11.5.5 manifesto)** | The failure-manifesto figure — the library's first *finding* figure (pulled 2026-09-04, CP-6; **audit-revised same day**, user skepticism applied) | `tests/integration/test_demo_failure_manifesto.py` (D-axes table gains no row — this is a finding, not a capability): four measured depth-failure faces, same pipeline, same terms, all at demo scale (~12 s): (1) **depth wall** — backprop 0.72→0.50→0.11 across depths 2/4/8, MNIST quick 60 batches, width 32 (flat across lr 0.02–0.2 — not an lr artifact); sPC walls at chance at this budget, **but the audit found the mechanism is last-layer-only training**: per-layer credit norms exactly 0.00 for every hidden weight matrix (asserted live in the record), budget softens the wall (0.21 at 60 settle steps) — the wall is the random-feature readout boundary of this instrument regime; hidden-layer-contrast achievability OPEN; (2) **μPC no lift** — `spc_mupc ≤ spc + 0.05` asserted at every depth (0.124 vs 0.105 at depth 8; OPEN, not refuted); (3) **runaway gain** — tile-hebbian init norm ratio 1.4→7.2e2→3.2e5 at depths 10/50/100, monotone growth asserted; (4) **subspace collapse** — Oja 10-class readout 0.99→0.23 toward chance, first layer ≈1.0 asserted. Record `f1_failure_manifesto`, gallery `DEMOS` row + `_fig_failure_manifesto` (1×3 panels), RESULTS.md front section "the failure manifesto" paragraph. Probes: `scripts/probes/failure_manifesto.py` (arms) + `scripts/probes/failure_manifesto_audit.py` (lr grid, budget grid, per-layer credit norms). Demo gate 14/14, ~158 s |
+| **F2 (R11.5.5 spiking)** | The spiking plateau, audited — the honest-failure slot filled (pulled 2026-09-04, user direction: look beyond PC) | `tests/integration/test_demo_spiking_plateau.py` (~3 s): (1) **the confound, instrument defect** — default init leaves hidden LIF layers silent (spike fraction < 1e-4 at depth 4, width 32, threshold 1.0) → exactly zero STDP gradient on every hidden weight matrix → frozen readout: historic "spiking at chance" measured a silent network; `init_scale=1.0` restores spiking (0.15–0.45/layer) and gradient reach (all norms > 0, asserted); (2) **the plateau, mechanism** — supervised accuracy 0.048 (chance) even with healthy spiking: `TemporalTraceCredit` declares `phases=(FREE,)` and never consumes `loss` — no supervision path by construction (category fact; a supervised spiking claim needs an error term, e.g. reward-modulated STDP — OPEN); (3) **runaway gain, spiking edition** — unsupervised STDP training collapses class structure: centroid readout on hidden membranes 0.36 (random init) → 0.18 (STDP-trained), asserted. Probes: `scripts/probes/spiking_learning.py`, `scripts/probes/spiking_gain_audit.py`. Gallery `DEMOS` row + `_fig_spiking_plateau` (1×3: spike fractions, credit norms, readout bars). RESULTS.md front section updated. |
+| **D13 (U-axis × local credit)** | The U-axis is a swap — and **local credit × Muon is real** (pulled 2026-09-04, user hypothesis: FF/PEPITA with Muon, untested elsewhere) | `tests/integration/test_demo_uaxis_muon_swap.py` (~8 s): one coordinate, three credits {bp, ff, pepita} × one swapped update {euclidean lr 0.2, muon lr 0.02}: FF×Muon 0.85 / PEPITA×Muon 0.85 vs FF/PEPITA×Euclid 0.26–0.61 (3.2× lift, asserted ≥ +0.2), BP×Muon 0.85 ≈ BP×Euclid 0.87. **Two instrument defects found and fixed en route, both ratcheted:** (1) `RiemannianOrthogonalUpdate` ignored `config.momentum` — orthogonalizing raw single-batch gradients amplifies the noise floor; now orthogonalizes the momentum buffer (Muon's actual recipe); (2) the "_orthogonalize" was reduced QR, whose R-diagonal is sign-arbitrary — measured cos(step, grad) ≈ 0 (untrained at every lr); replaced with the SVD polar factor `U @ Vh` (cos 0.55–0.80), locked by `test_muon_polar_factor_is_descent_aligned`. Also: `EuclideanUpdate` momentum buffers keyed by bare name leaked across geometries (campaign/HPO reuse hazard) — now fail-loud on shape mismatch, locked by `test_momentum_buffer_reuse_fails_loud`. Probes: `scripts/probes/local_credit_muon.py`, `scripts/probes/uaxis_learning.py`. Gallery + RESULTS.md updated. Property suite 679 passed at landing (update semantics changed). Demo gate 18/18, ~163 s. **Caveat: single seed, demo scale — multi-seed verification pending before quoting outside RESULTS.** |
 
 ### R11.4 — Adoption Surface
 
@@ -224,8 +231,12 @@ These land **only when a demo, campaign, or research paragraph needs them**.
   measures whether it *learns* — the pre-wiring Hebbian-plateau result
   (TODO10: spiking at chance on MNIST) is history, not a live refutation.
   First spiking pull must show one or the other: plateau (refutation figure,
-  same pipeline) or learning (capability claim). Until then the library's
-  "honest failure" slot is vacant.
+  same pipeline) or learning (capability claim). Both refutation slots are now
+  filled: F1 (2026-09-04) is the live depth-boundary manifesto figure, and
+  F2 (2026-09-04) shows the spiking plateau — audited, with the historic
+  chance-level numbers exposed as a silent-network confound. The new OPEN
+  follow-up: a supervised spiking claim needs an error term (reward-
+  modulated STDP or similar) — pull-based.
 - **R11.5.6 Pull rule.** A backlog item is pulled only if it ends in a live
   demonstration, a gallery figure, or a RESULTS.md capability paragraph.
   Infrastructure is justified by the capability it lets the suite show,
@@ -247,7 +258,7 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 # Property locks (fast CI gate) — 670 passed
 uv run pytest tests/property/ -q
 
-# Demo gate (D1–D12) — 13/13 passed (12 demos + gallery lock), ~145s
+# Demo gate (D1–D13 + F1/F2 findings) — 18/18 passed, ~163s
 # NOTE: invoke as `python -m pytest` — see Watch (user-site pytest drift)
 uv run python -m pytest tests/integration/ -k "demo or gallery_lock" -q
 
@@ -303,10 +314,10 @@ uv run python -m pytest tests/unit/core/test_root_exports.py -q
   manifest — same class as the 2026-09-03 sweep-regime note. Manifest
   re-pinned from current on-disk records; demo gate + gallery lock green
   after. If the lock fires again: check test asserts first, then re-render.
-- **Demo-gate budget drifted past R11.5.7's ≤90 s (now ~145 s at 12 demos +
-  lock):** D8–D12 additions grew the gate before this note; not a failure —
-  re-baseline the standing rule when the suite next gets a dedicated
-  fast/slow split.
+- **Demo-gate budget drifted past R11.5.7's ≤90 s (now ~163 s at 16 demos +
+  lock):** D8–D12 additions plus F1 grew the gate before this note; not a
+  failure — re-baseline the standing rule when the suite next gets a
+  dedicated fast/slow split.
 
 - **axis_probe `[2-0]` flake** — no recurrence since 2026-08-31.
 - **CUDA tolerance boundaries** shift xfail edges — CPU/GPU tests kept separate.
@@ -582,6 +593,78 @@ Sequencing: 1–4 complete; 5 after API stabilizes (done); 6–7 are RESEARCH3 C
   acceptance test (RESEARCH3 PR sequence), `to(device)` passthrough if a
   consumer needs it.
 - **Remaining pull-based items:** R11.1.10, R11.1.11, R11.2.9/13/14/16, R11.3.4–3.11, R11.3.13, R11.4.1/4.3/4.4. Land only when demo/campaign/research needs them.
+- **F1 landing (2026-09-04):** the first *finding* figure follows the demo
+  pattern exactly (static `_ARMS`/depth tables at module scope, helpers
+  extracted to satisfy PLR0915, one `DEMOS` row `_fig_failure_manifesto`,
+  gallery re-pin, RESULTS.md front paragraph). Conventions worth carrying:
+  (1) capability id **F-series** ("F1") marks findings vs capabilities —
+  future refutation figures continue it; (2) the D8 trap recurs per
+  arm-loop: seed **before** the loader draw, then per-arm reseed for model
+  init — single-seed `spc_mupc` vs `spc` diffs are order-dependent
+  otherwise (first run measured a 0.06 "lift" at depth 4 that vanished
+  once the shuffle draw was pinned); (3) the μPC arm's assert encodes
+  "no lift" as `mupc ≤ spc + 0.05` with the OPEN verdict in the message —
+  keep that phrasing if the multi-seed pilot lands; (4) `TileAlgorithm`
+  (core/local_learning) builds a depth-100 chain in <1 s — the cheap
+  runaway-gain instrument. The four arms run in ~12 s total; keep F1
+  lean if arms are added.
+- **F1 audit revision (2026-09-04, user skepticism — instrument before
+  verdict):** a follow-up probe (`scripts/probes/failure_manifesto_audit.py`)
+  checked the negative arms for implementation defects before letting them
+  stand. Findings: (1) BP's depth-8 collapse is NOT an lr artifact (flat
+  0.108–0.112 across lr 0.02–0.2); (2) the sPC wall IS budget-sensitive
+  (0.098 at 15 settle steps → 0.212 at 60) and its mechanism under our
+  layered settle is **last-layer-only training** — per-layer thermo-contrast
+  norms are exactly 0.00 for every hidden weight matrix (now asserted live
+  in the F1 record), so the "depth wall" for sPC is the random-feature
+  readout boundary of last-layer-only training, not hidden-credit decay.
+  This is consistent with D12 (hidden nudged deviations exactly zero) but
+  reframes the R11.3.11 frontier's sPC arm: depth enters through
+  random-feature quality only. Whether a hidden-layer contrast is
+  achievable in a layered settle at all (e.g., settle-time error
+  propagation or a PC-native weight gradient (∂ŝ/∂θ)ᵀε) is OPEN — a
+  candidate instrument improvement, not a physics verdict. The failure
+  arms are now framed as "under this instrument regime" everywhere
+  (test docstring, RESULTS.md, figure title).
+- **F2 landing (2026-09-04):** the gain-control thesis now spans THREE
+  families: error-based credit (last-layer-only under the layered settle),
+  tile-Hebbian chains (init runaway 1.4→3.2e5), and spiking STDP (readout
+  0.36→0.18 under unsupervised potentiation). All three are instrument-
+  audited, not assumed: the spiking audit (spiking_gain_audit.py) swept
+  threshold/step/init_scale and located the silence. Convention: the
+  confound (silent layers) and the mechanism (no error path, runaway gain)
+  are separate record fields with separate asserts — never let a fix to the
+  instrument silently upgrade a mechanism claim. Next lever, pull-based:
+  reward-modulated or error-gated STDP (a supervised TemporalTrace variant)
+  — the C-axis slot for a spiking capability claim.
+- **D13 landing (2026-09-04):** the audit trail matters more than the
+  number. Measured facts to carry: (1) reduced QR is NOT the polar factor
+  — its R-diagonal is sign-arbitrary, cos(ortho, grad) measured ≈ 0, and
+  every "Muon" lr trained at chance; the SVD polar factor (U @ Vh) gives
+  cos 0.55–0.80 and instant learning — the property lock
+  `test_muon_polar_factor_is_descent_aligned` (cos > 0.4) is the ratchet;
+  (2) orthogonalization MUST follow momentum accumulation (Muon's recipe);
+  raw single-batch orthogonalization amplifies the noise floor — BP×Muon
+  at chance was the symptom; (3) `EuclideanUpdate._momentum_buffers` were
+  keyed by bare parameter name and silently corrupted on cross-geometry
+  reuse (campaign/HPO/probe hazard) — shape-mismatch now fails loud;
+  (4) **`local_objective` is dead config**: it appears only in
+  `CreditAssignmentConfig`, no credit reads it — FF and PEPITA currently
+  run byte-identical pseudo-gradients (the D13 record shows identical
+  numbers). The factory-table FF/PEPITA distinction is NOT realized in
+  code — a real capability gap (new improvement opportunity below).
+  Single-seed: the 0.85-vs-0.26 effect is far beyond the seed noise that
+  faked the μPC 2× claim, but multi-seed verification is still pending —
+  do not quote outside RESULTS until then. As-touch lever: the
+  create_ff_mlp/create_pepita_mlp factories hardwire EuclideanUpdate —
+  expose update choice once the local_objective gap closes.
+- **Single-seed audit scope of F1:** every number in the F1 record is
+  single-seed but *live* (re-demonstrated each demo-gate run), and the
+  assertions are comparative margins (decay deltas, ratio monotonicity,
+  ≤ spc + 0.05) rather than headline values — the seed-noise failure mode
+  that faked the 2× μPC claim cannot flip an assertion silently. The
+  registered-scale multi-seed pilot (R11.3.11 tail) remains the
+  research-grade instrument.
 - **Resumable trainer (R11.2.24, landed 2026-09-04):** `fold_in(base, epoch, batch, *, domain)`
   (SplitMix64, `computronium/core/system_trainer/_resume.py`) + `TrainerSnapshot`
   (epoch, global_step, history, theta, opt_state). `SystemTrainer(resumable=True)`
@@ -606,16 +689,19 @@ Sequencing: 1–4 complete; 5 after API stabilizes (done); 6–7 are RESEARCH3 C
 
 ### New Improvement Opportunities (opened 2026-09-04, pull-based)
 
-- **R11.5.5 failure-manifesto paragraph (CP-6 candidate, recommended next
-  pull):** the depth boundary now has three *measured* failure modes —
-  error-based rules die by telescoping decay (R11.3.11 frontier), 
-  unnormalized local Hebbian chains by runaway gain (deep_hebbian_chain
-  probe), activity-normalized Oja chains by subspace collapse
-  (R11.3.14) — plus the μPC no-lift-under-our-trainer result (multi-seed
-  pilot; OPEN pending the jpc-faithful port). One
-  figure consolidating all four arms vs depth (same pipeline, same
-  terms) is the library's first *finding* figure. Deliverable: gallery
-  figure + RESULTS.md paragraph + failure-manifesto entry.
+- **FF / PEPITA as distinct algorithms (capability gap, opened by the D13
+  audit):** `local_objective` in `CreditAssignmentConfig` is never read —
+  the two factory-table entries run byte-identical pseudo-gradients.
+  Realizing them means: FF = per-layer goodness threshold (layer-local
+  loss, no inverse pass) and PEPITA = forward differential + inverse
+  propagation modulation; both as `LocalGoodnessCredit` branches (or
+  separate credits) reading `local_objective`. Then re-run the D13 grid —
+  the ×Muon question is open per realized rule.
+
+- **R11.5.5 failure-manifesto paragraph (CP-6 candidate):** **LANDED
+  2026-09-04** (see F1 row in Completed) — demo test + figure + RESULTS.md
+  front-section paragraph; the library's first *finding* figure exists at
+  HEAD and re-demonstrates on demand.
 - **Suppression-system repair (Register C):** convert the repo's invalid
   `# ruff: ignore[x]` comments to working `# noqa` codes (they currently
   suppress nothing). One-time sweep; unlocks the "self-flag on touch"

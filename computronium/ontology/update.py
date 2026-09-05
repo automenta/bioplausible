@@ -230,7 +230,19 @@ class EuclideanUpdate:
     ) -> dict[str, Tensor]:
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
             if self.config.momentum > 0:
-                buf = self._momentum_buffers.get(name, torch.zeros_like(param))
+                buf = self._momentum_buffers.get(name)
+                if buf is not None and buf.shape != param.shape:
+                    msg = (
+                        f"Momentum buffer for {name!r} has shape "
+                        f"{tuple(buf.shape)} but parameter has "
+                        f"{tuple(param.shape)} — the update instance is "
+                        "being reused across different geometries; create "
+                        "one update per system (optimizer state is "
+                        "system-scoped)"
+                    )
+                    raise RuntimeError(msg)
+                if buf is None:
+                    buf = torch.zeros_like(param)
                 buf.mul_(self.config.momentum).add_(grad)
                 self._momentum_buffers[name] = buf
                 return param - self.config.step_size * buf
@@ -244,22 +256,19 @@ class RiemannianOrthogonalUpdate:
 
     def __init__(self, config: ParameterUpdateConfig | None = None):
         self.config = config or ParameterUpdateConfig.riemannian_orthogonal()
+        self._momentum_buffers: dict[str, Tensor] = {}
 
     def _orthogonalize(self, grad: Tensor) -> Tensor:
-        """Orthogonalize gradient via QR decomposition (generalizes Newton-Schulz to non-square).
+        """Polar factor of the gradient via SVD (Newton-Schulz equivalent).
 
-        For square matrices, this approximates the polar factor.
-        For non-square: returns Q from QR with orthonormal columns (tall) or rows (wide).
+        U @ Vh is the nearest orthogonal matrix to grad in Frobenius norm
+        and its inner product with grad is sum(singular values) > 0 — a
+        descent-aligned direction. Reduced QR is NOT a substitute: its
+        R-diagonal is sign-arbitrary, so the resulting direction is
+        uncorrelated with the gradient (measured cos ≈ 0, flat training).
         """
-        m, n = grad.shape
-        if m >= n:
-            # Tall matrix: QR with orthonormal columns
-            Q, _ = torch.linalg.qr(grad, mode="reduced")
-            return Q
-        else:
-            # Wide matrix: QR of transpose for orthonormal rows
-            Q, _ = torch.linalg.qr(grad.T, mode="reduced")
-            return Q.T
+        U, _, Vh = torch.linalg.svd(grad, full_matrices=False)
+        return U @ Vh
 
     def step(
         self,
@@ -268,6 +277,16 @@ class RiemannianOrthogonalUpdate:
         geometry: Geometry,
     ) -> dict[str, Tensor]:
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
+            # Muon orthogonalizes the MOMENTUM, not the raw single-batch
+            # gradient: orthogonalization amplifies the noise floor, so the
+            # EMA buffer must accumulate signal across batches first.
+            if self.config.momentum > 0:
+                buf = self._momentum_buffers.get(name)
+                if buf is None or buf.shape != param.shape:
+                    buf = torch.zeros_like(param)
+                buf.mul_(self.config.momentum).add_(grad)
+                self._momentum_buffers[name] = buf
+                grad = buf
             ortho_grad = self._orthogonalize(grad)
             return param - self.config.step_size * ortho_grad
 
