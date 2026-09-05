@@ -20,6 +20,7 @@ from computronium.core.plasticity import (
 )
 from computronium.core.utils.device import get_device
 from computronium.ontology import (
+    AdamUpdate,
     CreditAssignmentConfig,
     DiffusionDynamics,
     DigitalSubstrate,
@@ -537,6 +538,8 @@ def compose_joint_system_from_configs(  # ruff: ignore[complex-structure, too-ma
         update_instance = ElasticConsolidationUpdate(update)
     elif update_type == "euclidean":
         update_instance = EuclideanUpdate(update)
+    elif update_type == "adam":
+        update_instance = AdamUpdate(update)
     else:
         raise ValueError(f"Unknown update_type: {update_type!r}")
 

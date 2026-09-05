@@ -147,6 +147,7 @@ SEARCH_SPACES = {
         ],
         "update": [
             "euclidean",
+            "adam",
             "riemannian_orthogonal",
             "spectral_constrained",
             "natural_gradient",

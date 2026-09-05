@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from computronium.ontology import (
+    AdamUpdate,
     BackpropCredit,
     CreditAssignmentConfig,
     DiffusionDynamics,
@@ -123,6 +124,8 @@ def _update_from_config(update: ParameterUpdateConfig):
         return ElasticConsolidationUpdate(update)
     elif update_type == "euclidean":
         return EuclideanUpdate(update)
+    elif update_type == "adam":
+        return AdamUpdate(update)
     else:
         raise ValueError(f"Unknown update_type: {update_type!r}")
 

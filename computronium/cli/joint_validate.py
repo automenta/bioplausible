@@ -106,7 +106,7 @@ def _list_axis_options():
     print("    temporal_trace, target_inversion, gradient")
     print()
     print("  ParameterUpdate (U):")
-    print("    euclidean, riemannian_orthogonal, spectral_constrained,")
+    print("    euclidean, adam, riemannian_orthogonal, spectral_constrained,")
     print("    natural_gradient, elastic_consolidation")
     print()
     print(

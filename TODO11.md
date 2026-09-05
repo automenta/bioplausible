@@ -182,6 +182,42 @@
 > 0–2 on the headline pairs, single-seed depth curves per the F1
 > convention, parameter counts in the record). Slow tier now = D14+D15;
 > gallery lock green after deliberate re-pin, drift-immunity ×2.
+> **2026-09-05 (continued): D16 LANDED — the U-axis coverage map.** Ran
+> queued item (0): `performance_hunt4.py`, fixed to be **capacity-matched
+> across geometries** (user correction — the first sweep's 26.5k–416k
+> param spread was unfair; retuned to 47.7k–57.5k, max/min < 1.25
+> asserted) and fixed to the pipeline contracts (GraphGeometry: node dim
+> == batch dim per D9 — each 32-sample batch is one graph over an 8×4
+> grid of batch positions; partial test batches dropped; mnist batches
+> flattened once at materialization). Promoted as
+> `test_demo_uaxis_coverage.py` (slow tier, ~188 s, timeout 600): Muon ≥
+> Euclid on every geometry; spectral matches Muon only on attention;
+> natural gradient at chance on mlp/graph/lattice, unstable on attention
+> — asserted as upper bound, OPEN regime question; local ff×Muon trails
+> bp×Muon on all four at this budget. Slow tier now = D14+D15+D16
+> (~8 min); gallery lock green after re-pin (d16 figure rendered).
+> **2026-09-05 (continued): the optimizer-family axis landed — SGD vs
+> Adam was the missing coordinate.** User correction: the hunt had
+> swapped orthogonalization rules but never the optimizer family — the
+> ontology had NO Adam (the `EuclideanUpdate` "SGD/Adam" docstring was a
+> dead claim). `AdamUpdate` implemented (Kingma & Ba, per-coordinate
+> moments + bias correction, system-scoped state that fails loud on
+> cross-geometry reuse — the D13 lesson) and wired per the primitive
+> checklist: `ParameterUpdateConfig.adam(step_size=1e-3, beta2=, eps=)`,
+> dispatch in factory/spec/joint, `SystemConfig.validate()` whitelist,
+> root + ontology exports, CLI listings. Locks:
+> `tests/unit/core/test_adam_update.py` (torch.optim.Adam parity,
+> bias-corrected first step, state-reuse fail-loud, SGD/Adam
+> distinctness). **The hunt's headline moved: Adam BEATS Muon on
+> attention (0.900±0.001 vs 0.874) while Muon keeps mlp/graph/lattice —
+> NO update rule dominates the map**, and Adam lifts local credit to
+> parity with Muon on mlp (ff×Adam 0.899 vs ff×Muon 0.896). The
+> "Muon is the robust default" reading was an artifact of sweeping only
+> the SGD family. D16 extended with the adam + ff/adam columns (~265 s,
+> slow tier); gallery re-pinned; property 679 passed; fast gate 19/19.
+> The learning-algorithm hunt is now OPEN as a directive: credit ×
+> optimizer-family cells are the new map (pepita×Adam, spectral×Adam,
+> and Adam for the D14 jpc regime are unexplored).
 
 ---
 
@@ -421,6 +457,7 @@ every workstream below.
 | D13| The U-axis is a swap (local credit × Muon: FF×Muon 0.838±0.009 over 5 seeds vs 0.568±0.041 on Euclidean; FF and realized PEPITA are distinct algorithms; SVD polar factor + momentum-orthogonalization locked) | `test_demo_uaxis_muon_swap.py` |
 | D14| Depth 20 trains under the jpc-faithful regime (ePC + PC-native weight gradient + Adam + β grid + steps=H): μPC generalizes (test ≈ 0.83) where default init memorizes (train 1.00 / test ≤ 0.24); the F1 depth wall is regime-bound — **slow tier** (`pytest -m slow -k demo`) | `test_demo_jpc_faithful_depth.py` |
 | D15| The U-axis moves the depth wall, capacity-matched (identical geometry, swapped update/credit, mnist quick 300 batches, TEST acc): depth 16/width 128 (349,450 params both) BP×Euclid 0.114±0.000 (chance) vs BP×Muon **0.834±0.036**; depth 4/width 256 (400,906 params both) FF×Muon **0.930±0.001** ≥ BP×Muon 0.911±0.007 — local learning beats backprop at matched capacity; BP degrades gracefully under Muon through depth 16 where Euclid cliffs — **slow tier** | `test_demo_uaxis_depth_frontier.py` |
+| D16| The U-axis coverage map, capacity-matched across geometry (4 geometries 47.7k–57.5k params × 5 update rules × seeds 0–2): Muon ≥ Euclid on EVERY geometry; **Adam beats Muon on attention (0.900 vs 0.874) — no update rule dominates the map** (Euclidean/Adam/Muon are distinct optimizer families); spectral geometry-conditioned (attention only); natural gradient at chance on mlp/graph/lattice, unstable on attention (OPEN regime question); Adam lifts local credit to parity on mlp (ff×Adam 0.899 ≈ ff×Muon 0.896); local ff×Muon trails bp×Muon on all four at this budget — **slow tier** | `test_demo_uaxis_coverage.py` |
 | F3 | The P-axis Pareto, REALIZED (CP-6 E-1 → finding instrument → mechanism audit → realization): per-gate input-projection drive + per-unit sigmoid masks (mask std 0.081; flat 0.5 scalar gain gone) and settled-activity fast weights (raw-target bias gone, θ gap 3.4%/episode monotone); retention ordering survives realization but the effective-lr confound survives too (null@0.015 > routing) — orderings recorded, lr-matched controls the OPEN item; realized-mechanism ratchets locked live | `test_demo_paxis_pareto.py` |
 
 ---
@@ -455,11 +492,28 @@ credit-semantics change gated by the full property suite.
 | **MEP Newton–Schulz wired as opt-in; whitening mechanism found** (user prompt: "are we using the MEP kernels?") | `ortho_steps` was dead config — the pipeline's Muon always ran the full SVD. Now: `ortho_steps=0` (default) = exact SVD polar factor; `>0` = canonical Muon NS (`newton_schulz5`, quintic coefficients, replaces the naive under-converging iteration in `core/optimization/strategies/update.py`; fp32 — bf16 is catastrophically slow on CPU). **Finding: the FF×Muon lift is whitening-driven** — NS at 5 steps preserves BP×Muon (0.868) but collapses FF×Muon to 0.29 (width 32, 5 seeds); SVD default restored, D13/D15 claims intact. Conv×Muon also probed: conv/ff/muon wide 0.971±0.002 on digits, CUDA 5.3× faster than CPU for conv (data must be pre-moved to device) | `computronium/ontology/update.py`, `core/optimization/strategies/update.py`; probes `performance_hunt3.py`; D13/D15 re-pinned under SVD default, slow tier + lock green ×2 |
 | **Multi-geometry × multi-update coverage map QUEUED** (user directives: don't fixate on conv, don't put all eggs in the Muon basket) | Written, NOT yet run: `scripts/probes/performance_hunt4.py` — the capacity-identical U-axis sweep the ontology claims but never measured: 4 geometries {ff, attention, graph (real 28×28 pixel-grid edges), spatial-lattice 3D} × 4 update rules {euclidean, muon, spectral, natural} with bp credit, plus ff/muon as the local reference; mnist quick 150 batches, seeds 0–2, test acc. Run it FIRST next session; promote discriminating cells per the D8–D12 capacity-matching convention; keep the sweep breadth-first (more geometries × updates) before giving any single cell budget-scaling | `scripts/probes/performance_hunt4.py` |
 | **lr-matched control pilot** (P-axis E-1, closes the retention confound) | Per-arm effective step measured from identical inits (θ displacement per episode); null lr matched by log-interp on a displacement grid; full 5-seed walk at the matched lr. **Verdict: routing's retention advantage is effective-lr ALONE** — matched null lr 0.0154 (exactly the mask-mean-0.5 prediction), null@matched retains 0.294 vs routing 0.273 (advantage −0.020). Fast-weights' step matches null's (matched lr 0.032): its deficit (0.155 vs 0.184) is REAL. Promoted into the F3 test: `record["mechanism_audit"]["lr_matched_audit"]` + `_assert_lr_matched` ratchets (routing ≤ 0.01, fw ≤ 0). **Campaign-design deliverable: the registered P-axis campaign must measure retention at matched effective lr per arm** — the retention axis at nominal lr is confounded by construction | `scripts/probes/p_axis_lr_matched.py` → `tests/integration/test_demo_paxis_pareto.py`; fast gate + gallery lock green after deliberate F3 re-pin |
+| **D16 — the U-axis coverage map** (queued item 0: `performance_hunt4.py`) | Capacity-matched (user correction: first sweep was 26.5k–416k params — unfair; retuned mlp 55.1k / attention 50.0k / graph 47.7k / lattice 57.5k, spread < 1.25× asserted) 4 geometries × updates × seeds 0–2, bp credit + ff/{muon,adam} reference. **Muon ≥ Euclid on every geometry** (lifts +0.068/+0.038/+0.102/+0.050); spectral competitive only on attention (0.879 vs muon 0.874); natural gradient at chance on mlp/graph/lattice, unstable on attention 0.377±0.114 (OPEN regime question, asserted < 0.6); local ff×Muon trails bp×Muon on all four at this budget. Pipeline-contract fixes: GraphGeometry node-dim==batch-dim (D9 semantics — 8×4 grid over batch positions), partial test batches dropped, mnist flattened once at materialization. Slow tier now D14+D15+D16 (~9 min) | `scripts/probes/performance_hunt4.py` → `tests/integration/test_demo_uaxis_coverage.py` (~265 s, timeout 600) + gallery `DEMOS["uaxis_coverage"]` (`_fig_declared` heatmap) + RESULTS.md row; gallery lock green after re-pin |
+| **AdamUpdate — the SGD-vs-Adam optimizer-family axis** (user correction: "are we forgetting there's a difference between SGD and Adam?") | The ontology had NO Adam — the `EuclideanUpdate` "SGD/Adam" docstring was a dead claim; the hunt had swapped orthogonalization rules but never the optimizer family. Landed: `AdamUpdate` (per-coordinate m/v moments, bias correction, global-norm clip shared with Euclidean, system-scoped state that fails loud on cross-geometry reuse); `ParameterUpdateConfig.adam(step_size=1e-3, momentum=β1, beta2=, eps=, grad_clip=)`; dispatch in `factory.py`/`spec.py`/`joint.py`; `SystemConfig.validate()` whitelist; root `_LAZY`+`__all__`+TYPE_CHECKING + ontology exports; CLI listings. **Findings: Adam BEATS Muon on attention (0.900±0.001 vs 0.874) — no update rule dominates the map**; Adam mid-pack on mlp (0.892) and lattice (0.895), ≈ Euclid on graph (0.332); **Adam lifts local credit to parity on mlp (ff×Adam 0.899 ≈ ff×Muon 0.896)** — the "Muon is the robust default" reading was an SGD-family-only artifact. D16 extended (adam + ff/adam columns, ~265 s); gallery re-pinned; property 679 passed; fast gate 19/19 | `computronium/ontology/update.py` (`AdamUpdate`, `ParameterUpdateConfig.adam`); `tests/unit/core/test_adam_update.py` (4 locks: torch.optim.Adam parity, bias-corrected first step, state-reuse fail-loud, SGD/Adam distinctness); probe `scripts/probes/performance_hunt4.py` |
 
-**Unblocked next (pull order):** (0) **run `performance_hunt4.py`** — the
-breadth-first geometry × update coverage map (user directive: spread
-across geometries AND update rules, not just conv × Muon); promote
-whichever cells discriminate, then budget-scale the winners; (1) ~~lr-
+**Unblocked next (pull order):** (0) ~~run `performance_hunt4.py`~~
+**DONE 2026-09-05 — promoted as D16** (see header). Follow-ups opened by
+the map: budget-scale the discriminating cells (Muon is the robust
+default everywhere; spectral's attention corner is the only competitor);
+the natural-gradient regime question (at chance at lr 0.1 everywhere but
+attention — is it an lr/scaling defect or a real boundary? needs an
+lr-sweep probe before any verdict per R11.5.5a); (0b) **the
+learning-algorithm hunt is OPEN (user directive 2026-09-05)**: the
+optimizer-family axis is now a first-class coordinate and the unexplored
+cells are the next pull order — pepita×Adam (does Adam rescue realized
+PEPITA's slow demo-budget learning, D13's 0.226?), spectral×Adam,
+Muon+Adam hybrid (orthogonalized Adam, e.g. Adam-momentum + NS
+orthogonalization), and Adam for the D14 jpc regime (the manual loop
+already used torch.optim.Adam — a trainer config could now express it
+natively via `ParameterUpdateConfig.adam`); the graph arm is
+semantically weak (D9 node==batch contract, adjacency over batch
+positions — a real 784-pixel-node graph needs an R11.2.9-class
+`substrate_coupled`/latent-graph path before it can join the map
+honestly); (1) ~~lr-
 matched controls per arm~~ **DONE 2026-09-05** — the pilot quantified the
 confound completely
 (routing's advantage = effective-lr alone; fw's deficit real) and the
@@ -633,10 +687,11 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 - **R11.5.7 Gates (tiered, per AGENTS.md test-execution tiers).** Per-commit
   duties are **scoped to changed files** (format + lint + pyright + targeted
   tests). The standing fast gates — property suite, demo gate
-  (`pytest tests/integration/ -k "demo or gallery_lock"`, now SPLIT:
-  fast tier ~190 s excluding the `slow` marker, slow tier
-  `pytest -m slow -k demo` ~120 s for D14 — landed 2026-09-05 as the
-  re-baseline; run the slow tier on round close or D14-adjacent changes),
+   (`pytest tests/integration/ -k "demo or gallery_lock"`, now SPLIT:
+   fast tier ~190 s excluding the `slow` marker, slow tier
+   `pytest -m slow -k demo` for D14+D15+D16 (~8 min; D14 ~120 s,
+   D15 ~240 s, D16 ~190 s) — landed 2026-09-05 as the re-baseline; run
+   the slow tier on round close or D14/D15/D16-adjacent changes),
   drift locks, positive control — run on their triggers (demo/gallery/
   lock-adjacent changes), never per-edit. The full CI order and repo-wide
   ruff/pyright are R11.2's deliverable and a round-close event, not a
@@ -656,8 +711,8 @@ uv run pytest tests/property/ -q
 # NOTE: invoke as `python -m pytest` — see Watch (user-site pytest drift)
 uv run python -m pytest tests/integration/ -k "demo or gallery_lock" -q
 
-# Demo gate, SLOW tier (D14 jpc-faithful depth-20 + D15 depth frontier)
-# — 2 passed, ~6 min
+# Demo gate, SLOW tier (D14 jpc-faithful depth-20 + D15 depth frontier
+# + D16 U-axis coverage map, now with the Adam family) — 3 passed, ~9 min
 uv run python -m pytest tests/integration/ -m slow -k "demo or gallery_lock" -q
 
 # Gallery lock — figure data checksums match manifest

@@ -175,6 +175,12 @@ if TYPE_CHECKING:
         ThermodynamicContrast,
         ThermodynamicContrastCredit,
     )
+    from computronium.ontology.depth import (
+        DepthMetric,
+        FixedDepth,
+        LongestPathDepth,
+        ShortestPathDepth,
+    )
     from computronium.ontology.dynamics import (
         DiffusionDynamics,
         EnergyMinimizationDynamics,
@@ -195,12 +201,6 @@ if TYPE_CHECKING:
         SpatialLattice3DGeometry,
         TileGeometry,
     )
-    from computronium.ontology.depth import (
-        DepthMetric,
-        FixedDepth,
-        LongestPathDepth,
-        ShortestPathDepth,
-    )
     from computronium.ontology.plasticity import (
         FastWeightPlasticity,
         RoutingPlasticity,
@@ -219,6 +219,7 @@ if TYPE_CHECKING:
     )
     from computronium.ontology.system import System, SystemConfig, SystemState
     from computronium.ontology.update import (
+        AdamUpdate,
         ElasticConsolidationUpdate,
         EuclideanUpdate,
         NaturalGradientUpdate,
@@ -266,6 +267,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
         "EnergyMinimizationDynamics",
     ),
     "EuclideanUpdate": ("computronium.ontology.update", "EuclideanUpdate"),
+    "AdamUpdate": ("computronium.ontology.update", "AdamUpdate"),
     "ConvGeometry": ("computronium.ontology.geometry", "ConvGeometry"),
     "GraphGeometry": ("computronium.ontology.geometry", "GraphGeometry"),
     "AttentionGeometry": ("computronium.ontology.geometry", "AttentionGeometry"),
@@ -488,6 +490,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
 }
 
 __all__ = [
+    "AdamUpdate",
     "AnalogSubstrate",
     "AttentionGeometry",
     "BackpropCredit",

@@ -596,6 +596,7 @@ DEMOS: dict[str, DemoSpec] = {
     "uaxis_muon_swap": DemoSpec("D13", _fig_declared),
     "jpc_faithful_depth": DemoSpec("D14", _fig_declared),
     "uaxis_depth_frontier": DemoSpec("D15", _fig_declared),
+    "uaxis_coverage": DemoSpec("D16", _fig_declared),
     "paxis_pareto": DemoSpec("F3", _fig_declared),
 }
 

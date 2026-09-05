@@ -10,6 +10,7 @@ from torch import Tensor, nn
 
 from computronium.core.utils.device import get_device
 from computronium.ontology import (
+    AdamUpdate,
     CreditAssignmentConfig,
     DigitalSubstrate,
     ElasticConsolidationUpdate,
@@ -241,6 +242,8 @@ def compose_system[  # ruff: ignore[complex-structure]
                 update = ElasticConsolidationUpdate(update_cfg)
             elif update_type == "euclidean":
                 update = EuclideanUpdate(update_cfg)
+            elif update_type == "adam":
+                update = AdamUpdate(update_cfg)
             else:
                 raise ValueError(f"Unknown update_type: {update_type!r}")
 

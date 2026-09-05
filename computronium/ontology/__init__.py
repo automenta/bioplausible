@@ -103,6 +103,7 @@ from computronium.ontology.system import (
     Phase as SystemPhase,
 )
 from computronium.ontology.update import (
+    AdamUpdate,
     ElasticConsolidationUpdate,
     EuclideanUpdate,
     NaturalGradientUpdate,
@@ -187,6 +188,7 @@ __all__ = [  # ruff: ignore[unsorted-dunder-all]
     "ParameterUpdateConfig",
     "ParameterUpdate",
     "EuclideanUpdate",
+    "AdamUpdate",
     "RiemannianOrthogonalUpdate",
     "SpectralConstrainedUpdate",
     "NaturalGradientUpdate",

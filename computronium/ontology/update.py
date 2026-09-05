@@ -44,6 +44,8 @@ class ParameterUpdateConfig:
     fisher_damping: float
     ewc_lambda: float
     grad_clip: float = 1.0
+    beta2: float = 0.999
+    eps: float = 1e-8
 
     @classmethod
     def euclidean(
@@ -163,6 +165,39 @@ class ParameterUpdateConfig:
             ewc_lambda=ewc_lambda,
         )
 
+    @classmethod
+    def adam(
+        cls,
+        *,
+        step_size: float = 1e-3,
+        momentum: float = 0.9,
+        beta2: float = 0.999,
+        eps: float = 1e-8,
+        grad_clip: float = 1.0,
+    ) -> ParameterUpdateConfig:
+        """Adam update config.
+
+        ``momentum`` is β1 (first-moment decay), ``beta2`` the
+        second-moment decay, ``eps`` the denominator floor. Distinct from
+        ``euclidean`` (plain SGD + momentum): the per-coordinate
+        second-moment normalization is a different optimizer family, not a
+        step-size variant — the D14 jpc-faithful regime showed it is
+        load-bearing for deep local learning, and the D16 coverage map
+        never swept it (a known instrument gap).
+        """
+        return cls(
+            update_type="adam",
+            step_size=step_size,
+            momentum=momentum,
+            ortho_steps=0,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
+            grad_clip=grad_clip,
+            beta2=beta2,
+            eps=eps,
+        )
+
 
 # ============================================================
 # ParameterUpdate Protocol
@@ -212,7 +247,13 @@ class ParameterUpdate(Protocol):
 
 
 class EuclideanUpdate:
-    """Standard Euclidean SGD/Adam update."""
+    """Standard Euclidean update: plain SGD (optionally with momentum).
+
+    Not Adam — the per-coordinate second-moment family is
+    :class:`AdamUpdate`. The ParameterUpdate Protocol docstring's
+    "SGD/Adam" phrasing refers to the update *shapes* both realize
+    (ΔW = f(∇) in flat space), not to the same algorithm.
+    """
 
     def __init__(self, config: ParameterUpdateConfig | None = None):
         self.config = config or ParameterUpdateConfig.euclidean()
@@ -260,6 +301,75 @@ class EuclideanUpdate:
             return param - self.config.step_size * grad
 
         return apply_pseudo_gradients(params, self._clip(list(pseudo_grads)), apply)
+
+
+class AdamUpdate:
+    """Adam (Kingma & Ba 2015) on pseudo-gradients.
+
+    Per-coordinate first/second-moment estimates with bias correction.
+    Optimizer state is system-scoped: reusing one instance across
+    geometries fails loud (the D13 momentum-buffer lesson). A distinct
+    optimizer family from EuclideanUpdate's plain SGD+momentum — the
+    U-axis coverage map (D16) measured only the SGD family, which the
+    D14 jpc-faithful regime showed is the wrong default at depth.
+    """
+
+    def __init__(self, config: ParameterUpdateConfig | None = None):
+        self.config = config or ParameterUpdateConfig.adam()
+        self._m: dict[str, Tensor] = {}
+        self._v: dict[str, Tensor] = {}
+        self._t = 0
+
+    def _clip(self, grads: list[Tensor]) -> list[Tensor]:
+        clip = self.config.grad_clip
+        if clip is None or clip <= 0 or not grads:
+            return grads
+        stacked_norms = torch.stack([g.norm() for g in grads])
+        total_norm = torch.linalg.vector_norm(stacked_norms)
+        if total_norm > clip:
+            scale = clip / (total_norm + 1e-8)
+            grads = [g * scale for g in grads]
+        return grads
+
+    def _state(self, name: str, param: Tensor, store: dict[str, Tensor]) -> Tensor:
+        buf = store.get(name)
+        if buf is not None and buf.shape != param.shape:
+            msg = (
+                f"Adam state for {name!r} has shape {tuple(buf.shape)} but "
+                f"parameter has {tuple(param.shape)} — the update instance "
+                "is being reused across different geometries; create one "
+                "update per system (optimizer state is system-scoped)"
+            )
+            raise RuntimeError(msg)
+        if buf is None:
+            buf = torch.zeros_like(param)
+            store[name] = buf
+        return buf
+
+    def step(
+        self,
+        params: dict[str, Tensor],
+        pseudo_grads: list[Tensor],
+        geometry: Geometry,
+    ) -> dict[str, Tensor]:
+        grads = self._clip(list(pseudo_grads))
+        self._t += 1
+        beta1 = self.config.momentum
+        beta2 = self.config.beta2
+        bias1 = 1 - beta1**self._t
+        bias2 = 1 - beta2**self._t
+
+        def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
+            m = self._state(name, param, self._m)
+            v = self._state(name, param, self._v)
+            m.mul_(beta1).add_(grad, alpha=1 - beta1)
+            v.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
+            m_hat = m / bias1
+            v_hat = v / bias2
+            denom = v_hat.sqrt().add_(self.config.eps)
+            return param - self.config.step_size * m_hat / denom
+
+        return apply_pseudo_gradients(params, grads, apply)
 
 
 class RiemannianOrthogonalUpdate:
