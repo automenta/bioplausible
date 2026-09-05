@@ -46,8 +46,7 @@
 > Later 2026-09-04: **F2** (spiking plateau, audited) and **D13** (local
 > credit × Muon, single-seed) landed — demo gate 18/18, ~163 s.
 > **Next-session plan queued 2026-09-05** (see "The Next-Session Plan").
-> **2026-09-05 session: plan items 1–4 landed.** Item 1 — D13 multi-seed
-> probe (`scripts/probes/d13_multiseed.py`): the Muon lift HOLDS across
+> **2026-09-05 session: plan items 1–4 landed.** Item 1 — D13 multi-seed> probe (`scripts/probes/d13_multiseed.py`): the Muon lift HOLDS across
 > seeds 0–4 (FF×Muon 0.838±0.009 vs FF×Euclid 0.568±0.041, per-seed
 > min +0.241); multi-seed grid promoted into the D13 demo test with
 > variance-aware asserts — the lift claim is multi-seed verified and
@@ -85,6 +84,104 @@
 > physics); D14 is the first composed-regime capability (D14 row).
 > β=1e3 lands in the memorization corner at this scale — β is a working
 > knob, not a monotone dial.
+> **2026-09-05 (continued): CP-6 Path B E-1 smoke EXECUTED — the P-axis
+> Pareto axes discriminate, promoted to F3.** With Path A closed, the
+> session turned to the doctrine's queued Path B deliverable (the
+> settling-time vs basin-stability trade-off per plasticity primitive).
+> E-1 smoke first (`scripts/probes/p_axis_pareto.py`): at the A20/B20 toy
+> scale the axes did NOT discriminate (compute proxy arm-invariant by
+> construction, walltime launch-bound noise, basin ≈ 0.88 everywhere,
+> mastery precondition unmet) — per RESEARCH3's stated risk. At the
+> registered A40/B40 regime (5 seeds, CPU) the axes separate cleanly:
+> routing retains what null forgets (0.272±0.027 vs 0.194±0.076, ≥ null
+> 4/5 seeds) with the widest decision basins (perturbation agreement 0.50
+> vs 0.42 at radius 4.0) at +22% episode latency; fast_weights pays most
+> latency (+45%) and ψ-capacity (512) with NO retention benefit on this
+> path — its ψ re-initializes per episode under the `train_step` contract
+> (scope-honest boundary, not a verdict on fast weights). The compute
+> proxy is arm-invariant (asserted): ψ-update cost is visible ONLY in
+> walltime — a measured proxy gap. Promoted: `test_demo_paxis_pareto.py`
+> (F3, ~11 s), gallery row + `f3_paxis_pareto.png`, RESULTS.md row.
+> Walltime drift discipline: absolute latency NEVER enters `record["data"]`.
+> **⚠ The attribution story in THIS paragraph is superseded by the
+> mechanism audit below — read both before quoting anything.** User
+> directive: Demo API publishability roadmap deferred — research first.
+> **2026-09-05 (continued): F3 MECHANISM AUDIT — the attribution story was
+> premature; the audit ratchets are now the claim.** User-directed
+> R11.5.5a discipline applied to our own fresh landing. Findings: (1)
+> RoutingPlasticity's `modulate` applies `mean(sigmoid(gate_logits))` as
+> a per-sample SCALAR GAIN, and the gate-strength trace is FLAT at
+> 0.502 ± 0.0006 across the whole walk — the "routing" primitive
+> implements constant gain control, not routing; (2) the retention
+> "advantage" is an effective-lr effect: null at lr 0.015 (≈ 0.5 gain ×
+> 0.03) retains 0.294 vs routing's 0.288 — statistically identical (this
+> confound also touches D3's registered mechanism reading; its
+> comparative claims stand); (3) FastWeightPlasticity's `modulate`
+> injects `proj(outer(x, y_target))` — target-correlated bias from the
+> RAW target — into every layer; gradient-live but modest (θ gap
+> ~0.9%/episode from identical inits, monotone), retention below null.
+> **Audit-of-the-audit:** the first draft's "flat 1.42 fw θ divergence"
+> was the per-coordinate INIT DRAW, not the modulation — caught by
+> re-running with identical inits; and even the quantized latency-ratio
+> bins flipped run-to-run (routing's ψ cost sits at the noise floor), so
+> record["data"] now carries NO walltime at all (figure x-axis =
+> ψ-capacity; latency stays a live assert + stdout). F3's record carries
+> a `mechanism_audit` block and the test ratchets the audit facts (gate
+> ≈ 0.5 flat, fw θ-gap monotone growth, lr-brake control) — if a
+> primitive's behavior changes, the ratchets fire and force re-audit.
+> **Registered gap: realize the primitives** — real per-gate routing and
+> real fast-weight modulation are unpulled work; no P-axis mechanism
+> claim is quotable until then. The comparative orderings and the
+> Pareto-instrument discrimination (E-1 gate) stand.
+> **2026-09-05 (continued): the realization gap CLOSED — the P-axis
+> primitives are now their advertised mechanisms, and the audit ratchets
+> were re-derived for the realized behavior.** RoutingPlasticity: per-gate
+> input-projection drive (gates differentiate) + per-unit sigmoid masks in
+> `modulate` (mask std 0.081 — flat scalar gain gone; flat-MLP re-spec of
+> pathway gating). FastWeightPlasticity: `pipeline.py` now steps ψ on the
+> first phase's SETTLED activity (settled output as post) — the raw-target
+> bias is gone; modulation stays gradient-live (θ gap 3.4%/episode,
+> monotone). Outcome: routing's retention advantage SURVIVES realization
+> (0.273 vs null 0.194, 4/5 seeds) but the effective-lr confound survives
+> too (null@0.015 retains 0.294 > routing) — ordering recorded, never a
+> mechanism claim; the retention-ordering OPEN item is now lr-matched
+> controls per arm. F3 ratchets re-derived (mask-std ratchet replaces the
+> flatness ratchet); D3 green unchanged at fixed lr; property 679 passed;
+> demo gate 19/19 + gallery lock green after a deliberate two-record
+> re-pin (swap_plasticity + paxis_pareto), drift-immunity proven ×2
+> consecutive runs. Probe: `scripts/probes/p_axis_realize.py`.
+> **2026-09-05 (continued): fast/slow demo-gate split landed** (the
+> R11.5.7 re-baseline): D14 is the slow tier (`pytest -m slow -k demo`,
+> ~120 s); the fast gate (D1–D13 + F1–F3 + lock) is back to ~190 s.
+> Remaining open work is the registered-scale P-axis campaign with
+> lr-matched controls per arm — the first finding-grade P-axis claim.
+> **2026-09-05 (continued): the lr-matched control pilot EXECUTED and
+> promoted — the retention confound is CLOSED, quantitatively.** Routing's
+> effective step is exactly half of null's (Δθ 0.0014 vs 0.0028/episode;
+> matched null lr 0.0154 = the mask-mean-0.5 prediction) and null@matched
+> retains 0.294 vs routing's 0.273 — the retention ordering is effective
+> learning rate ALONE; no routing mechanism claim is quotable. Fast-
+> weights' step matches null's (0.032 ≈ 0.03): its retention deficit is
+> REAL. Promoted into F3 (`record["mechanism_audit"]["lr_matched_audit"]`
+> + ratchets: routing matched-advantage ≤ 0.01, fw ≤ 0). Campaign-design
+> deliverable extracted: retention must be measured at matched effective
+> lr per arm. Probe: `scripts/probes/p_axis_lr_matched.py`. Demo gate fast
+> tier + gallery lock green after deliberate F3 re-pin.
+> **2026-09-05 (continued): D15 LANDED — the performance hunt's headline.**
+> User directive applied: hunt for high performers across the ontology
+> (probes `scripts/probes/performance_hunt*.py`, digits for cheap
+> iteration — measured ~28% faster than mnist; CPU beats CUDA for MLPs,
+> consistent with the standing device policy). Finding: **the U-axis
+> moves the depth wall, capacity-matched** — at identical geometry and
+> parameter count, BP×Euclid is at chance at depth 16 (0.114) while
+> BP×Muon generalizes (0.834 ± 0.036); FF×Muon 0.930 ± 0.001 ≥ BP×Muon
+> 0.911 ± 0.007 at depth 4 / width 256 — local learning beats backprop
+> at matched capacity. Both Muon arms set repo records for held-out
+> accuracy at this budget (previous: D13's 0.84 at width 32). Promoted
+> as D15 (`test_demo_uaxis_depth_frontier.py`, slow tier ~240 s, seeds
+> 0–2 on the headline pairs, single-seed depth curves per the F1
+> convention, parameter counts in the record). Slow tier now = D14+D15;
+> gallery lock green after deliberate re-pin, drift-immunity ×2.
 
 ---
 
@@ -319,10 +416,12 @@ every workstream below.
 | D8 | The G-axis is a swap (capacity-matched conv vs flat)                | `test_demo_geometry_swap.py`                   |
 | D9 | The G-axis is a swap (capacity-matched graph vs flat, structural generalization) | `test_demo_graph_geometry_swap.py` |
 | D10| The G-axis is a swap (capacity-matched attention vs flat, permutation sensitivity) | `test_demo_attention_geometry_swap.py` |
-| D11| The G-axis is a swap (capacity-matched 3D lattice vs flat, spatial noise robustness) | `test_demo_spatial_lattice_geometry_swap.py` |
+| D11| The G-axis is a swap (capacity-matched 3D lattice vs flat — 206,090 vs 203,530 params, a 1.25% gap after reducing the larger lattice arm — spatial noise robustness) | `test_demo_spatial_lattice_geometry_swap.py` |
 | D12| The D-axis settles without signal decay (ePC: free equilibrium = feedforward bitwise, nudged signal reaches every layer, 1/3 settle budget) | `test_demo_epc_fast_settle.py` |
 | D13| The U-axis is a swap (local credit × Muon: FF×Muon 0.838±0.009 over 5 seeds vs 0.568±0.041 on Euclidean; FF and realized PEPITA are distinct algorithms; SVD polar factor + momentum-orthogonalization locked) | `test_demo_uaxis_muon_swap.py` |
-| D14| Depth 20 trains under the jpc-faithful regime (ePC + PC-native weight gradient + Adam + β grid + steps=H): μPC generalizes (test ≈ 0.83) where default init memorizes (train 1.00 / test ≤ 0.24); the F1 depth wall is regime-bound | `test_demo_jpc_faithful_depth.py` |
+| D14| Depth 20 trains under the jpc-faithful regime (ePC + PC-native weight gradient + Adam + β grid + steps=H): μPC generalizes (test ≈ 0.83) where default init memorizes (train 1.00 / test ≤ 0.24); the F1 depth wall is regime-bound — **slow tier** (`pytest -m slow -k demo`) | `test_demo_jpc_faithful_depth.py` |
+| D15| The U-axis moves the depth wall, capacity-matched (identical geometry, swapped update/credit, mnist quick 300 batches, TEST acc): depth 16/width 128 (349,450 params both) BP×Euclid 0.114±0.000 (chance) vs BP×Muon **0.834±0.036**; depth 4/width 256 (400,906 params both) FF×Muon **0.930±0.001** ≥ BP×Muon 0.911±0.007 — local learning beats backprop at matched capacity; BP degrades gracefully under Muon through depth 16 where Euclid cliffs — **slow tier** | `test_demo_uaxis_depth_frontier.py` |
+| F3 | The P-axis Pareto, REALIZED (CP-6 E-1 → finding instrument → mechanism audit → realization): per-gate input-projection drive + per-unit sigmoid masks (mask std 0.081; flat 0.5 scalar gain gone) and settled-activity fast weights (raw-target bias gone, θ gap 3.4%/episode monotone); retention ordering survives realization but the effective-lr confound survives too (null@0.015 > routing) — orderings recorded, lr-matched controls the OPEN item; realized-mechanism ratchets locked live | `test_demo_paxis_pareto.py` |
 
 ---
 
@@ -339,6 +438,40 @@ every workstream below.
 Property suite 679 passed; demo gate 17/18 + gallery lock green after
 deliberate manifest re-pins (D13/F1/F2 record changes are intended);
 credit-semantics change gated by the full property suite.
+
+## ✅ Completed This Session (2026-09-05 — CP-6 Path B, research)
+
+| Item | Description | Key Evidence |
+|------|-------------|--------------|
+| **F3** | The P-axis Pareto, E-1 smoke → promoted → **mechanism-audited the same session** (see header). Final state: comparative orderings + audit ratchets locked live; no mechanism claim | Probe `scripts/probes/p_axis_pareto.py` (E-1), audit `scripts/probes/p_axis_mechanism_audit.py` (gate trace, lr control, θ divergence — incl. the init-draw artifact correction), demo `tests/integration/test_demo_paxis_pareto.py` (~11 s: 4 walks + gate trace + θ divergence). Gallery `DEMOS["paxis_pareto"]` → `_fig_declared` (ψ-capacity vs retention scatter + basin curves), RESULTS.md audited row. Record drift discipline evolved twice: absolute walltime out, then quantized ratios out too — record["data"] carries zero walltime; drift-immunity proven ×2 consecutive runs |
+
+## ✅ Completed This Session (2026-09-05 — P-axis realization)
+
+| Item | Description | Key Evidence |
+|------|-------------|--------------|
+| **Realize the P-axis primitives** | The F3 audit's registered gap CLOSED. `RoutingPlasticity`: fixed per-gate input→gate projection drive (gates differentiate across units/samples) + `modulate` applies per-unit sigmoid masks via per-layer fixed gate→unit projections (seeded by layer index; `to(device)` moves them). `FastWeightPlasticity` + `pipeline.py`: ψ steps ONCE per episode on the first phase's SETTLED activity (settled output passed as post) instead of the raw pre-settle target | Probe `scripts/probes/p_axis_realize.py` (registered A40/B40, 5 seeds): routing mask std 0.081 (real per-unit gating), retention 0.273±0.028 vs null 0.194±0.076 (4/5 seeds), mastery 0.398 (masters A slower); fw θ gap 0.034 monotone, retention 0.155 (below null); null@0.015 retained 0.294 — the effective-lr confound survives realization. F3 test re-audited: mask-std ratchet (> 0.05) replaces the flatness ratchet; record `mechanism_audit` gains `per_unit_mask_std`; D3 green unchanged. Property 679 passed; `test_psi_engagement` routing control now asserts exact inequality (toy-scale per-episode ψ effect ~1e-7 is below approx tolerance — documented at the assert); demo gate 19/19 + gallery lock green after deliberate re-pin of swap_plasticity + paxis_pareto, drift-immunity ×2 |
+| **Fast/slow demo-gate split** (R11.5.7 re-baseline) | D14 marked `pytest.mark.slow` — the suite's first slow-tier resident. Fast gate (default invocation) = D1–D13 + F1–F3 + gallery lock, **19 passed in ~188 s** (was ~300 s); slow tier = D14 + D15 (~6 min total). Gate Commands + R11.5.7 re-baselined; gallery lock unaffected (hashes on-disk records regardless of markers) | `tests/integration/test_demo_jpc_faithful_depth.py`; both tiers verified green same-day |
+| **D15 — performance hunt: Muon moves the depth wall** (user-directed: hunt high performers, capacity-matched) | Probes (`scripts/probes/performance_hunt.py` mnist grid, `performance_hunt2.py` digits sweeps — digits ~28% faster per step, CPU beats CUDA for MLPs) found the unexplored cell: Muon × depth. Promoted as `test_demo_uaxis_depth_frontier.py` (slow tier, ~240 s): capacity-matched headline pairs (seeds 0–2, variance-aware asserts) + single-seed depth curves; record carries per-arm parameter counts — no capacity confound by construction | See D-table D15 row. Repo-record held-out accuracy: FF×Muon d4 w256 0.930±0.001, BP×Muon d16 w128 0.834±0.036 at chance-matched Euclid 0.114 |
+| **MEP Newton–Schulz wired as opt-in; whitening mechanism found** (user prompt: "are we using the MEP kernels?") | `ortho_steps` was dead config — the pipeline's Muon always ran the full SVD. Now: `ortho_steps=0` (default) = exact SVD polar factor; `>0` = canonical Muon NS (`newton_schulz5`, quintic coefficients, replaces the naive under-converging iteration in `core/optimization/strategies/update.py`; fp32 — bf16 is catastrophically slow on CPU). **Finding: the FF×Muon lift is whitening-driven** — NS at 5 steps preserves BP×Muon (0.868) but collapses FF×Muon to 0.29 (width 32, 5 seeds); SVD default restored, D13/D15 claims intact. Conv×Muon also probed: conv/ff/muon wide 0.971±0.002 on digits, CUDA 5.3× faster than CPU for conv (data must be pre-moved to device) | `computronium/ontology/update.py`, `core/optimization/strategies/update.py`; probes `performance_hunt3.py`; D13/D15 re-pinned under SVD default, slow tier + lock green ×2 |
+| **Multi-geometry × multi-update coverage map QUEUED** (user directives: don't fixate on conv, don't put all eggs in the Muon basket) | Written, NOT yet run: `scripts/probes/performance_hunt4.py` — the capacity-identical U-axis sweep the ontology claims but never measured: 4 geometries {ff, attention, graph (real 28×28 pixel-grid edges), spatial-lattice 3D} × 4 update rules {euclidean, muon, spectral, natural} with bp credit, plus ff/muon as the local reference; mnist quick 150 batches, seeds 0–2, test acc. Run it FIRST next session; promote discriminating cells per the D8–D12 capacity-matching convention; keep the sweep breadth-first (more geometries × updates) before giving any single cell budget-scaling | `scripts/probes/performance_hunt4.py` |
+| **lr-matched control pilot** (P-axis E-1, closes the retention confound) | Per-arm effective step measured from identical inits (θ displacement per episode); null lr matched by log-interp on a displacement grid; full 5-seed walk at the matched lr. **Verdict: routing's retention advantage is effective-lr ALONE** — matched null lr 0.0154 (exactly the mask-mean-0.5 prediction), null@matched retains 0.294 vs routing 0.273 (advantage −0.020). Fast-weights' step matches null's (matched lr 0.032): its deficit (0.155 vs 0.184) is REAL. Promoted into the F3 test: `record["mechanism_audit"]["lr_matched_audit"]` + `_assert_lr_matched` ratchets (routing ≤ 0.01, fw ≤ 0). **Campaign-design deliverable: the registered P-axis campaign must measure retention at matched effective lr per arm** — the retention axis at nominal lr is confounded by construction | `scripts/probes/p_axis_lr_matched.py` → `tests/integration/test_demo_paxis_pareto.py`; fast gate + gallery lock green after deliberate F3 re-pin |
+
+**Unblocked next (pull order):** (0) **run `performance_hunt4.py`** — the
+breadth-first geometry × update coverage map (user directive: spread
+across geometries AND update rules, not just conv × Muon); promote
+whichever cells discriminate, then budget-scale the winners; (1) ~~lr-
+matched controls per arm~~ **DONE 2026-09-05** — the pilot quantified the
+confound completely
+(routing's advantage = effective-lr alone; fw's deficit real) and the
+campaign-design requirement is extracted: measure retention at matched
+effective lr per arm. The **registered-scale P-axis campaign (Path B
+full)** is the remaining deliverable — its manifest must pin the
+matched-lr protocol; (2) ~~the fast/slow demo-gate split~~ **DONE
+2026-09-05** — D14 is slow-tier marked (`pytest.mark.slow`), the fast gate
+(D1–D13 + F1–F3 + lock) is ~190 s, the slow tier (`-m slow -k demo`) runs
+D14 in ~120 s; R11.5.7 + Gate Commands re-baselined; (3) persistent-ψ
+across batches (`train_step` contract change) only if a registered
+fast-weight memory claim needs multi-batch episodes.
 
 ---
 
@@ -420,6 +553,8 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 | **R11.2.14** Latency proxy | **Landed 2026-09-04** — `estimate_train_step_flops` (`core/profiling.py`): deterministic structure-derived FLOPs per train_step (matmul rounds per weight matrix × settle structure from `dynamics_type`, incl. the spike-substrate one-matmul-per-layer subtlety); intended as a *relative* comparator — absolute latency stays with the repeated-timing path in `analyze_joint_system`. Lock: `tests/unit/core/test_latency_proxy.py` (determinism, depth/settle-step scaling, **proxy ordering matches measured walltime**, non-layered rejection) | ~~Hygiene~~ ✅ |
 | **R11.2.9** `substrate_coupled` plasticity engagement | Campaign manifest needs it; probe fixed-dim `step` assumptions; now also the home of any future latent-graph ternary learning path (see Notes) | Hygiene |
 | **R11.2.13** Campaign stability proxy | Cheap per-episode proxy for stability axis | Hygiene |
+| **Compute proxy: count ψ-update work** | `_episode_resources` (campaign/evaluation.py) is arm-invariant across P-axis primitives — measured in F3 (asserted live): the ψ-update cost is visible in walltime (+22%/+45%) but absent from the compute/energy MACs. Add the primitive's per-step ψ arithmetic to the proxy when the registered P-axis campaign needs the work axis to discriminate | Hygiene |
+| **P-axis primitives realized (closed the F3 mechanism-audit gap, 2026-09-05)** | **LANDED 2026-09-05** (see header + session table). Remaining P-axis OPEN item: lr-matched controls per arm before any retention mechanism claim; an episode that persists ψ across batches (the `train_step` contract re-initializes ψ per episode) if a registered fast-weight claim needs multi-batch memory | ~~Capability (P-axis)~~ ✅ core |
 | **R11.2.15** `demo/tests/` 28 stale failures | Rebuild with R11.4 UI, or before if path touched | Hygiene |
 | **R11.2.16** TF-IDF weighting / `V_nudged` | Research track wants strengthened PC Lyapunov xfail | Hygiene |
 | **R11.3.4** AutoScientist P-axis frontier | Tangible Checkpoint 5 — first *finding* figure (Pareto over 𝒞) | Research |
@@ -427,6 +562,7 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 | **Path A: jpc-faithful trainer** | **LANDED 2026-09-05 as D14** (see Completed). Remaining tail (pull-based): promote the manual jpc loop into a `JPCFaithfulTrainer`/`SystemTrainer` regime config if a registered-scale sweep needs it; wider width 512 replication; the a_L = N^{-1} CE-softmax subtlety never bit us at width 128 (CE on 1/N-scaled logits trained fine) — revisit only at width 512 | ~~Research~~ ✅ core |
 | **R11.3.13** Depth-metric classes | **Landed 2026-09-04** | `computronium/ontology/depth.py`: `DepthMetric` Protocol, `FixedDepth`, `ShortestPathDepth` (BFS from sources, edge direction row←col matching `GraphGeometry._aggregate`), `LongestPathDepth` (DAG Kahn; fail-loud on cycles), `max_depth`. `GraphGeometry.num_nodes` + `node_depths(metric)`. Root + ontology exports. Lock: `tests/unit/core/test_depth_mupc.py` (12 tests, incl. default-init bitwise lock) |
 | **R11.2.23** Energy-framed metric contract | **Pulled 2026-09-04** (see R11.2.23 in Completed) — live trainer sample-weighted metrics + `val_ppl`. FabricPC's legacy `EvalMetric` design informed the contract; FabricPC itself is archived | ~~Hygiene~~ ✅ |
+| **Path B: P-axis Pareto campaign** | **E-1 smoke DONE (F3, 2026-09-05): the axes discriminate at demo scale, mechanisms realized, and the lr-matched pilot fixed the protocol: retention must be measured at MATCHED effective lr per arm (nominal-lr retention is confounded by construction — routing's advantage is effective-lr alone).** Remaining: registered-scale pilot → full (AutoScientist commissioning, S/G/D/C/U pinned at the flagship coordinate, sweep P ∈ {Null, Routing, FastWeight, RuleState}, wider dims where walltime differentiates reliably, PR-5 guard wired via `probe_interval_for_overhead`, GPU-first). RESEARCH3 protocol governs | Research |
 | **R11.3.5** Z3 flagship registered commission | Tangible Checkpoint 6 — ≥95% on 3 tasks, exact Δθ=0, ≤20% fine-tuning steps, ≥5 seeds | Research |
 | **R11.3.6–3.10** Boundary mapping, CL, task-family, provenance, companions | Pull when research paragraph needs them | Research |
 | **R11.4.1** Drop-in PyTorch wrapper | **v1 pulled 2026-09-04** (see R11.4.1 in Completed) — remaining: pip packaging + acceptance test per RESEARCH3 PR sequence | Adoption |
@@ -497,11 +633,15 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 - **R11.5.7 Gates (tiered, per AGENTS.md test-execution tiers).** Per-commit
   duties are **scoped to changed files** (format + lint + pyright + targeted
   tests). The standing fast gates — property suite, demo gate
-  (`pytest tests/integration/ -k "demo or gallery_lock"`, ≤90 s), drift locks,
-  positive control — run on their triggers (demo/gallery/lock-adjacent
-  changes), never per-edit. The full CI order and repo-wide ruff/pyright are
-  R11.2's deliverable and a round-close event, not a habit. No new
-  verification rounds are commissioned in R11; R11 spends R6–R10's trust.
+  (`pytest tests/integration/ -k "demo or gallery_lock"`, now SPLIT:
+  fast tier ~190 s excluding the `slow` marker, slow tier
+  `pytest -m slow -k demo` ~120 s for D14 — landed 2026-09-05 as the
+  re-baseline; run the slow tier on round close or D14-adjacent changes),
+  drift locks, positive control — run on their triggers (demo/gallery/
+  lock-adjacent changes), never per-edit. The full CI order and repo-wide
+  ruff/pyright are R11.2's deliverable and a round-close event, not a
+  habit. No new verification rounds are commissioned in R11; R11 spends
+  R6–R10's trust.
 
 ---
 
@@ -511,9 +651,14 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 # Property locks (fast CI gate) — 670 passed
 uv run pytest tests/property/ -q
 
-# Demo gate (D1–D13 + F1/F2 findings) — 18/18 passed, ~163s
+# Demo gate, FAST tier (D1–D13 + F1–F3 + gallery lock) — 19 passed, ~190 s
+# (default addopts exclude the `slow` marker; D14 lives in the slow tier)
 # NOTE: invoke as `python -m pytest` — see Watch (user-site pytest drift)
 uv run python -m pytest tests/integration/ -k "demo or gallery_lock" -q
+
+# Demo gate, SLOW tier (D14 jpc-faithful depth-20 + D15 depth frontier)
+# — 2 passed, ~6 min
+uv run python -m pytest tests/integration/ -m slow -k "demo or gallery_lock" -q
 
 # Gallery lock — figure data checksums match manifest
 uv run python -m pytest tests/integration/test_gallery_lock.py -q
@@ -522,7 +667,9 @@ uv run python -m pytest tests/integration/test_gallery_lock.py -q
 uv run comp repro --seed 42 --device cpu
 
 # Gallery re-render from on-disk records (deliberate re-pin; `--run` re-runs
-# the demo suite first and needs >2min)
+# the demo suite first and needs >2min; NOTE: `--run` inherits the default
+# `-m 'not slow'` addopts, so D14's on-disk record is reused — run the slow
+# tier first when a deliberate D14 re-pin is wanted)
 uv run comp gallery
 
 # Root exports
@@ -567,12 +714,55 @@ uv run python -m pytest tests/unit/core/test_root_exports.py -q
   manifest — same class as the 2026-09-03 sweep-regime note. Manifest
   re-pinned from current on-disk records; demo gate + gallery lock green
   after. If the lock fires again: check test asserts first, then re-render.
-- **Demo-gate budget drifted past R11.5.7's ≤90 s (now ~163 s at 16 demos +
-  lock):** D8–D12 additions plus F1 grew the gate before this note; not a
-  failure — re-baseline the standing rule when the suite next gets a
-  dedicated fast/slow split.
+- **Demo-gate budget drifted past R11.5.7's ≤90 s (RESOLVED 2026-09-05 by
+  the fast/slow split):** D8–D12 additions plus F1 grew the gate, then D14
+  pushed it to ~300 s. The gate is now split: fast tier (D1–D13 + F1–F3 +
+  lock, ~190 s, default invocation) and slow tier (`-m slow -k demo`,
+  D14, ~120 s) — future slow demos join the `-m slow` resident set
+  (candidates: any test needing >60 s or a timeout marker).
 
 - **axis_probe `[2-0]` flake** — no recurrence since 2026-08-31.
+- **D3 mechanism confound (found by the F3 audit, 2026-09-05; updated
+  after the primitive realization same day):** the retention advantage
+  SURVIVES realized routing (real per-unit gates now, not scalar gain) —
+  but null@0.015 still retains more (0.294 vs routing 0.273), so the
+  effective-lr explanation remains live there too. D3's mechanism
+  wording ("pathway gating") should still be softened when D3 is next
+  touched; its assert messages should carry the audit pointer, and any
+  future mechanism claim needs lr-matched controls per arm.
+- **Walltime never enters `record["data"]` (2026-09-05, F3 lesson — twice
+  refined):** the gallery lock hashes data at 1e-6 and walltime drifts
+  every run. First fix (quantized latency RATIO vs null) still tripped
+  the lock: routing's ψ cost sits at the noise floor (~+20% ≈ run-to-run
+  drift), so its ratio flipped 0.25-bins between runs. Final rule:
+  record["data"] carries ZERO walltime — Pareto cost axes use
+  deterministic quantities (ψ-capacity); latency-ordering claims are
+  live asserts with margins; absolute values stay on stdout/probes.
+  Drift-immunity for any record is proven by two consecutive demo+lock
+  green runs, not one.
+- **Muon orthogonalizers are TWO algorithms (2026-09-05, user prompt on
+  the MEP kernels):** the pipeline's `RiemannianOrthogonalUpdate` had been
+  using the exact SVD polar factor while `ortho_steps` sat as dead config.
+  Now wired: `ortho_steps=0` (default) = exact SVD polar factor —
+  full-spectrum whitening, the configuration of record for D13/D15;
+  `ortho_steps>0` = canonical Muon Newton–Schulz (quintic coefficients,
+  `newton_schulz5` in `core/optimization/strategies/update.py`; the old
+  naive `0.5·X(3I−XᵀX)` variant under-converged from Frobenius
+  normalization, orthonormality err ~0.85). **Measured finding: the
+  FF×Muon lift is WHITENING-driven** — NS preserves BP×Muon (0.868) but
+  collapses FF×Muon to 0.29 at width 32 (SVD maps even tiny singular
+  values to 1, dense exploration for low-rank FF buffers; NS keeps the
+  spectrum). The MEP Triton/CUDA NS kernels implement the naive
+  iteration — upgrade them to the quintic coefficients before any GPU
+  registered sweep that opts into NS (cross-device numerics).
+- **Suppression-comment verdict REVERSED back (2026-09-05):** `#
+  ruff: ignore[x]` fires RUF103 (unknown directive) under the current
+  ruff — the 2026-09-05 note claiming it is preferred/applied is wrong
+  for this version; the 2026-09-04 note was right. `# noqa: <code>`
+  works and did NOT trigger the repo-local `noqa-comments` rule on the
+  F3 test. Best: avoid suppressions (e.g. `torch.nn.functional.normalize`
+  instead of `x = x / x.norm()`). Register C sweep still owns the legacy
+  conversions.
 - **CUDA tolerance boundaries** shift xfail edges — CPU/GPU tests kept separate.
 - **R11 sweep regime note (2026-09-03):** repo-wide ruff autofix shifted import/init order, moving D2/D7 record data. Tests pass asserts; manifest re-rendered. If figure lock fires again, check test asserts first, then re-render.
 - **D8 record determinism:** seed must precede loader draw (`torch.manual_seed(42)` before `_materialize`); DEVICE must be `"cpu"`.

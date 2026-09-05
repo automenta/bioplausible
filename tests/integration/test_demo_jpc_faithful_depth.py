@@ -126,6 +126,10 @@ def _eval(dynamics, geometry, substrate) -> float:
     return correct / total
 
 
+# Slow tier (R11.5.7 re-baseline): the three depth-20 arms are the demo
+# suite's first slow-tier resident — the fast gate proves D1–D13+F1–F3 in
+# ~190 s; run this with `pytest -m slow -k demo` (~107 s).
+@pytest.mark.slow
 @pytest.mark.timeout(600)
 def test_demo_jpc_faithful_depth(emit_run_record) -> None:
     torch.manual_seed(0)  # seed BEFORE the loader draw (D8 trap)

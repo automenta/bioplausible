@@ -45,9 +45,21 @@ class RoutingPlasticity:
     - active_routes: binary/soft mask of active pathways [batch, gate_dim]
 
     The plasticity law:
-        gate_logits_{t+1} = decay * gate_logits_t + lr * f(activity_t)
+        gate_logits_{t+1} = decay * gate_logits_t + lr * (x @ G)
         active_routes = GumbelSoftmax(gate_logits, temperature)  # training
                     = top_k(gate_logits)                         # eval
+
+    G is a fixed random input→gate projection (deterministically seeded
+    per input_dim), so each gate receives its own state-dependent drive —
+    gates differentiate across units AND samples (audited F3 fix: the
+    previous scalar |x|-mean drive left every gate identical, reducing
+    modulate to constant gain control).
+
+    Modulation is per-unit: each layer's activations are scaled by
+    sigmoid(gate_logits @ U_ℓ) where U_ℓ is a fixed gate→unit projection
+    seeded by layer index — real per-sample, per-unit routing over the
+    network's units (the flat-MLP re-spec of pathway gating; there are no
+    distinct physical pathways to mask in a dense geometry).
     """
 
     config: PlasticityConfig
@@ -77,10 +89,42 @@ class RoutingPlasticity:
             learning_rate=learning_rate,
         )
         self.config = PlasticityConfig.routing(gate_dim=gate_dim)
+        # Fixed random projections, lazy per input_dim / layer width
+        self._gate_proj: dict[int, Tensor] = {}
+        self._unit_proj: dict[int, Tensor] = {}
 
     @property
     def gate_dim(self) -> int:
         return self._config.gate_dim
+
+    def _gate_projection(self, input_dim: int, device: torch.device) -> Tensor:
+        """Fixed input→gate drive matrix, [input_dim, gate_dim]."""
+        if input_dim not in self._gate_proj:
+            generator = torch.Generator(device=device)
+            generator.manual_seed(input_dim * 7717 + 13)
+            self._gate_proj[input_dim] = torch.randn(
+                input_dim, self.gate_dim, generator=generator, device=device
+            ) / (input_dim**0.5)
+        return self._gate_proj[input_dim]
+
+    def _unit_projection(
+        self, layer_index: int, width: int, device: torch.device
+    ) -> Tensor:
+        """Fixed gate→unit mask matrix for a layer, [gate_dim, width]."""
+        key = layer_index * 100_003 + width
+        if key not in self._unit_proj:
+            generator = torch.Generator(device=device)
+            generator.manual_seed(layer_index * 2654435761 + width)
+            self._unit_proj[key] = torch.randn(
+                self.gate_dim, width, generator=generator, device=device
+            ) / (self.gate_dim**0.5)
+        return self._unit_proj[key]
+
+    def to(self, device: torch.device) -> RoutingPlasticity:
+        """Move projection matrices to device."""
+        self._gate_proj = {k: v.to(device) for k, v in self._gate_proj.items()}
+        self._unit_proj = {k: v.to(device) for k, v in self._unit_proj.items()}
+        return self
 
     def initial_psi(
         self, context: SystemContext | None, batch_size: int = 1
@@ -129,15 +173,17 @@ class RoutingPlasticity:
             if x.shape[0] != batch_size:
                 # Expand or truncate gate logits to match x
                 if x.shape[0] > batch_size:
-                    new_gate_logits = new_gate_logits.expand(x.shape[0], -1)
+                    new_gate_logits = new_gate_logits.expand(
+                        x.shape[0], -1
+                    ).contiguous()
                 else:
                     new_gate_logits = new_gate_logits[: x.shape[0]]
                 batch_size = x.shape[0]
 
-            # Compute gate update from input statistics
-            gate_drive = x.abs().mean(dim=1, keepdim=True)  # [batch, 1]
-            gate_drive = gate_drive.expand(-1, self.gate_dim)
-            new_gate_logits = new_gate_logits + self._config.learning_rate * gate_drive  # ruff: ignore[non-augmented-assignment]
+            # Per-gate drive from input statistics (fixed projection)
+            gate_proj = self._gate_projection(x.shape[1], x.device)
+            gate_drive = x.flatten(1) @ gate_proj  # [batch, gate_dim]
+            new_gate_logits += self._config.learning_rate * gate_drive
 
         # Compute active routes
         # Use training mode if context has theta with requires_grad
@@ -177,25 +223,25 @@ class RoutingPlasticity:
     def modulate(
         self, activations: list[Tensor] | Tensor, psi: dict[str, Tensor]
     ) -> list[Tensor] | Tensor:
-        """Apply routing gates to activations.
+        """Apply per-unit routing gates to activations.
 
-        Per-sample scalar gate strength applied to hidden/output layers.
+        Each layer is scaled by sigmoid(gate_logits @ U_ℓ): a per-sample,
+        per-unit soft mask (per-layer fixed projection, seeded by layer
+        index). Zero ψ yields the uniform 0.5 mask; stepped ψ differentiates
+        units — the realized routing mechanism.
         """
         gate_logits = psi.get("gate_logits")
         if gate_logits is None:
             return activations
 
-        # Per-sample gate strength: mean sigmoid across gates
-        gate_strength = torch.sigmoid(gate_logits).mean(
-            dim=-1, keepdim=True
-        )  # [batch, 1]
-
         acts = activations if isinstance(activations, list) else [activations]
         modulated = []
-        for a in acts:
-            # Apply gate strength to batch dimension
-            if a.shape[0] == gate_strength.shape[0]:
-                modulated.append(a * gate_strength)
+        for i, a in enumerate(acts):
+            width = a.shape[-1]
+            unit_proj = self._unit_projection(i, width, gate_logits.device)
+            mask = torch.sigmoid(gate_logits @ unit_proj)  # [batch, width]
+            if a.shape[0] == mask.shape[0]:
+                modulated.append(a * mask)
             else:
                 modulated.append(a)
         return modulated if isinstance(activations, list) else modulated[0]

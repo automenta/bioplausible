@@ -27,6 +27,14 @@ Claims:
    reduced QR has a sign-arbitrary R-diagonal, its "orthogonalized"
    direction measured cos ≈ 0 with the gradient and trained at chance.
    Both fixes are locked here (ratchets).
+4. **The lift is WHITENING-driven (2026-09-05):** the exact SVD polar
+   factor maps every singular value to 1 — for FF's strongly low-rank
+   momentum buffers that is aggressive full-spectrum amplification, and
+   it is load-bearing: swapping in Newton–Schulz (Muon's cheaper
+   partial-whitening recipe, ``ortho_steps=5``) preserves BP×Muon
+   (0.868) but COLLAPSES FF×Muon to 0.29. NS is therefore an opt-in
+   variant (`ParameterUpdateConfig.riemannian_orthogonal(ortho_steps=k)`);
+   the SVD polar factor is the default and the configuration of record.
 """
 
 from itertools import islice

@@ -114,7 +114,13 @@ def test_metrics_respond_to_frozen_psi_control(coordinate: str) -> None:
     )
     frozen = frozen_system.train_step(x, y)
 
-    assert stepped["free_loss"] != pytest.approx(frozen["free_loss"]), (
+    # Exact inequality, deliberately NOT pytest.approx: routing's
+    # per-episode ψ effect at toy scale is small (one ψ step from fresh ψ
+    # → per-unit masks ≈ 0.5 ± 0.003 → free_loss deltas ~1e-7, inside
+    # approx's default tolerance). The control's job is to catch a
+    # DISCONNECTED ψ (byte-identical metrics); the effect's magnitude is
+    # ratcheted at the registered regime (F3: per-unit mask std > 0.05).
+    assert stepped["free_loss"] != frozen["free_loss"], (
         "metrics identical under frozen vs stepped ψ — suite cannot measure "
         "P-axis effects"
     )

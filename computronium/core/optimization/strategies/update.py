@@ -15,6 +15,39 @@ from .base import UpdateStrategy
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+
+def newton_schulz5(G: torch.Tensor, steps: int = 5, eps: float = 1e-7) -> torch.Tensor:
+    """Canonical Muon Newton–Schulz orthogonalization (Jordan et al.).
+
+    Quintic iteration ``X ← aX + (bA + cA²)X`` with A = XXᵀ and the
+    (3.4445, −4.7750, 2.0315) coefficient schedule: five steps drive every
+    singular value of the Frobenius-normalized matrix into a narrow band
+    near 1, so the result is approximately semi-orthogonal regardless of
+    the input spectrum — the exact polar factor is NOT required for a
+    descent-aligned direction (the naive ``0.5·X(3I − XᵀX)`` iteration
+    used previously under-converges from Frobenius normalization and
+    measured orthonormality error ~0.85 on Gaussian matrices).
+
+    Returns the update direction as ``float32``.
+    """
+    a, b, c = 3.4445, -4.7750, 2.0315
+    # float32 everywhere: bfloat16 is Muon's GPU speed choice but is
+    # catastrophically slow on CPU (no wide AMX path) — and fp32 keeps
+    # CPU/CUDA numerics in one tolerance regime.
+    X = G.float()
+    X /= X.norm() + eps
+    transposed = G.size(0) > G.size(1)
+    if transposed:
+        X = X.T
+    for _ in range(steps):
+        A = X @ X.T
+        B = b * A + c * (A @ A)
+        X = a * X + B @ X
+    if transposed:
+        X = X.T
+    return X.to(torch.float32)
+
+
 __all__ = ["MuonUpdate", "PlainUpdate"]
 
 
@@ -71,23 +104,4 @@ class MuonUpdate(UpdateStrategy):
         if self._ns is not None:
             return cast("torch.Tensor", self._ns(G, steps=steps, epsilon=epsilon))
 
-        r, c = G.shape
-        transposed = False
-        if r < c:
-            G = G.T
-            r, c = c, r
-            transposed = True
-
-        X = G.clone()
-        norm = X.norm().clamp(min=1e-4, max=1e4)
-        X = X / norm  # ruff: ignore[non-augmented-assignment]
-
-        identity = torch.eye(c, device=G.device, dtype=G.dtype)
-        for _ in range(steps):
-            A = X.T @ X
-            X = 0.5 * X @ (3 * identity - A)
-
-        if transposed:
-            X = X.T
-
-        return cast("torch.Tensor", X)
+        return newton_schulz5(G, steps)

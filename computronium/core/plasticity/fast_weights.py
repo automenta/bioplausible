@@ -41,6 +41,11 @@ class FastWeightPlasticity:
     ψ = fast_weights updated as:
         A_{t+1} = decay * A_t + lr * Proj(outer(pre_t, post_t))
 
+    pre/post are the SETTLED activities supplied by the pipeline (input x
+    and the first phase's settled output — the F3-audit fix: the previous
+    contract received the raw target, making the modulation a
+    target-correlated bias instead of associative memory).
+
     Uses a fixed random projection to map the full outer product
     (input_dim * output_dim) to fast_weight_dim, avoiding the
     truncation bias that discards informative dimensions.
@@ -134,6 +139,9 @@ class FastWeightPlasticity:
         context: SystemContext,
     ) -> dict[str, Tensor]:
         """Compute next plastic state via Hebbian update with random projection.
+
+        ``z.activity["y"]`` is the pipeline's settled output (first phase),
+        not the raw target — the outer product is settled pre/post activity.
 
         Args:
             psi: Current plastic state with fast_weights.

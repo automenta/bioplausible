@@ -7,8 +7,10 @@ arms is the single geometry constructor argument, and the arms are
 capacity-matched, so the comparison isolates topology, not size.
 
 Demonstrated regime: MNIST quick-mode, 1 epoch over 75 batches of 128,
-feedforward hidden ``(64,)`` vs spatial_lattice ``(4,4,4)`` lattice
-with hidden ``(32,)``, Euclidean step 0.1 -> both learn (≈0.6-0.7);
+feedforward hidden ``(256,)`` (203,530 params) vs spatial_lattice
+``(4,4,4)`` lattice with hidden ``(4,4)`` (206,090 params — a 1.25%
+capacity gap, retro (f): the larger lattice arm was reduced to match),
+Euclidean step 0.1 -> both learn (0.83-0.86 train, probe ≈0.91);
 spatial_lattice arm tested for spatial perturbation robustness.
 """
 
@@ -94,7 +96,7 @@ def test_demo_spatial_lattice_geometry_swap(emit_run_record) -> None:
                     input_dim=784,  # total input dimension
                     output_dim=10,
                     lattice_dims=(4, 4, 4),
-                    hidden_dims=(8, 8),
+                    hidden_dims=(4, 4),
                     connectivity_radius=1,
                 )
             ),
@@ -133,8 +135,9 @@ def test_demo_spatial_lattice_geometry_swap(emit_run_record) -> None:
         assert arm["train_acc"] > 0.25, f"{name} must learn above 2.5x chance"
         assert arm["probe_normal"] > 0.4, f"{name} must classify probe digits"
     ff, lattice = record["arms"]["feedforward"], record["arms"]["spatial_lattice"]
-    # Capacity-matched: allow 2x difference
+    # Capacity-matched by construction: lattice hidden (8,8)->(4,4) reduced
+    # the larger arm (416k -> 206k vs ff 204k, a 1.25% gap — retro (f)).
     ratio = max(ff["param_count"], lattice["param_count"]) / min(
         ff["param_count"], lattice["param_count"]
     )
-    assert ratio < 2.5, f"arms must be roughly capacity-matched (ratio={ratio:.1f})"
+    assert ratio < 1.1, f"arms must be capacity-matched (ratio={ratio:.2f})"

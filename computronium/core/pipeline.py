@@ -133,21 +133,26 @@ def run_train_step(  # 5/6-axis pipeline contract + x/y  # ruff: ignore[too-many
         states: dict[Phase, SystemState] = {}
         initial_activations = forward_pass(substrate, geometry, x)
 
-        # P-axis: step plasticity once per episode on the input/target state
-        if plasticity is not None and psi is not None and context is not None:
-            from computronium.state import CompositeState
-
-            z = CompositeState(activity={"x": x, "y": y}, plastic=psi, substrate={})
-            psi = plasticity.step(psi, z, context)
-
         for phase in credit.phases:
             state = SystemState(x=x, y=y)
             state.activations = initial_activations
             target = y if phase is Phase.NUDGED else None
             settled = dynamics.settle(state, geometry, substrate, target=target)
 
-            # P-axis: modulate settled activity if plasticity provides modulate hook
+            # P-axis: ψ steps ONCE per episode, on the first phase's settled
+            # activity (real fast-weight content: the Hebbian outer over
+            # settled pre/post, not the raw target). Modulation applies to
+            # every phase after the step.
             if plasticity is not None and psi is not None:
+                if phase is credit.phases[0] and context is not None:
+                    from computronium.state import CompositeState
+
+                    acts = settled.activations
+                    post = acts[-1] if isinstance(acts, list) else acts
+                    z = CompositeState(
+                        activity={"x": x, "y": post}, plastic=psi, substrate={}
+                    )
+                    psi = plasticity.step(psi, z, context)
                 modulate = getattr(plasticity, "modulate", None)
                 if modulate is not None:
                     settled.activations = modulate(settled.activations, psi)

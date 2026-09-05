@@ -51,12 +51,13 @@ class ParameterUpdateConfig:
         *,
         step_size: float = 0.01,
         momentum: float = 0.9,
-        ortho_steps: int = 5,
+        ortho_steps: int = 0,
         spectral_norm: float = 1.0,
         fisher_damping: float = 1e-3,
         ewc_lambda: float = 1000.0,
         grad_clip: float = 1.0,
     ) -> ParameterUpdateConfig:
+        """Euclidean SGD update config."""
         return cls(
             update_type="euclidean",
             step_size=step_size,
@@ -74,11 +75,21 @@ class ParameterUpdateConfig:
         *,
         step_size: float = 0.01,
         momentum: float = 0.9,
-        ortho_steps: int = 5,
+        ortho_steps: int = 0,
         spectral_norm: float = 1.0,
         fisher_damping: float = 1e-3,
         ewc_lambda: float = 1000.0,
     ) -> ParameterUpdateConfig:
+        """Riemannian-orthogonal (Muon-class) update config.
+
+        ``ortho_steps == 0`` (default) selects the EXACT SVD polar factor —
+        full-spectrum whitening, the configuration under which D13's
+        FF×Muon lift and D15's depth-frontier claims are measured. Values
+        > 0 select Newton–Schulz iteration (Muon's cheaper recipe, partial
+        whitening): measured at width 32 it PRESERVES the BP×Muon lift but
+        COLLAPSES FF×Muon (0.29 vs 0.838) — the local-credit lift is
+        whitening-driven, so NS is an opt-in variant, never the default.
+        """
         return cls(
             update_type="riemannian_orthogonal",
             step_size=step_size,
@@ -252,23 +263,33 @@ class EuclideanUpdate:
 
 
 class RiemannianOrthogonalUpdate:
-    """Muon-style orthogonal update: project gradient onto tangent space of Stiefel manifold."""
+    """Muon-style orthogonal update: orthogonalize the momentum buffer.
+
+    The orthogonalizer is Newton–Schulz iteration (Muon's actual recipe,
+    ``ortho_steps`` iterations — MEP fast paths: Triton kernel on Triton
+    targets, CUDA kernel on CUDA, torch otherwise), NOT the full SVD:
+    the SVD polar factor was the placeholder, its per-matrix-per-step
+    cost dominating deep sweeps. ``ortho_steps == 0`` selects the exact
+    SVD polar factor as an audit escape hatch.
+    """
 
     def __init__(self, config: ParameterUpdateConfig | None = None):
         self.config = config or ParameterUpdateConfig.riemannian_orthogonal()
         self._momentum_buffers: dict[str, Tensor] = {}
 
     def _orthogonalize(self, grad: Tensor) -> Tensor:
-        """Polar factor of the gradient via SVD (Newton-Schulz equivalent).
+        if self.config.ortho_steps <= 0:
+            # Exact polar factor: U @ Vh is the nearest orthogonal matrix
+            # to grad in Frobenius norm. Reduced QR is NOT a substitute:
+            # its R-diagonal is sign-arbitrary, so the resulting direction
+            # is uncorrelated with the gradient (measured cos ≈ 0).
+            U, _, Vh = torch.linalg.svd(grad, full_matrices=False)
+            return U @ Vh
+        from computronium.core.optimization.strategies.update import (
+            newton_schulz5,
+        )
 
-        U @ Vh is the nearest orthogonal matrix to grad in Frobenius norm
-        and its inner product with grad is sum(singular values) > 0 — a
-        descent-aligned direction. Reduced QR is NOT a substitute: its
-        R-diagonal is sign-arbitrary, so the resulting direction is
-        uncorrelated with the gradient (measured cos ≈ 0, flat training).
-        """
-        U, _, Vh = torch.linalg.svd(grad, full_matrices=False)
-        return U @ Vh
+        return newton_schulz5(grad, self.config.ortho_steps)
 
     def step(
         self,
