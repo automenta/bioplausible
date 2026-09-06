@@ -20,6 +20,12 @@ Claims:
    the two to byte-identical pseudo-gradients. Realized PEPITA is slow at
    demo budget (≈ 0.11 Euclidean / ≈ 0.23 Muon after one epoch) — its
    learning is asserted as lift-over-own-baseline, never FF-parity.
+   **The pepita×optimizer cell is regime-dependent** (learning-algorithm
+   hunt, 2026-09-05): at this width-32 scale Adam partially rescues
+   realized PEPITA (0.11 → 0.17, comparable to Muon's 0.20), while at
+   width 64 Muon clearly dominates (0.31 vs 0.14, `hunt_cells.py`
+   probe). Asserted here as lift-over-own-baseline only — no
+   optimizer-family mechanism claim for local credit.
 3. **The instrument history is part of the claim:** this only works after
    two defects were fixed — (a) the update now orthogonalizes the
    MOMENTUM buffer (raw single-batch orthogonalization amplifies the
@@ -43,6 +49,7 @@ import pytest
 import torch
 
 from computronium import (
+    AdamUpdate,
     BackpropCredit,
     CreditAssignmentConfig,
     DigitalSubstrate,
@@ -102,6 +109,15 @@ _UPDATES = {
     ),
 }
 
+# Hunt arm (2026-09-05): the pepita×Adam cell, run for pepita only —
+# the question is whether the Adam family rescues realized PEPITA's
+# slow demo-budget learning. Kept out of _UPDATES so the multi-seed
+# grid stays on the registered arms.
+
+
+def _adam_update():
+    return AdamUpdate(ParameterUpdateConfig.adam(step_size=1e-3))
+
 
 def _loader():
     task = create_task("mnist", device="cpu", quick_mode=True, num_workers=0)
@@ -121,7 +137,7 @@ def _run_arm(credit_name: str, update_name: str, train_data, seed: int) -> float
         geometry=geometry,
         dynamics=InstantaneousDynamics(StateDynamicsConfig.instantaneous()),
         credit=_CREDITS[credit_name](),
-        update=_UPDATES[update_name](),
+        update=(_UPDATES.get(update_name) or _adam_update)(),
     )
     return SystemTrainer(
         system=system,
@@ -148,6 +164,10 @@ def test_demo_uaxis_muon_swap(emit_run_record) -> None:
             accs[key] = _run_arm(credit_name, update_name, train_data, seed=0)
             record["arms"][key] = accs[key]
             print(f"{key:>16}: {accs[key]:.3f}")
+
+    accs["pepita/adam"] = _run_arm("pepita", "adam", train_data, seed=0)
+    record["arms"]["pepita/adam"] = accs["pepita/adam"]
+    print(f"{'pepita/adam':>16}: {accs['pepita/adam']:.3f}")
 
     # Multi-seed promotion (d13_multiseed.py probe): the local arms' Muon
     # lift is variance-aware asserted, not single-seed quoted.
@@ -177,12 +197,14 @@ def test_demo_uaxis_muon_swap(emit_run_record) -> None:
                     c: {
                         "euclidean": accs[f"{c}/euclidean"],
                         "muon": accs[f"{c}/muon"],
+                        **({"adam": accs["pepita/adam"]} if c == "pepita" else {}),
                     }
                     for c in credits
                 },
                 "series_labels": {
                     "euclidean": f"euclidean (lr {LR_EUCLID})",
                     "muon": f"muon (lr {LR_MUON})",
+                    "adam": "adam (lr 1e-3)",
                 },
                 "chance": 0.1,
                 "chance_label": "chance (0.1)",
@@ -228,6 +250,10 @@ def test_demo_uaxis_muon_swap(emit_run_record) -> None:
         "local credit × Muon must train to BP-grade (the headline)"
     )
     assert accs["bp/muon"] > 0.6, "BP×Muon must also learn"
+    assert accs["pepita/adam"] > accs["pepita/euclidean"] + 0.03, (
+        "the Adam family must lift realized PEPITA over its own Euclidean "
+        "baseline at this scale (partial rescue, hunt cell)"
+    )
 
 
 def test_muon_polar_factor_is_descent_aligned() -> None:

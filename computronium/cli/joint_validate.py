@@ -106,7 +106,9 @@ def _list_axis_options():
     print("    temporal_trace, target_inversion, gradient")
     print()
     print("  ParameterUpdate (U):")
-    print("    euclidean, adam, riemannian_orthogonal, spectral_constrained,")
+    print(
+        "    euclidean, adam, ortho_adam, riemannian_orthogonal, spectral_constrained,"
+    )
     print("    natural_gradient, elastic_consolidation")
     print()
     print(
@@ -135,6 +137,7 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
         EuclideanUpdate,
         GeometryConfig,
         InstantaneousDynamics,
+        OrthoAdamUpdate,
         ParameterUpdateConfig,
         PredictiveSettlingDynamics,
         RecurrentGeometry,
@@ -303,6 +306,10 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
             "elastic_consolidation": lambda: (
                 EuclideanUpdate(ParameterUpdateConfig.elastic_consolidation()),
                 ParameterUpdateConfig.elastic_consolidation(),
+            ),
+            "ortho_adam": lambda: (
+                OrthoAdamUpdate(ParameterUpdateConfig.ortho_adam()),
+                ParameterUpdateConfig.ortho_adam(),
             ),
         }
         if coord["update"] not in update_map:

@@ -298,6 +298,7 @@ _CREDIT_FACTORIES = {
 }
 _UPDATE_FACTORIES = {
     "euclidean": _thunk(ParameterUpdateConfig.euclidean, step_size=0.01),
+    "ortho_adam": _thunk(ParameterUpdateConfig.ortho_adam, step_size=0.001),
     # Planted-effect control arm (R8.5): a declared embedded control composes
     # this explicit value as its lr=0 coordinate — θ never consolidates, so
     # the arm must sit at chance on any learnable stream.

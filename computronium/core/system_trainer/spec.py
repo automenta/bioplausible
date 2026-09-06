@@ -17,6 +17,7 @@ from computronium.ontology import (
     InstantaneousDynamics,
     LocalGoodnessCredit,
     NaturalGradientUpdate,
+    OrthoAdamUpdate,
     ParameterUpdateConfig,
     PredictiveSettlingDynamics,
     RandomProjectionsCredit,
@@ -111,23 +112,27 @@ def _credit_from_config(config: CreditAssignmentConfig):  # ruff: ignore[too-man
             raise ValueError(f"Unknown credit_type: {other!r}")
 
 
+_UPDATE_CLASSES: dict[str, type] = {
+    "riemannian_orthogonal": RiemannianOrthogonalUpdate,
+    "muon": RiemannianOrthogonalUpdate,
+    "spectral_constrained": SpectralConstrainedUpdate,
+    "spectral": SpectralConstrainedUpdate,
+    "natural_gradient": NaturalGradientUpdate,
+    "fisher": NaturalGradientUpdate,
+    "elastic_consolidation": ElasticConsolidationUpdate,
+    "ewc": ElasticConsolidationUpdate,
+    "euclidean": EuclideanUpdate,
+    "adam": AdamUpdate,
+    "ortho_adam": OrthoAdamUpdate,
+}
+
+
 def _update_from_config(update: ParameterUpdateConfig):
     """Instantiate update from config."""
-    update_type = update.update_type.lower()
-    if update_type in ("riemannian_orthogonal", "muon"):  # ruff: ignore[literal-membership]
-        return RiemannianOrthogonalUpdate(update)
-    elif update_type in ("spectral_constrained", "spectral"):  # ruff: ignore[literal-membership]
-        return SpectralConstrainedUpdate(update)
-    elif update_type in ("natural_gradient", "fisher"):  # ruff: ignore[literal-membership]
-        return NaturalGradientUpdate(update)
-    elif update_type in ("elastic_consolidation", "ewc"):  # ruff: ignore[literal-membership]
-        return ElasticConsolidationUpdate(update)
-    elif update_type == "euclidean":
-        return EuclideanUpdate(update)
-    elif update_type == "adam":
-        return AdamUpdate(update)
-    else:
-        raise ValueError(f"Unknown update_type: {update_type!r}")
+    cls = _UPDATE_CLASSES.get(update.update_type.lower())
+    if cls is None:
+        raise ValueError(f"Unknown update_type: {update.update_type!r}")
+    return cls(update)
 
 
 def _plasticity_from_config(plasticity: PlasticityConfig):

@@ -11,27 +11,45 @@ accuracy:
    geometry): ff +0.068, attention +0.038, graph +0.102, lattice +0.050.
    The orthogonalized-update lift is not an MLP artifact.
 2. **The optimizer family is a first-class coordinate (adam column,
-   2026-09-05):** Adam BEATS Muon on attention (0.900 ± 0.001 vs 0.874)
-   while Muon keeps ff, graph, and lattice — NO update rule dominates
-   the map. The earlier "Muon is the robust default" reading was drawn
-   inside the SGD family only; Euclidean, Adam, and Muon are three
-   distinct optimizer families, not step-size variants. Adam also lifts
-   the local rule to parity on ff (ff×Adam 0.899 vs ff×Muon 0.896).
-3. **Spectral-constrained is geometry-conditioned:** it matches Muon on
-   attention (0.879 vs 0.874) but never beats it and clearly lags on
-   ff, graph, and lattice.
-4. **Natural gradient is at chance at this budget on ff/graph/lattice**
-   and unstable on attention (0.38 ± 0.11) — asserted as an upper bound,
-   an OPEN budget/regime question, not a physics verdict (R11.5.5a).
-5. **The local reference trails the global rule here:** ff-credit ×
-   Muon < bp × Muon on all four geometries at this budget (contrast
-   D13/D15's parity at their regimes) — except on Adam × ff, where the
-   local rule reaches the global rule (0.899 vs 0.892).
+    2026-09-05):** Adam BEATS Muon on attention (0.900 ± 0.001 vs 0.874)
+    while Muon keeps ff, graph, and lattice — the earlier "Muon is the
+    robust default" reading was drawn inside the SGD family only;
+    Euclidean, Adam, and Muon are three distinct optimizer families, not
+    step-size variants. Adam also lifts the local rule to parity on ff
+    (ff×Adam 0.899 vs ff×Muon 0.896).
+3. **OrthoAdam dominates the headline cells (ortho_adam column,
+    2026-09-05 hunt):** Adam moments + Muon's SVD-polar
+    orthogonalization of matrix-shaped first-moment directions beats
+    BOTH parents on mlp (≈ 0.930 vs Muon 0.919 / Adam 0.892),
+    attention (≈ 0.911 vs 0.900/0.874), and lattice (≈ 0.924 vs
+    0.905/0.895), and beats Adam on EVERY geometry (≈ 0.411 vs 0.332 on
+    graph — the one geometry where Muon keeps its win, 0.433). The
+    hybrid rule is now a library primitive (`OrthoAdamUpdate`,
+    `ParameterUpdateConfig.ortho_adam`); asserted here as ortho > adam
+    everywhere and ortho never clearly below Muon.
+4. **Spectral-constrained is geometry-conditioned:** it matches Muon on
+    attention (0.879 vs 0.874) but never beats it and clearly lags on
+    ff, graph, and lattice.
+5. **Natural gradient is lr-normalized:** the update divides by the
+    tensor's mean |grad| (effective step ≈ step_size), so the original
+    sweep's lr 0.1 was a ~10× overshoot that destabilized every geometry
+    into collapse (measured flat at chance across lr 0.01–1.0, probe
+    `scripts/probes/hunt_cells.py` + the 2026-09-05 micro-probe: lr 1e-4
+    → 0.805, lr 1e-3 → 0.875 on mlp). At its working lr 1e-3 it is
+    competitive on the mlp geometry — the "natural gradient at chance"
+    cell was a step-size artifact, not a learning boundary.
+6. **The local reference trails the global rule here:** ff-credit ×
+    Muon < bp × Muon on all four geometries at this budget (contrast
+    D13/D15's parity at their regimes) — except on Adam × ff, where the
+    local rule reaches the global rule (0.899 vs 0.892).
 
 Capacity-matched per the D8–D12 convention: 47.7k–57.5k params across
 geometries (max/min < 1.25, asserted); identical within each geometry.
 LR note: each family uses its own working lr (SGD 0.1, Muon 0.02, Adam
-1e-3) — the comparison is per-family best-effort, not equal-lr.
+1e-3, natural 1e-3 — the natural-gradient update is mean-|grad|-
+normalized so its effective step is its step_size, and the original
+sweep's 0.1 was an overshoot artifact) — the comparison is per-family
+best-effort, not equal-lr.
 
 Naming convention: "ff/" prefix = Forward-Forward credit (the repo's
 D13 convention, `local_objective="ff"`); "mlp_d2_w64" = the two-layer
@@ -63,6 +81,7 @@ from computronium import (
     InstantaneousDynamics,
     LocalGoodnessCredit,
     NaturalGradientUpdate,
+    OrthoAdamUpdate,
     ParameterUpdateConfig,
     SpatialLattice3DGeometry,
     SpectralConstrainedUpdate,
@@ -141,9 +160,15 @@ def _updates() -> dict[str, Callable]:
             ParameterUpdateConfig.spectral_constrained(step_size=0.1)
         ),
         "natural": lambda: NaturalGradientUpdate(
-            ParameterUpdateConfig.natural_gradient(step_size=0.1)
+            # mean-|grad|-normalized update: effective step ≈ step_size.
+            # lr 0.1 destabilizes every geometry into collapse (measured);
+            # 1e-3 is the working lr (0.875 on mlp, hunt micro-probe).
+            ParameterUpdateConfig.natural_gradient(step_size=1e-3)
         ),
         "adam": lambda: AdamUpdate(ParameterUpdateConfig.adam(step_size=1e-3)),
+        "ortho_adam": lambda: OrthoAdamUpdate(
+            ParameterUpdateConfig.ortho_adam(step_size=1e-3, ortho_lr=3e-3)
+        ),
     }
 
 
@@ -202,7 +227,38 @@ _TEST_BATCHES = [
 ]
 
 
-# Slow tier: ~265 s (4 geometries × 7 arms × 3 seeds at capacity-match).
+def _assert_geometry_claims(arms: dict, name: str) -> None:
+    muon = arms[f"{name}/muon"]["mean"]
+    euclid = arms[f"{name}/euclid"]["mean"]
+    assert muon - euclid > 0.02, (
+        f"{name}: Muon lift over Euclidean must hold (muon {muon:.3f} "
+        f"vs euclid {euclid:.3f})"
+    )
+    spectral = arms[f"{name}/spectral"]["mean"]
+    assert muon >= spectral - 0.01, (
+        f"{name}: Muon must not clearly trail spectral ({muon:.3f} vs {spectral:.3f})"
+    )
+    natural = arms[f"{name}/natural"]["mean"]
+    assert natural > CHANCE + 0.05, (
+        f"{name}: natural gradient must learn at its working lr 1e-3 "
+        f"(measured {natural:.3f}) — the chance-level cell was a "
+        "step-size artifact of the original lr-0.1 sweep"
+    )
+    ortho = arms[f"{name}/ortho_adam"]["mean"]
+    assert ortho > arms[f"{name}/adam"]["mean"] + 0.005, (
+        f"{name}: OrthoAdam must beat plain Adam (ortho {ortho:.3f} vs "
+        "adam) — orthogonalizing the momentum is load-bearing"
+    )
+    assert ortho > muon - 0.03, (
+        f"{name}: OrthoAdam must never clearly trail Muon ({ortho:.3f} vs "
+        f"muon {muon:.3f}) — the hybrid stays in the leading set"
+    )
+    assert arms[f"{name}/ff_muon"]["mean"] < muon, (
+        f"{name}: local ff×Muon trails bp×Muon at this budget"
+    )
+
+
+# Slow tier: ~290 s (4 geometries × 8 arms × 3 seeds at capacity-match).
 @pytest.mark.slow
 @pytest.mark.timeout(600)
 def test_demo_uaxis_coverage(emit_run_record) -> None:
@@ -234,7 +290,7 @@ def test_demo_uaxis_coverage(emit_run_record) -> None:
 
     arms = record["arms"]
     record["figure"] = figure_spec(
-        "D16 — the U-axis coverage map: no update rule dominates (Muon, Adam, Euclid are distinct families)",
+        "D16 — the U-axis coverage map: OrthoAdam dominates the headline cells (the hybrid rule)",
         heatmap_panel(
             grid=[
                 [grid[g][u] for u in [*updates, "ff_muon", "ff_adam"]]
@@ -257,24 +313,7 @@ def test_demo_uaxis_coverage(emit_run_record) -> None:
         "geometries must be capacity-matched (D8–D12 convention)"
     )
     for name in geometries:
-        muon = arms[f"{name}/muon"]["mean"]
-        euclid = arms[f"{name}/euclid"]["mean"]
-        assert muon - euclid > 0.02, (
-            f"{name}: Muon lift over Euclidean must hold (muon {muon:.3f} "
-            f"vs euclid {euclid:.3f})"
-        )
-        spectral = arms[f"{name}/spectral"]["mean"]
-        assert muon >= spectral - 0.01, (
-            f"{name}: Muon must not clearly trail spectral ({muon:.3f} vs "
-            f"{spectral:.3f})"
-        )
-        assert arms[f"{name}/natural"]["mean"] < 0.6, (
-            f"{name}: natural gradient stays far below the others at this "
-            "budget (OPEN regime question, R11.5.5a)"
-        )
-        assert arms[f"{name}/ff_muon"]["mean"] < muon, (
-            f"{name}: local ff×Muon trails bp×Muon at this budget"
-        )
+        _assert_geometry_claims(arms, name)
     for name in ("mlp_d2_w64", "graph_grid8x4"):
         muon = arms[f"{name}/muon"]["mean"]
         spectral = arms[f"{name}/spectral"]["mean"]

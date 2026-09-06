@@ -30,6 +30,7 @@ from computronium.ontology import (
     GeometryConfig,
     InstantaneousDynamics,
     NaturalGradientUpdate,
+    OrthoAdamUpdate,
     ParameterUpdateConfig,
     PredictiveSettlingDynamics,
     RiemannianOrthogonalUpdate,
@@ -540,6 +541,8 @@ def compose_joint_system_from_configs(  # ruff: ignore[complex-structure, too-ma
         update_instance = EuclideanUpdate(update)
     elif update_type == "adam":
         update_instance = AdamUpdate(update)
+    elif update_type == "ortho_adam":
+        update_instance = OrthoAdamUpdate(update)
     else:
         raise ValueError(f"Unknown update_type: {update_type!r}")
 

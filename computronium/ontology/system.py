@@ -619,6 +619,7 @@ class SystemConfig:
         updates = [
             {"update_type": "euclidean", "step_size": 0.01},
             {"update_type": "adam", "step_size": 0.001},
+            {"update_type": "ortho_adam", "step_size": 0.001, "ortho_lr": 0.003},
             {"update_type": "riemannian_orthogonal", "step_size": 0.01},
             {"update_type": "spectral_constrained", "step_size": 0.01},
             {"update_type": "natural_gradient", "step_size": 0.01},

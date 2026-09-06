@@ -16,8 +16,18 @@ mnist quick, 300 batches, 1 epoch, TEST accuracy:
    params both) — the layer-local goodness rule BEATS backprop at
    matched capacity under the same update.
 3. **The depth curve, single-seed live (F1 convention):** BP degrades
-   gracefully under Muon through depth 16 while Euclid cliffs — the
-   frontier shifts, and the failure mode is update-conditioned.
+    gracefully under Muon through depth 16 while Euclid cliffs — the
+    frontier shifts, and the failure mode is update-conditioned.
+4. **OrthoAdam moves the frontier further (ortho_adam arms, 2026-09-05
+    hunt; probe `scripts/probes/ortho_adam_scale.py`):** at depth 16 /
+    width 128 BP×OrthoAdam 0.878 ± 0.035 beats BP×Muon 0.834 ± 0.036
+    while plain ADAM partially collapses (0.303 ± 0.079) — Adam's
+    per-coordinate second-moment normalization is itself depth-fragile,
+    and orthogonalizing its momentum repairs it. And at depth 4 /
+    width 128 the hybrid rescues local credit to a repo record for this
+    budget class: FF×OrthoAdam 0.947 ± 0.002 at ~119k params (vs
+    FF×Muon 0.920, FF×Adam 0.939; D15's previous local record 0.930
+    needed 400.9k params).
 
 Record carries per-arm parameter counts. Every compared pair is at
 identical geometry — no capacity confound (the D8–D12 convention).
@@ -30,6 +40,7 @@ import pytest
 import torch
 
 from computronium import (
+    AdamUpdate,
     BackpropCredit,
     CreditAssignmentConfig,
     DigitalSubstrate,
@@ -38,6 +49,7 @@ from computronium import (
     GeometryConfig,
     InstantaneousDynamics,
     LocalGoodnessCredit,
+    OrthoAdamUpdate,
     ParameterUpdateConfig,
     StateDynamicsConfig,
     SubstrateConfig,
@@ -80,6 +92,12 @@ def _run(credit: str, update: str, depth: int, width: int, seed: int) -> float:
     if update == "muon":
         update_obj = RiemannianOrthogonalUpdate(
             ParameterUpdateConfig.riemannian_orthogonal(step_size=LR_MUON, momentum=0.9)
+        )
+    elif update == "adam":
+        update_obj = AdamUpdate(ParameterUpdateConfig.adam(step_size=1e-3))
+    elif update == "ortho_adam":
+        update_obj = OrthoAdamUpdate(
+            ParameterUpdateConfig.ortho_adam(step_size=1e-3, ortho_lr=3e-3)
         )
     else:
         update_obj = EuclideanUpdate(
@@ -127,21 +145,35 @@ _TRAIN_DATA = list(_flatten(_TASK.get_dataloader("train"), BATCH_CAP))
 _TEST_BATCHES = list(_TASK.get_dataloader("test"))
 
 
-# Slow tier: ~240 s (3 multi-seed arms + 3 depth curves at width 128).
+# Slow tier: ~380 s (6 multi-seed headline arms + 3 local cells + 3 depth
+# curves at width 128).
 @pytest.mark.slow
-@pytest.mark.timeout(600)
+@pytest.mark.timeout(900)
 def test_demo_uaxis_depth_frontier(emit_run_record) -> None:
     # Headline pairs, multi-seed (capacity-matched: identical geometry).
     headline: dict[str, list[float]] = {}
     for label, credit, update, depth, width in [
         ("bp/euclid d16 w128", "bp", "euclid", 16, 128),
         ("bp/muon d16 w128", "bp", "muon", 16, 128),
+        ("bp/adam d16 w128", "bp", "adam", 16, 128),
+        ("bp/ortho_adam d16 w128", "bp", "ortho_adam", 16, 128),
         ("bp/muon d4 w256", "bp", "muon", 4, 256),
         ("ff/muon d4 w256", "ff", "muon", 4, 256),
     ]:
         accs = [_run(credit, update, depth, width, s) for s in MULTI_SEEDS]
         headline[label] = accs
-        print(f"{label:>20}: {np.mean(accs):.3f} ± {np.std(accs):.3f} {accs}")
+        print(f"{label:>24}: {np.mean(accs):.3f} ± {np.std(accs):.3f} {accs}")
+
+    # Local-credit OrthoAdam cells at depth 4 / width 128 (~119k params).
+    local: dict[str, list[float]] = {}
+    for label, credit, update in [
+        ("ff/muon d4 w128", "ff", "muon"),
+        ("ff/adam d4 w128", "ff", "adam"),
+        ("ff/ortho_adam d4 w128", "ff", "ortho_adam"),
+    ]:
+        accs = [_run(credit, update, 4, 128, s) for s in MULTI_SEEDS]
+        local[label] = accs
+        print(f"{label:>24}: {np.mean(accs):.3f} ± {np.std(accs):.3f} {accs}")
 
     # Depth curves, single-seed live (F1 convention: comparative margins).
     depths = (2, 4, 8, 16)
@@ -167,14 +199,19 @@ def test_demo_uaxis_depth_frontier(emit_run_record) -> None:
         "device": "cpu",
         "params": {str(k): v for k, v in params.items()},
         "headline": {k: list(v) for k, v in headline.items()},
+        "local_cells": {k: list(v) for k, v in local.items()},
         "depth_curves": {k: list(v) for k, v in curves.items()},
         "figure": figure_spec(
-            "D15 — Muon moves the depth wall (capacity-matched, mnist)",
+            "D15 — OrthoAdam moves the depth wall further (capacity-matched, mnist)",
             bars_panel(
                 {
-                    "depth 16 / width 128 (349,450 params both)": {
+                    "depth 16 / width 128 (349,450 params each)": {
                         "BP×Euclid": float(np.mean(headline["bp/euclid d16 w128"])),
+                        "BP×Adam": float(np.mean(headline["bp/adam d16 w128"])),
                         "BP×Muon": float(np.mean(headline["bp/muon d16 w128"])),
+                        "BP×OrthoAdam": float(
+                            np.mean(headline["bp/ortho_adam d16 w128"])
+                        ),
                     },
                     "depth 4 / width 256 (400,906 params both)": {
                         "BP×Muon": float(np.mean(headline["bp/muon d4 w256"])),
@@ -219,6 +256,29 @@ def test_demo_uaxis_depth_frontier(emit_run_record) -> None:
         f"({np.mean(ff_d4):.3f} vs {np.mean(bp_d4):.3f}) — re-audit"
     )
     assert min(ff_d4) > 0.9, f"ff/muon d4 w256 per-seed floor broken: {ff_d4}"
+
+    # OrthoAdam ratchets (hunt, 2026-09-05): the hybrid beats Muon at
+    # depth 16, plain Adam collapses there, and the hybrid tops the
+    # local-credit cells at width 128.
+    ortho_d16 = headline["bp/ortho_adam d16 w128"]
+    adam_d16 = headline["bp/adam d16 w128"]
+    assert np.mean(ortho_d16) > np.mean(muon_d16), (
+        f"bp/ortho_adam must beat bp/muon at depth 16 "
+        f"({np.mean(ortho_d16):.3f} vs {np.mean(muon_d16):.3f}) — the "
+        "frontier must move with the hybrid; re-audit if not"
+    )
+    assert np.mean(adam_d16) < 0.5, (
+        f"bp/adam d16 must partially collapse ({np.mean(adam_d16):.3f}) — "
+        "Adam's second-moment normalization is depth-fragile; re-audit if not"
+    )
+    ff_ortho_w128 = local["ff/ortho_adam d4 w128"]
+    assert np.mean(ff_ortho_w128) > np.mean(local["ff/muon d4 w128"]), (
+        "ff/ortho_adam must top ff/muon at width 128 — the hybrid rescues "
+        "local credit at scale"
+    )
+    assert min(ff_ortho_w128) > 0.93, (
+        f"ff/ortho_adam d4 w128 per-seed floor broken: {ff_ortho_w128}"
+    )
 
     # The curve claims: Muon degrades gracefully where Euclid cliffs.
     assert curves["bp_euclid"][-1] < 0.2 and curves["bp_muon"][-1] > 0.6, (
