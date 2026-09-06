@@ -8,7 +8,7 @@
       "figure_png": "d10_attention_geometry_swap.png",
       "provenance": {
         "config_sha256": "df1e1a0c175b0d3d714a6a02c6c90f4eb37f66d4d5f1df9563a0265b6821da43",
-        "git_commit": "c4bea727d9e9bdde0d009c889bc0321324d02c69"
+        "git_commit": "77f689ce7394e3a5d71c2c7bb69efb4f318998cc"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -20,7 +20,7 @@
       "figure_png": "d11_spatial_lattice_geometry_swap.png",
       "provenance": {
         "config_sha256": "70bacc1af326b95810fac0f9b1ea93cdd32abc9c7eef721baa84ac6951f8adeb",
-        "git_commit": "c4bea727d9e9bdde0d009c889bc0321324d02c69"
+        "git_commit": "77f689ce7394e3a5d71c2c7bb69efb4f318998cc"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -32,19 +32,19 @@
       "figure_png": "d12_epc_fast_settle.png",
       "provenance": {
         "config_sha256": "6be4ea8d162b42d53eec84b30dbd1decd2cb2b9e1daa989f25ccba43abb8aa78",
-        "git_commit": "c4bea727d9e9bdde0d009c889bc0321324d02c69"
+        "git_commit": "77f689ce7394e3a5d71c2c7bb69efb4f318998cc"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
     {
       "capability_id": "D13",
       "capability_name": "uaxis_muon_swap",
-      "data_sha256": "6be0a055d52af6dd314071690d879b2feca4deb5348fab4374a37d1557ade139",
+      "data_sha256": "c032b4823e63a969a31d4e2cb7cc2adacc4612bd9b099368bfa7e7ff13621fee",
       "demo_test": "tests/integration/test_demo_uaxis_muon_swap.py",
       "figure_png": "d13_uaxis_muon_swap.png",
       "provenance": {
-        "config_sha256": "6be0a055d52af6dd314071690d879b2feca4deb5348fab4374a37d1557ade139",
-        "git_commit": "c4bea727d9e9bdde0d009c889bc0321324d02c69"
+        "config_sha256": "c032b4823e63a969a31d4e2cb7cc2adacc4612bd9b099368bfa7e7ff13621fee",
+        "git_commit": "79f93c61e8cf9012f5ed349f98ba10cc8c77222c"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -92,7 +92,7 @@
       "figure_png": "d1_compose_6axis.png",
       "provenance": {
         "config_sha256": "e1800586b27a7e5f52afef208b484082abca05f8f104589a9e703941096b8dde",
-        "git_commit": "c4bea727d9e9bdde0d009c889bc0321324d02c69"
+        "git_commit": "77f689ce7394e3a5d71c2c7bb69efb4f318998cc"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -104,7 +104,7 @@
       "figure_png": "d2_swap_credit.png",
       "provenance": {
         "config_sha256": "be3b342fd8be5c18d1fe1c0f7fd7c227f5a25cf3fcacae6b48642b16ee8b86a6",
-        "git_commit": "c4bea727d9e9bdde0d009c889bc0321324d02c69"
+        "git_commit": "77f689ce7394e3a5d71c2c7bb69efb4f318998cc"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -116,7 +116,7 @@
       "figure_png": "d3_swap_plasticity.png",
       "provenance": {
         "config_sha256": "89f8ab58ed16beaa6e9f101e96903e5433232512827fea9bd6b8a9d0c5fca5cd",
-        "git_commit": "c4bea727d9e9bdde0d009c889bc0321324d02c69"
+        "git_commit": "77f689ce7394e3a5d71c2c7bb69efb4f318998cc"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -128,7 +128,7 @@
       "figure_png": "d4_memory_budget.png",
       "provenance": {
         "config_sha256": "1100452dee3bb0958284dec909d3d96bcba97ffe926d1e439de5955505853979",
-        "git_commit": "c4bea727d9e9bdde0d009c889bc0321324d02c69"
+        "git_commit": "77f689ce7394e3a5d71c2c7bb69efb4f318998cc"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -140,7 +140,7 @@
       "figure_png": "d5_z3_frozen_theta.png",
       "provenance": {
         "config_sha256": "6a8f0d82677ff6f1bda9fd21a4bacd6b764fbf09c070cd550c2ae79906d25b55",
-        "git_commit": "c4bea727d9e9bdde0d009c889bc0321324d02c69"
+        "git_commit": "77f689ce7394e3a5d71c2c7bb69efb4f318998cc"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -152,7 +152,7 @@
       "figure_png": "d6_substrate_swap.png",
       "provenance": {
         "config_sha256": "9d0a04cbe553b89ad6b6150e3f350e10bd954a0723cf0ae7a3da51e6fa17d93f",
-        "git_commit": "c4bea727d9e9bdde0d009c889bc0321324d02c69"
+        "git_commit": "77f689ce7394e3a5d71c2c7bb69efb4f318998cc"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -164,7 +164,7 @@
       "figure_png": "d7_spike_settle.png",
       "provenance": {
         "config_sha256": "479da64f1c471dbcda8975917a6ee241d9cdc2dd3c800973c3088a98c856a0d6",
-        "git_commit": "c4bea727d9e9bdde0d009c889bc0321324d02c69"
+        "git_commit": "77f689ce7394e3a5d71c2c7bb69efb4f318998cc"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -176,7 +176,7 @@
       "figure_png": "d8_geometry_swap.png",
       "provenance": {
         "config_sha256": "8a19fe0a2a95b3e11e28c74dd9b2f122b3aa0f51419bd83b59f87ce577364c10",
-        "git_commit": "c4bea727d9e9bdde0d009c889bc0321324d02c69"
+        "git_commit": "77f689ce7394e3a5d71c2c7bb69efb4f318998cc"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -188,7 +188,7 @@
       "figure_png": "d9_graph_geometry_swap.png",
       "provenance": {
         "config_sha256": "e46d8c142213f0cc5122fdde92bfd777507973475a6d6cdc0e266f4c26e9cf16",
-        "git_commit": "c4bea727d9e9bdde0d009c889bc0321324d02c69"
+        "git_commit": "77f689ce7394e3a5d71c2c7bb69efb4f318998cc"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -200,7 +200,7 @@
       "figure_png": "f1_failure_manifesto.png",
       "provenance": {
         "config_sha256": "ebf8654fea3e1aab9d078984129ca15bebd8548531d8cdffa075a3a1fa698fa1",
-        "git_commit": "c4bea727d9e9bdde0d009c889bc0321324d02c69"
+        "git_commit": "77f689ce7394e3a5d71c2c7bb69efb4f318998cc"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -212,7 +212,7 @@
       "figure_png": "f2_spiking_plateau.png",
       "provenance": {
         "config_sha256": "b8657a3e651cbb4ee29ee4eb22c8b5490f587c5bb1f370d4d068b51cc2731162",
-        "git_commit": "c4bea727d9e9bdde0d009c889bc0321324d02c69"
+        "git_commit": "77f689ce7394e3a5d71c2c7bb69efb4f318998cc"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
@@ -224,7 +224,7 @@
       "figure_png": "f3_paxis_pareto.png",
       "provenance": {
         "config_sha256": "47f73330e9f3e012704ed9c7066f3912bd7a2aa464c089f986cbda59680d1495",
-        "git_commit": "c4bea727d9e9bdde0d009c889bc0321324d02c69"
+        "git_commit": "77f689ce7394e3a5d71c2c7bb69efb4f318998cc"
       },
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     }

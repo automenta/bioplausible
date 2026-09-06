@@ -317,6 +317,21 @@
 > see "Fundamental-Research Focus" (P1 ff_hybrid reach, P2 jpc-LM
 > trainer, P3 Muon lr-matched controls, P4 width fragility, P5 pepita
 > theory); the 60-minute LM runs commission only after P1–P3.**
+> **2026-09-06 session: P1(a), P3, P1(b) closed; P2 open-negative.**
+> (1) **P1a — the FF hybrid upgrades D13** (ff_hybrid×Muon 0.857±0.010
+> vs FF×Muon 0.838±0.009 over seeds 0–4, promoted into the D13 demo with
+> ratchets; hybrid also rescues the Euclid arm 0.568→0.798). (2) **P3 —
+> Muon lr-matched controls: direction quality, not lr scale** (ff_hybrid
+> muon 13.84 vs matched-euclid 30.26 ppl; epc_thermo's euclid step is
+> 400× too small at stable lr and diverges at parity — Muon is genuinely
+> load-bearing for the PC family on LM). (3) **P1b — attention, not
+> supervision density** (zero-block dense supervision: ff_hybrid 13.9 vs
+> bp 12.16 — local credit fine on the dense path; the zero-block is
+> capacity-invariant unigram, verified at 156,520 params per the
+> user's fairness directive). (4) **P2 — the jpc-faithful frozen-error
+> gradient does NOT train the free settle on the LM arm** (11 regimes
+> incl. paper-faithful MSE-clamped; OPEN, untried cells listed in
+> Priority 2). Demo gate D13 re-pinned + locks green ×2.
 
 ---
 
@@ -553,7 +568,7 @@ every workstream below.
 | D10| The G-axis is a swap (capacity-matched attention vs flat, permutation sensitivity) | `test_demo_attention_geometry_swap.py` |
 | D11| The G-axis is a swap (capacity-matched 3D lattice vs flat — 206,090 vs 203,530 params, a 1.25% gap after reducing the larger lattice arm — spatial noise robustness) | `test_demo_spatial_lattice_geometry_swap.py` |
 | D12| The D-axis settles without signal decay (ePC: free equilibrium = feedforward bitwise, nudged signal reaches every layer, 1/3 settle budget) | `test_demo_epc_fast_settle.py` |
-| D13| The U-axis is a swap (local credit × Muon: FF×Muon 0.838±0.009 over 5 seeds vs 0.568±0.041 on Euclidean; FF and realized PEPITA are distinct algorithms; SVD polar factor + momentum-orthogonalization locked) | `test_demo_uaxis_muon_swap.py` |
+| D13| The U-axis is a swap (local credit × Muon: FF×Muon 0.838±0.009 over 5 seeds vs 0.568±0.041 on Euclidean; **FF-hybrid×Muon 0.857±0.010 — the readout_error hybrid upgrades the family, and rescues the Euclid arm 0.568→0.798 (P1a)**; FF and realized PEPITA are distinct algorithms; SVD polar factor + momentum-orthogonalization locked) | `test_demo_uaxis_muon_swap.py` |
 | D14| Depth 20 trains under the jpc-faithful regime (ePC + PC-native weight gradient + Adam + β grid + steps=H): μPC generalizes (test ≈ 0.83) where default init memorizes (train 1.00 / test ≤ 0.24); **OrthoAdam arms (2026-09-05): mupc×OrthoAdam 0.923 / default×OrthoAdam 0.838 (seed 1) — the whole regime lifts and the μPC-vs-default gap narrows from ≈0.58 to ≈0.07; momentum-orthogonalization and depth-scaled init are partially interchangeable repairs of the same depth pathology, μPC still leads**; the F1 depth wall is regime-bound — **slow tier** (`pytest -m slow -k demo`) | `test_demo_jpc_faithful_depth.py` |
 | D15| The U-axis moves the depth wall, capacity-matched (identical geometry, swapped update/credit, mnist quick 300 batches, TEST acc): depth 16/width 128 (349,450 params each) BP×Euclid 0.114±0.000 (chance) / BP×Adam 0.303±0.079 / BP×Muon 0.834±0.036 / **BP×OrthoAdam 0.878±0.035 — the hybrid moves the frontier beyond Muon**; depth 4/width 256 (400,906 params both) FF×Muon **0.930±0.001** ≥ BP×Muon 0.911±0.007 — local learning beats backprop at matched capacity; width-128 local cells — **FF×OrthoAdam 0.947±0.002** (~119k params, repo-best acc/param at this budget) > FF×Adam 0.939 > FF×Muon 0.920; BP degrades gracefully under Muon through depth 16 where Euclid cliffs — **slow tier** | `test_demo_uaxis_depth_frontier.py` |
 | D16| The U-axis coverage map, capacity-matched across geometry (4 geometries 47.7k–57.5k params × 6 update rules × seeds 0–2): **OrthoAdam (the Muon+Adam hybrid, a library primitive) dominates the headline cells — mlp 0.930 / attention 0.911 / lattice 0.924, beating BOTH parents, and beats Adam everywhere** (graph 0.411, where Muon keeps its win 0.433); Muon ≥ Euclid on EVERY geometry; Euclidean/Adam/Muon/Natural are distinct optimizer families (natural's early "chance" cell resolved 2026-09-05 as a step-size artifact — at its working lr 1e-3 it learns on all four geometries); spectral geometry-conditioned (attention only); local ff×Muon trails bp×Muon on all four at this budget — **slow tier** | `test_demo_uaxis_coverage.py` |
@@ -561,7 +576,24 @@ every workstream below.
 
 ---
 
+## ✅ Completed This Session (2026-09-06 — Fundamental-Research sprint: P1a + P3 + P1b closed, P2 open-negative)
+
+| Item | Description | Key Evidence |
+|------|-------------|--------------|
+| **P1(a) — ff_hybrid beats pure FF on MNIST** | D13 promoted: `ff_hybrid` is a fourth credit in `_CREDITS` (single-seed arms + multi-seed grid over seeds 0–4); ratchets: hybrid/muon > ff/muon per seed (min lift > 0), hybrid/euclid > ff/euclid + 0.15 | Probe `scripts/probes/p1a_ff_hybrid_mnist.py` (byte-identical D13 regime): ff_hybrid/muon 0.857±0.010, ff/muon 0.838±0.009, ff_hybrid/euclid 0.798 vs ff/euclid 0.568. D13 test green (~27 s), manifest re-pinned, gallery + declared-figure locks green ×2 (drift-immunity proven) |
+| **P3 — Muon lr-matched controls on LM** | Per-arm effective step from identical inits (20 steps, mean ‖Δθ‖_F/step), Euclid lr log-interp-matched, 2-min arms on each credit's verified shape | Probe `scripts/probes/lm_muon_lr_matched.py`: ff_hybrid muon eff-step 0.209 → matched euclid lr 0.317 → at matched step muon 13.84 vs euclid 30.26 ppl (direction QUALITY). epc_thermo: muon eff-step 0.433 vs euclid ~0.001 at lr 0.3 (matched lr ≈ 134 → 1e13 loss) — Muon load-bearing for the PC family on LM |
+| **P1(b) — dense-supervision isolation** | Zero-block `TransformerGeometry` (`n_layers=0` verified: embed+head, dense `[B·T,V]` logits); 4 arms × 2.5 min at smoke shape + capacity-matched controls | Probe `scripts/probes/p1b_dense_supervision.py`: full/bp 5.77, full/ff_hybrid 6.61 (reproduces the 2.5-min table), zero/bp 12.16, zero/ff_hybrid 13.9 — local credit tracks bp on the dense path; **capacity-invariance control (user directive): zero-block at d=1204 (156,520 params) gives 12.37/14.10 ≈ the 8.3k numbers — unigram function class at any width; attention is the lever** |
+| **P2 — jpc-faithful PC trainer for LM** | D14 loop ported (ePC settle steps=H → frozen settled errors → d(β·loss)/dθ → Adam); MLP arm, registered w816×7, capacity-matched baseline epc_thermo/muon 28.01 ppl (P3 probe, same geometry/val/seed) | Probe `scripts/probes/p2_jpc_lm.py` + diagnostic cells: **negative at all 13 tried regimes** (CE β∈{1e3…0.01} × lr∈{1e-4…1e-2}, ±residual, MSE-clamped-output β∈{10,1e3}, exact-ε = nudged−free activity difference β∈{10,1}) — corrected forward fits by construction while the free settle lands at chance or worse (MSE cells: free-train-acc exactly 0.000). OPEN; untried cells (γ grid, width 512) listed in Priority 2. The logged train "loss" in the corrected forward is NOT a progress metric (ε can drive it to 0) — read only the free-settle val |
+| **P4 — width fragility of local feedback** | Width {32,64,128,256} × {ff, ff_hybrid, pepita, epc_thermo}, depth 4, Muon @ registered per-credit lr, 75 s/arm, ctx 32; final val ppl + per-layer free-settle act stds | Probe `scripts/probes/p4_width_fragility.py` (~20 min): ff flat ≈60 at every width; **ff_hybrid trains at EVERY width (14.7–16.0) — width-robust**; pepita bidirectionally fragile (w32 act std 0.66→10.8 exploding → 1e8 ppl; w128/256 signal collapses 0.35→0.05 → chance); epc w32 std →2028, only w256 bounded and trains. **Mechanism: per-layer activity-scale compounding for rules whose error signal is not self-normalized — the third family under the structural gain-control thesis** (CP-6 boundary-figure candidate) |
+| **P5 — PEPITA theory fixes** | Probe subclass `VariantPepita` transforms e = onehot − softmax before the fixed projection: center / per-sample rmsnorm / both; MNIST D13 regime (depth 2, w32+w128, seeds 0–2) + LM w128 cell | Probe `scripts/probes/p5_pepita_fixes.py`: **all three fixes refuted.** MNIST: control best (0.239/0.211); center HURTS (0.187/0.126 — the constant component is load-bearing on single-target MNIST); LM w128: all flat at chance. **Verdict: the collapse is in the fixed random projections (directionally-random channel), not the error's constant component or scale. Remaining pull: learned feedback projections** (library change) |
+
+**Gate evidence:** D13 green ×2 + gallery/declared locks green ×2; ruff
+clean on all changed files; no library code touched (probes + D13 test +
+manifest only) — property suite not required by its trigger.
+
 ## ✅ Completed This Session (2026-09-05 — LM local-credit audit + PC-family smoke: the unique combos DO have a chance)
+
+
 
 | Item | Description | Key Evidence |
 |------|-------------|--------------|
@@ -578,10 +610,15 @@ term centering helps stability but no learning signal yet at 1 min); spc is flat
 (nudge trapping). Harness CELLS updated: ff_hybrid and epc_thermo promoted,
 transformer/ff and mlp/bp/muon+ortho dropped (optimizer-insensitive at this scale).
 
-**Next session (runs still user-gated):** `--minutes 60` on the 10-arm CELLS
-(~10 h) or the recommended subset {transformer/bp/adam, transformer/bp/muon,
-mlp/ff_hybrid/muon, mlp/epc_thermo/muon, mlp/pepita/muon} (~5 h); then D17
-promotion + RESULTS.md.
+**Next session (runs user-gated, GRADUAL BUDGET — user directive
+2026-09-06): first ladder rung is ~10–20 min per arm on the candidate
+subset {transformer/bp/adam, transformer/bp/muon, transformer/ff_hybrid/
+muon, mlp/ff_hybrid/muon, mlp/epc_thermo/muon, mlp/pepita/muon}
+(~1.5–2 h total); scale to 60 min only as findings stabilize. The
+matched-step protocol (P3) rides along: measure retention/quality at
+matched effective lr per arm. Then analyze curves + ppl table, promote
+the result to a demo (D17 candidate) per the static-arms convention,
+RESULTS.md paragraph, gallery row.**
 
 ### FF-hybrid promotion + 2.5-min confirmation (same session, user-directed)
 
@@ -619,58 +656,142 @@ refutation); what remains open are *mechanism* questions that cheap
 instruments can answer and that de-risk every future run. Ordered by
 win-per-effort:
 
-### Priority 1 — ff_hybrid everywhere it can reach (highest win/effort)
+### Priority 1 — ff_hybrid everywhere it can reach (highest win/effort) — ✅ RESOLVED POSITIVE 2026-09-06 (P1a + P1b)
 
 The invention is now a library flag (`readout_error=True`) and the
 strongest unique result on the board (6.74 vs bp 5.82 at 2.5 min on the
-transformer). Two cheap questions remain:
+transformer). Both cheap questions answered:
 
-- **(a) Does it beat pure FF on MNIST?** D13's FF×Muon 0.838 is the repo's
-  flagship local result; if ff_hybrid×Muon beats it at demo scale, the
-  hybrid upgrades EVERY local-credit claim in the D-table. One probe, ~15 min.
-- **(b) Dense-supervision isolation experiment.** The MLP arms eat a 9×
-  tokens/s handicap (single target per window vs dense CE). A zero-block
-  `TransformerGeometry` (embedding + head only, no attention) gives dense
-  per-position supervision on a LOCAL-CREDIT-compatible geometry — isolating
-  how much of the transformer's advantage is attention vs supervision
-  density. If local credit + dense supervision closes most of the gap, the
-  "local learning can't do LM" story changes fundamentally. Geometry
-  supports `n_layers=0` already (verify).
+- **(a) Does it beat pure FF on MNIST? — YES.** Probe
+  `scripts/probes/p1a_ff_hybrid_mnist.py` (D13 regime byte-identical,
+  seeds 0–4): ff_hybrid×Muon **0.857 ± 0.010** vs FF×Muon 0.838 ± 0.009
+  (per-seed lift min +0.009, positive on all 5 seeds) — promoted into the
+  D13 demo test as a fourth credit (`ff_hybrid` in `_CREDITS`, multi-seed
+  grid + ratchets: hybrid/muon > ff/muon per seed, hybrid/euclid >
+  ff/euclid + 0.15). The bigger effect: **the hybrid rescues the Euclid
+  arm** (0.798 vs 0.568 — the readout-error term nearly closes the Muon
+  gap for plain Euclidean steps). D13 record re-pinned; locks green ×2
+  (drift-immunity proven). The D-table's local-credit claims are upgraded.
+- **(b) Dense-supervision isolation — attention is the lever, not
+  supervision density.** Probe `scripts/probes/p1b_dense_supervision.py`
+  (2.5 min arms, smoke transformer d64/3L/ctx32): full/bp 5.77,
+  full/ff_hybrid 6.61 (≈ the 2.5-min table ✓), zero-block (n_layers=0,
+  embed+head only, dense per-position supervision) bp 12.16 vs
+  **ff_hybrid 13.9** — local credit tracks bp within ~14% on the dense
+  path (no supervision-density pathology). **Capacity-fairness control
+  (user-directed):** the zero-block's function class is UNIGRAM at any
+  width — verified empirically at d=1204 (156,520 params ≈ the full
+  transformer's 156,544): bp 12.37 / ff_hybrid 14.10, statistically
+  identical to the 8.3k widths. So no-mixing dense supervision saturates
+  at unigram entropy (~12.2 ppl) regardless of capacity, and the full
+  transformer's advantage (both bp and ff_hybrid beat every zero arm by
+  >6 ppl) is attention-based contextual mixing. The local-credit
+  transformer deficit (0.84 ppl behind bp) rides on hidden-layer
+  learning, not on the dense-supervision pathway.
 
-### Priority 2 — the PC-native trainer for LM (biggest potential finding)
+### Priority 2 — the PC-native trainer for LM (biggest potential finding) — ⚠ OPEN NEGATIVE at tried regimes (2026-09-06)
 
 ePC×thermo×Muon already trains LM at 1-min scale; the D14 recipe (β grid,
 PC-native weight gradient with frozen errors, Adam) is the *theory-faithful*
-version and produced our deepest result (D14). Porting the jpc-faithful
-loop to the LM task (CE over `[B·T,V]`, frozen settled errors, one
-reverse-mode sweep) is a medium-effort landing with the largest payoff:
-an energy-based LM trainer with a paper-grounded regime. Prereq: ePC needs
-biases — the MLP arm has them; `TransformerGeometry` is bias-free (a
-candidate geometry extension if the transformer ePC cell is wanted).
+version and produced our deepest result (D14). **Port executed as
+`scripts/probes/p2_jpc_lm.py` (MLP arm, registered w816×7, biases present,
+registered-width capacity-matched baseline = epc_thermo/muon val_ppl 28.01
+from the P3 probe, same geometry/val/seed): the frozen-error weight
+gradient NEVER trains the free equilibrium on this task** — 13 regimes
+tried (CE on logits: β ∈ {1e3, 100, 10, 1, 0.1, 0.01} × Adam lr ∈ {1e-4,
+1e-3, 1e-2}; ± `residual=True`; paper-faithful MSE with output clamped to
+one-hot at β ∈ {10, 1e3}; **the exact-ε construction — εᵢ = nudgedᵢ −
+freeᵢ from the two settled activity sets, not the dynamics' internal
+error variables — at β ∈ {10, 1}**: diverges too): the corrected forward
+fits by construction
+while the free settle lands at chance or WORSE (several cells actively
+anti-correlate it; MSE cells drove free-train-acc to exactly 0.000).
+Mechanism reading: the update minimizes CE of the eps-PERTURBED forward
+(hidden states carry settled ε, output none) — on this task that objective
+diverges from the free forward's CE, and the gap dominates. D14 (MNIST,
+depth-20 residual) is the regime where the two coincide. **Untried cells
+before any "does not transfer" verdict:** the exact jpc inference-network
+construction (ε from free-vs-nudged difference, not the nudged fixed
+point), the γ (activity step) grid, width 512, and inference steps > H.
+The ÷β contrastive credit (epc_thermo/muon) remains the working PC-family
+LM instrument. Prereq note stands: TransformerGeometry is bias-free — the
+transformer ePC cell needs a geometry extension first.
 
-### Priority 3 — the Muon-vs-lr confound, closed properly
+### Priority 3 — the Muon-vs-lr confound, closed properly — ✅ RESOLVED 2026-09-06: Muon wins at matched effective step
 
 Both LM headline candidates are ×Muon, and we have measured twice that
 optimizer effects masquerade as mechanism (F3 routing, D3). Protocol
-exists: per-arm effective-step measurement (P-axis lr-matched pilot) →
-epc×muon vs epc×euclid and ff_hybrid×muon vs ff_hybrid×euclid at matched
-effective lr. Cheap, and it is the difference between "Muon is load-bearing
-for local credit on LM" (a mechanism claim) and an artifact note.
+executed (`scripts/probes/lm_muon_lr_matched.py`, the P-axis lr-matched
+pilot's method — per-arm effective step from identical inits, Euclid lr
+log-interp-matched to Muon's measured displacement, then 2-min arms):
 
-### Priority 4 — width fragility of local feedback (the theory paragraph)
+- **ff_hybrid (w64×4):** muon lr 0.02 → eff step 0.209; matched euclid lr
+  0.317. At MATCHED step: muon val_ppl **13.84** vs euclid **30.26** —
+  the advantage is direction QUALITY, not lr scale. A mechanism claim is
+  now quotable for this arm (single-seed, probe scale — multi-seed before
+  registering).
+- **epc_thermo (registered w816×7):** muon lr 0.01 → eff step **0.433**
+  while euclid displaces ~0.001/step even at lr 0.3 — the ÷β-capped ePC
+  gradient is so small Euclid cannot deliver a usable step at any finite
+  lr (the log-interp matched lr ≈ 134 explodes to 1e13 loss). **Muon is
+  genuinely load-bearing for the PC family on LM** — the audit's "epc
+  euclid diverges" is now quantified: euclid's step is 400× too small at
+  its stable lr, and scaling to parity diverges.
 
-ePC×Muon and pepita explode at w64 and train at w256+; pure FF is flat at
-every width. One width-sweep study (w32/64/128/256 × {ff, ff_hybrid,
-pepita, epc}) would explain the signal-to-noise mechanism of local feedback
-versus parameter count — the kind of boundary result CP-6 exists to produce.
+### Priority 4 — width fragility of local feedback (the theory paragraph) — ✅ RESOLVED 2026-09-06: per-layer activity-scale compounding
 
-### Priority 5 — PEPITA theory (speculative, highest upside per success)
+Probe `scripts/probes/p4_width_fragility.py` (width {32,64,128,256} ×
+{ff, ff_hybrid, pepita, epc_thermo}, depth 4 fixed, Muon at each credit's
+registered lr, 75 s/arm, ctx 32; per-arm final val ppl + per-layer
+free-settle activation std). **The mechanism is visible directly in the
+activity stds:**
 
-Pepita's constant-dominated error at init (`e ≈ onehot − 1/65`) is actively
-wrong on dense per-position targets. Candidate fixes, each a one-probe test:
-per-position error centering (stability-verified already), learned feedback
-projections, error whitening. Pepita is the only pure-local rule with an
-error pathway — rescuing it is worth one focused session if P1–P3 land fast.
+- **ff**: flat ≈ 60 ppl at every width (the error-blind objective again).
+- **ff_hybrid**: trains at EVERY width (14.7–16.0, mild degradation) —
+  its readout-error term is autograd-scaled (no width-dependent gain);
+  width-robust.
+- **pepita**: bidirectionally fragile — w32: activity EXPLODES through
+  depth (std 0.66 → 10.8, val 1e8); w128/256: the signal COLLAPSES
+  (0.35 → 0.05, ~100× through depth, val ≈ chance). The usable band is
+  razor-thin; the fixed random feedback projections carry a
+  width-proportional error scale with no per-layer normalization.
+- **epc_thermo**: same shape, sharper — w32: std 0.93 → 2028 through
+  depth; only w256 stays bounded (…→ 5.8) and trains (57.85). Quantifies
+  the "width ≥ 256 required" observation: the ÷β error scale compounds
+  ∝ width below the threshold.
+
+**Theory paragraph (CP-6 material):** local-feedback rules whose error
+signal is not self-normalized (pepita's fixed projections, ePC's ÷β
+reparameterization) have a narrow stable-width window set by per-layer
+activity-scale compounding — the same structural gain-control bottleneck
+as the DeepHebbianChain (R11.3.14) and the tile-chain runaway, now
+measured on the third family (fixed feedback). The width-sweep figure is
+a candidate CP-6 boundary result. Scope caveats: single seed, lrs are
+the registered per-credit values (not re-tuned per width — lr sensitivity
+is itself part of the fragility), depth fixed at 4.
+
+### Priority 5 — PEPITA theory (speculative, highest upside per success) — ⚠ RESOLVED NEGATIVE for the cheap fixes (2026-09-06)
+
+P4's mechanism (non-self-normalized error signal, fixed random feedback
+projections) suggested three one-probe fixes. Executed as
+`scripts/probes/p5_pepita_fixes.py` (probe subclass `VariantPepita`
+transforming e = onehot − softmax before the fixed projection):
+**center** (batch-mean-centered — the LM audit's "centered-e"),
+**rmsnorm** (per-sample RMS — the P4 self-normalization fix), **crms**
+(both). Results: **none rescues PEPITA anywhere.** MNIST D13 regime
+(depth 2, seeds 0–2): control 0.239 (w32) / 0.211 (w128); center 0.187 /
+0.126 (HURTS — on single-target MNIST the constant component is
+neutral-to-load-bearing, refuting the "constant-dominated error" theory
+there); rmsnorm ≈ control; crms worst. LM w128 (where control collapsed
+to chance in P4): all four flat at chance (65.9–67.8 ppl). **The
+collapse is in the FIXED RANDOM PROJECTIONS themselves** — a closed-form
+random B is uncorrelated with each layer's feature space, and that
+misalignment compounds with depth/width; no transform of e repairs a
+directionally-random channel. **Remaining lever (the real pull, library
+change): learned feedback projections** — train B through the autograd
+graph (PEPITA-as-inference-network), or depth/width-conditioned
+projection scaling. Pepita stays the slowest D13 arm; the D13 ratchet
+(ff − pepita > 0.2) is safe.
 
 ### What is promising where (the allocation summary)
 
@@ -686,6 +807,21 @@ error pathway — rescuing it is worth one focused session if P1–P3 land fast.
 **Sequencing for the fresh sprint:** P1(a) → P3 → P1(b) → P2 → P4 → P5.
 The 60-minute LM runs commission only after P1–P3 close, so the runs test
 *fixed* arms at *verified* regimes with pre-registered controls.
+**Status 2026-09-06: P1(a), P3, P1(b) closed (P1a positive — D13 upgraded;
+P3 positive — Muon direction-quality mechanism quotable; P1b — attention,
+not supervision density, is the lever); P2 OPEN NEGATIVE at tried regimes
+(see Priority 2's untried-cell list); P4 CLOSED — per-layer
+activity-scale compounding is the width-fragility mechanism (see
+Priority 4); P5 RESOLVED NEGATIVE for the cheap error transforms — the
+collapse lives in the fixed random projections; learned feedback
+projections is the remaining pull (see Priority 5). The sprint's
+fundamental-research queue is now EMPTY of one-probe items; the next
+moves are the 10–20-min ladder runs (user directive) and the two library
+pulls the sprint surfaced (learned pepita feedback; P2's lower-prior
+cells).**
+**Runs directive (user, 2026-09-06): GRADUAL BUDGET SCALING — the next
+trial budget is ~10–20 min per arm, not 60; scale only as findings
+stabilize. The 60-minute runs stay gated behind that ladder.**
 
 ---
 
@@ -908,7 +1044,7 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 | **R11.2.15** `demo/tests/` 28 stale failures | Rebuild with R11.4 UI, or before if path touched | Hygiene |
 | **R11.2.16** TF-IDF weighting / `V_nudged` | Research track wants strengthened PC Lyapunov xfail | Hygiene |
 | **LM fundamental-research queue (P1–P5)** | **The fresh sprint's focus** — see "Fundamental-Research Focus" section: ff_hybrid reach (MNIST + dense-supervision isolation), the jpc-faithful PC trainer for LM, Muon lr-matched controls, the width-fragility sweep, PEPITA theory fixes. All ≤1-session instruments; the 60-min LM runs are user-gated behind P1–P3 | Research |
-| **`readout_error` flag (FF hybrid)** | **Landed 2026-09-05** as `CreditAssignmentConfig.local_goodness(readout_error=True)`; lock in `TestLocalGoodnessRealization`. Candidate D-table upgrade if it beats pure FF×Muon on MNIST (P1a) | ~~Capability~~ ✅ |
+| **`readout_error` flag (FF hybrid)** | **Landed 2026-09-05** as `CreditAssignmentConfig.local_goodness(readout_error=True)`; lock in `TestLocalGoodnessRealization`. **D-table upgrade CONFIRMED 2026-09-06 (P1a): beats pure FF×Muon on MNIST — promoted into D13 with ratchets** | ~~Capability~~ ✅ |
 | **R11.3.4** AutoScientist P-axis frontier | Tangible Checkpoint 5 — first *finding* figure (Pareto over 𝒞) | Research |
 | **R11.3.11** μPC depth scaling | **RESOLVED 2026-09-05 (D14): the μPC lift is REAL** at depth 20 under the jpc-faithful regime (test 0.69–0.83 vs default 0.14–0.24, seeds 0–2) — the earlier "no lift" verdicts were trainer-regime artifacts (Euclidean SGD, β=0.5, fixed 60 steps). Init landed 2026-09-04 (`GeometryConfig.init_scheme="mupc"`); regime landed 2026-09-05 (D14). Probe history: `scripts/probes/jpc_faithful.py` | ~~Research~~ ✅ (verdict: lift real, depth-dependent — saturated/invisible at depth 8, decisive at depth 20) |
 | **Path A: jpc-faithful trainer** | **LANDED 2026-09-05 as D14** (see Completed). Remaining tail (pull-based): promote the manual jpc loop into a `JPCFaithfulTrainer`/`SystemTrainer` regime config if a registered-scale sweep needs it; wider width 512 replication; the a_L = N^{-1} CE-softmax subtlety never bit us at width 128 (CE on 1/N-scaled logits trained fine) — revisit only at width 512 | ~~Research~~ ✅ core |
@@ -1799,6 +1935,29 @@ resident (carried from the session notes).
   resume; `fold_in` is the canonical seed derivation for any future per-batch
   keyed randomness (probes, campaign shard seeds).
 - **Lint/type debt deprioritized:** ruff clean passively; pyright on new modules only. Legacy findings carry per-line noqa markers that self-flag on touch.
+
+### New Improvement Opportunities (opened 2026-09-06, Fundamental-Research sprint)
+
+- **jpc-loop progress metric trap:** the frozen-error corrected forward's
+  CE is drivable to 0 by construction (ε does the correction) — never a
+  progress signal; only the FREE-settle readout measures learning. Any
+  future `JPCFaithfulTrainer` config must log free-phase metrics only.
+- **`TransformerGeometry` `n_layers=0` is probe-verified but unguarded:**
+  embedding+head-only works and is the dense-supervision isolation
+  instrument (P1b); if it becomes a demo arm, add a unit lock (spec
+  round-trip + acts alignment at zero blocks) before relying on it.
+- **`lm_comparison.py` `_build` annotates `dict[str, Callable[...]]` with
+  `Callable` never imported** (works only because annotations are lazy) —
+  as-touch fix on that probe.
+- **Learned pepita feedback projections (P5 tail, library pull):** the
+  fixed random inverse projections B are the measured bottleneck (P5:
+  no error transform rescues pepita; P4: directional collapse with
+  depth/width). Realizing PEPITA-as-inference-network — B trained
+  through the autograd graph alongside θ — is the remaining lever and
+  would touch `LocalGoodnessCredit._pepita_gradient` + a config field.
+  The D13 ratchet (ff − pepita > 0.2) will fire if it ever works well
+  enough to close the gap — expected and fine (update the ratchet with
+  the new record then).
 
 ### New Improvement Opportunities (opened 2026-09-05, LM session)
 

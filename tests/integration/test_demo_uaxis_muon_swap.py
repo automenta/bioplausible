@@ -38,9 +38,17 @@ Claims:
    momentum buffers that is aggressive full-spectrum amplification, and
    it is load-bearing: swapping in Newton–Schulz (Muon's cheaper
    partial-whitening recipe, ``ortho_steps=5``) preserves BP×Muon
-   (0.868) but COLLAPSES FF×Muon to 0.29. NS is therefore an opt-in
+   (0.868) but COLLAPSES FF×Muon to 0.29.     NS is therefore an opt-in
    variant (`ParameterUpdateConfig.riemannian_orthogonal(ortho_steps=k)`);
    the SVD polar factor is the default and the configuration of record.
+5. **The FF hybrid upgrades the local-credit family (P1a, 2026-09-05):**
+   `readout_error=True` (FF layer-local goodness + CE on the free logits,
+   the LM hybrid's library flag) beats pure FF×Muon on MNIST too —
+   0.857 ± 0.010 vs 0.838 ± 0.009 over seeds 0–4 (`p1a_ff_hybrid_mnist.py`,
+   per-seed lift min +0.009) and rescues the Euclidean arm dramatically
+   (0.798 vs 0.568 — the readout-error term nearly closes the Muon gap
+   for plain Euclidean steps). The readout-error term is a real
+   ingredient, not an LM-specific trick.
 """
 
 from itertools import islice
@@ -96,6 +104,11 @@ _CREDITS = {
     "pepita": lambda: LocalGoodnessCredit(
         CreditAssignmentConfig.local_goodness(
             feedback_scale=0.01, local_objective="pepita"
+        )
+    ),
+    "ff_hybrid": lambda: LocalGoodnessCredit(
+        CreditAssignmentConfig.local_goodness(
+            feedback_scale=0.01, local_objective="ff", readout_error=True
         )
     ),
 }
@@ -171,7 +184,7 @@ def test_demo_uaxis_muon_swap(emit_run_record) -> None:
 
     # Multi-seed promotion (d13_multiseed.py probe): the local arms' Muon
     # lift is variance-aware asserted, not single-seed quoted.
-    for credit_name in ("ff", "pepita"):
+    for credit_name in ("ff", "pepita", "ff_hybrid"):
         for update_name in _UPDATES:
             seeded = [
                 _run_arm(credit_name, update_name, train_data, seed=s)
@@ -184,7 +197,7 @@ def test_demo_uaxis_muon_swap(emit_run_record) -> None:
     # Color-coding lives in the SHAPE of the declaration: groups = credit
     # rule, series = update rule — the renderer colors each series and
     # draws the legend from series_labels.
-    credits = ("bp", "ff", "pepita")
+    credits = ("bp", "ff", "ff_hybrid", "pepita")
     # Seed variance on the page (roadmap item 2): the multi-seed arms'
     # bars carry ± half-range over seeds; single-run arms carry none.
     yerr: dict[str, dict[str, float]] = {}
@@ -253,6 +266,22 @@ def test_demo_uaxis_muon_swap(emit_run_record) -> None:
     )
     assert accs["ff/euclidean"] < EUCLID_LOCAL_CEILING, (
         "local credit on Euclidean must be the weak baseline at this budget"
+    )
+    hybrid_lift = [
+        h - f
+        for h, f in zip(
+            record["multi_seed"]["ff_hybrid/muon"],
+            record["multi_seed"]["ff/muon"],
+            strict=True,
+        )
+    ]
+    assert min(hybrid_lift) > 0, (
+        f"FF-hybrid×Muon must beat pure FF×Muon per seed (min "
+        f"{min(hybrid_lift):.3f}; P1a probe p1a_ff_hybrid_mnist.py)"
+    )
+    assert accs["ff_hybrid/euclidean"] > accs["ff/euclidean"] + 0.15, (
+        "the readout-error term must rescue the Euclidean local arm "
+        "(P1a: 0.798 vs 0.568)"
     )
     assert accs["ff/muon"] > LOCAL_FLOOR, (
         "local credit × Muon must train to BP-grade (the headline)"
