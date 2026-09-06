@@ -14,6 +14,21 @@
 > HEAD. The demo suite is the proof; the README quotes it; everything else
 > is history or hypothesis.*
 >
+> **State (2026-09-06, rev 11 — HIGHLIGHT-REEL PIVOT, user directive):**
+> the repair program has its winners; show them off. Three active steps,
+> in order: **(1) D17** — the LM ladder, now UN-GATED: Transformer ×
+> ff_hybrid (star local rule) vs Transformer × backprop at 10–20-min
+> arms; **(2) the capstone resource-vector accounting demo** on the
+> Step-1 winner (memory/energy Pareto vs backprop at matched accuracy);
+> **(3) ψ-only adaptation** — θ frozen, Task B learned via routing ψ
+> only (D22). **PARKED:** PEPITA (five-cause audit chain complete,
+> realization retired for the local-credit story), Z3-terminology
+> defense (the demo stands on its own: frozen θ is asserted exactly),
+> deep-Hebbian / naive-STDP rescue work. Pre-registered targets below
+> are *targets, not claims* — measured numbers only (prime directive
+> unchanged). The parked items satisfy the carried-queue rule by
+> explicit re-dating, not silent drop.
+>
 > **State (2026-09-06, rev 10):** F4 LANDED (`test_demo_credit_channel_map.py`,
 > gallery lock green ×2, full property suite 1685 passed / 3 pre-existing
 > baseline fails). PEPITA readout rung FALSIFIED — bounding hidden gain AND
@@ -85,6 +100,36 @@
 > PEPITA control explodes as audited. **The optimizer crutch is dead
 > for ePC at w32–64.** Next: A3 (depth under unit_rms) → A4 (credit_norm)
 > → B1 (learned feedback — PEPITA's indicated repair).
+
+---
+
+## 🎬 The Highlight Reel Program (rev 11 — ACTIVE)
+
+> User directive 2026-09-06: stop writing the mechanic's logbook; win the
+> race. Ignore the broken algorithms and showcase the high performers —
+> **ff_hybrid**, **OrthoAdam**, and **ePC** — as end-to-end, slide-grade
+> results. Everything below is probe-first (pre-register the target in
+> the probe docstring, measure, then promote), and every "juicy" number
+> in this section is a **pre-registered target to hit or honestly miss**,
+> never a claim until a demo pins it.
+
+| Step | Goal | Action | Pre-registered target (honest fallback: record what measures) |
+|---|---|---|---|
+| **1 — D17 headline** | Local, biologically-plausible learning trains a Transformer on LM | Un-gate and run the C0 ladder: `transformer/ff_hybrid/muon` vs `transformer/bp/adam` (+ `mlp/ff_hybrid/muon` local reference), 10–20-min arms, matched-step protocol, seeds 0–2; promote to a fixed-step D17 demo (walltime-budgeted arms can never be gallery-pinned — walltime printed, never recorded) | Local rule within **~15% of backprop val_ppl** at matched steps, no global backward sweep through hidden layers. A miss re-orders Step 2 (its "matched accuracy" premise depends on this) |
+| **2 — Capstone figure (F5)** | High performers are physically superior for next-gen hardware | Resource-vector accounting on the Step-1 winner: extend the D4 memory profiler to ff_hybrid (no stored-activation sweep), simulated-energy per the substrate models' stated terms (local updates vs global matmuls), per-episode compute at matched accuracy; one FrontierRecord table + Pareto frontier figure | Order-of-magnitude memory-bandwidth saving (**~10×** target) and **~5×** simulated-energy saving at comparable accuracy — the numbers that make hardware researchers care. Measured ratios stand whatever they are |
+| **3 — D22 instant adaptation** | Something backprop physically cannot do | ψ-only adaptation (D1→D22): train Task A, freeze θ completely, learn Task B **only** via routing ψ (the F3 per-gate/per-unit realization is already landed) | Single-episode adaptation in seconds with **‖θ_after − θ_before‖ = 0 asserted exactly** and Task-A performance retained (zero catastrophic forgetting by construction). No Z3-terminology defense — the exact-θ-invariance assert IS the claim |
+
+**Ruthlessly parked (rev 11):** PEPITA — anything further (audit chain
+complete: feedback_scale, centered-e1, row space, hidden gain, output
+step shape all ruled out; readout-path rung falsified); Z3 semantics
+debates; deep-Hebbian / naive-STDP repair work (B5, B2, B6 → garage
+unless a neuromorphic paper pulls them). C1 (P2 contrastive-LM parity)
+and C2–C4 stay queued but *below the reel* — they resume only if Step 1
+misses and the map says propagation repair is the blocker.
+
+**Binding constraint retained:** the demo suite is still the proof. A
+parked claim can be resurrected only through a new probe with a
+pre-registered prediction.
 
 ---
 
@@ -191,7 +236,7 @@ local rules work without the Muon/OrthoAdam crutch.
 | ePC — depth (simple regime) | credit_norm spectral (A4), gain_control (A5) | Partial lift only (0.195 vs 0.113 @ depth 8); no lift from activity-side renorm; credit norms still explode (A5 rung: 1.1e7) | Muon best-in-class at depth 8 (0.276); orthogonalization's residual value is **depth-only** |
 | ePC — depth (faithful regime) | none needed (A4×D14) | Self-sufficient: plain SGD 0.528 @ depth 20; credit_norm HARMS (ε is dynamics) | SGD suffices — the strongest co-design result in the program |
 | ff_hybrid | readout_error (landed pre-TODO12) | Width-robust on LM; carries the local-credit story | Trains under plain rungs |
-| PEPITA — width (LM) | A2/B1/A5 audit chain | Diverges under every landed lever; four causes ruled out; readout-path suspect named | Explodes on every non-Muon rung (Muon small-lr = stable-flat) — the one rule still Muon- (or anything-) dependent |
+| PEPITA — width (LM) | A2/B1/A5 audit chain | 🅿️ **PARKED rev 11** — diverges under every landed lever; five causes ruled out; realization retired | Explodes on every non-Muon rung (Muon small-lr = stable-flat) — parked, not a high performer |
 | NaturalGradientUpdate | — | Mean-\|grad\| magnitude normalizer, not Fisher (A0) | ✅ **RESOLVED 2026-09-06 — renamed `MeanNormUpdate`/`mean_norm`** (touching `_UPDATE_CLASSES`, factory, joint, CLI listings, evaluation map, probes/tests; fake `"fisher"` alias dropped). No diag-Fisher was implemented — the A6 map shows the momentum-EMA family (unit_rms) dominates it, so the honest resolution is the rename |
 
 **Map-level conclusions:** (1) the optimizer crutch is dead for ePC on
@@ -215,10 +260,10 @@ separate storage).
 | **B0** | ✅ **DONE 2026-09-06** — smoking-gun probe (`scripts/probes/b0_adaptive_fa_audit.py`): with W FROZEN, no activity, and zero gradients (only enabling the branch), legacy `AdaptiveFA._update_feedback_weights` drives cos(B, Wᵀ) monotonically up (0.116→0.160, 0.288→0.447 over 5000 updates) — **the legacy alignment is pure soft weight transport** (it reads `param.data`; Akrout's non-transport activity term was dropped in the port). The xfail's reason ("feedback LR too small to show alignment in 50 steps") = the transport is present but slow; the xfail stays xfail forever under the L3 lock, by construction. Reusable for B1: slow feedback timescale (feedback_lr 1e-4 ≪ lr), cos(B, Wᵀ) metric, feedback_scale | `scripts/probes/b0_adaptive_fa_audit.py` | Probe output + walltime in docstring; transport verdict recorded |
 | **B0-legacy-row** | *(original description)* **Audit the legacy seam first.** `computronium/core/local_learning/rules/fa.py:148` has `AdaptiveFA` (Akrout et al. 2019) — but its `_update_feedback_weights` pulls `fb` toward `param.data` (or `param.data.T`): **it reads forward weights, i.e. soft weight transport**; its bio-alignment property test sits xfail'd (`tests/property/biology/test_biology_axioms.py:365`, "feedback LR too small to show alignment in 50 steps"). Extract what's reusable (slow feedback timescale, alignment metric) and record the transport verdict | Probe note + `b0` docstring citing this file | The ontology port must NOT inherit the transport; the xfail stays xfail until a transport-free rule passes it |
 | **B1** | ✅ **LANDED 2026-09-06** — `CreditAssignmentConfig.local_goodness(learned_feedback=, feedback_lr=0.5, feedback_update_every=1)`; extended `local_goodness`, NOT a new credit_type (registry surfaces untouched). Learned B is credit-internal state (`LocalGoodnessCredit._learned`, same deterministic CRC-seeded init as fixed B): per weight, closed-form ridge regression `post @ C ≈ e1` with `B = Cᵀ·feedback_scale` (autoencoder-style, autograd-free, reads only settled activations + the e₁ broadcast — never `param.data`, L3 honored), EMA-blended at `feedback_lr` every `feedback_update_every` steps; non-finite settles skip the update (diverged-step precedent). `get_state()`/`load_state()` per the A1 protocol (learned-B matrices + step counter, string keys, fail-loud shape-mismatch reuse); **TrainerSnapshot now captures credit state** (`credit_state` named-group axis, restore fails loud — carried-queue lesson closed for credits too). **PROBE VERDICT (pre-registered prediction FALSIFIED):** `p4_width_fragility.py --learned-feedback --update unit_rms` — pepita w32/w128 STILL explode (val_ppl 4.8e8; act_std ~20×/layer at lrs 1e-4/3e-4, ~5 min on RTX 3080). Learned B changes the update's row space and the runaway persists ⇒ the fixed-B row space is exonerated; the driver is the unbounded settle-activity loop. **A5 (settle-path gain homeostasis) is the indicated PEPITA repair**, per the pre-registration's else-branch. Library-side B1 stands as honest infrastructure (unit locks + bitwise resume green) | `computronium/ontology/credit.py` + `tests/unit/core/test_learned_feedback.py` (5 locks: B moves + reconstruction strictly improves, transport-free trajectory vs perturbed W, bitwise state round-trip, fail-loud reuse, fixed path untouched) + `tests/integration/test_learned_feedback_resume.py` (snapshot carries credit state; resume bitwise) | Full property suite 679 passed (credit-semantics gate); ruff clean on new code; pyright clean on new code (legacy findings unchanged) |
-| **B2** | Fixed-vs-learned B at depths 4/8/16, capacity-matched, MNIST + LM cells | `scripts/probes/b2_learned_feedback_depth.py` | Does the depth-attenuation problem dissolve for the FA/PEPITA family? |
+| **B2** | 🅿️ **PARKED (rev 11 — PEPITA family).** Fixed-vs-learned B at depths 4/8/16, capacity-matched, MNIST + LM cells | `scripts/probes/b2_learned_feedback_depth.py` | Does the depth-attenuation problem dissolve for the FA/PEPITA family? |
 | **B3** | **Predictive targets for FF (C-axis):** each layer predicts the next layer's activity; the prediction error IS the credit signal (predictive coding's error, FF's architecture). New credit type `local_predictive` — full registry wiring per the checklist below. Design note: `TargetInversionCredit` currently propagates targets through `Wᵀ` (**weight transport by construction**) — the honest variant propagates targets through learned B (compose with B1) | `computronium/ontology/credit.py` + demo test | vs `ff_hybrid` on MNIST + LM: does it match without global CE? |
 | **B4** | **Per-layer contrastive targets:** each layer sees its activity under (a) correct-class input, (b) corrupted-class input; the activity difference is the layer-local signal (FF's original idea, made per-layer) | `computronium/ontology/credit.py` | Does it beat ff_hybrid on LM (where pure FF's global-goodness fails)? |
-| **B5** | **Reward-modulated STDP** — the supervised error term `TemporalTraceCredit` lacks by construction (F2: "declares `phases=(FREE,)` and never consumes `loss`"). Add a config-gated reward/error term on the timing-STDP path; closes F2's OPEN verdict either way | `credit.py` + F2 test re-audit | Collapse stops + readout ≥ random-init ⇒ F2 was a missing term; persists ⇒ a verified constraint of timing-STDP, honestly closed |
+| **B5** | 🅿️ **PARKED (rev 11 — naive-STDP rescue).** **Reward-modulated STDP** — the supervised error term `TemporalTraceCredit` lacks by construction (F2: "declares `phases=(FREE,)` and never consumes `loss`"). Add a config-gated reward/error term on the timing-STDP path; closes F2's OPEN verdict either way | `credit.py` + F2 test re-audit | Collapse stops + readout ≥ random-init ⇒ F2 was a missing term; persists ⇒ a verified constraint of timing-STDP, honestly closed |
 | **B6** | *(optional, last)* **Temporal targets:** use the settling trajectory (not just the final equilibrium) as credit — EqProp-adjacent; only if B3–B5 leave the target-delivery question open | probe only | — |
 
 ### Workstream C — Objective Consistency & Architecture (Lever 5; Phase 5)
@@ -228,7 +273,7 @@ and co-design the architecture for local learning.
 
 | Step | Description | Artifact | Validation |
 |---|---|---|---|
-| **C0** | **Bank the LM baselines first** (carried queue): the 10–20-min ladder arms at verified regimes with matched-step protocol riding along; curves + ppl table → **D17** per the static-arms convention. The repair program then measures lift-over-*this* baseline, not over 2.5-min smoke | `scripts/probes/lm_comparison.py --minutes 15 --arms …` → D17 demo | User-gated budget; findings stabilize before any 60-min run |
+| **C0** | ▶️ **UN-GATED rev 11 — this is Highlight-Reel Step 1** (the D17 ladder). Bank the LM baselines: the 10–20-min ladder arms at verified regimes with matched-step protocol riding along; curves + ppl table → **D17** per the static-arms convention. The repair program then measures lift-over-*this* baseline, not over 2.5-min smoke | `scripts/probes/lm_comparison.py --minutes 15 --arms …` → D17 demo | User-gated budget — **gate lifted by the 2026-09-06 highlight-reel directive**; findings stabilize before any 60-min run |
 | **C1** | **P2 resolution via the contrastive path:** epc_thermo×Muon already trains LM at registered width (train 2.81, val ~21 vs bp 9.9) — the open question is closing the gap to parity. Cells: (a) contrastive credit + A4 credit_norm + B1 learned feedback at w816×7; (b) P2's untried cells verbatim (inference-network ε, γ grid, width 512, steps > H); (c) prereq: the **TransformerGeometry × ePC settle extension** (block-structured error routing) before any transformer PC-family cell | `scripts/probes/c1_contrastive_lm.py` | Contrastive+repairs reach bp-parity or a mapped boundary; frozen-error retired as wrong-objective-for-LM if the untried cells also fail |
 | **C2** | **Error buses (G-axis):** dedicated channels carrying error alongside the forward pass; each layer reads/writes the bus; bus updated by local accumulation of prediction errors. `GeometryConfig.error_bus` + geometry support; residual (`GeometryConfig.residual`, landed) composes | geometry + settle/credit support + demo | Does the depth wall dissolve at depth 20+ for ALL credit rules (RESEARCH4 Phase-5 experiment)? |
 | **C3** | **Normalized architectures (G-axis):** LayerNorm/RMSNorm/weight-norm as geometry config — the scale problem fixed at the architecture level rather than the optimizer level | `GeometryConfig.normalization` | Width fragility disappears architecturally? (Cross-check A5: pipeline-level vs architecture-level gain control) |
@@ -248,11 +293,12 @@ landed per-gate drive + per-unit masks (2026-09-05). What remains:
 
 ---
 
-## 🏆 Capstone — The Payoff, Made Measurable
+## 🏆 Capstone — The Payoff, Made Measurable (▶️ ACTIVE — Highlight-Reel Step 2)
 
 RESEARCH4's payoff table (energy, plasticity, dynamic networks, distributed
 operation, substrate compatibility) becomes a **resource-vector accounting**
-demo once A/B/C land:
+demo — now the ACTIVE Step 2 of the highlight reel, run on the Step-1
+winner (ff_hybrid presumed; the D17 result decides):
 
 - **Memory:** no stored-activation backward sweep — the D4 memory profiler
   (`test_demo_memory_budget.py`) already measures saved bytes; extend to the
@@ -268,7 +314,9 @@ demo once A/B/C land:
 Deliverable: one campaign FrontierRecord table over
 𝒞 = (compute, memory, energy, latency, plastic-state capacity), repaired
 local rules vs backprop at matched accuracy — the "why it matters"
-paragraph with numbers.
+paragraph with numbers. Pre-registered targets: ~10× memory bandwidth,
+~5× energy (see the Highlight Reel table). Lands as demo **F5**
+(`test_demo_resource_vector.py`) + Pareto frontier figure.
 
 ---
 
@@ -276,13 +324,14 @@ paragraph with numbers.
 
 | Target | Description | Workstream | Demo Test |
 |---|---|---|---|
-| **D17** | LM ladder result at 10–20-min arms (carried TODO11 numbering — first claim on the number) | C0 | per static-arms convention |
+| **D17** | ▶️ **ACTIVE — Highlight-Reel Step 1 (un-gated rev 11).** LM ladder result at 10–20-min arms: transformer/ff_hybrid vs transformer/bp, seeds 0–2, fixed-step arms (gallery-pinnable), walltime printed never recorded | C0 | per static-arms convention |
 | **D18** | ✅ **LANDED 2026-09-06** — crutch killed for ePC w32–64: ePC trains at both fragile widths under unit_rms (w64 32.5, w32 42.5 multi-seed means) while Muon at its registered lr explodes (101.2 / 191.7); PEPITA control explodes (audit-backed structural). Demo: fixed-step arms (deterministic — walltime budgets CANNOT be gallery-pinned), LM task, seeds 0–2, CPU | A0–A2 | `test_demo_update_ladder.py` + `docs/figures/run_records/d18_update_ladder.json` |
 | **D19** | Credit-space normalization: ePC learns at depth 8–20 under the simple regime; per-layer decay ~1× | A4 | `test_demo_credit_norm_epc_depth.py` |
 | **D20** | Learned feedback: PEPITA with learned B competitive at depth 16, width-matched | B1–B2 | `test_demo_learned_feedback_pepita.py` |
 | **D21** | Predictive/contrastive local targets train without global CE | B3/B4 | `test_demo_local_targets.py` |
 | **F2-close** | Reward-modulated STDP verdict (either terminus) | B5 | re-audit inside `test_demo_spiking_plateau.py` |
-| **D22** | ψ-only adaptation (θ frozen) solves the switch | D1 | `test_demo_psi_only_adaptation.py` |
+| **D22** | ▶️ **ACTIVE — Highlight-Reel Step 3.** ψ-only adaptation (θ frozen, exact ‖Δθ‖=0 assert) solves the A→B switch | D1 | `test_demo_psi_only_adaptation.py` |
+| **F5** | ▶️ **ACTIVE — Highlight-Reel Step 2.** Resource-vector accounting: memory/energy/compute Pareto, repaired local rules vs backprop at matched accuracy | Capstone | `test_demo_resource_vector.py` |
 | **F4** | ✅ **LANDED 2026-09-06** — `test_demo_credit_channel_map.py`: all 8 failure modes in one figure; two mechanisms LIVE (A4 spectral repair: ePC depth-8 0.108→0.170 with per-layer credit norms flattened to ~1.0; blocked channel: sPC hidden norms exactly 0.0 vs ePC > 0) + record ratchets locked against D18/D16/F1/F2/D14 pinned data. **D19 supersedes the deferred simple-regime demo** — F4's live cell IS the A4 demonstration | A/B/C | `test_demo_credit_channel_map.py` + `docs/figures/run_records/f4_credit_channel_map.json` |
 
 ---
@@ -355,7 +404,32 @@ paragraph with numbers.
 
 ---
 
-## 🎯 The Next-Session Plan (Ordered, rev 3 — A0/A1/A2 landed)
+## 🎯 The Next-Session Plan (Ordered, rev 11 — Highlight Reel)
+
+1. **D17 ladder (Step 1)** — run the un-gated C0 arms:
+   `uv run python scripts/probes/lm_comparison.py --minutes 15 --arms
+   transformer/ff_hybrid/muon transformer/bp/adam mlp/ff_hybrid/muon`
+   (verify the exact arm syntax in the script first). Probe-first:
+   pre-register the ~15%-of-backprop target in the probe docstring,
+   seeds 0–2, then promote to the fixed-step D17 demo + gallery lock.
+2. **F5 resource-vector demo (Step 2)** — winner of Step 1 through the
+   capstone accounting: extend the D4 memory profiler to ff_hybrid,
+   simulated-energy per substrate terms, per-episode compute; one
+   FrontierRecord table + Pareto figure; static-arms convention.
+3. **D22 ψ-only adaptation (Step 3)** — Z3 frozen-θ machinery (D5) is
+   the precedent; assert ‖θ_after − θ_before‖ = 0 exactly, Task-A
+   retention, adaptation time measured by episode count; no terminology
+   defense in prose — the assert is the claim.
+4. Only if Step 1 misses its target: re-open C1 (P2 contrastive-LM
+   parity + propagation repair) — the reel's fallback path.
+
+**Gate after each step:** probe output + walltime visible → ruff
+format/check on changed files → pyright on new modules → targeted tests
+→ gallery lock green if a demo was promoted.
+
+---
+
+## 🎯 The Next-Session Plan (historical, rev 3–10 — repair program, closed at rev 10)
 
 1. ✅ **A4×D14 composition — DONE 2026-09-06, clean informative
    negative** (`scripts/probes/a4_faithful_composition.py`): faithful
@@ -610,6 +684,21 @@ green if a demo was promoted.
 ---
 
 ## 🏁 Completion Criteria for TODO12
+
+**Rev 11 criteria (highlight reel — the active bar):**
+
+1. **D17 pinned** — Transformer × ff_hybrid vs Transformer × backprop at
+   10–20-min equivalent arms, seeds 0–2, gallery-locked; the headline
+   table exists whatever the gap measures (target: within ~15%).
+2. **F5 pinned** — the resource-vector FrontierRecord table + Pareto
+   figure over the Step-1 winner at matched accuracy (targets: ~10×
+   memory bandwidth, ~5× energy — measured ratios stand).
+3. **D22 pinned** — ψ-only adaptation demo with exact ‖Δθ‖=0 assert and
+   Task-A retention.
+4. **RESULTS.md carries the three-step story** — one paragraph per step,
+   numbers quoted from the pinned records only.
+
+**Rev ≤10 criteria (repair program — status at rev 10, kept for record):**
 
 1. **Phase 1 verdict locked** — the magnitude-vs-direction ladder measured on
    PEPITA/ePC fragile cells; pre-registered predictions confirmed or
