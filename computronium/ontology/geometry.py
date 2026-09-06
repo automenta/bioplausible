@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import math
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, cast, runtime_checkable
 
 import torch
 from torch import Tensor, nn
@@ -117,6 +118,8 @@ class GeometryConfig:
         num_heads: int = 8
         head_dim: int | None = None
         attention_dropout: float = 0.0
+        # Causal-transformer topology
+        seq_len: int = 128
         # SpatialLattice3D topology fields
         lattice_dims: tuple[int, int, int] = (4, 4, 4)
         connectivity_radius: int = 1
@@ -141,6 +144,8 @@ class GeometryConfig:
     num_heads: int = 8
     head_dim: int | None = None
     attention_dropout: float = 0.0
+    # Causal-transformer topology
+    seq_len: int = 128
     # SpatialLattice3D topology
     lattice_dims: tuple[int, int, int] = (4, 4, 4)
     connectivity_radius: int = 1
@@ -167,6 +172,28 @@ class GeometryConfig:
             init_scale=init_scale,
             init_scheme=init_scheme,
             residual=residual,
+        )
+
+    @classmethod
+    def causal_transformer(
+        cls,
+        *,
+        vocab_size: int,
+        d_model: int,
+        n_layers: int,
+        n_heads: int,
+        seq_len: int,
+    ) -> GeometryConfig:
+        return cls(
+            input_dim=vocab_size,
+            output_dim=vocab_size,
+            hidden_dims=(d_model,),
+            num_layers=n_layers,
+            topology_type="causal_transformer",
+            connectivity=None,
+            recurrent_weight=None,
+            num_heads=n_heads,
+            seq_len=seq_len,
         )
 
     @classmethod
@@ -575,6 +602,164 @@ class FeedforwardGeometry(nn.Module):
 
     def transition_modules(self) -> list[nn.Module]:
         return [m for m in self._layers if isinstance(m, nn.Linear)]
+
+
+def _sinusoidal_pe(seq_len: int, d_model: int) -> Tensor:
+    pe = torch.zeros(seq_len, d_model)
+    pos = torch.arange(seq_len, dtype=torch.float).unsqueeze(1)
+    div = torch.exp(
+        torch.arange(0, d_model, 2, dtype=torch.float) * (-math.log(10000.0) / d_model)
+    )
+    pe[:, 0::2] = torch.sin(pos * div)
+    pe[:, 1::2] = torch.cos(pos * div)
+    return pe
+
+
+class _TransformerBlock(nn.Module):
+    """Pre-LN causal block: fused-QKV attention + 4x FFN, bias-free."""
+
+    def __init__(self, d: int):
+        super().__init__()
+        self.ln1 = nn.LayerNorm(d)
+        self.in_proj = nn.Linear(d, 3 * d, bias=False)
+        self.out_proj = nn.Linear(d, d, bias=False)
+        self.ln2 = nn.LayerNorm(d)
+        self.ffn1 = nn.Linear(d, 4 * d, bias=False)
+        self.ffn2 = nn.Linear(4 * d, d, bias=False)
+
+
+class TransformerGeometry(nn.Module):
+    """Causal transformer language-model topology (G-axis).
+
+    Contract: input token ids ``[B, T]`` (int64), output logits
+    ``[B*T, V]`` — the sequence dim folds into the batch so every
+    intermediate activity is a 2-D ``(B*T, dim)`` matrix.
+
+    The transition chain is aligned for the local-credit family:
+    ``forward_with_intermediates`` returns one act per Linear INPUT
+    (plus the final logits), in the same order as ``params``' 2-D
+    weights — exactly the positional pairing ``LocalGoodnessCredit``
+    (ff goodness and pepita inverse projections) and
+    ``RandomProjectionsCredit`` iterate. The embedding is a bias-free
+    Linear over synthesized one-hot ids, so every learnable weight is a
+    Linear ``(out, in)`` matrix; LayerNorm gains/biases are 1-D and pass
+    through the credit/update contracts untouched (they train only under
+    autograd credit: bp / ff).
+    """
+
+    blocks: nn.ModuleList
+    pe: Tensor
+    mask: Tensor
+
+    def __init__(self, config: GeometryConfig):
+        super().__init__()
+        self.config = config
+        d = config.hidden_dims[0]
+        self.d_model = d
+        self.seq_len = config.seq_len
+        self.num_heads = config.num_heads
+        self.embed = nn.Linear(config.input_dim, d, bias=False)
+        self.blocks = nn.ModuleList(
+            _TransformerBlock(d) for _ in range(config.num_layers)
+        )
+        self.head = nn.Linear(d, config.output_dim, bias=False)
+        self.register_buffer("pe", _sinusoidal_pe(config.seq_len, d))
+        mask = torch.triu(
+            torch.ones(config.seq_len, config.seq_len, dtype=torch.bool), diagonal=1
+        )
+        self.register_buffer("mask", mask)
+
+    @property
+    def params(self) -> dict[str, Tensor]:
+        return dict(self.named_parameters())
+
+    def _attention(self, qkv: Tensor, b: int, t: int) -> Tensor:
+        hd = self.d_model // self.num_heads
+        q, k, v = (
+            x.view(b, t, self.num_heads, hd).transpose(1, 2) for x in qkv.chunk(3, -1)
+        )
+        scores = q @ k.transpose(-2, -1) / (hd**0.5)
+        scores = scores.masked_fill(self.mask[:t, :t], float("-inf"))
+        out = torch.softmax(scores, dim=-1) @ v
+        return out.transpose(1, 2).contiguous().view(b * t, self.d_model)
+
+    def _apply_stack(
+        self,
+        x: Tensor,
+        substrate: Substrate | None,
+        intermediates: list[Tensor] | None = None,
+    ) -> Tensor:
+        if substrate is None:
+            from computronium.ontology.substrate import DigitalSubstrate
+
+            substrate = DigitalSubstrate()
+        op = substrate.get_forward_operator()
+        b, t = x.shape
+        dtype = self.embed.weight.dtype
+        onehot = torch.nn.functional.one_hot(x, self.config.input_dim).to(dtype)
+        flat = onehot.view(b * t, -1)
+        if intermediates is not None:
+            intermediates.append(flat)
+        h = op(flat, self.embed.weight).view(b, t, self.d_model) + self.pe[:t]
+        h = h.reshape(b * t, self.d_model)
+        for block in self.blocks:
+            h = self._apply_block(
+                cast("_TransformerBlock", block), h, op, b, t, intermediates
+            )
+        if intermediates is not None:
+            intermediates.append(h)
+        logits = op(h, self.head.weight)
+        if intermediates is not None:
+            intermediates.append(logits)
+        return logits
+
+    def _apply_block(
+        self,
+        block: _TransformerBlock,
+        h: Tensor,
+        op: Callable[[Tensor, Tensor], Tensor],
+        b: int,
+        t: int,
+        intermediates: list[Tensor] | None,
+    ) -> Tensor:
+        """One pre-LN causal block; appends transition-input acts."""
+        ln1_h = block.ln1(h)
+        if intermediates is not None:
+            intermediates.append(ln1_h)
+        attn_ctx = self._attention(op(ln1_h, block.in_proj.weight), b, t)
+        if intermediates is not None:
+            intermediates.append(attn_ctx)
+        h = torch.add(h, op(attn_ctx, block.out_proj.weight))
+        ln2_h = block.ln2(h)
+        if intermediates is not None:
+            intermediates.append(ln2_h)
+        f1 = torch.nn.functional.gelu(op(ln2_h, block.ffn1.weight))
+        if intermediates is not None:
+            intermediates.append(f1)
+        return torch.add(h, op(f1, block.ffn2.weight))
+
+    def forward(self, x: Tensor, substrate: Substrate | None = None) -> Tensor:
+        return self._apply_stack(x, substrate)
+
+    def forward_with_intermediates(
+        self, x: Tensor, substrate: Substrate | None = None
+    ) -> list[Tensor]:
+        acts: list[Tensor] = []
+        logits = self._apply_stack(x, substrate, acts)
+        _ = logits
+        return acts
+
+    def route(self, activations: Tensor) -> Tensor:
+        return self._apply_stack(activations, None)
+
+    def update_params(self, new_params: dict[str, Tensor]) -> None:
+        own = dict(self.named_parameters())
+        for name, param in new_params.items():
+            if name in own:
+                own[name].data.copy_(param)
+
+    def transition_modules(self) -> list[nn.Module]:
+        return [self.embed, *self.blocks, self.head]
 
 
 class RecurrentGeometry(nn.Module):
@@ -2096,6 +2281,8 @@ def geometry_from_config(config: GeometryConfig) -> Geometry:  # ruff: ignore[to
         return AttentionGeometry(config)
     if topology_type == "spatial_lattice":
         return SpatialLattice3DGeometry(config)
+    if topology_type == "causal_transformer":
+        return TransformerGeometry(config)
     if topology_type == "feedforward":
         return FeedforwardGeometry(config)
     raise ValueError(f"Unknown topology_type: {topology_type!r}")

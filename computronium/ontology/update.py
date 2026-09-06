@@ -456,6 +456,10 @@ class OrthoAdamUpdate(AdamUpdate):
         ortho_steps = self.config.ortho_steps
 
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
+            if not torch.isfinite(grad).all():
+                # Non-finite gradient: poisoning the m/v moments would be
+                # permanent (NaNs propagate through the EMA) — skip.
+                return param
             m = self._state(name, param, self._m)
             v = self._state(name, param, self._v)
             m.mul_(beta1).add_(grad, alpha=1 - beta1)
@@ -471,7 +475,10 @@ class OrthoAdamUpdate(AdamUpdate):
 
                     ortho = newton_schulz5(m_hat, steps=ortho_steps)
                 else:
-                    U, _, Vh = torch.linalg.svd(m_hat, full_matrices=False)
+                    try:
+                        U, _, Vh = torch.linalg.svd(m_hat, full_matrices=False)
+                    except RuntimeError:  # svd convergence failure surfaces as RuntimeError
+                        return param  # ill-conditioned moment — skip
                     ortho = U @ Vh
                 ortho *= adam_step.norm() / (ortho.norm() + 1e-8)
                 return param - self.config.ortho_lr * ortho
@@ -526,7 +533,17 @@ class RiemannianOrthogonalUpdate:
                 buf.mul_(self.config.momentum).add_(grad)
                 self._momentum_buffers[name] = buf
                 grad = buf
-            ortho_grad = self._orthogonalize(grad)
+            if not torch.isfinite(grad).all():
+                # Diverged step: SVD would crash on inf/NaN — skip this
+                # tensor's update instead of killing a long run (the run
+                # is already lost; the crash only destroys the evidence).
+                return param
+            try:
+                ortho_grad = self._orthogonalize(grad)
+            except RuntimeError:  # svd convergence failure surfaces as RuntimeError
+                # Ill-conditioned momentum (repeated singular values):
+                # SVD fails to converge — skip this tensor's update.
+                return param
             return param - self.config.step_size * ortho_grad
 
         return apply_pseudo_gradients(params, list(pseudo_grads), apply)

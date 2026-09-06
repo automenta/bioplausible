@@ -42,6 +42,13 @@ class CreditAssignmentConfig:
             through fixed random inverse projections)
         orthogonal_init: Initialize feedback matrices with orthogonal weights
         feedback_scale: Scaling factor for feedback matrices
+        readout_error: Augment the FF goodness contrast with CE on the
+            free output logits (the "FF hybrid"): pure FF's norm-contrast
+            is error-blind — no term sees the target — which refutes it
+            on tasks whose difficulty is the output mapping (LM: flat at
+            chance across beta/lr/ctx). The readout CE carries the target
+            through the shared autograd graph; hidden layers keep the
+            layer-local objective
         a_plus: STDP potentiation amplitude (for temporal_trace)
         a_minus: STDP depression amplitude (for temporal_trace)
         tau: STDP time constant (for temporal_trace, legacy)
@@ -60,6 +67,7 @@ class CreditAssignmentConfig:
     local_objective: Literal["ff", "pepita"]
     orthogonal_init: bool
     feedback_scale: float
+    readout_error: bool = False
     a_plus: float = 1.0
     a_minus: float = 1.0
     tau: float = 20.0
@@ -115,9 +123,11 @@ class CreditAssignmentConfig:
         local_objective: Literal["ff", "pepita"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
+        readout_error: bool = False,
     ) -> CreditAssignmentConfig:
         return cls(
             credit_type="local_goodness",
+            readout_error=readout_error,
             beta=beta,
             feedback_matrix=feedback_matrix,
             local_objective=local_objective,
@@ -718,6 +728,15 @@ class LocalGoodnessCredit:
         total = torch.zeros((), device=nudged_acts[-1].device)
         for i in range(1, n_trans + 1):
             total += free_acts[i].pow(2).mean() - nudged_acts[i].pow(2).mean()
+        y = free_state.y
+        if self.config.readout_error and y is not None:
+            # FF hybrid: pure FF is error-blind (no term sees the target —
+            # measured flat on LM across beta/lr/ctx); the readout CE
+            # carries the target through the shared autograd graph while
+            # hidden layers keep the layer-local objective.
+            total = torch.add(
+                total, torch.nn.functional.cross_entropy(free_acts[-1], y)
+            )
 
         params = [geometry.params[n] for n in weight_names]
         grads = torch.autograd.grad(

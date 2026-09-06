@@ -200,6 +200,7 @@ if TYPE_CHECKING:
         RecurrentGeometry,
         SpatialLattice3DGeometry,
         TileGeometry,
+        TransformerGeometry,
     )
     from computronium.ontology.plasticity import (
         FastWeightPlasticity,
@@ -279,6 +280,7 @@ _LAZY: dict[str, tuple[str, str | None]] = {  # ruff: ignore[non-empty-init-modu
     ),
     "theta_audit": ("computronium.core.theta_audit", "theta_audit"),
     "FeedforwardGeometry": ("computronium.ontology.geometry", "FeedforwardGeometry"),
+    "TransformerGeometry": ("computronium.ontology.geometry", "TransformerGeometry"),
     "GeometryConfig": ("computronium.ontology.geometry", "GeometryConfig"),
     "DepthMetric": ("computronium.ontology.depth", "DepthMetric"),
     "FixedDepth": ("computronium.ontology.depth", "FixedDepth"),
@@ -561,6 +563,7 @@ __all__ = [
     "ThermodynamicContrastCredit",
     "TileGeometry",
     "TrainingConfig",
+    "TransformerGeometry",
     "__version__",
     "compose_joint_system",
     "compose_joint_system_from_configs",

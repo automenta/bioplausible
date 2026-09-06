@@ -685,6 +685,54 @@ class TestLocalGoodnessRealization:
                 "PEPITA feedback projections must be deterministic"
             )
 
+    def test_readout_error_changes_ff(self, device):
+        """FF hybrid (readout_error=True) differs from pure FF and its
+        output-layer gradient carries the CE signal (the LM error-blindness
+        fix: pure FF is flat at chance on next-char prediction)."""
+        from computronium.ontology import LocalGoodnessCredit
+
+        def grads(readout_error: bool) -> list[Tensor]:
+            torch.manual_seed(0)
+            geometry = FeedforwardGeometry(
+                GeometryConfig.feedforward(
+                    input_dim=20, output_dim=4, hidden_dims=(16, 16)
+                )
+            ).to(device)
+            substrate = DigitalSubstrate(SubstrateConfig.digital(device=str(device)))
+            x = torch.randn(8, 20, device=device)
+            y = torch.randint(0, 4, (8,), device=device)
+            acts = geometry.forward_with_intermediates(x, substrate)
+            free = SystemState(x=x, y=y)
+            free.activations = acts
+            nudged = SystemState(x=x, y=y)
+            nudged.activations = [
+                *acts[:-1],
+                acts[-1] + 0.5 * (F.one_hot(y, 4).float() - acts[-1]),
+            ]
+            credit = LocalGoodnessCredit(
+                CreditAssignmentConfig.local_goodness(
+                    feedback_scale=0.01,
+                    local_objective="ff",
+                    readout_error=readout_error,
+                )
+            )
+            return geometry, credit.compute_pseudo_gradient(
+                {Phase.FREE: free, Phase.NUDGED: nudged}, None, geometry
+            )
+
+        geometry, pure = grads(False)
+        _, hybrid = grads(True)
+        wn = [n for n, p in geometry.params.items() if "weight" in n and p.ndim == 2]
+        out_idx = wn.index("layer_2_weight") if "layer_2_weight" in wn else len(wn) - 1
+        assert not torch.allclose(pure[out_idx], hybrid[out_idx]), (
+            "readout_error must change the output-layer gradient"
+        )
+        # the CE term is large relative to the tiny goodness contrast —
+        # the hybrid's readout gradient must be strictly larger in norm
+        assert hybrid[out_idx].norm() > pure[out_idx].norm(), (
+            "readout CE signal must dominate the output-layer update"
+        )
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

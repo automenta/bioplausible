@@ -300,6 +300,23 @@
 > but μPC still leads per seed. Promoted into D14 (two new arms +
 > ratchets; slow tier ~216 s). Property 679 passed; gallery lock green
 > ×2 after deliberate re-pin.
+> **2026-09-05 (continued): LM capability pull — `TransformerGeometry`
+> (G-axis) + the 1-hour LM comparison harness READY, runs user-gated.**
+> The causal transformer is now an ontology primitive with
+> transition-aligned acts (ff/pepita work on attention weights
+> unmodified); the harness capacity-matches transformer vs MLP arms
+> (params printed per arm, ratio asserted) and found+fixed a real
+> library defect (per-split vocab cipher in `get_lm_dataset`). Smoke
+> table banked; preliminary findings: Muon ≥ Adam on the transformer
+> at 1 min, FF flat at chance on LM (OPEN), pepita stable-but-marginal.
+> See the LM session table + New Improvement Opportunities.
+> **2026-09-05 (final): the readout_error flag landed (FF hybrid is a
+> library config), transformer/ff_hybrid/muon confirmed at 2.5 min
+> (6.74 vs bp 5.82), and the 2.5-min confirmation trials fixed the
+> candidate set. THE NEXT SPRINT IS FUNDAMENTAL RESEARCH, not runs —
+> see "Fundamental-Research Focus" (P1 ff_hybrid reach, P2 jpc-LM
+> trainer, P3 Muon lr-matched controls, P4 width fragility, P5 pepita
+> theory); the 60-minute LM runs commission only after P1–P3.**
 
 ---
 
@@ -544,6 +561,163 @@ every workstream below.
 
 ---
 
+## ✅ Completed This Session (2026-09-05 — LM local-credit audit + PC-family smoke: the unique combos DO have a chance)
+
+| Item | Description | Key Evidence |
+|------|-------------|--------------|
+| **`lm_local_audit.py` — FF/PEPITA audit + PC arms** (user: "check we aren't doing something stupid") | 12 arms × 1 min on the MLP LM (w256×4, D13-scale): FF {control(D13-exact), beta2, **hybrid**}, pepita {control, **centered-e**, ortho, fs1e-3}, bp control, **spc/thermo×{euclid,muon}, epc/thermo×{euclid,muon}** | D13 credit configs reproduce exactly in the harness (no config drift). Results (chance 4.17, bp control 9.9): **ff/hybrid 14.5–15.0** · **epc/thermo/muon 20.7–22.3** · epc/thermo/euclid diverges · spc/* flat or explodes · pure FF flat at every beta · pepita unstable at muon 0.02 (all variants), centered most stable |
+| **The FF diagnosis is CONFIRMED and FIXED** | Pure FF's norm-contrast objective is error-blind (beta 0.5 vs 2.0 identical: 62.6 vs 62.2 — the nudge strength is irrelevant because no term sees y). `HybridFFCredit` (FF layer-local goodness **+ CE on the free logits**) learns immediately: 62→14.5. This is a NEW algorithm variant (FF+readout-error), honestly labeled a hybrid | `scripts/probes/lm_local_audit.py::HybridFFCredit`; promoted into the harness as `mlp/ff_hybrid/muon` (reproduces 15.04) |
+| **ePC×thermo×Muon LEARNS LM — the energy-based family is alive** | The D12 pairing (ePC error reparameterization + ÷β contrastive credit) × Muon: 2.2–2.7 train, 20.7–22.3 val at 1 min — while sPC (nudge trapped in the layered settle, the D12 pathology) stays flat and ePC×Euclid diverges. **Muon is load-bearing for the PC family on LM** | Audit + registered-width verification: w816×7 (7.4M) 4.18→**2.81** in 1 min, stable. Narrow-width instability is a smoke artifact: ePC×Muon explodes at w64 (harness smoke shape) — width ≥ ~256 required, like pepita's w64 profile |
+| **Muon robustness guards (library)** | `RiemannianOrthogonalUpdate` and `OrthoAdamUpdate` now skip non-finite gradients and SVD-convergence failures per-tensor (return param unchanged) instead of crashing a long run — diverged evidence was being destroyed by the crash. Property suite 689 passed | `computronium/ontology/update.py` (isfinite guards + `_LinAlgError` fallbacks); the audit's ff arms at 1 min hit both failure modes live |
+
+**Revised scoreboard for the 1-hour runs (chance = 65 ppl, bp reference ≈ 9.9):**
+ff_hybrid/muon 15.0 and epc_thermo/muon ~21 (stable at registered width) are the
+unique-combo candidates with a real chance; pure FF is refuted-as-is (error-blind
+objective — the hybrid is the salvage); pepita needs an instrument fix (constant-
+term centering helps stability but no learning signal yet at 1 min); spc is flat
+(nudge trapping). Harness CELLS updated: ff_hybrid and epc_thermo promoted,
+transformer/ff and mlp/bp/muon+ortho dropped (optimizer-insensitive at this scale).
+
+**Next session (runs still user-gated):** `--minutes 60` on the 10-arm CELLS
+(~10 h) or the recommended subset {transformer/bp/adam, transformer/bp/muon,
+mlp/ff_hybrid/muon, mlp/epc_thermo/muon, mlp/pepita/muon} (~5 h); then D17
+promotion + RESULTS.md.
+
+### FF-hybrid promotion + 2.5-min confirmation (same session, user-directed)
+
+- **`readout_error: bool = False` landed on `CreditAssignmentConfig.local_goodness`**
+  — the FF hybrid is now a library configuration option (not a probe subclass):
+  pure FF's norm-contrast is error-blind (no term sees the target); the flag
+  adds CE on the free output logits through the shared autograd graph while
+  hidden layers keep the layer-local objective. Lock:
+  `test_credit.py::TestLocalGoodnessRealization::test_readout_error_changes_ff`
+  (readout gradient differs + CE dominates the output-layer update). Harness
+  uses the library flag (probe subclass deleted).
+- **transformer/ff_hybrid/muon WORKS**: 7.34 ppl at 1 min, **6.74 at 2.5 min**
+  (vs bp/adam 5.82, bp/muon 5.92) — a local-error rule training a transformer
+  LM through the ontology pipeline, ~15% behind backprop at matched wall-clock.
+  Added to CELLS.
+- **2.5-min confirmation table (smoke capacity, `--minutes` bug fixed — the
+  smoke flag was forcing 1 min and silently ignoring the override):**
+  transformer/bp/adam 5.82 / bp/muon 5.92 (Adam catches up — the 1-min Muon
+  edge was an early-steps artifact, do NOT quote) / ff_hybrid 6.74;
+  mlp/bp/adam 9.33 / ff_hybrid 13.71; pure FF still flat (58–60); pepita
+  unstable at current lrs; epc_thermo explodes at the w64 smoke shape
+  (KNOWN narrow-width artifact — verified stable at registered w816: 2.81
+  train at 1 min). Registered-scale CELLS: transformer {bp/adam, bp/muon,
+  ff_hybrid/muon, pepita/muon}, mlp {bp/adam, ff_hybrid/muon, epc_thermo/muon,
+  ff/muon, ff/ortho_adam, pepita/muon}.
+
+---
+
+## 🔬 Fundamental-Research Focus (2026-09-05, user-directed — the sprint that follows; NO runs beyond 5 min until these resolve)
+
+The user's decision: **more fundamental research before committing to
+lengthy runs.** The 2.5-min confirmations fixed the candidate set
+(ff_hybrid on both geometries, epc_thermo at registered width, the pure-FF
+refutation); what remains open are *mechanism* questions that cheap
+instruments can answer and that de-risk every future run. Ordered by
+win-per-effort:
+
+### Priority 1 — ff_hybrid everywhere it can reach (highest win/effort)
+
+The invention is now a library flag (`readout_error=True`) and the
+strongest unique result on the board (6.74 vs bp 5.82 at 2.5 min on the
+transformer). Two cheap questions remain:
+
+- **(a) Does it beat pure FF on MNIST?** D13's FF×Muon 0.838 is the repo's
+  flagship local result; if ff_hybrid×Muon beats it at demo scale, the
+  hybrid upgrades EVERY local-credit claim in the D-table. One probe, ~15 min.
+- **(b) Dense-supervision isolation experiment.** The MLP arms eat a 9×
+  tokens/s handicap (single target per window vs dense CE). A zero-block
+  `TransformerGeometry` (embedding + head only, no attention) gives dense
+  per-position supervision on a LOCAL-CREDIT-compatible geometry — isolating
+  how much of the transformer's advantage is attention vs supervision
+  density. If local credit + dense supervision closes most of the gap, the
+  "local learning can't do LM" story changes fundamentally. Geometry
+  supports `n_layers=0` already (verify).
+
+### Priority 2 — the PC-native trainer for LM (biggest potential finding)
+
+ePC×thermo×Muon already trains LM at 1-min scale; the D14 recipe (β grid,
+PC-native weight gradient with frozen errors, Adam) is the *theory-faithful*
+version and produced our deepest result (D14). Porting the jpc-faithful
+loop to the LM task (CE over `[B·T,V]`, frozen settled errors, one
+reverse-mode sweep) is a medium-effort landing with the largest payoff:
+an energy-based LM trainer with a paper-grounded regime. Prereq: ePC needs
+biases — the MLP arm has them; `TransformerGeometry` is bias-free (a
+candidate geometry extension if the transformer ePC cell is wanted).
+
+### Priority 3 — the Muon-vs-lr confound, closed properly
+
+Both LM headline candidates are ×Muon, and we have measured twice that
+optimizer effects masquerade as mechanism (F3 routing, D3). Protocol
+exists: per-arm effective-step measurement (P-axis lr-matched pilot) →
+epc×muon vs epc×euclid and ff_hybrid×muon vs ff_hybrid×euclid at matched
+effective lr. Cheap, and it is the difference between "Muon is load-bearing
+for local credit on LM" (a mechanism claim) and an artifact note.
+
+### Priority 4 — width fragility of local feedback (the theory paragraph)
+
+ePC×Muon and pepita explode at w64 and train at w256+; pure FF is flat at
+every width. One width-sweep study (w32/64/128/256 × {ff, ff_hybrid,
+pepita, epc}) would explain the signal-to-noise mechanism of local feedback
+versus parameter count — the kind of boundary result CP-6 exists to produce.
+
+### Priority 5 — PEPITA theory (speculative, highest upside per success)
+
+Pepita's constant-dominated error at init (`e ≈ onehot − 1/65`) is actively
+wrong on dense per-position targets. Candidate fixes, each a one-probe test:
+per-position error centering (stability-verified already), learned feedback
+projections, error whitening. Pepita is the only pure-local rule with an
+error pathway — rescuing it is worth one focused session if P1–P3 land fast.
+
+### What is promising where (the allocation summary)
+
+| Track | LM | Other tasks (MNIST-class) | Effort |
+|-------|----|---------------------------|--------|
+| ff_hybrid | headline candidate (6.74 vs 5.82, both geometries) | **may upgrade D13's 0.838** — cheapest big win | hours |
+| ePC × Muon (jpc trainer) | biggest finding potential | D12-adjacent; MNIST already covered | ~1 session |
+| Muon lr-matched controls | gates every Muon claim | gates D13/D15/D16 wording | hours |
+| Width-fragility sweep | explains local-feedback S/N | boundary figure (CP-6) | ~1 session |
+| PEPITA fixes | long shot | fixes D13's slowest arm | ~1 session, speculative |
+| Long LM runs | blocked on P1–P3 | — | user-gated, ~7–10 h |
+
+**Sequencing for the fresh sprint:** P1(a) → P3 → P1(b) → P2 → P4 → P5.
+The 60-minute LM runs commission only after P1–P3 close, so the runs test
+*fixed* arms at *verified* regimes with pre-registered controls.
+
+---
+
+## ✅ Completed This Session (2026-09-05 — LM capability pull: TransformerGeometry + the 1-hour comparison harness)
+
+| Item | Description | Key Evidence |
+|------|-------------|--------------|
+| **`TransformerGeometry` — the G-axis LM primitive** | Causal pre-LN transformer as a first-class geometry (NOT a probe hack — user directive): token ids `[B, T]` in, logits `[B*T, V]` out (sequence folds into batch, so every act is 2-D); embedding realized as a bias-free Linear over synthesized one-hot ids so every learnable weight is a Linear `(out, in)`; sinusoidal PE buffer; fused-QKV + out-proj + 4× FFN per block, all bias-free through the substrate operator. **The acts chain is transition-ALIGNED** (`forward_with_intermediates` returns one act per Linear input, in `params` order) — so ff goodness and pepita inverse projections work on attention weights UNMODIFIED. LayerNorm gains are 1-D and pass the credit/update contracts (train only under autograd credit) | `computronium/ontology/geometry.py` (`TransformerGeometry`, `_TransformerBlock`, `_sinusoidal_pe`, `GeometryConfig.causal_transformer` + `seq_len` field, dispatch `"causal_transformer"`); root + ontology exports. Locks `tests/unit/core/test_transformer_geometry.py` (6 passed, ~5 s): acts↔weights alignment, causal masking (future ids never change past logits — bitwise), spec round-trip w/ param restore (bitwise), bp learns structured tokens < chance−0.5, ff/pepita nonzero pseudo-gradients on `blocks.0.in_proj` (mechanism live). Property 679 passed; fast demo gate 20/20 + gallery lock green (no re-pin) |
+| **`lm_comparison.py` — the 1-hour comparison harness, READY (runs not started)** | Both families through the ONE pipeline: `transformer/*` arms (dense next-token supervision, all T positions) vs `mlp/*` arms (one-hot context window, single next-char target), same credit×update space {bp/adam (conventional SOTA), bp/muon, bp/ortho_adam, ff/muon, ff/ortho_adam, pepita/muon}. **Capacity-matched family pairs, asserted** (registered: transformer d320/6L/C128 7.41M vs mlp w816/7L/C64 7.43M, ratio 1.003; smoke: 156,544 vs 149,889, ratio 1.044, gate < 1.05) **and printed for every arm** (user directive). Fixed val window set shared across arms; per-arm curves + tokens/s; JSON to `benchmark_results/lm_comparison.json` | `scripts/probes/lm_comparison.py`. Smoke table (1 min/arm, RTX 3080): transformer/bp/muon **6.41** < transformer/bp/adam 6.61 < transformer/bp/ortho_adam 7.08 « mlp/bp/* 10.5–10.8 « ff/* 56–60 « pepita/* 135–221 (chance 65) |
+| **LM data-path bugs found and fixed** | (1) **Per-split vocab cipher** (the big one): `get_lm_dataset` builds a CharDataset per split, each with its OWN vocab — token id 10 is a different character in train vs val, so every naive val number is garbage (worse-than-chance val was the smoke-run tell). Fix: `load_tokens()` encodes both splits through ONE train-built vocab. (2) HF `tiny_shakespeare` script-format dataset deprecated → URL fallback verified live (1.004M train / 55.8K val chars, vocab 65) | `scripts/probes/lm_comparison.py::load_tokens`; the pre-fix symptom: bp train loss 1.5 with val loss 8.2 on "same-distribution" text, KL(val‖train char freq) = 1.55 nats |
+| **Tuned LM lrs (smoke sweeps, per-arm)** | bp/adam 1e-3; bp/muon 0.01 (0.02 was MNIST-calibrated, 15.5→12.1 ppl at 1 min); bp/ortho ortho_lr 1e-3 (3e-3 → 14.1, 1e-3 → 12.2); ff/muon 0.01; **pepita needs arm-specific gentler steps** — 0.02 explodes, 0.005 borderline (stable solo, explodes multi-arm), 0.002 stable on MLP, **5e-4 on transformer**; wildcard-LR ordering must list specific patterns BEFORE wildcards (first match wins — the shadowing bug caused a false "still unstable" reading) | `LR` table in `lm_comparison.py` with the ordering note; explosion autopsies in-session |
+
+**Preliminary findings (smoke scale, treat as OPEN):**
+- **FF is flat at chance on LM** — both geometries, ctx 8–64, every lr tried
+  (MLP arm stuck at 4.10 ≈ ln(60); transformer arm 3.93 descending very
+  slowly at 1500 steps). NOT starvation: bp arms learn at identical budgets,
+  and FF×Muon learns MNIST at HEAD (demo-proven). The layer-local goodness
+  objective does not transfer to next-char prediction at smoke scale. OPEN.
+- **Pepita is stable-but-marginal** at its tuned lrs (135–221 ppl at 1 min,
+  both geometries) — consistent with its D13 profile (slow learner); the
+  1-hour budget is the first fair test.
+- **Muon ≥ Adam on the transformer at 1 min** (6.41 vs 6.61) — first LM-scale
+  U-axis signal, single-seed, smoke capacity; do not quote.
+- Wall-clock supervision asymmetry is structural: the transformer arm sees
+  ~9× more tokens/s (dense per-position CE vs single target per window) —
+  the comparison is wall-clock-budgeted (user directive), the asymmetry is
+  part of what "conventional methods" buy you; recorded, not hidden.
+
+**Next session (the runs, user-gated):** `uv run python scripts/probes/lm_comparison.py --minutes 60` (~11 h for all 11 arms; select subsets with `--arms`); then analyze curves + ppl table, promote the result to a demo (D17 candidate) per the static-arms convention, RESULTS.md paragraph, gallery row.
+
+---
+
 ## ✅ Completed This Session (2026-09-05 — Demo API roadmap item 2, seed variance on the page)
 
 | Item | Description | Key Evidence |
@@ -733,6 +907,8 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 | **P-axis primitives realized (closed the F3 mechanism-audit gap, 2026-09-05)** | **LANDED 2026-09-05** (see header + session table). Remaining P-axis OPEN item: lr-matched controls per arm before any retention mechanism claim; an episode that persists ψ across batches (the `train_step` contract re-initializes ψ per episode) if a registered fast-weight claim needs multi-batch memory | ~~Capability (P-axis)~~ ✅ core |
 | **R11.2.15** `demo/tests/` 28 stale failures | Rebuild with R11.4 UI, or before if path touched | Hygiene |
 | **R11.2.16** TF-IDF weighting / `V_nudged` | Research track wants strengthened PC Lyapunov xfail | Hygiene |
+| **LM fundamental-research queue (P1–P5)** | **The fresh sprint's focus** — see "Fundamental-Research Focus" section: ff_hybrid reach (MNIST + dense-supervision isolation), the jpc-faithful PC trainer for LM, Muon lr-matched controls, the width-fragility sweep, PEPITA theory fixes. All ≤1-session instruments; the 60-min LM runs are user-gated behind P1–P3 | Research |
+| **`readout_error` flag (FF hybrid)** | **Landed 2026-09-05** as `CreditAssignmentConfig.local_goodness(readout_error=True)`; lock in `TestLocalGoodnessRealization`. Candidate D-table upgrade if it beats pure FF×Muon on MNIST (P1a) | ~~Capability~~ ✅ |
 | **R11.3.4** AutoScientist P-axis frontier | Tangible Checkpoint 5 — first *finding* figure (Pareto over 𝒞) | Research |
 | **R11.3.11** μPC depth scaling | **RESOLVED 2026-09-05 (D14): the μPC lift is REAL** at depth 20 under the jpc-faithful regime (test 0.69–0.83 vs default 0.14–0.24, seeds 0–2) — the earlier "no lift" verdicts were trainer-regime artifacts (Euclidean SGD, β=0.5, fixed 60 steps). Init landed 2026-09-04 (`GeometryConfig.init_scheme="mupc"`); regime landed 2026-09-05 (D14). Probe history: `scripts/probes/jpc_faithful.py` | ~~Research~~ ✅ (verdict: lift real, depth-dependent — saturated/invisible at depth 8, decisive at depth 20) |
 | **Path A: jpc-faithful trainer** | **LANDED 2026-09-05 as D14** (see Completed). Remaining tail (pull-based): promote the manual jpc loop into a `JPCFaithfulTrainer`/`SystemTrainer` regime config if a registered-scale sweep needs it; wider width 512 replication; the a_L = N^{-1} CE-softmax subtlety never bit us at width 128 (CE on 1/N-scaled logits trained fine) — revisit only at width 512 | ~~Research~~ ✅ core |
@@ -1623,6 +1799,27 @@ resident (carried from the session notes).
   resume; `fold_in` is the canonical seed derivation for any future per-batch
   keyed randomness (probes, campaign shard seeds).
 - **Lint/type debt deprioritized:** ruff clean passively; pyright on new modules only. Legacy findings carry per-line noqa markers that self-flag on touch.
+
+### New Improvement Opportunities (opened 2026-09-05, LM session)
+
+- **`get_lm_dataset` per-split vocab cipher (library defect):** any consumer
+  of `get_lm_dataset` across splits gets misaligned token ids. The harness
+  works around it (`load_tokens`); the real fix belongs in
+  `computronium/data/lm.py` (share one CharDataset vocab across splits or
+  expose the raw text) — as-touch on that module.
+- **FF-doesn't-train-LM (OPEN finding):** layer-local goodness is flat at
+  chance on next-char prediction at smoke scale (both geometries, all lrs,
+  ctx 8–64). Candidate mechanisms: goodness thresholds vs char-class count
+  (65 ≫ 10), one-hot input statistics, single-target sparsity. Worth a
+  dedicated audit before any "local learning fails on LM" claim
+  (R11.5.5a applies).
+- **`domains/lm.py::LMTask` is stale:** predicts a single next token per
+  window (not dense), wires its own loaders, never used by the harness —
+  reconcile or retire on next touch of the domains layer.
+- **TransformerGeometry `ortho_lr`/`step_size` coupling:** ortho arms take
+  `step_size` from the `*/bp/adam` entry — the Adam-base and ortho-lr knobs
+  are not independently addressable from the CLI yet; fine for the planned
+  runs, split if a registered sweep needs it.
 
 ### New Improvement Opportunities (opened 2026-09-04, pull-based)
 
