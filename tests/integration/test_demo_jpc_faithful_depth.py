@@ -21,6 +21,16 @@ this demo shows at depth 20 / width 128:
    this scale. Single-seed demo with comparative margins (the multi-seed
    probe numbers live in scripts/probes/jpc_faithful.py; the measured
    per-seed lift gap is ≥ 0.54).
+4. **Orthogonalized-momentum Adam (OrthoAdam, ortho_lr 1e-3) lifts the
+   whole regime and shrinks the μPC lift** (hunt cell, probe
+   scripts/probes/jpc_ortho_adam.py, seeds 0–2): mupc×ortho 0.914 /
+   0.923 / 0.922 and default×ortho 0.859 / 0.838 / 0.856 — the
+   default-init memorization corner (test ≈ 0.20 under Adam) is largely
+   rescued, so the μPC-vs-default gap narrows from ≈ 0.58 to ≈ 0.07.
+   Momentum-orthogonalization and depth-scaled init are partially
+   interchangeable repairs of the same depth pathology; μPC still leads.
+   The lr is sharp (3e-3 — the D16-calibrated value — degrades μPC to
+   ≈ 0.52: a step-size artifact, the natural-gradient lesson again).
 """
 
 from itertools import islice
@@ -46,8 +56,40 @@ DEPTH = 20
 BATCH_CAP = 150
 EVAL_CAP = 20
 ADAM_LR = 1e-3
+ORTHO_LR = 1e-3  # the jpc-regime calibration (probe lr sweep: 5e-4–1e-3 plateau, 3e-3 degrades)
 ACTIVITY_STEP = 0.1
 CHANCE = 0.1
+
+
+class _OrthoAdamWeights:
+    """Adam moments + SVD-polar matrix directions over a plain weight
+    list — the OrthoAdamUpdate recipe for the manual jpc loop."""
+
+    def __init__(self, weights: list[torch.Tensor], lr: float):
+        self.weights = weights
+        self.lr = lr
+        self.beta1, self.beta2, self.eps = 0.9, 0.999, 1e-8
+        self.t = 0
+        self.m = [torch.zeros_like(w) for w in weights]
+        self.v = [torch.zeros_like(w) for w in weights]
+
+    def step(self, grads: list[torch.Tensor]) -> None:
+        self.t += 1
+        bias1 = 1 - self.beta1**self.t
+        bias2 = 1 - self.beta2**self.t
+        with torch.no_grad():
+            for w, g, m, v in zip(self.weights, grads, self.m, self.v, strict=True):
+                m.mul_(self.beta1).add_(g, alpha=1 - self.beta1)
+                v.mul_(self.beta2).addcmul_(g, g, value=1 - self.beta2)
+                m_hat = m / bias1
+                adam_step = m_hat / (v / bias2).sqrt().add_(self.eps)
+                if w.ndim == 2:
+                    U, _, Vh = torch.linalg.svd(m_hat, full_matrices=False)
+                    ortho = U @ Vh
+                    ortho *= adam_step.norm() / (ortho.norm() + 1e-8)
+                    w.add_(ortho, alpha=-self.lr)
+                else:
+                    w.add_(adam_step, alpha=-self.lr)
 
 
 def _flatten(loader, cap):
@@ -61,7 +103,7 @@ def _task() -> object:
     return task
 
 
-def _run_arm(init: str, beta: float, train_data) -> dict:
+def _run_arm(init: str, beta: float, train_data, optimizer: str = "adam") -> dict:
     torch.manual_seed(1)
     geometry = FeedforwardGeometry(
         GeometryConfig.feedforward(
@@ -85,6 +127,7 @@ def _run_arm(init: str, beta: float, train_data) -> dict:
     layered = extract_layered_params(geometry)
     weights = [t[0] for t in layered.transitions]
     adam = optim.Adam(weights, lr=ADAM_LR)
+    ortho = _OrthoAdamWeights(weights, ORTHO_LR)
 
     n = total = 0
     for x, y in train_data:
@@ -102,10 +145,13 @@ def _run_arm(init: str, beta: float, train_data) -> dict:
             energy = beta * torch.nn.functional.cross_entropy(y_hat, y)
             grads = torch.autograd.grad(energy, weights)
 
-        adam.zero_grad()
-        for w, g in zip(weights, grads, strict=True):
-            w.grad = g
-        adam.step()
+        if optimizer == "ortho_adam":
+            ortho.step([g.detach() for g in grads])
+        else:
+            adam.zero_grad()
+            for w, g in zip(weights, grads, strict=True):
+                w.grad = g
+            adam.step()
         n += (y_hat.argmax(1) == y).sum().item()
         total += y.shape[0]
 
@@ -147,12 +193,14 @@ def test_demo_jpc_faithful_depth(emit_run_record) -> None:
         },
         "arms": {},
     }
-    for name, init, beta in (
-        ("mupc_beta10", "mupc", 10.0),
-        ("default_beta10", "default", 10.0),
-        ("mupc_beta1e3", "mupc", 1e3),
+    for name, init, beta, optimizer in (
+        ("mupc_beta10", "mupc", 10.0, "adam"),
+        ("default_beta10", "default", 10.0, "adam"),
+        ("mupc_beta1e3", "mupc", 1e3, "adam"),
+        ("mupc_ortho", "mupc", 10.0, "ortho_adam"),
+        ("default_ortho", "default", 10.0, "ortho_adam"),
     ):
-        record["arms"][name] = _run_arm(init, beta, train_data)
+        record["arms"][name] = _run_arm(init, beta, train_data, optimizer)
         print(f"{name:>16}: {record['arms'][name]}")
 
     # Common demo API: the figure is declared IN the record, next to the
@@ -160,8 +208,8 @@ def test_demo_jpc_faithful_depth(emit_run_record) -> None:
     # and value labels.
     record["figure"] = {
         "title": (
-            "D14 — depth 20 under the jpc-faithful regime: "
-            "μPC generalizes where default init memorizes"
+            "D14 — depth 20 under the jpc-faithful regime: μPC generalizes "
+            "where default init memorizes; OrthoAdam lifts both inits"
         ),
         "figsize": [7.5, 4.5],
         "panels": [
@@ -196,4 +244,19 @@ def test_demo_jpc_faithful_depth(emit_run_record) -> None:
     assert record["arms"]["mupc_beta1e3"]["test"] < mupc["test"] - 0.2, (
         "β=1e3 must land in the memorization corner at this scale "
         "(β is a working regime knob, not a monotone dial)"
+    )
+    mupc_ortho = record["arms"]["mupc_ortho"]
+    default_ortho = record["arms"]["default_ortho"]
+    assert mupc_ortho["test"] > mupc["test"] + 0.05, (
+        "OrthoAdam must lift the μPC regime beyond plain Adam "
+        f"(probe gap +0.095 at this seed; got {mupc_ortho['test']:.3f} vs "
+        f"{mupc['test']:.3f})"
+    )
+    assert default_ortho["test"] > default["test"] + 0.3, (
+        "OrthoAdam must largely rescue the default-init memorization corner "
+        f"(probe gap +0.6 at this seed; got {default_ortho['test']:.3f})"
+    )
+    assert mupc_ortho["test"] > default_ortho["test"] + 0.03, (
+        "μPC still leads under OrthoAdam (probe per-seed gap ≥ 0.06; "
+        "the lift narrows — the two repairs are partially interchangeable)"
     )

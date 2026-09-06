@@ -45,6 +45,7 @@ from computronium import (
     compose_system,
     create_task,
 )
+from computronium.visualization import bars_panel, figure_spec, lines_panel
 
 BATCH_CAP = 300
 LEARN_FLOOR = 0.5  # both arms must learn (5x chance)
@@ -111,6 +112,30 @@ def test_demo_spike_settle(emit_run_record) -> None:
             "membrane_max": settled.activations[-1].max().item(),
         }
         record["spike_observation"] = probe
+
+    record["figure"] = figure_spec(
+        "D7 — one wiring, one swapped D-axis",
+        bars_panel(
+            {
+                name: {"train accuracy": arm["train_acc"]}
+                for name, arm in record["arms"].items()
+            },
+            chance=1 / 10,
+            chance_label="chance (0.1)",
+            ylabel="train accuracy",
+            ylim=(0, 1),
+        ),
+        lines_panel(
+            {"spikes": probe["spike_totals"]},
+            xlabel="settle step (hidden | output)",
+            ylabel="spikes per step",
+            title=(
+                f"LIF settle: {probe['total_spikes']:.0f} spikes, "
+                f"membrane max {probe['membrane_max']:.2f} ≤ {THRESHOLD}"
+            ),
+        ),
+        figsize=[9, 4],
+    )
 
     emit_run_record("D7", "spike_settle", record)
 

@@ -100,3 +100,30 @@ def test_ortho_adam_dispatch_round_trip():
     assert isinstance(upd, OrthoAdamUpdate)
     assert upd.config.step_size == pytest.approx(1e-3)
     assert upd.config.ortho_lr == pytest.approx(3e-3)
+
+
+def test_ortho_adam_ns_mode_orthogonal_and_distinct():
+    """ortho_steps > 0 selects Newton–Schulz on the first moment: the
+    matrix direction stays (semi-)orthogonal and the trajectory differs
+    from the SVD path (the hunt's NS-variant opt-in, probe
+    scripts/probes/hunt_ns_adam.py)."""
+    torch.manual_seed(2)
+    names = _learnable_weight_names(_geometry().params)
+    wname = next(n for n in names if "weight" in n)
+    shape = _geometry().params[wname].shape
+    ns = OrthoAdamUpdate(ParameterUpdateConfig.ortho_adam(ortho_steps=5))
+    svd = OrthoAdamUpdate(ParameterUpdateConfig.ortho_adam(ortho_steps=0))
+    p = {wname: torch.zeros(shape)}
+    g = [torch.randn(shape) * 0.1]
+    out_ns = ns.step(dict(p), g, _geometry())[wname]
+    out_svd = svd.step(dict(p), g, _geometry())[wname]
+    step = (-out_ns).float()
+    gram = step.T @ step
+    off = gram - torch.diag(torch.diag(gram))
+    assert float(off.abs().max()) < 0.35 * float(torch.diag(gram).mean()), (
+        "the NS matrix direction must be approximately semi-orthogonal "
+        "(cross-terms well below the column energies)"
+    )
+    assert not torch.allclose(out_ns, out_svd), (
+        "NS and SVD modes must be distinct trajectories (same moments)"
+    )

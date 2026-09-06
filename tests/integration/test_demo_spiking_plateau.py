@@ -60,6 +60,7 @@ from computronium import (
     create_task,
 )
 from computronium.ontology.credit import Phase
+from computronium.visualization import bars_panel, figure_spec, lines_panel
 
 WIDTH = 32
 DEPTH = 4
@@ -205,6 +206,44 @@ def test_demo_spiking_plateau(emit_run_record) -> None:
 
     record["homeostatic_audit"] = _homeostatic_arm(
         healthy, config, train_data, eval_data
+    )
+
+    record["figure"] = figure_spec(
+        "F2 — the spiking plateau, audited",
+        lines_panel(
+            {
+                tag: [max(f, 1e-5) for f in fractions_]
+                for tag, fractions_ in record["spike_fractions"].items()
+            },
+            x=list(range(1, len(record["spike_fractions"]["default"]) + 1)),
+            log_y=True,
+            xlabel="layer",
+            ylabel="spike fraction",
+            title="the confound: default init is silent past layer 1",
+        ),
+        lines_panel(
+            {
+                tag: [max(n, 1e-6) for n in norms_]
+                for tag, norms_ in record["credit_norms"].items()
+            },
+            x=list(range(1, len(record["spike_fractions"]["default"]) + 1)),
+            log_y=True,
+            xlabel="weight matrix",
+            ylabel="STDP credit norm",
+            title="gradients: frozen at init vs reaching every layer",
+        ),
+        bars_panel(
+            {name: {"readout": v} for name, v in record["feature_readout"].items()},
+            chance=CHANCE,
+            chance_label=f"chance ({CHANCE})",
+            ylabel="10-class centroid readout (hidden membrane)",
+            title=(
+                "unsupervised STDP collapses class structure "
+                f"(supervised acc {record['supervised_train_acc']:.2f}: no error path)"
+            ),
+            ylim=(0, 0.8),
+        ),
+        figsize=[14, 4],
     )
 
     emit_run_record("F2", "spiking_plateau", record)

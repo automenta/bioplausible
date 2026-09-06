@@ -32,6 +32,7 @@ from computronium import (
     compose_joint_system,
     create_task,
 )
+from computronium.visualization import bars_panel, figure_spec
 
 DEVICE = "cpu"
 BATCH_CAP = 75
@@ -128,6 +129,35 @@ def test_demo_spatial_lattice_geometry_swap(emit_run_record) -> None:
             "probe_normal": probe_normal,
             "probe_noisy": probe_noisy,
         }
+
+    record["figure"] = figure_spec(
+        "D11 — one wiring, one swapped G-axis (3D lattice)",
+        bars_panel(
+            {
+                name: {"train accuracy": arm["train_acc"]}
+                for name, arm in record["arms"].items()
+            },
+            chance=1 / 10,
+            chance_label="chance (0.1)",
+            ylabel="train accuracy",
+            ylim=(0, 1),
+        ),
+        bars_panel(
+            {
+                name: {
+                    "clean probe": arm["probe_normal"],
+                    "noisy probe": arm["probe_noisy"],
+                }
+                for name, arm in record["arms"].items()
+            },
+            chance=1 / 10,
+            chance_label="chance (0.1)",
+            ylabel="probe accuracy",
+            title="probe vs additive-noise probe",
+            ylim=(0, 1),
+        ),
+        figsize=[9, 4],
+    )
 
     emit_run_record("D11", "spatial_lattice_geometry_swap", record)
 

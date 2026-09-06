@@ -46,6 +46,7 @@ from computronium import (
     create_neuromorphic_mlp,
     create_task,
 )
+from computronium.visualization import bars_panel, figure_spec
 
 BATCH_CAP = 800  # loader cap (Register C): suite walltime, regime re-pinned 2026-09-03 (five arms)
 LEARN_FLOOR = 0.5  # constrained arm must learn (5x chance)
@@ -107,6 +108,30 @@ def test_demo_substrate_swap(emit_run_record) -> None:
             "train_acc": metrics["train_acc"],
             "probe_state_zeros": probe_zeros.item(),
         }
+
+    record["figure"] = figure_spec(
+        "D6 — one wiring, one swapped substrate (mild physics learns, severe walls)",
+        bars_panel(
+            {
+                name: {"train accuracy": a["train_acc"]}
+                for name, a in record["arms"].items()
+            },
+            chance=1 / 10,
+            chance_label="chance (0.1)",
+            ylabel="train accuracy",
+            ylim=(0, 1),
+        ),
+        bars_panel(
+            {
+                name: {"probe state zeros": a["probe_state_zeros"]}
+                for name, a in record["arms"].items()
+            },
+            ylabel="probe state zeros (fraction)",
+            title="the dial itself: dropout thins the state, noise does not",
+            ylim=(0, 1),
+        ),
+        figsize=[11, 4],
+    )
 
     emit_run_record("D6", "substrate_swap", record)
 

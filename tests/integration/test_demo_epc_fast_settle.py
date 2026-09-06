@@ -54,6 +54,7 @@ from computronium import (
     create_task,
 )
 from computronium.ontology.dynamics import ErrorPredictiveCodingDynamics
+from computronium.visualization import bars_panel, figure_spec, lines_panel
 
 BATCH_CAP = 150
 LEARN_FLOOR = 0.3  # both arms must learn (3x chance)
@@ -172,6 +173,33 @@ def test_demo_epc_fast_settle(emit_run_record) -> None:
         if free_eq_diff is not None:
             free_equilibrium_max_diff = free_eq_diff
             record["free_equilibrium_max_diff"] = free_eq_diff
+
+    record["figure"] = figure_spec(
+        "D12 — one wiring, one swapped D-axis (ePC)",
+        bars_panel(
+            {
+                f"{name} ({arm['settle_budget']} steps)": {
+                    "train accuracy": arm["train_acc"]
+                }
+                for name, arm in record["arms"].items()
+            },
+            chance=1 / 10,
+            chance_label="chance (0.1)",
+            ylabel="train accuracy",
+            ylim=(0, 1),
+        ),
+        lines_panel(
+            {
+                name: arm["nudged_layer_deviations"]
+                for name, arm in record["arms"].items()
+            },
+            xlabel="layer (input → hidden → output)",
+            ylabel="|nudged − free| (max, per layer)",
+            title="the output-error signal reaches every layer in ePC",
+            symlog_thresh=1e-4,
+        ),
+        figsize=[9, 4],
+    )
 
     emit_run_record("D12", "epc_fast_settle", record)
 

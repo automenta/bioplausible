@@ -34,6 +34,7 @@ from computronium import (
     compose_joint_system,
     create_task,
 )
+from computronium.visualization import bars_panel, figure_spec
 
 BATCH_CAP = 600  # loader cap (Register C): suite walltime, regime re-pinned 2026-09-02
 
@@ -78,5 +79,20 @@ def test_demo_swap_credit(emit_run_record) -> None:
         print(f"{name}: {metrics['train_acc']:.1%}")
         record["arms"][name] = {"train_acc": metrics["train_acc"]}
         assert metrics["train_acc"] > 0.25, f"{name} must learn above 2.5x chance"
+
+    record["figure"] = figure_spec(
+        "D2 — one trainer, three credit rules (wiring identical)",
+        bars_panel(
+            {
+                name: {"train_acc": arm["train_acc"]}
+                for name, arm in record["arms"].items()
+            },
+            chance=1 / 10,
+            chance_label="chance (0.1)",
+            ylabel="train accuracy",
+            ylim=(0, 1),
+        ),
+        figsize=[6, 4],
+    )
 
     emit_run_record("D2", "swap_credit", record)

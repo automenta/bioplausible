@@ -271,6 +271,35 @@
 > ortho > muon at d16, adam < 0.5 at d16, ff/ortho tops ff/muon at
 > w128); RESULTS.md re-pinned; gallery lock green after deliberate
 > re-pin.
+> **2026-09-05 (continued): RESEARCH SESSION — two hunt cells resolved and
+> the D14 regime lifted to a new repo record.** (1) **The
+> NS-orthogonalized-Adam cell: resolved POSITIVE, no whitening caveat.**
+> `OrthoAdamUpdate` gained `ortho_steps` (0 = SVD polar factor, config of
+> record; >0 = canonical Muon Newton–Schulz quintic — wired per the
+> primitive checklist, `ParameterUpdateConfig.ortho_adam(ortho_steps=)`;
+> unit lock green). Probe `scripts/probes/hunt_ns_adam.py` (D16 regime,
+> seeds 0–2): NS is statistically identical to SVD on ALL FOUR geometries
+> (mlp 0.931 vs 0.930 / attention 0.911 = / graph 0.410 vs 0.411 /
+> lattice 0.924 =) AND on the ff local cell (0.920 vs 0.924) — **the
+> D13 whitening lesson does NOT transfer to the hybrid: its lift is
+> momentum-orthogonalization-driven, not full-spectrum-whitening-driven**
+> (the rescale-to-Adam-step-magnitude dominates). NS costs ~40% less on
+> mlp/graph (0.7 vs 1.2 s/arm) — the preferred variant for deep sweeps.
+> (2) **The OrthoAdam×D14 cell: resolved LIFT — new repo record for the
+> jpc regime.** Probe `scripts/probes/jpc_ortho_adam.py` (depth 20 /
+> width 128 residual, β=10, seeds 0–2; D14's Adam numbers reproduce
+> bitwise): mupc×OrthoAdam at ortho_lr 1e-3 → test **0.914 / 0.923 /
+> 0.922 (mean 0.920)** vs Adam's 0.782 — and **default×OrthoAdam 0.859 /
+> 0.838 / 0.856 (mean 0.851) vs Adam's 0.204** — the default-init
+> memorization corner is largely rescued. The lr is SHARP (3e-3, the
+> D16-calibrated value, degrades μPC to 0.52 — a step-size artifact, the
+> natural-gradient lesson again; 5e-4–1e-3 is the plateau). **The
+> structural finding: momentum-orthogonalization and depth-scaled init
+> are partially interchangeable repairs of the same depth pathology** —
+> under OrthoAdam the μPC-vs-default gap narrows from ≈0.58 to ≈0.07,
+> but μPC still leads per seed. Promoted into D14 (two new arms +
+> ratchets; slow tier ~216 s). Property 679 passed; gallery lock green
+> ×2 after deliberate re-pin.
 
 ---
 
@@ -508,12 +537,24 @@ every workstream below.
 | D11| The G-axis is a swap (capacity-matched 3D lattice vs flat — 206,090 vs 203,530 params, a 1.25% gap after reducing the larger lattice arm — spatial noise robustness) | `test_demo_spatial_lattice_geometry_swap.py` |
 | D12| The D-axis settles without signal decay (ePC: free equilibrium = feedforward bitwise, nudged signal reaches every layer, 1/3 settle budget) | `test_demo_epc_fast_settle.py` |
 | D13| The U-axis is a swap (local credit × Muon: FF×Muon 0.838±0.009 over 5 seeds vs 0.568±0.041 on Euclidean; FF and realized PEPITA are distinct algorithms; SVD polar factor + momentum-orthogonalization locked) | `test_demo_uaxis_muon_swap.py` |
-| D14| Depth 20 trains under the jpc-faithful regime (ePC + PC-native weight gradient + Adam + β grid + steps=H): μPC generalizes (test ≈ 0.83) where default init memorizes (train 1.00 / test ≤ 0.24); the F1 depth wall is regime-bound — **slow tier** (`pytest -m slow -k demo`) | `test_demo_jpc_faithful_depth.py` |
+| D14| Depth 20 trains under the jpc-faithful regime (ePC + PC-native weight gradient + Adam + β grid + steps=H): μPC generalizes (test ≈ 0.83) where default init memorizes (train 1.00 / test ≤ 0.24); **OrthoAdam arms (2026-09-05): mupc×OrthoAdam 0.923 / default×OrthoAdam 0.838 (seed 1) — the whole regime lifts and the μPC-vs-default gap narrows from ≈0.58 to ≈0.07; momentum-orthogonalization and depth-scaled init are partially interchangeable repairs of the same depth pathology, μPC still leads**; the F1 depth wall is regime-bound — **slow tier** (`pytest -m slow -k demo`) | `test_demo_jpc_faithful_depth.py` |
 | D15| The U-axis moves the depth wall, capacity-matched (identical geometry, swapped update/credit, mnist quick 300 batches, TEST acc): depth 16/width 128 (349,450 params each) BP×Euclid 0.114±0.000 (chance) / BP×Adam 0.303±0.079 / BP×Muon 0.834±0.036 / **BP×OrthoAdam 0.878±0.035 — the hybrid moves the frontier beyond Muon**; depth 4/width 256 (400,906 params both) FF×Muon **0.930±0.001** ≥ BP×Muon 0.911±0.007 — local learning beats backprop at matched capacity; width-128 local cells — **FF×OrthoAdam 0.947±0.002** (~119k params, repo-best acc/param at this budget) > FF×Adam 0.939 > FF×Muon 0.920; BP degrades gracefully under Muon through depth 16 where Euclid cliffs — **slow tier** | `test_demo_uaxis_depth_frontier.py` |
 | D16| The U-axis coverage map, capacity-matched across geometry (4 geometries 47.7k–57.5k params × 6 update rules × seeds 0–2): **OrthoAdam (the Muon+Adam hybrid, a library primitive) dominates the headline cells — mlp 0.930 / attention 0.911 / lattice 0.924, beating BOTH parents, and beats Adam everywhere** (graph 0.411, where Muon keeps its win 0.433); Muon ≥ Euclid on EVERY geometry; Euclidean/Adam/Muon/Natural are distinct optimizer families (natural's early "chance" cell resolved 2026-09-05 as a step-size artifact — at its working lr 1e-3 it learns on all four geometries); spectral geometry-conditioned (attention only); local ff×Muon trails bp×Muon on all four at this budget — **slow tier** | `test_demo_uaxis_coverage.py` |
 | F3 | The P-axis Pareto, REALIZED (CP-6 E-1 → finding instrument → mechanism audit → realization): per-gate input-projection drive + per-unit sigmoid masks (mask std 0.081; flat 0.5 scalar gain gone) and settled-activity fast weights (raw-target bias gone, θ gap 3.4%/episode monotone); retention ordering survives realization but the effective-lr confound survives too (null@0.015 > routing) — orderings recorded, lr-matched controls the OPEN item; realized-mechanism ratchets locked live | `test_demo_paxis_pareto.py` |
 
 ---
+
+## ✅ Completed This Session (2026-09-05 — Demo API roadmap item 2, seed variance on the page)
+
+| Item | Description | Key Evidence |
+|------|-------------|--------------|
+| **`yerr` + `bands`: variance renders from the record** | `BarPanel.yerr` (group→series→symmetric error; missing entries default 0) and `LinePanel.bands` (per-series `low`/`high` → `fill_between`, alpha 0.2 in the series color). Builders carry them; `_draw_bar_series`/`_draw_line_series` extracted to keep C901 honest (the old `# ruff: ignore[complex-structure]` markers in `_demo_api.py` were dead — RUF103 — and suppressed nothing). Wired: **D13** bars now show ± half-range over seeds 0–4 on ff/pepita arms (title: "± range over seeds 0–4"); **D3** mean lines carry per-seed min/max bands over the 10-seed walk | Unit locks 18 passed (error-bar container, band polygon extents, builder round-trip, partial-yerr no-crash); D13 + D3 re-run (~26 s), deliberate re-pin, gallery lock green ×2 consecutive; pyright deltas vs HEAD: none (remaining 2 errors pre-existing TaskProtocol noise). **Gate lesson (second run):** the builders initially serialized `"yerr": null` into EVERY spec, silently re-keying all 14 records past the 1e-6 canonicalization — the lock fired on D10; fix was omitting null variance keys from the builders (not a re-pin of noise), then one full fast gate (18/18, ~205 s) + clean re-pin + lock ×2. Spec-shape changes trip the lock exactly like data changes — build the spec once, then freeze the builder's key set |
+
+## ✅ Completed This Session (2026-09-05 — Demo API roadmap item 1, declared-figure migration)
+
+| Item | Description | Key Evidence |
+|------|-------------|--------------|
+| **All 19 demo records declare their figures** | The 14 legacy bespoke factories (D1–D12, F1, F2) deleted from `gallery.py` (~476 lines) — every `DEMOS` row now renders through the one generic `_fig_declared`. Each demo test builds `record["figure"]` with the builder family (`figure_spec` + `bars_panel`/`lines_panel`/`heatmap_panel`) right before emit, so the producer owns the presentation and the spec is checksummed with the data. Strict migration ratchet: `tests/integration/test_gallery_lock_declared.py` walks the on-disk records and fails on any undeclared one | Deliberate manifest re-pin (all 14 legacy records changed — intended, the spec rides in `data`); gallery lock green ×2 consecutive; fast demo tier 18/18 (~205 s incl. the D8 key-type fix); pyright clean on `gallery.py` + the new lock. Migration gotcha: in-test record dicts have INT probe keys (`probe[s]`) while reloaded JSON records have str keys — build specs from the live record. Known simplifications: per-seed thin lines (D3), per-arm colors on single-series bars (D2/D6/D9), and D4's "runs/walled" text (now a 0/1 heatmap) are flattened to the common vocabulary — cosmetic, revisit under roadmap item 5 (label polish) |
 
 ## ✅ Completed This Session (2026-09-05 — learning-algorithm hunt, first cells)
 
@@ -588,14 +629,12 @@ cells RESOLVED 2026-09-05** (see header):
   record-holder on mlp~~ **DONE 2026-09-05 — promoted into D15** (see
   session table): the hybrid beats Muon at depth 16, plain Adam
   collapses there, and FF×OrthoAdam 0.947 at ~119k params is the
-  repo-best acc/param. Natural next pulls: NS-orthogonalized-Adam
-  variant (SVD per step is the deep-sweep cost center — NS is Muon's
-  cheaper recipe; measure whether it preserves the OrthoAdam lift, the
-  D13 whitening question for the hybrid); the OrthoAdam×D14 jpc regime
-  (the manual loop's torch.optim.Adam could become OrthoAdam — does
-  orthogonalized-momentum Adam lift μPC's depth-20 regime further?);
-  GPU registered-scale confirmation when a conv/large-width study
-  commissions.
+  repo-best acc/param. ~~NS-orthogonalized-Adam variant~~ **DONE
+  2026-09-05** — NS preserves the OrthoAdam lift everywhere (and the
+  D13 whitening lesson does not transfer; see header); ~~the
+  OrthoAdam×D14 jpc regime~~ **DONE 2026-09-05** — decisive lift,
+  promoted into D14 (see header). Remaining pulls: GPU registered-scale
+  confirmation when a conv/large-width study commissions.
 - (1) ~~lr-
 matched controls per arm~~ **DONE 2026-09-05** — the pilot quantified the
 confound completely
@@ -771,7 +810,8 @@ These land **only when a demo, campaign, or research paragraph needs them**.
   duties are **scoped to changed files** (format + lint + pyright + targeted
   tests). The standing fast gates — property suite, demo gate
    (`pytest tests/integration/ -k "demo or gallery_lock"`, now SPLIT:
-   fast tier ~190 s excluding the `slow` marker, slow tier
+   fast tier ~205 s excluding the `slow` marker (D1–D13 + F1–F3 +
+   gallery lock + declared-figure lock), slow tier
    `pytest -m slow -k demo` for D14+D15+D16 (~13.5 min; D14 ~120 s,
    D15 ~380 s, D16 ~310 s) — re-baselined 2026-09-05 after the
    OrthoAdam arms landed; run
@@ -790,13 +830,15 @@ These land **only when a demo, campaign, or research paragraph needs them**.
 # Property locks (fast CI gate) — 670 passed
 uv run pytest tests/property/ -q
 
-# Demo gate, FAST tier (D1–D13 + F1–F3 + gallery lock) — 19 passed, ~190 s
-# (default addopts exclude the `slow` marker; D14 lives in the slow tier)
+# Demo gate, FAST tier (D1–D13 + F1–F3 + gallery lock + declared-figure
+# lock) — 20 passed, ~205 s
+# (default addopts exclude the `slow` marker; D14–D16 live in the slow tier)
 # NOTE: invoke as `python -m pytest` — see Watch (user-site pytest drift)
 uv run python -m pytest tests/integration/ -k "demo or gallery_lock" -q
 
-# Demo gate, SLOW tier (D14 jpc-faithful depth-20 + D15 depth frontier
-# with OrthoAdam arms + D16 coverage map with ortho_adam) — 3 passed, ~13.5 min
+# Demo gate, SLOW tier (D14 jpc-faithful depth-20, 5 arms incl. the
+# OrthoAdam cells + D15 depth frontier with OrthoAdam arms
+# + D16 coverage map with ortho_adam) — 3 passed, ~14.5 min
 uv run python -m pytest tests/integration/ -m slow -k "demo or gallery_lock" -q
 
 # Gallery lock — figure data checksums match manifest
@@ -957,17 +999,20 @@ the data, drift-immune lock) but NOT yet *publication polish*. The gaps,
 planned in dependency order — each lands when a figure needs it (R11.5.6),
 except item 1 which is a tracked migration:
 
-1. **Migrate the 14 legacy figure factories to declared specs**
-   (D1–D12, F1, F2). Migration ratchet: a lock that walks `DEMOS` and
-   asserts every record declares `data["figure"]` — write it as a tally
-   test now (reports 14 undeclared), flip to strict when the count hits
-   zero. After this, bespoke factories are dead code and delete.
-2. **Seed variance on the page.** Multi-seed claims (D13's ±0.009, the
-   D14 probe's per-seed spreads) live in record fields but the figures
-   can't show them: add `yerr` to `bars` (from per-seed arrays: mean ±
-   range) and a mean±band mode to `lines`. Error bars are the single
-   biggest publishability gap — a claim without visible variance invites
-   the single-seed skepticism the μPC audit earned.
+1. ~~**Migrate the 14 legacy figure factories to declared specs**
+   (D1–D12, F1, F2).~~ **LANDED 2026-09-05** — all 19 records declare
+   `data["figure"]`; the 14 bespoke factories are deleted (~476 lines);
+   strict migration ratchet `tests/integration/test_declared_figure_lock.py`
+   fails on any undeclared record. Deliberate manifest re-pin (all 14
+   records changed — the spec rides in the data layer); lock green ×2.
+2. ~~**Seed variance on the page.**~~ **LANDED 2026-09-05** — `BarPanel.yerr`
+   (group→series→symmetric error) and `LinePanel.bands`
+   (per-series `low`/`high` fill) landed in `_demo_api.py`; complexity
+   fixed by extracting `_draw_bar_series`/`_draw_line_series` (the stale
+   `# ruff: ignore` markers there suppressed nothing). Wired live: D13's
+   bars carry ± half-range over seeds 0–4 (title states the spread), D3's
+   mean lines carry per-seed min/max bands. Unit locks: yerr container,
+   band polygon, builder round-trip (`test_demo_api.py`, 18 passed).
 3. **Vector export.** `save()` is PNG@150 only; publication needs PDF/SVG.
    `render_gallery(..., formats=("png", "pdf"))` + `comp gallery` flag;
    manifest lists per-format files. Cheap, unblocks docs/paper embeds.
@@ -996,6 +1041,38 @@ hand-styling; 2–4 are the publishability core; 5–8 ride on touch. The
 demo gate (~300 s) argues for the fast/slow split BEFORE adding more
 demos — D14's three depth-20 arms are the natural first slow-tier
 resident (carried from the session notes).
+
+---
+
+## 📝 Notes for the Next Editor (2026-09-05 session, NS-Adam + OrthoAdam×D14)
+
+- **The D13 whitening lesson is ABOUT THE FF×MUON PAIR, not about
+  orthogonalization in general.** OrthoAdam's lift survives Newton–Schulz
+  everywhere (probe `hunt_ns_adam.py`): the rescale-to-Adam-step-magnitude
+  makes the direction's spectrum (nearly) irrelevant — what matters is
+  that the momentum DIRECTION is orthogonalized. FF×Muon collapses under
+  NS because its update IS the raw polar factor (no magnitude rescale, no
+  second moment). Quote the distinction if either cell is cited.
+- **The jpc-regime ortho_lr is sharp and regime-specific: 1e-3 (plateau
+  5e-4–1e-3), NOT the D16-calibrated 3e-3.** The first sweep at 3e-3
+  looked like a μPC DEGRADATION (0.52 vs 0.78) — train went up, test down:
+  memorization pressure, i.e. a step-size artifact. The R11.5.5a lr
+  discipline (match the regime before verdicting) applies to promoted
+  primitives too, not just to update rules: `ortho_lr` was calibrated on
+  the D16 pipeline and transfers nowhere automatically.
+- **Structural reading worth developing:** μPC init (parameter-space
+  depth scaling) and OrthoAdam (momentum-space orthogonalization) both
+  repair the depth pathology, and their effects largely SUBSTITUTED for
+  each other in the D14 regime (gap 0.58 → 0.07). If a research paragraph
+  needs a mechanism claim, the discriminating experiment is the 2×2
+  {default,mupc} × {adam,ortho} sweep already in D14's record — μPC's
+  remaining edge under OrthoAdam (0.92 vs 0.85) is the init-only
+  contribution. A width-512 replication would test whether the
+  substitution holds at the paper's scale.
+- **Gate evidence:** D14 slow-tier single run green (~216 s, 5 arms);
+  probe/demo bitwise agreement at seed 1 again (all three D14 Adam
+  numbers reproduce exactly); property 679 passed (update.py touched);
+  gallery lock green ×2 after deliberate re-pin.
 
 ---
 

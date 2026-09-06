@@ -2,8 +2,10 @@
 run records at HEAD (TODO10 R10.1).
 
 Every figure is what a demo test shows, drawn: fixed seeds, CPU, current
-code. One pure figure factory per capability, each consuming the run record
-its demo test emitted (``docs/figures/run_records/``). Nothing frozen,
+code. Every demo declares its figure spec inside its run record
+(``data["figure"]``) and one generic renderer (``_fig_declared``) turns
+the spec into a styled figure — the producer owns the presentation
+(``_demo_api.py``). Nothing frozen,
 nothing to re-verify — the figure lock (R10.1.4) regenerates each figure and
 compares data-layer checksums so the gallery cannot silently drift from what
 the code actually demonstrates.
@@ -17,15 +19,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from computronium.visualization._style import (
-    COLOR_ARM,
-    COLOR_CONTRAST,
-    COLOR_FEASIBLE,
-    COLOR_WALLED,
-    apply_style,
-    chance_line,
-    save,
-)
+from computronium.visualization._style import save
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -34,9 +28,6 @@ if TYPE_CHECKING:
 
 SCOPE_LABEL = "live demo scale (HEAD, CPU, fixed seeds)"
 RECORDS_DIRNAME = "run_records"
-
-# For D9 graph geometry swap
-NUM_CLASSES = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,486 +74,10 @@ def _sha256_data(record: dict) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-def _fig_compose_train(record: dict) -> Figure:
-    import matplotlib.pyplot as plt
-
-    data = record["data"]
-    history = data["six_axis"]["history"]
-    epochs = range(1, len(history) + 1)
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.plot(epochs, [h["train_acc"] for h in history], marker="o", color=COLOR_ARM)
-    ax.set_ylim(0, 1)
-    chance = 1 / 10
-    chance_line(ax, chance, "chance (0.1)")
-    ax.set_xlabel("epoch")
-    ax.set_ylabel("train accuracy")
-    ax.set_title(
-        "D1 — six-axis composition trains "
-        f"(J1 θ-bitwise-equal: {data['j1']['theta_bitwise_equal']}, "
-        f"round-trip: {data['round_trip']})"
-    )
-    apply_style(fig)
-    return fig
-
-
-def _fig_credit_swap(record: dict) -> Figure:
-    import matplotlib.pyplot as plt
-
-    arms = record["data"]["arms"]
-    names = list(arms)
-    accs = [arms[name]["train_acc"] for name in names]
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.bar(names, accs, color=[COLOR_ARM, COLOR_CONTRAST, COLOR_FEASIBLE])
-    ax.set_ylim(0, 1)
-    chance = 1 / 10
-    chance_line(ax, chance, "chance (0.1)")
-    ax.set_ylabel("train accuracy")
-    ax.set_title("D2 — one trainer, three credit rules (wiring identical)")
-    for i, acc in enumerate(accs):
-        ax.text(i, acc, f"{acc:.2f}", ha="center", va="bottom", fontsize=9)
-    apply_style(fig)
-    return fig
-
-
-def _fig_plasticity_swap(record: dict) -> Figure:
-    import matplotlib.pyplot as plt
-
-    arms = record["data"]["arms"]
-    fig, ax = plt.subplots(figsize=(6, 4))
-    for label, color in (("null", COLOR_WALLED), ("routing", COLOR_ARM)):
-        mastery = arms[label]["a_mastery"]
-        retained = arms[label]["a_retained"]
-        for m, r in zip(mastery, retained, strict=True):
-            ax.plot([0, 1], [m, r], color=color, alpha=0.35, linewidth=1)
-        ax.plot(
-            [0, 1],
-            [sum(mastery) / len(mastery), sum(retained) / len(retained)],
-            color=color,
-            linewidth=3,
-            label=label,
-        )
-    chance_line(ax, record["data"]["chance"], "chance")
-    ax.set_xticks([0, 1], ["after segment A", "after segment B"])
-    ax.set_ylabel("segment-A probe accuracy")
-    ax.set_title("D3 — the P-axis swap: routing retains what null forgets")
-    ax.legend()
-    apply_style(fig)
-    return fig
-
-
-def _fig_memory_wall(record: dict) -> Figure:
-    import matplotlib.pyplot as plt
-    from matplotlib.patches import Rectangle
-
-    data = record["data"]
-    budget_bytes = data["budget_mib"] * 1024 * 1024
-    cells = {
-        k: v for k, v in data["saved_bytes"].items() if not k.startswith("control")
-    }
-    envs = sorted({k.split("@")[1] for k in cells})
-    arms = sorted({k.split("@")[0] for k in cells})
-    fig, ax = plt.subplots(figsize=(6, 4))
-    for row, arm in enumerate(arms):
-        for col, env in enumerate(envs):
-            saved = cells[f"{arm}@{env}"]
-            feasible = saved <= budget_bytes
-            ax.add_patch(
-                Rectangle(
-                    (col, row),
-                    0.9,
-                    0.9,
-                    facecolor=COLOR_FEASIBLE if feasible else COLOR_WALLED,
-                    alpha=0.75,
-                )
-            )
-            ax.text(
-                col + 0.45,
-                row + 0.45,
-                "runs" if feasible else "walled",
-                ha="center",
-                va="center",
-                fontsize=9,
-            )
-    ax.set_xlim(0, len(envs))
-    ax.set_ylim(0, len(arms))
-    ax.set_xticks([c + 0.45 for c in range(len(envs))], envs)
-    ax.set_yticks([r + 0.45 for r in range(len(arms))], arms)
-    ax.set_xlabel(f"depth environment (budget {data['budget_mib']} MiB)")
-    ax.set_title("D4 — the memory profiler decides before training")
-    apply_style(fig)
-    return fig
-
-
-def _fig_frozen_theta(record: dict) -> Figure:
-    import matplotlib.pyplot as plt
-
-    r = record["data"]
-    stages = ["stage A (adapted)", "restored ψ", "fresh-ψ floor"]
-    accs = [
-        r["stage_a"]["accuracy"],
-        r["restored"]["task_a_accuracy"],
-        r["restored"]["fresh_psi_floor"],
-    ]
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.bar(stages, accs, color=[COLOR_ARM, COLOR_FEASIBLE, COLOR_WALLED])
-    ax.set_ylim(0, 1)
-    chance_line(ax, 0.5, "chance (0.5)")
-    ax.set_ylabel("fixed-probe accuracy")
-    badge = (
-        "identical"
-        if r["theta_sha256_before"] == r["theta_sha256_after"]
-        else "CHANGED"
-    )
-    ax.set_title(
-        f"D5 — frozen θ is bitwise ({badge}: θ sha256 {r['theta_sha256_before'][:12]}…)"
-    )
-    apply_style(fig)
-    return fig
-
-
-def _fig_substrate_swap(record: dict) -> Figure:
-    import matplotlib.pyplot as plt
-
-    arms = record["data"]["arms"]
-    names = list(arms)
-    accs = [arms[name]["train_acc"] for name in names]
-    zeros = [arms[name].get("probe_state_zeros", 0.0) for name in names]
-    labels = [
-        name.replace("memristive_", "memristive\nIR-drop ").replace(
-            "neuromorphic_", "neuromorphic\nspike-drop "
-        )
-        for name in names
-    ]
-    fig, (ax_acc, ax_probe) = plt.subplots(1, 2, figsize=(11, 4))
-    acc_colors = [
-        COLOR_FEASIBLE
-        if name == "digital"
-        else COLOR_WALLED
-        if "severe" in name
-        else COLOR_ARM
-        for name in names
-    ]
-    ax_acc.bar(labels, accs, color=acc_colors)
-    ax_acc.set_ylim(0, 1)
-    chance_line(ax_acc, 1 / 10, "chance (0.1)")
-    ax_acc.set_ylabel("train accuracy")
-    ax_acc.set_title(
-        "D6 — one wiring, one swapped substrate (mild physics learns, severe walls)"
-    )
-    for i, acc in enumerate(accs):
-        ax_acc.text(i, acc, f"{acc:.2f}", ha="center", va="bottom", fontsize=9)
-    ax_probe.bar(labels, zeros, color=acc_colors)
-    ax_probe.set_ylim(0, 1)
-    ax_probe.set_ylabel("probe state zeros (fraction)")
-    ax_probe.set_title("the dial itself: dropout thins the state, noise does not")
-    for i, z in enumerate(zeros):
-        ax_probe.text(i, z, f"{z:.2f}", ha="center", va="bottom", fontsize=9)
-    apply_style(fig)
-    return fig
-
-
-def _fig_spike_settle(record: dict) -> Figure:
-    import matplotlib.pyplot as plt
-
-    data = record["data"]
-    arms = data["arms"]
-    obs = data["spike_observation"]
-    fig, (ax_acc, ax_spikes) = plt.subplots(1, 2, figsize=(9, 4))
-    names = list(arms)
-    accs = [arms[name]["train_acc"] for name in names]
-    ax_acc.bar(names, accs, color=[COLOR_CONTRAST, COLOR_ARM])
-    ax_acc.set_ylim(0, 1)
-    chance_line(ax_acc, 1 / 10, "chance (0.1)")
-    ax_acc.set_ylabel("train accuracy")
-    ax_acc.set_title("D7 — one wiring, one swapped D-axis")
-    for i, acc in enumerate(accs):
-        ax_acc.text(i, acc, f"{acc:.2f}", ha="center", va="bottom", fontsize=9)
-    totals = obs["spike_totals"]
-    half = len(totals) // 2
-    steps = range(len(totals))
-    ax_spikes.bar(
-        steps, totals, color=[COLOR_ARM] * half + [COLOR_WALLED] * (len(totals) - half)
-    )
-    ax_spikes.set_xlabel("settle step (hidden | output)")
-    ax_spikes.set_ylabel("spikes per step")
-    ax_spikes.set_title(
-        f"LIF settle: {obs['total_spikes']:.0f} spikes, "
-        f"membrane max {obs['membrane_max']:.2f} ≤ {data['threshold']}"
-    )
-    apply_style(fig)
-    return fig
-
-
-def _fig_geometry_swap(record: dict) -> Figure:
-    import matplotlib.pyplot as plt
-
-    data = record["data"]
-    arms = data["arms"]
-    names = list(arms)
-    shifts = data["probe_shifts"]
-    fig, (ax_train, ax_probe) = plt.subplots(1, 2, figsize=(9, 4))
-    accs = [arms[name]["train_acc"] for name in names]
-    params = [arms[name]["param_count"] / 1000 for name in names]
-    colors = [COLOR_CONTRAST, COLOR_ARM]
-    labels = [
-        f"{name}\n({p:.1f}k params)" for name, p in zip(names, params, strict=True)
-    ]
-    ax_train.bar(labels, accs, color=colors)
-    ax_train.set_ylim(0, 1)
-    chance_line(ax_train, 1 / 10, "chance (0.1)")
-    ax_train.set_ylabel("train accuracy")
-    ax_train.set_title("D8 — one wiring, one swapped G-axis (capacity-fair)")
-    for i, acc in enumerate(accs):
-        ax_train.text(i, acc, f"{acc:.2f}", ha="center", va="bottom", fontsize=9)
-    for name, color, p in zip(names, colors, params, strict=True):
-        probe = arms[name]["probe"]
-        ax_probe.plot(
-            shifts,
-            [probe[str(s)] for s in shifts],
-            marker="o",
-            color=color,
-            label=f"{name} ({p:.1f}k params)",
-        )
-    chance_line(ax_probe, 1 / 10, "chance (0.1)")
-    ax_probe.set_xlabel("probe digit shift (px)")
-    ax_probe.set_ylabel("probe accuracy")
-    ax_probe.set_title("the smaller conv arm retains the shifted digits")
-    ax_probe.legend()
-    apply_style(fig)
-    return fig
-
-
-def _fig_graph_geometry_swap(record: dict) -> Figure:
-    import matplotlib.pyplot as plt
-
-    data = record["data"]
-    arms = data["arms"]
-    names = list(arms)
-    fig, (ax_train, ax_probe) = plt.subplots(1, 2, figsize=(9, 4))
-    accs = [arms[name]["train_acc"] for name in names]
-    params = [arms[name]["param_count"] / 1000 for name in names]
-    colors = [COLOR_CONTRAST, COLOR_ARM]
-    labels = [
-        f"{name}\n({p:.1f}k params)" for name, p in zip(names, params, strict=True)
-    ]
-    ax_train.bar(labels, accs, color=colors)
-    ax_train.set_ylim(0, 1)
-    chance = 1 / NUM_CLASSES
-    chance_line(ax_train, chance, f"chance ({chance:.2f})")
-    ax_train.set_ylabel("train accuracy")
-    ax_train.set_title("D9 — one wiring, one swapped G-axis (graph structure)")
-    for i, acc in enumerate(accs):
-        ax_train.text(i, acc, f"{acc:.2f}", ha="center", va="bottom", fontsize=9)
-
-    # Probe comparison: edge perturbation robustness
-    probe_key = "probe_perturb_02"
-    probe_vals = [arms[name][probe_key] for name in names]
-    ax_probe.bar(labels, probe_vals, color=colors)
-    ax_probe.set_ylim(0, 1)
-    chance_line(ax_probe, chance, f"chance ({chance:.2f})")
-    ax_probe.set_ylabel("probe accuracy (20% edge dropout)")
-    ax_probe.set_title("graph arm more robust to edge perturbation")
-    for i, p in enumerate(probe_vals):
-        ax_probe.text(i, p, f"{p:.2f}", ha="center", va="bottom", fontsize=9)
-    apply_style(fig)
-    return fig
-
-
-def _fig_attention_geometry_swap(record: dict) -> Figure:
-    import matplotlib.pyplot as plt
-
-    data = record["data"]
-    arms = data["arms"]
-    names = list(arms)
-    fig, (ax_train, ax_probe) = plt.subplots(1, 2, figsize=(9, 4))
-    accs = [arms[name]["train_acc"] for name in names]
-    params = [arms[name]["param_count"] / 1000 for name in names]
-    colors = [COLOR_CONTRAST, COLOR_ARM]
-    labels = [
-        f"{name}\n({p:.1f}k params)" for name, p in zip(names, params, strict=True)
-    ]
-    ax_train.bar(labels, accs, color=colors)
-    ax_train.set_ylim(0, 1)
-    chance_line(ax_train, 1 / 10, "chance (0.1)")
-    ax_train.set_ylabel("train accuracy")
-    ax_train.set_title("D10 — one wiring, one swapped G-axis (attention)")
-    for i, acc in enumerate(accs):
-        ax_train.text(i, acc, f"{acc:.2f}", ha="center", va="bottom", fontsize=9)
-
-    probe_vals = [arms[name]["probe_normal"] for name in names]
-    perm_vals = [arms[name]["probe_permuted"] for name in names]
-    ax_probe.bar(labels, probe_vals, color=colors, label="unpermuted probe")
-    ax_probe.bar(labels, perm_vals, color=colors, alpha=0.45, label="permuted probe")
-    ax_probe.set_ylim(0, 1)
-    chance_line(ax_probe, 1 / 10, "chance (0.1)")
-    ax_probe.set_ylabel("probe accuracy")
-    ax_probe.set_title("probe vs pixel-permuted probe")
-    ax_probe.legend()
-    apply_style(fig)
-    return fig
-
-
-def _fig_spatial_lattice_geometry_swap(record: dict) -> Figure:
-    import matplotlib.pyplot as plt
-
-    data = record["data"]
-    arms = data["arms"]
-    names = list(arms)
-    fig, (ax_train, ax_probe) = plt.subplots(1, 2, figsize=(9, 4))
-    accs = [arms[name]["train_acc"] for name in names]
-    params = [arms[name]["param_count"] / 1000 for name in names]
-    colors = [COLOR_CONTRAST, COLOR_ARM]
-    labels = [
-        f"{name}\n({p:.1f}k params)" for name, p in zip(names, params, strict=True)
-    ]
-    ax_train.bar(labels, accs, color=colors)
-    ax_train.set_ylim(0, 1)
-    chance_line(ax_train, 1 / 10, "chance (0.1)")
-    ax_train.set_ylabel("train accuracy")
-    ax_train.set_title("D11 — one wiring, one swapped G-axis (3D lattice)")
-    for i, acc in enumerate(accs):
-        ax_train.text(i, acc, f"{acc:.2f}", ha="center", va="bottom", fontsize=9)
-
-    probe_vals = [arms[name]["probe_normal"] for name in names]
-    noisy_vals = [arms[name]["probe_noisy"] for name in names]
-    ax_probe.bar(labels, probe_vals, color=colors, label="clean probe")
-    ax_probe.bar(labels, noisy_vals, color=colors, alpha=0.45, label="noisy probe")
-    ax_probe.set_ylim(0, 1)
-    chance_line(ax_probe, 1 / 10, "chance (0.1)")
-    ax_probe.set_ylabel("probe accuracy")
-    ax_probe.set_title("probe vs additive-noise probe")
-    ax_probe.legend()
-    apply_style(fig)
-    return fig
-
-
-def _fig_epc_fast_settle(record: dict) -> Figure:
-    import matplotlib.pyplot as plt
-
-    data = record["data"]
-    arms = data["arms"]
-    names = list(arms)
-    fig, (ax_acc, ax_dev) = plt.subplots(1, 2, figsize=(9, 4))
-    accs = [arms[name]["train_acc"] for name in names]
-    ax_acc.bar(names, accs, color=[COLOR_CONTRAST, COLOR_ARM])
-    ax_acc.set_ylim(0, 1)
-    chance_line(ax_acc, 1 / 10, "chance (0.1)")
-    ax_acc.set_ylabel("train accuracy")
-    ax_acc.set_title("D12 — one wiring, one swapped D-axis (ePC)")
-    for i, (name, acc) in enumerate(zip(names, accs, strict=True)):
-        budget = arms[name]["settle_budget"]
-        ax_acc.text(
-            i, acc, f"{acc:.2f}\n({budget} steps)", ha="center", va="bottom", fontsize=9
-        )
-    for name, color in zip(names, [COLOR_CONTRAST, COLOR_ARM], strict=True):
-        devs = arms[name]["nudged_layer_deviations"]
-        ax_dev.plot(
-            range(len(devs)),
-            devs,
-            marker="o",
-            color=color,
-            label=name,
-        )
-    ax_dev.set_yscale("symlog", linthresh=1e-4)
-    ax_dev.set_xlabel("layer (input → hidden → output)")
-    ax_dev.set_ylabel("|nudged − free| (max, per layer)")
-    ax_dev.set_title("the output-error signal reaches every layer in ePC")
-    ax_dev.legend()
-    apply_style(fig)
-    return fig
-
-
-def _fig_failure_manifesto(record: dict) -> Figure:
-    import matplotlib.pyplot as plt
-
-    arms = record["data"]["arms"]
-    fig, (ax_acc, ax_gain, ax_collapse) = plt.subplots(1, 3, figsize=(14, 4))
-    chance = record["data"]["chance"]
-    for name, color in (
-        ("bp", COLOR_CONTRAST),
-        ("spc", COLOR_ARM),
-        ("spc_mupc", COLOR_FEASIBLE),
-    ):
-        arm = arms[name]
-        ax_acc.plot(
-            arm["depths"],
-            arm["train_acc"],
-            marker="o",
-            color=color,
-            label=name,
-        )
-    chance_line(ax_acc, chance, f"chance ({chance})")
-    ax_acc.set_ylim(0, 0.8)
-    ax_acc.set_xlabel("depth")
-    ax_acc.set_ylabel("train accuracy")
-    ax_acc.set_title(
-        "backprop decays, sPC walls (credit: last layer only), μPC no lift"
-    )
-    ax_acc.legend()
-
-    run = arms["hebbian_runaway"]
-    ax_gain.plot(run["depths"], run["norm_ratio"], marker="o", color=COLOR_WALLED)
-    ax_gain.set_yscale("log")
-    ax_gain.set_xlabel("depth")
-    ax_gain.set_ylabel("forward norm ratio (last/first)")
-    ax_gain.set_title("unnormalized hebbian chain: runaway gain")
-
-    arm = arms["oja_collapse"]
-    ax_collapse.plot(arm["depths"], arm["readout_acc"], marker="o", color=COLOR_ARM)
-    chance_line(ax_collapse, chance, f"chance ({chance})")
-    ax_collapse.set_ylim(0, 1)
-    ax_collapse.set_xlabel("depth")
-    ax_collapse.set_ylabel("10-class readout (last layer)")
-    ax_collapse.set_title("normalized Oja chain: subspace collapse")
-    apply_style(fig)
-    return fig
-
-
-def _fig_spiking_plateau(record: dict) -> Figure:
-    import matplotlib.pyplot as plt
-
-    data = record["data"]
-    layers = range(1, len(data["spike_fractions"]["default"]) + 1)
-    fig, (ax_sil, ax_grad, ax_read) = plt.subplots(1, 3, figsize=(14, 4))
-    for tag, color in (("default", COLOR_WALLED), ("init1.0", COLOR_ARM)):
-        fr = [max(f, 1e-5) for f in data["spike_fractions"][tag]]
-        ax_sil.plot(layers, fr, marker="o", color=color, label=tag)
-    ax_sil.set_yscale("log")
-    ax_sil.set_xlabel("layer")
-    ax_sil.set_ylabel("spike fraction")
-    ax_sil.set_title("the confound: default init is silent past layer 1")
-    ax_sil.legend()
-
-    for tag, color in (("default", COLOR_WALLED), ("init1.0", COLOR_ARM)):
-        norms = [max(n, 1e-6) for n in data["credit_norms"][tag]]
-        ax_grad.plot(layers, norms, marker="o", color=color, label=tag)
-    ax_grad.set_yscale("log")
-    ax_grad.set_xlabel("weight matrix")
-    ax_grad.set_ylabel("STDP credit norm")
-    ax_grad.set_title("gradients: frozen at init vs reaching every layer")
-    ax_grad.legend()
-
-    read = data["feature_readout"]
-    names = ["random_init", "stdp_trained"]
-    vals = [read[n] for n in names]
-    ax_read.bar(names, vals, color=[COLOR_ARM, COLOR_WALLED])
-    ax_read.set_ylim(0, 0.8)
-    chance_line(ax_read, data["chance"], f"chance ({data['chance']})")
-    ax_read.set_ylabel("10-class centroid readout (hidden membrane)")
-    ax_read.set_title(
-        "unsupervised STDP collapses class structure "
-        f"(supervised acc {data['supervised_train_acc']:.2f}: no error path)"
-    )
-    for i, v in enumerate(vals):
-        ax_read.text(i, v, f"{v:.2f}", ha="center", va="bottom", fontsize=9)
-    apply_style(fig)
-    return fig
-
-
 def _fig_declared(record: dict) -> Figure:
     """Generic renderer for records declaring ``data["figure"]`` — the
-    common demo API. New demos register this and declare panels in the
-    record; bespoke factories remain for legacy records."""
+    common demo API. Every demo declares its panels in the record; the
+    producer owns the presentation."""
     from computronium.visualization._demo_api import declared_figure
 
     return declared_figure(record)
@@ -577,22 +92,20 @@ class DemoSpec:
 
 
 DEMOS: dict[str, DemoSpec] = {
-    "compose_6axis": DemoSpec("D1", _fig_compose_train),
-    "swap_credit": DemoSpec("D2", _fig_credit_swap),
-    "swap_plasticity": DemoSpec("D3", _fig_plasticity_swap),
-    "memory_budget": DemoSpec("D4", _fig_memory_wall),
-    "substrate_swap": DemoSpec("D6", _fig_substrate_swap),
-    "spike_settle": DemoSpec("D7", _fig_spike_settle),
-    "z3_frozen_theta": DemoSpec("D5", _fig_frozen_theta),
-    "geometry_swap": DemoSpec("D8", _fig_geometry_swap),
-    "graph_geometry_swap": DemoSpec("D9", _fig_graph_geometry_swap),
-    "attention_geometry_swap": DemoSpec("D10", _fig_attention_geometry_swap),
-    "spatial_lattice_geometry_swap": DemoSpec(
-        "D11", _fig_spatial_lattice_geometry_swap
-    ),
-    "epc_fast_settle": DemoSpec("D12", _fig_epc_fast_settle),
-    "failure_manifesto": DemoSpec("F1", _fig_failure_manifesto),
-    "spiking_plateau": DemoSpec("F2", _fig_spiking_plateau),
+    "compose_6axis": DemoSpec("D1", _fig_declared),
+    "swap_credit": DemoSpec("D2", _fig_declared),
+    "swap_plasticity": DemoSpec("D3", _fig_declared),
+    "memory_budget": DemoSpec("D4", _fig_declared),
+    "substrate_swap": DemoSpec("D6", _fig_declared),
+    "spike_settle": DemoSpec("D7", _fig_declared),
+    "z3_frozen_theta": DemoSpec("D5", _fig_declared),
+    "geometry_swap": DemoSpec("D8", _fig_declared),
+    "graph_geometry_swap": DemoSpec("D9", _fig_declared),
+    "attention_geometry_swap": DemoSpec("D10", _fig_declared),
+    "spatial_lattice_geometry_swap": DemoSpec("D11", _fig_declared),
+    "epc_fast_settle": DemoSpec("D12", _fig_declared),
+    "failure_manifesto": DemoSpec("F1", _fig_declared),
+    "spiking_plateau": DemoSpec("F2", _fig_declared),
     "uaxis_muon_swap": DemoSpec("D13", _fig_declared),
     "jpc_faithful_depth": DemoSpec("D14", _fig_declared),
     "uaxis_depth_frontier": DemoSpec("D15", _fig_declared),

@@ -23,6 +23,7 @@ from computronium.experiments.joint.memory_budget_trial import (
     _measure_saved_bytes,
     _walk_seed,
 )
+from computronium.visualization import figure_spec, heatmap_panel
 
 ARMS = ("gradient", "random_projections", "thermodynamic_contrast")
 CONTROL_CREDIT = "thermodynamic_contrast"  # the only credit feasible at every budget
@@ -72,5 +73,27 @@ def test_demo_memory_budget(emit_run_record) -> None:
     )
     record["feasible_walk"] = {"probe": probe, "late_window_acc": late}
     assert probe >= COMPETENCE_FLOOR, "the O(1)-memory arm must demonstrably run"
+
+    budget_bytes = BUDGET_MIB * 1024 * 1024
+    arm_names = sorted({k.split("@")[0] for k in saved_bytes})
+    env_names = sorted({k.split("@")[1] for k in saved_bytes})
+    record["figure"] = figure_spec(
+        "D4 — the memory profiler decides before training",
+        heatmap_panel(
+            [
+                [
+                    1.0 if saved_bytes[f"{arm}@{env}"] <= budget_bytes else 0.0
+                    for env in env_names
+                ]
+                for arm in arm_names
+            ],
+            row_labels=arm_names,
+            col_labels=env_names,
+            vmin=0.0,
+            vmax=1.0,
+            fmt=".0f",
+        ),
+        figsize=[6, 4],
+    )
 
     emit_run_record("D4", "memory_budget", record)

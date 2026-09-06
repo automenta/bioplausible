@@ -33,6 +33,7 @@ from computronium.experiments.joint.z3_fixed_weights import (
     create_last_symbol_task,
     create_parity_task,
 )
+from computronium.visualization import bars_panel, figure_spec
 
 META_EPOCHS = 4
 ADAPT_EPOCHS = 4
@@ -99,5 +100,25 @@ def test_demo_z3_frozen_theta(emit_run_record) -> None:
     # The demonstration is visible: stage A is acquired, restoration beats
     # the fresh-ψ floor by the registered margin.
     assert result["retention_gate"]["passed"], result["retention_gate"]["failed"]
+
+    record["figure"] = figure_spec(
+        f"D5 — frozen θ is bitwise "
+        f"({'identical' if hash_before == hash_after else 'CHANGED'})",
+        bars_panel(
+            {
+                stage: {"fixed-probe accuracy": acc}
+                for stage, acc in (
+                    ("stage A (adapted)", retention["stage_a"]["accuracy"]),
+                    ("restored ψ", retention["restored"]["task_a_accuracy"]),
+                    ("fresh-ψ floor", retention["restored"]["fresh_psi_floor"]),
+                )
+            },
+            chance=0.5,
+            chance_label="chance (0.5)",
+            ylabel="fixed-probe accuracy",
+            ylim=(0, 1),
+        ),
+        figsize=[6, 4],
+    )
 
     emit_run_record("D5", "z3_frozen_theta", record)

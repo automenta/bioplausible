@@ -209,6 +209,7 @@ class ParameterUpdateConfig:
         beta2: float = 0.999,
         eps: float = 1e-8,
         grad_clip: float = 1.0,
+        ortho_steps: int = 0,
     ) -> ParameterUpdateConfig:
         """OrthoAdam (orthogonalized Adam) update config.
 
@@ -223,13 +224,17 @@ class ParameterUpdateConfig:
         update rule that dominates the coverage map's headline cells.
         ``step_size`` is the vector-param lr; ``ortho_lr`` the
         matrix-direction lr (calibrated on mlp across {1e-3, 3e-3,
-        1e-2}).
+        1e-2}). ``ortho_steps == 0`` (default) keeps the exact SVD polar
+        factor — the configuration of record for D15/D16; ``>0`` selects
+        Newton–Schulz iteration (Muon's cheaper recipe) — probe before
+        quoting: the D13 whitening lesson says NS may not preserve
+        local-credit lifts.
         """
         return cls(
             update_type="ortho_adam",
             step_size=step_size,
             momentum=momentum,
-            ortho_steps=0,
+            ortho_steps=ortho_steps,
             spectral_norm=1.0,
             fisher_damping=1e-3,
             ewc_lambda=1000.0,
@@ -427,6 +432,13 @@ class OrthoAdamUpdate(AdamUpdate):
     mnist quick 150 batches, bp credit): mlp 0.930 ± 0.002 / attention
     0.911 ± 0.003 / lattice 0.924 ± 0.003 / graph 0.411 ± 0.008 — beats
     both parents on mlp, attention, lattice; beats Adam on graph.
+
+    ``config.ortho_steps`` selects the orthogonalizer: 0 (default) is the
+    exact SVD polar factor — full-spectrum whitening, the configuration
+    of record; ``>0`` is Newton–Schulz iteration (canonical Muon quintic
+    coefficients) — the cheaper per-step recipe, opt-in pending the hunt
+    probe (the D13 whitening lesson: NS preserves BP lifts but can
+    collapse local-credit lifts that depend on full-spectrum whitening).
     """
 
     def step(
@@ -441,6 +453,7 @@ class OrthoAdamUpdate(AdamUpdate):
         beta2 = self.config.beta2
         bias1 = 1 - beta1**self._t
         bias2 = 1 - beta2**self._t
+        ortho_steps = self.config.ortho_steps
 
         def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
             m = self._state(name, param, self._m)
@@ -451,8 +464,15 @@ class OrthoAdamUpdate(AdamUpdate):
             denom = (v / bias2).sqrt().add_(self.config.eps)
             adam_step = m_hat / denom
             if param.ndim == 2:
-                U, _, Vh = torch.linalg.svd(m_hat, full_matrices=False)
-                ortho = U @ Vh
+                if ortho_steps > 0:
+                    from computronium.core.optimization.strategies.update import (
+                        newton_schulz5,
+                    )
+
+                    ortho = newton_schulz5(m_hat, steps=ortho_steps)
+                else:
+                    U, _, Vh = torch.linalg.svd(m_hat, full_matrices=False)
+                    ortho = U @ Vh
                 ortho *= adam_step.norm() / (ortho.norm() + 1e-8)
                 return param - self.config.ortho_lr * ortho
             return param - self.config.step_size * adam_step

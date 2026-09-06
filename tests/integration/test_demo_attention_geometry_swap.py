@@ -30,6 +30,7 @@ from computronium import (
     compose_joint_system,
     create_task,
 )
+from computronium.visualization import bars_panel, figure_spec
 
 DEVICE = "cpu"
 BATCH_CAP = 75
@@ -132,6 +133,35 @@ def test_demo_attention_geometry_swap(emit_run_record) -> None:
             "probe_normal": probe_normal,
             "probe_permuted": probe_permuted,
         }
+
+    record["figure"] = figure_spec(
+        "D10 — one wiring, one swapped G-axis (attention)",
+        bars_panel(
+            {
+                name: {"train accuracy": arm["train_acc"]}
+                for name, arm in record["arms"].items()
+            },
+            chance=1 / 10,
+            chance_label="chance (0.1)",
+            ylabel="train accuracy",
+            ylim=(0, 1),
+        ),
+        bars_panel(
+            {
+                name: {
+                    "unpermuted probe": arm["probe_normal"],
+                    "permuted probe": arm["probe_permuted"],
+                }
+                for name, arm in record["arms"].items()
+            },
+            chance=1 / 10,
+            chance_label="chance (0.1)",
+            ylabel="probe accuracy",
+            title="probe vs pixel-permuted probe",
+            ylim=(0, 1),
+        ),
+        figsize=[9, 4],
+    )
 
     emit_run_record("D10", "attention_geometry_swap", record)
 

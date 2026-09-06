@@ -66,6 +66,7 @@ from computronium import (
 from computronium.core.local_learning.builder import TileAlgorithm, TileAlgorithmConfig
 from computronium.models.native import DeepHebbianChain
 from computronium.ontology.credit import Phase
+from computronium.visualization import figure_spec, lines_panel
 
 WIDTH = 32
 TRAIN_DEPTHS = (2, 4, 8)
@@ -305,6 +306,41 @@ def test_demo_failure_manifesto(emit_run_record) -> None:
         "depths": list(OJA_DEPTHS),
         "readout_acc": readouts,
     }
+
+    record["figure"] = figure_spec(
+        "F1 — the depth boundary: decay, walls, runaway gain, collapse",
+        lines_panel(
+            {
+                name: record["arms"][name]["train_acc"]
+                for name in ("bp", "spc", "spc_mupc")
+            },
+            x=list(TRAIN_DEPTHS),
+            chance=CHANCE,
+            chance_label=f"chance ({CHANCE})",
+            xlabel="depth",
+            ylabel="train accuracy",
+            title="backprop decays, sPC walls (credit: last layer only), μPC no lift",
+            legend_loc="upper right",
+        ),
+        lines_panel(
+            {"norm ratio": record["arms"]["hebbian_runaway"]["norm_ratio"]},
+            x=list(RUNAWAY_DEPTHS),
+            log_y=True,
+            xlabel="depth",
+            ylabel="forward norm ratio (last/first)",
+            title="unnormalized hebbian chain: runaway gain",
+        ),
+        lines_panel(
+            {"readout": record["arms"]["oja_collapse"]["readout_acc"]},
+            x=list(OJA_DEPTHS),
+            chance=CHANCE,
+            chance_label=f"chance ({CHANCE})",
+            xlabel="depth",
+            ylabel="10-class readout (last layer)",
+            title="normalized Oja chain: subspace collapse",
+        ),
+        figsize=[14, 4],
+    )
 
     emit_run_record("F1", "failure_manifesto", record)
 

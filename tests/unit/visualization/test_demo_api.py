@@ -283,3 +283,65 @@ def test_builders_produce_renderable_specs(tmp_path):
     )
     fig = _render(spec, tmp_path)
     assert len(fig.axes) == 4
+
+
+def test_bars_yerr_renders_error_bars(tmp_path):
+    """Roadmap item 2: seed variance must be visible on the page."""
+    from matplotlib.container import ErrorbarContainer
+
+    spec = {
+        "title": "T — bars with yerr",
+        "panels": [
+            {
+                "type": "bars",
+                "groups": {"a": {"x": 0.9}, "b": {"x": 0.5}},
+                "yerr": {"a": {"x": 0.02}, "b": {"x": 0.05}},
+                "ylim": [0, 1],
+            }
+        ],
+    }
+    ax = _render(spec, tmp_path).axes[0]
+    containers = [c for c in ax.containers if isinstance(c, ErrorbarContainer)]
+    assert len(containers) == 1, "one error-bar container for the series"
+    # missing yerr entries default to 0 without failing
+    spec2 = {
+        "title": "T — partial yerr",
+        "panels": [{"type": "bars", "groups": {"a": {"x": 0.9}}}],
+    }
+    _render(spec2, tmp_path)
+
+
+def test_lines_bands_render_mean_spread_fill(tmp_path):
+    spec = {
+        "title": "T — lines with band",
+        "panels": [
+            {
+                "type": "lines",
+                "series": {"arm": [0.5, 0.6]},
+                "bands": {"arm": {"low": [0.4, 0.5], "high": [0.6, 0.7]}},
+                "x": [0, 1],
+            }
+        ],
+    }
+    ax = _render(spec, tmp_path).axes[0]
+    polys = list(ax.collections)
+    assert polys, "the mean±spread band must be drawn as a filled polygon"
+    # band aligned to the line's y-extent
+    assert polys[0].get_paths()[0].vertices[:, 1].min() == pytest.approx(0.4)
+
+
+def test_builder_round_trip_carries_variance(tmp_path):
+    from computronium.visualization import (
+        bars_panel,
+        figure_spec,
+        lines_panel,
+    )
+
+    spec = figure_spec(
+        "T — variance builders",
+        bars_panel({"a": {"s": 0.9}}, yerr={"a": {"s": 0.03}}),
+        lines_panel({"s": [1.0]}, bands={"s": {"low": [0.9], "high": [1.1]}}),
+    )
+    ax_bars, ax_lines = _render(spec, tmp_path).axes
+    assert ax_bars.containers, "bars_panel(yerr=...) must reach the renderer"
+    assert ax_lines.collections, "lines_panel(bands=...) must reach the renderer"

@@ -185,9 +185,16 @@ def test_demo_uaxis_muon_swap(emit_run_record) -> None:
     # rule, series = update rule — the renderer colors each series and
     # draws the legend from series_labels.
     credits = ("bp", "ff", "pepita")
+    # Seed variance on the page (roadmap item 2): the multi-seed arms'
+    # bars carry ± half-range over seeds; single-run arms carry none.
+    yerr: dict[str, dict[str, float]] = {}
+    for key, vals in record["multi_seed"].items():
+        credit, update = key.split("/")
+        yerr.setdefault(credit, {})[update] = (max(vals) - min(vals)) / 2
     record["figure"] = {
         "title": (
-            "D13 — the U-axis is a swap: orthogonalized updates rescue local credit"
+            "D13 — the U-axis is a swap: orthogonalized updates rescue "
+            f"local credit (± range over seeds {MULTI_SEEDS[0]}–{MULTI_SEEDS[-1]})"
         ),
         "figsize": [7.5, 4.5],
         "panels": [
@@ -210,6 +217,7 @@ def test_demo_uaxis_muon_swap(emit_run_record) -> None:
                 "chance_label": "chance (0.1)",
                 "ylabel": "train accuracy",
                 "ylim": [0, 1],
+                "yerr": yerr,
             }
         ],
     }

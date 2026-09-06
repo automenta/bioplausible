@@ -29,6 +29,7 @@ from computronium import (
     SystemTrainerConfig,
     compose_joint_system,
 )
+from computronium.visualization import bars_panel, figure_spec
 
 DEVICE = "cpu"
 NUM_NODES = 200
@@ -176,6 +177,32 @@ def test_demo_graph_geometry_swap(emit_run_record) -> None:
             "param_count": param_count,
             "probe_perturb_02": probe_acc,
         }
+
+    record["figure"] = figure_spec(
+        "D9 — one wiring, one swapped G-axis (graph structure)",
+        bars_panel(
+            {
+                name: {"train accuracy": arm["train_acc"]}
+                for name, arm in record["arms"].items()
+            },
+            chance=1 / NUM_CLASSES,
+            chance_label=f"chance ({1 / NUM_CLASSES:.2f})",
+            ylabel="train accuracy",
+            ylim=(0, 1),
+        ),
+        bars_panel(
+            {
+                name: {"probe (20% edge dropout)": arm["probe_perturb_02"]}
+                for name, arm in record["arms"].items()
+            },
+            chance=1 / NUM_CLASSES,
+            chance_label=f"chance ({1 / NUM_CLASSES:.2f})",
+            ylabel="probe accuracy (20% edge dropout)",
+            title="graph arm more robust to edge perturbation",
+            ylim=(0, 1),
+        ),
+        figsize=[9, 4],
+    )
 
     emit_run_record("D9", "graph_geometry_swap", record)
 

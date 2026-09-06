@@ -38,6 +38,7 @@ from computronium import (
     create_task,
     extract_config,
 )
+from computronium.visualization import figure_spec, lines_panel
 
 BATCH_CAP = 600  # loader cap (Register C): suite walltime, regime re-pinned 2026-09-02
 EXPECTED_ACCURACY_FLOOR = 0.5  # far above the 0.1 chance, wide guard band
@@ -133,5 +134,19 @@ def test_demo_compose_6axis(emit_run_record) -> None:
     rebuilt = compose_system_from_configs(**extract_config(five_axis))
     assert extract_config(rebuilt) == extract_config(five_axis)
     record["round_trip"] = True
+
+    record["figure"] = figure_spec(
+        "D1 — six-axis composition trains "
+        f"(J1 θ-bitwise-equal: {record['j1']['theta_bitwise_equal']}, "
+        f"round-trip: {record['round_trip']})",
+        lines_panel(
+            {"train_acc": [h["train_acc"] for h in record["six_axis"]["history"]]},
+            chance=1 / 10,
+            chance_label="chance (0.1)",
+            xlabel="epoch",
+            ylabel="train accuracy",
+        ),
+        figsize=[6, 4],
+    )
 
     emit_run_record("D1", "compose_6axis", record)

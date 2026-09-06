@@ -5,7 +5,7 @@ A demo test emits its measured data and — in the same dict — a
 renderer turns the spec into a styled figure, so:
 
 - labeling, chance lines, value labels, palettes, and layout are defined
-  ONCE (consistency by construction, not by 16 hand-copied factories);
+  ONCE (consistency by construction — every demo declares its figure);
 - a new demo gets a gallery figure for free by declaring panels next to
   the data it measured (the producer owns the presentation);
 - the record stays the single JSON artifact — spec and data re-render
@@ -35,12 +35,14 @@ Panel types:
      "group_order": [...], "series_order": [...],
      "series_labels": {"train": "train"}, "series_colors": {"train": "#..."},
      "horizontal": false, "ylabel": "accuracy", "xlabel": "...",
-     "ylim": [0, 1], "fmt": ".2f"}
+     "ylim": [0, 1], "fmt": ".2f",
+     "yerr": {"group": {"series": err, ...}}}   # symmetric error bars
 - ``lines`` — one marker-line per series over a shared x:
     {"type": "lines", "series": {"arm": [y, ...], ...},
      "x": [...], "xticklabels": [...], "xlabel": "layer", "ylabel": "...",
      "log_y": false, "symlog_thresh": 1e-4, "annotate": true, "fmt": ".2f",
-     "vline": {"x": 8, "label": "depth boundary"}}
+     "vline": {"x": 8, "label": "depth boundary"},
+     "bands": {"arm": {"low": [...], "high": [...]}}}  # mean±spread fill
 - ``scatter`` — points per series; the Pareto/frontier panel:
     {"type": "scatter", "series": {"arm": {"x": [...], "y": [...]}},
      "connect": true, "xlabel": "latency", "ylabel": "stability",
@@ -99,6 +101,7 @@ class BarPanel(_Panel):
     xlabel: str = ""
     ylim: tuple[float, float] | None = None
     xlim: tuple[float, float] | None = None
+    yerr: dict[str, dict[str, float]] | None = None
     fmt: str = ".2f"
 
 
@@ -114,6 +117,7 @@ class LinePanel(_Panel):
     log_y: bool = False
     symlog_thresh: float | None = None
     vline: dict[str, float | str] | None = None
+    bands: dict[str, dict[str, list[float]]] | None = None
     annotate: bool = False
     fmt: str = ".2f"
 
@@ -199,6 +203,7 @@ def _panel_from_dict(d: dict) -> BarPanel | LinePanel | ScatterPanel | HeatmapPa
                 xlabel=d.get("xlabel", ""),
                 ylim=_tuple(d.get("ylim")),
                 xlim=_tuple(d.get("xlim")),
+                yerr=d.get("yerr"),
                 fmt=d.get("fmt", ".2f"),
                 **common,
             )
@@ -212,6 +217,7 @@ def _panel_from_dict(d: dict) -> BarPanel | LinePanel | ScatterPanel | HeatmapPa
                 log_y=d.get("log_y", False),
                 symlog_thresh=d.get("symlog_thresh"),
                 vline=d.get("vline"),
+                bands=d.get("bands"),
                 annotate=d.get("annotate", False),
                 fmt=d.get("fmt", ".2f"),
                 **common,
@@ -274,31 +280,19 @@ def _series_color(panel: BarPanel, series: str, idx: int) -> str:
     return override.get(series, SERIES_PALETTE[idx % len(SERIES_PALETTE)])
 
 
-def _render_bars(ax: Axes, panel: BarPanel) -> None:  # ruff: ignore[complex-structure] (one declarative panel = one branch)
+def _render_bars(ax: Axes, panel: BarPanel) -> None:
     group_order = panel.group_order or tuple(panel.groups)
     series_order = panel.series_order or tuple(next(iter(panel.groups.values())))
-    labels = panel.series_labels or {}
     width = 0.8 / max(len(series_order), 1)
+    yerr = panel.yerr or {}
 
     for s_idx, series in enumerate(series_order):
         values = [panel.groups[g].get(series, 0.0) for g in group_order]
+        errors = [yerr.get(g, {}).get(series, 0.0) for g in group_order]
         offsets = [i + s_idx * width - 0.4 + width / 2 for i in range(len(group_order))]
-        color = _series_color(panel, series, s_idx)
-        label = labels.get(series, series)
-        if panel.horizontal:
-            ax.barh(offsets, values, width, color=color, label=label)
-            for y, v in zip(offsets, values, strict=True):
-                ax.text(v, y, f"{v:{panel.fmt}}", va="center", fontsize=8)
-            ax.set_yticks(range(len(group_order)), group_order)
-            if panel.xlim:
-                ax.set_xlim(*panel.xlim)
-        else:
-            ax.bar(offsets, values, width, color=color, label=label)
-            for x, v in zip(offsets, values, strict=True):
-                ax.text(x, v, f"{v:{panel.fmt}}", ha="center", va="bottom", fontsize=8)
-            ax.set_xticks(range(len(group_order)), group_order)
-            if panel.ylim:
-                ax.set_ylim(*panel.ylim)
+        _draw_bar_series(
+            ax, panel, series, s_idx, group_order, offsets, values, errors, width
+        )
 
     if panel.chance is not None:
         chance_line(ax, panel.chance, panel.chance_label)
@@ -311,21 +305,39 @@ def _render_bars(ax: Axes, panel: BarPanel) -> None:  # ruff: ignore[complex-str
         ax.legend(loc=panel.legend_loc or "best")
 
 
-def _render_lines(ax: Axes, panel: LinePanel) -> None:  # ruff: ignore[complex-structure]
+def _draw_bar_series(
+    ax: Axes,
+    panel: BarPanel,
+    series: str,
+    s_idx: int,
+    group_order: tuple[str, ...],
+    offsets: list[float],
+    values: list[float],
+    errors: list[float],
+    width: float,
+) -> None:
+    color = _series_color(panel, series, s_idx)
+    label = (panel.series_labels or {}).get(series, series)
+    if panel.horizontal:
+        ax.barh(offsets, values, width, color=color, label=label, xerr=errors)
+        for y, v in zip(offsets, values, strict=True):
+            ax.text(v, y, f"{v:{panel.fmt}}", va="center", fontsize=8)
+        ax.set_yticks(range(len(group_order)), group_order)
+        if panel.xlim:
+            ax.set_xlim(*panel.xlim)
+    else:
+        ax.bar(offsets, values, width, color=color, label=label, yerr=errors)
+        for x, v in zip(offsets, values, strict=True):
+            ax.text(x, v, f"{v:{panel.fmt}}", ha="center", va="bottom", fontsize=8)
+        ax.set_xticks(range(len(group_order)), group_order)
+        if panel.ylim:
+            ax.set_ylim(*panel.ylim)
+
+
+def _render_lines(ax: Axes, panel: LinePanel) -> None:
+    bands = panel.bands or {}
     for s_idx, (name, ys) in enumerate(panel.series.items()):
-        xs = panel.x if panel.x is not None else list(range(len(ys)))
-        color = SERIES_PALETTE[s_idx % len(SERIES_PALETTE)]
-        ax.plot(xs, ys, marker="o", color=color, label=name)
-        if panel.annotate:
-            for x, y in zip(xs, ys, strict=True):
-                ax.annotate(
-                    f"{y:{panel.fmt}}",
-                    (x, y),
-                    textcoords="offset points",
-                    xytext=(0, 4),
-                    ha="center",
-                    fontsize=8,
-                )
+        _draw_line_series(ax, panel, name, ys, s_idx, bands.get(name))
     if panel.chance is not None:
         chance_line(ax, panel.chance, panel.chance_label)
     if panel.vline is not None:
@@ -355,6 +367,38 @@ def _render_lines(ax: Axes, panel: LinePanel) -> None:  # ruff: ignore[complex-s
         ax.set_xticks(range(len(panel.xticklabels)), panel.xticklabels)
     if len(panel.series) > 1:
         ax.legend(loc=panel.legend_loc or "best")
+
+
+def _draw_line_series(
+    ax: Axes,
+    panel: LinePanel,
+    name: str,
+    ys: list[float],
+    s_idx: int,
+    band: dict[str, list[float]] | None,
+) -> None:
+    xs = panel.x if panel.x is not None else list(range(len(ys)))
+    color = SERIES_PALETTE[s_idx % len(SERIES_PALETTE)]
+    if band:
+        ax.fill_between(
+            xs,
+            band["low"],
+            band["high"],
+            color=color,
+            alpha=0.2,
+            linewidth=0,
+        )
+    ax.plot(xs, ys, marker="o", color=color, label=name)
+    if panel.annotate:
+        for x, y in zip(xs, ys, strict=True):
+            ax.annotate(
+                f"{y:{panel.fmt}}",
+                (x, y),
+                textcoords="offset points",
+                xytext=(0, 4),
+                ha="center",
+                fontsize=8,
+            )
 
 
 def _render_scatter(ax: Axes, panel: ScatterPanel) -> None:
@@ -583,7 +627,7 @@ def _spring_positions(
     rng = np.random.default_rng(0)
     pos = np.array([
         (np.cos(2 * np.pi * i / n), np.sin(2 * np.pi * i / n)) for i in range(n)
-    ]    ) * (1 + (rng.random(n) * 0.1)[:, None])
+    ]) * (1 + (rng.random(n) * 0.1)[:, None])
     k = 1.0 / max(n**0.5, 1.0)
     for _ in range(iterations):
         delta = np.zeros((n, 2))
@@ -693,9 +737,10 @@ def bars_panel(
     chance: float | None = None,
     chance_label: str = "chance",
     ylabel: str = "accuracy",
+    yerr: dict[str, dict[str, float]] | None = None,
     **kwargs,
 ) -> dict:
-    return {
+    spec = {
         "type": "bars",
         "groups": groups,
         "chance": chance,
@@ -703,6 +748,9 @@ def bars_panel(
         "ylabel": ylabel,
         **kwargs,
     }
+    if yerr is not None:
+        spec["yerr"] = yerr
+    return spec
 
 
 def lines_panel(
@@ -711,9 +759,10 @@ def lines_panel(
     chance: float | None = None,
     xlabel: str = "",
     ylabel: str = "",
+    bands: dict[str, dict[str, list[float]]] | None = None,
     **kwargs,
 ) -> dict:
-    return {
+    spec = {
         "type": "lines",
         "series": series,
         "chance": chance,
@@ -721,6 +770,9 @@ def lines_panel(
         "ylabel": ylabel,
         **kwargs,
     }
+    if bands is not None:
+        spec["bands"] = bands
+    return spec
 
 
 def scatter_panel(

@@ -33,6 +33,7 @@ from computronium import (
     compose_joint_system,
     create_task,
 )
+from computronium.visualization import bars_panel, figure_spec, lines_panel
 
 DEVICE = "cpu"
 BATCH_CAP = 75
@@ -113,6 +114,35 @@ def test_demo_geometry_swap(emit_run_record) -> None:
             "param_count": param_count,
             "probe": probes,
         }
+
+    record["figure"] = figure_spec(
+        "D8 — one wiring, one swapped G-axis (capacity-fair)",
+        bars_panel(
+            {
+                name: {"train accuracy": arm["train_acc"]}
+                for name, arm in record["arms"].items()
+            },
+            chance=1 / 10,
+            chance_label="chance (0.1)",
+            ylabel="train accuracy",
+            ylim=(0, 1),
+        ),
+        lines_panel(
+            {
+                f"{name} ({arm['param_count'] / 1000:.1f}k params)": [
+                    arm["probe"][s] for s in record["probe_shifts"]
+                ]
+                for name, arm in record["arms"].items()
+            },
+            x=list(record["probe_shifts"]),
+            chance=1 / 10,
+            chance_label="chance (0.1)",
+            xlabel="probe digit shift (px)",
+            ylabel="probe accuracy",
+            title="the smaller conv arm retains the shifted digits",
+        ),
+        figsize=[9, 4],
+    )
 
     emit_run_record("D8", "geometry_swap", record)
 

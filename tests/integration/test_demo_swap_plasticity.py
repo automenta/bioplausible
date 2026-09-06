@@ -21,6 +21,7 @@ from computronium.experiments.joint.forgetting_trial import (
     _arm_coordinate,
     _walk_arm,
 )
+from computronium.visualization import figure_spec, lines_panel
 
 ARMS = ("null", "routing")
 SEEDS = tuple(range(10))
@@ -69,5 +70,39 @@ def test_demo_swap_plasticity(emit_run_record) -> None:
     record["seeds_routing_retains"] = wins
     assert gap >= 0.05, "routing's retention advantage must be visible in means"
     assert wins >= 8, "routing must retain at least as well as null per-seed"
+
+    record["figure"] = figure_spec(
+        "D3 — the P-axis swap: routing retains what null forgets",
+        lines_panel(
+            {
+                label: [
+                    float(np.mean(arms[label].a_mastery)),
+                    float(np.mean(arms[label].a_retained)),
+                ]
+                for label in ARMS
+            },
+            x=[0, 1],
+            xticklabels=("after segment A", "after segment B"),
+            chance=CHANCE,
+            chance_label="chance",
+            ylabel="segment-A probe accuracy",
+            # Seed variance on the page (roadmap item 2): per-seed min/max
+            # band around each mean line.
+            bands={
+                label: {
+                    "low": [
+                        float(np.min(arms[label].a_mastery)),
+                        float(np.min(arms[label].a_retained)),
+                    ],
+                    "high": [
+                        float(np.max(arms[label].a_mastery)),
+                        float(np.max(arms[label].a_retained)),
+                    ],
+                }
+                for label in ARMS
+            },
+        ),
+        figsize=[6, 4],
+    )
 
     emit_run_record("D3", "swap_plasticity", record)
