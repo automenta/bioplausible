@@ -36,7 +36,7 @@ from computronium import (
     GraphGeometry,
     InstantaneousDynamics,
     LocalGoodnessCredit,
-    NaturalGradientUpdate,
+    MeanNormUpdate,
     ParameterUpdateConfig,
     SpatialLattice3DGeometry,
     SpectralConstrainedUpdate,
@@ -112,8 +112,8 @@ def _updates() -> dict[str, Callable]:
         "spectral": lambda: SpectralConstrainedUpdate(
             ParameterUpdateConfig.spectral_constrained(step_size=0.1)
         ),
-        "natural": lambda: NaturalGradientUpdate(
-            ParameterUpdateConfig.natural_gradient(step_size=0.1)
+        "natural": lambda: MeanNormUpdate(
+            ParameterUpdateConfig.mean_norm(step_size=0.1)
         ),
         "adam": lambda: AdamUpdate(ParameterUpdateConfig.adam(step_size=1e-3)),
     }

@@ -15,8 +15,9 @@ from computronium.ontology import (
     GeometryConfig,
     HomeostaticCredit,
     InstantaneousDynamics,
+    LocalAdamUpdate,
     LocalGoodnessCredit,
-    NaturalGradientUpdate,
+    MeanNormUpdate,
     OrthoAdamUpdate,
     ParameterUpdateConfig,
     PredictiveSettlingDynamics,
@@ -29,6 +30,7 @@ from computronium.ontology import (
     TargetInversionCredit,
     TemporalTraceCredit,
     ThermodynamicContrast,
+    UnitRMSUpdate,
     geometry_from_config,
     substrate_from_config,
 )
@@ -117,13 +119,14 @@ _UPDATE_CLASSES: dict[str, type] = {
     "muon": RiemannianOrthogonalUpdate,
     "spectral_constrained": SpectralConstrainedUpdate,
     "spectral": SpectralConstrainedUpdate,
-    "natural_gradient": NaturalGradientUpdate,
-    "fisher": NaturalGradientUpdate,
+    "mean_norm": MeanNormUpdate,
     "elastic_consolidation": ElasticConsolidationUpdate,
     "ewc": ElasticConsolidationUpdate,
     "euclidean": EuclideanUpdate,
     "adam": AdamUpdate,
     "ortho_adam": OrthoAdamUpdate,
+    "unit_rms": UnitRMSUpdate,
+    "local_adam": LocalAdamUpdate,
 }
 
 

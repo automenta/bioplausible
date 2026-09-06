@@ -25,7 +25,7 @@ from computronium.ontology import (
     GeometryConfig,
     InstantaneousDynamics,
     LocalGoodnessCredit,
-    NaturalGradientUpdate,
+    MeanNormUpdate,
     NullPlasticity,
     ParameterUpdateConfig,
     RecurrentGeometry,
@@ -131,7 +131,7 @@ def _make_random_system(device: torch.device) -> tuple:
         "euclidean",
         "riemannian_orthogonal",
         "spectral_constrained",
-        "natural_gradient",
+        "mean_norm",
         "elastic_consolidation",
     ])
     update_map = {
@@ -168,9 +168,9 @@ def _make_random_system(device: torch.device) -> tuple:
                 ewc_lambda=1000.0,
             )
         ),
-        "natural_gradient": lambda: NaturalGradientUpdate(
+        "mean_norm": lambda: MeanNormUpdate(
             ParameterUpdateConfig(
-                update_type="natural_gradient",
+                update_type="mean_norm",
                 step_size=0.01,
                 momentum=0.9,
                 ortho_steps=5,

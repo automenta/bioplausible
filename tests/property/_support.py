@@ -182,7 +182,7 @@ def _round_trip_configs(system: System) -> System:  # ruff: ignore[too-many-loca
         FeedforwardGeometry,
         InstantaneousDynamics,
         LocalGoodnessCredit,
-        NaturalGradientUpdate,
+        MeanNormUpdate,
         RandomProjectionsCredit,
         RecurrentGeometry,
         RiemannianOrthogonalUpdate,
@@ -241,7 +241,7 @@ def _round_trip_configs(system: System) -> System:  # ruff: ignore[too-many-loca
         "euclidean": EuclideanUpdate,
         "riemannian_orthogonal": RiemannianOrthogonalUpdate,
         "spectral_constrained": SpectralConstrainedUpdate,
-        "natural_gradient": NaturalGradientUpdate,
+        "mean_norm": MeanNormUpdate,
         "elastic_consolidation": ElasticConsolidationUpdate,
     }
     update_cls = update_map.get(update_cfg.update_type, EuclideanUpdate)

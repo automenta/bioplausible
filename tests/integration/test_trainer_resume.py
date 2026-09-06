@@ -102,5 +102,5 @@ def test_snapshot_round_trip_restores_optimizer_state() -> None:
         system=_system(), config=_config(1), train_data=_loader(), snapshot=snapshot
     )
     restored_buffers = restored.system.update._momentum_buffers
-    for name, t in snapshot.opt_state.items():
+    for name, t in snapshot.opt_state["momentum"].items():
         assert torch.equal(restored_buffers[name], t)

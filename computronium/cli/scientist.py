@@ -151,7 +151,7 @@ SEARCH_SPACES = {
             "ortho_adam",
             "riemannian_orthogonal",
             "spectral_constrained",
-            "natural_gradient",
+            "mean_norm",
             "elastic_consolidation",
         ],
     },

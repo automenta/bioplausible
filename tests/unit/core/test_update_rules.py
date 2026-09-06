@@ -14,7 +14,7 @@ import torch
 from computronium.ontology import (
     ElasticConsolidationUpdate,
     EuclideanUpdate,
-    NaturalGradientUpdate,
+    MeanNormUpdate,
     ParameterUpdateConfig,
     RiemannianOrthogonalUpdate,
     SpectralConstrainedUpdate,
@@ -51,7 +51,7 @@ def _weight_grads(params: dict[str, torch.Tensor]) -> list[torch.Tensor]:
         SpectralConstrainedUpdate(
             ParameterUpdateConfig.spectral_constrained(step_size=0.01)
         ),
-        NaturalGradientUpdate(ParameterUpdateConfig.natural_gradient(step_size=0.01)),
+        MeanNormUpdate(ParameterUpdateConfig.mean_norm(step_size=0.01)),
         ElasticConsolidationUpdate(
             ParameterUpdateConfig.elastic_consolidation(step_size=0.01)
         ),

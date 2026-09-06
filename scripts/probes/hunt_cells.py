@@ -32,7 +32,7 @@ from computronium import (
     GeometryConfig,
     InstantaneousDynamics,
     LocalGoodnessCredit,
-    NaturalGradientUpdate,
+    MeanNormUpdate,
     ParameterUpdateConfig,
     SpectralConstrainedUpdate,
     StateDynamicsConfig,
@@ -73,14 +73,14 @@ def _updates() -> dict[str, Callable]:
         "spectral": lambda: SpectralConstrainedUpdate(
             ParameterUpdateConfig.spectral_constrained(step_size=0.1)
         ),
-        "nat.01": lambda: NaturalGradientUpdate(
-            ParameterUpdateConfig.natural_gradient(step_size=0.01)
+        "nat.01": lambda: MeanNormUpdate(
+            ParameterUpdateConfig.mean_norm(step_size=0.01)
         ),
-        "nat.1": lambda: NaturalGradientUpdate(
-            ParameterUpdateConfig.natural_gradient(step_size=0.1)
+        "nat.1": lambda: MeanNormUpdate(
+            ParameterUpdateConfig.mean_norm(step_size=0.1)
         ),
-        "nat1": lambda: NaturalGradientUpdate(
-            ParameterUpdateConfig.natural_gradient(step_size=1.0)
+        "nat1": lambda: MeanNormUpdate(
+            ParameterUpdateConfig.mean_norm(step_size=1.0)
         ),
     }
 

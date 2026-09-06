@@ -136,9 +136,9 @@ UPDATE_FACTORIES = {
         EuclideanUpdate(ParameterUpdateConfig.spectral_constrained()),
         ParameterUpdateConfig.spectral_constrained(),
     ),
-    "natural_gradient": lambda: (
-        EuclideanUpdate(ParameterUpdateConfig.natural_gradient()),
-        ParameterUpdateConfig.natural_gradient(),
+    "mean_norm": lambda: (
+        EuclideanUpdate(ParameterUpdateConfig.mean_norm()),
+        ParameterUpdateConfig.mean_norm(),
     ),
     "elastic_consolidation": lambda: (
         EuclideanUpdate(ParameterUpdateConfig.elastic_consolidation()),

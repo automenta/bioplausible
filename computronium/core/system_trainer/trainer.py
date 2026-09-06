@@ -184,16 +184,21 @@ class SystemTrainer:
         theta = {
             name: t.detach().clone() for name, t in self.system.geometry.params.items()
         }
-        buffers: dict[str, Tensor] = getattr(
-            self.system.update, "_momentum_buffers", {}
+        get_state = getattr(self.system.update, "get_state", None)
+        buffers: dict[str, dict[str, Tensor]] = (
+            get_state() if get_state is not None else {}
         )
-        opt_state = {name: t.detach().clone() for name, t in buffers.items()}
+        credit_state_fn = getattr(self.system.credit, "get_state", None)
+        credit_state: dict[str, dict[str, Tensor]] = (
+            credit_state_fn() if credit_state_fn is not None else {}
+        )
         return TrainerSnapshot(
             epoch=self.current_epoch,
             global_step=self.global_step,
             history=tuple(self.history),
             theta=theta,
-            opt_state=opt_state,
+            opt_state=buffers,
+            credit_state=credit_state,
         )
 
     @classmethod
@@ -223,14 +228,22 @@ class SystemTrainer:
             name: t.to(self.device) for name, t in snap.theta.items()
         })
         if snap.opt_state:
-            buffers = getattr(self.system.update, "_momentum_buffers", None)
-            if buffers is None:
+            load = getattr(self.system.update, "load_state", None)
+            if load is None:
                 raise TypeError(
                     f"{type(self.system.update).__name__} carries no "
                     "optimizer state to restore into"
                 )
-            for name, t in snap.opt_state.items():
-                buffers[name] = t.to(self.device).clone()
+            load(snap.opt_state)
+        if snap.credit_state:
+            credit_load = getattr(self.system.credit, "load_state", None)
+            if credit_load is None:
+                msg = (
+                    f"{type(self.system.credit).__name__} carries no "
+                    "credit state to restore into"
+                )
+                raise TypeError(msg)
+            credit_load(snap.credit_state)
         self.current_epoch = snap.epoch
         self.global_step = snap.global_step
         self.history = list(snap.history)

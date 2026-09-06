@@ -256,10 +256,10 @@ ONTOLOGY = {
                 "params": {"update_type": "spectral_constrained"},
                 "papers": ["Yoshida & Miyato 2017", "Sedghi et al. 2019"],
             },
-            "natural_gradient": {
+            "mean_norm": {
                 "label": "Natural Gradient",
                 "description": "Fisher information metric",
-                "params": {"update_type": "natural_gradient"},
+                "params": {"update_type": "mean_norm"},
                 "papers": ["Amari 1998", "Martens 2020"],
             },
             "elastic_consolidation": {
@@ -363,7 +363,7 @@ def generate_python_code(selection: dict[str, str]) -> str:  # ruff: ignore[comp
         "euclidean": "EuclideanUpdate",
         "riemannian_orthogonal": "RiemannianOrthogonalUpdate",
         "spectral_constrained": "SpectralConstrainedUpdate",
-        "natural_gradient": "NaturalGradientUpdate",
+        "mean_norm": "MeanNormUpdate",
         "elastic_consolidation": "ElasticConsolidationUpdate",
     }
 

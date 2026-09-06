@@ -65,7 +65,7 @@ AXIS_VALUES: Final[dict[int, tuple[str, ...]]] = {
         "euclidean",
         "riemannian_orthogonal",
         "spectral_constrained",
-        "natural_gradient",
+        "mean_norm",
         "elastic_consolidation",
     ),
 }

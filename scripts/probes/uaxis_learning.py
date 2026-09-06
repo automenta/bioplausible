@@ -30,7 +30,7 @@ from computronium import (
 )
 from computronium.ontology.update import (
     EuclideanUpdate,
-    NaturalGradientUpdate,
+    MeanNormUpdate,
     RiemannianOrthogonalUpdate,
     SpectralConstrainedUpdate,
 )
@@ -55,7 +55,7 @@ ARMS = (
     ),
     (
         "natural",
-        NaturalGradientUpdate(ParameterUpdateConfig.natural_gradient(step_size=0.2)),
+        MeanNormUpdate(ParameterUpdateConfig.mean_norm(step_size=0.2)),
     ),
 )
 

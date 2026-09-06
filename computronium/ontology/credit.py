@@ -25,6 +25,53 @@ if TYPE_CHECKING:
 # ============================================================
 
 
+CreditNormMode = Literal["none", "relative", "rms", "beta_adaptive", "spectral"]
+
+
+def _apply_credit_norm(
+    grads: list[Tensor],
+    mode: CreditNormMode,
+    error_refs: list[Tensor] | None = None,
+) -> list[Tensor]:
+    """Per-layer credit-signal normalization (TODO12 A4).
+
+    ``grads`` are the per-layer credit tensors at formation; zeros stay
+    zeros (a zero norm leaves the layer untouched — no fabricated signal).
+    """
+    if mode == "none":
+        return grads
+    out: list[Tensor] = []
+    for i, g in enumerate(grads):
+        if not torch.isfinite(g).all():
+            # Diverged credit: SVD/RMS on inf/NaN would crash or poison
+            # downstream sweeps — pass the layer through untouched (the
+            # run is already lost; the crash only destroys the evidence;
+            # the RiemannianOrthogonalUpdate diverged-step precedent).
+            out.append(g)
+            continue
+        if mode == "spectral":
+            if g.ndim < 2:
+                out.append(g)
+                continue
+            radius = torch.linalg.matrix_norm(g, ord=2)
+            out.append(g / (radius + 1e-8) if radius > 0 else g)
+        elif mode == "rms":
+            rms = g.square().mean().sqrt()
+            out.append(g / (rms + 1e-8) if rms > 0 else g)
+        else:  # "relative" | "beta_adaptive"
+            ref = (
+                error_refs[i]
+                if error_refs is not None and i < len(error_refs)
+                else None
+            )
+            if ref is None:
+                out.append(g)
+                continue
+            mag = ref.norm() if mode == "relative" else ref.square().mean().sqrt()
+            out.append(g / (mag + 1e-8) if mag > 0 else g)
+    return out
+
+
 @dataclass(frozen=True, slots=True)
 class CreditAssignmentConfig:
     """Configuration for credit assignment.
@@ -33,6 +80,15 @@ class CreditAssignmentConfig:
         credit_type: "thermodynamic_contrast", "random_projections",
             "local_goodness", "temporal_trace", "target_inversion"
         beta: Nudge strength (for thermodynamic contrast)
+        credit_norm: Per-layer credit-signal normalization (TODO12 A4,
+            RESEARCH4 Lever 1 — "Muon applied to the backward signal").
+            Applied at pseudo-gradient formation: ``relative`` rescales
+            each layer's gradient by its settled error magnitude
+            ε = (free − nudged)/β; ``rms`` rescales to unit RMS per
+            layer; ``beta_adaptive`` is the ePC-native per-layer β
+            tuning (unit-scale error, Fix-2 option 2); ``spectral``
+            rescales matrix gradients to spectral radius 1 (Fix-2
+            option 3). Zeros stay zeros — never fabricates signal.
         feedback_matrix: Optional fixed feedback matrix
             (for random projections)
         local_objective: Local-credit algorithm selection (for
@@ -54,6 +110,17 @@ class CreditAssignmentConfig:
         tau: STDP time constant (for temporal_trace, legacy)
         tau_pre: STDP pre-synaptic trace time constant (for timing-asymmetric STDP)
         tau_post: STDP post-synaptic trace time constant (for timing-asymmetric STDP)
+        learned_feedback: Train the PEPITA inverse projections B as
+            credit-internal state via a transport-free reconstruction
+            objective (TODO12 B1, RESEARCH4 Fix 1a): each B_i is regressed
+            (closed-form ridge, autograd-free) to map the broadcast output
+            error e₁ back into the post-synaptic activity space of its
+            weight, EMA-blended at ``feedback_lr`` every
+            ``feedback_update_every`` steps. Never reads forward weights
+            (the L3 transport lock is the guard — B0's legacy-AdaptiveFA
+            defect is not inherited)
+        feedback_lr: EMA rate toward the ridge solution (learned_feedback)
+        feedback_update_every: Steps between learned-feedback updates
     homeostatic_target: Target row-norm for homeostatic synaptic
         scaling (timing-asymmetric STDP)
     homeostatic_scaling: Gate the homeostatic synaptic-scaling term on
@@ -68,6 +135,7 @@ class CreditAssignmentConfig:
     orthogonal_init: bool
     feedback_scale: float
     readout_error: bool = False
+    credit_norm: CreditNormMode = "none"
     a_plus: float = 1.0
     a_minus: float = 1.0
     tau: float = 20.0
@@ -75,6 +143,9 @@ class CreditAssignmentConfig:
     tau_post: float = 0.9
     homeostatic_target: float = 1.0
     homeostatic_scaling: bool = False
+    learned_feedback: bool = False
+    feedback_lr: float = 0.5
+    feedback_update_every: int = 1
 
     @classmethod
     def thermodynamic_contrast(
@@ -85,6 +156,7 @@ class CreditAssignmentConfig:
         local_objective: Literal["ff", "pepita"] = "ff",
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
+        credit_norm: CreditNormMode = "none",
     ) -> CreditAssignmentConfig:
         return cls(
             credit_type="thermodynamic_contrast",
@@ -93,6 +165,7 @@ class CreditAssignmentConfig:
             local_objective=local_objective,
             orthogonal_init=orthogonal_init,
             feedback_scale=feedback_scale,
+            credit_norm=credit_norm,
         )
 
     @classmethod
@@ -115,7 +188,7 @@ class CreditAssignmentConfig:
         )
 
     @classmethod
-    def local_goodness(
+    def local_goodness(  # ruff: ignore[too-many-arguments] (config mirrors the knobs)
         cls,
         *,
         beta: float = 0.5,
@@ -124,10 +197,18 @@ class CreditAssignmentConfig:
         orthogonal_init: bool = False,
         feedback_scale: float = 0.01,
         readout_error: bool = False,
+        credit_norm: CreditNormMode = "none",
+        learned_feedback: bool = False,
+        feedback_lr: float = 0.5,
+        feedback_update_every: int = 1,
     ) -> CreditAssignmentConfig:
         return cls(
             credit_type="local_goodness",
             readout_error=readout_error,
+            credit_norm=credit_norm,
+            learned_feedback=learned_feedback,
+            feedback_lr=feedback_lr,
+            feedback_update_every=feedback_update_every,
             beta=beta,
             feedback_matrix=feedback_matrix,
             local_objective=local_objective,
@@ -445,34 +526,34 @@ class ThermodynamicContrast:
                 / batch
                 for i in range(len(free_acts) - 1)
             ]
-            return geometry.scatter_block_grads(block_grads)
+            eps = [
+                (free_acts[i + 1] - nudged_acts[i + 1]) / self.config.beta
+                for i in range(len(free_acts) - 1)
+            ]
+            return geometry.scatter_block_grads(
+                _apply_credit_norm(block_grads, self.config.credit_norm, eps)
+            )
 
         weight_names = _learnable_weight_names(geometry.params)
-
-        grads = []
-        # Compute contrastive Hebbian gradients for each weight matrix
-        # Assume activations are ordered: [input, hidden1, hidden2, ..., output]
         n_layers = len(free_acts) - 1
-        for l in range(n_layers):  # ruff: ignore[ambiguous-variable-name]
-            if l < len(weight_names):
-                # Free phase correlation: free_pre^T @ free_post
-                free_pre = free_acts[l]  # (batch, in_dim)
-                free_post = free_acts[l + 1]  # (batch, out_dim)
-                free_corr = free_pre.T @ free_post  # (in_dim, out_dim)
-
-                # Nudged phase correlation
-                nudged_pre = nudged_acts[l]
-                nudged_post = nudged_acts[l + 1]
-                nudged_corr = nudged_pre.T @ nudged_post
-
-                # Contrastive gradient: (free - nudged) / β (standard EqProp)
-                contrast = (
-                    (free_corr - nudged_corr) / self.config.beta / free_pre.shape[0]
+        eps = [
+            (free_acts[i + 1] - nudged_acts[i + 1]) / self.config.beta
+            for i in range(n_layers)
+        ]
+        grads = []
+        # Contrastive Hebbian gradients per weight matrix; activations are
+        # ordered [input, hidden1, ..., output].
+        for i in range(min(n_layers, len(weight_names))):
+            contrast = (
+                (
+                    free_acts[i].T @ free_acts[i + 1]
+                    - nudged_acts[i].T @ nudged_acts[i + 1]
                 )
-                # Transpose to match weight shape (out_dim, in_dim)
-                grads.append(contrast.T)
-
-        return grads
+                / self.config.beta
+                / free_acts[i].shape[0]
+            )
+            grads.append(contrast.T)
+        return _apply_credit_norm(grads, self.config.credit_norm, eps)
 
     def surrogate_objective(
         self,
@@ -558,11 +639,13 @@ class RandomProjectionsCredit:
         # contract (B maps act_{k+1} widths down to act_k) holds per edge.
         if _block_transition_acts(acts, geometry) is not None:
             blocks = geometry.assemble_blocks(self._feedback_weights)
-            err = delta_out
+            err = _apply_credit_norm([delta_out], self.config.credit_norm)[0]
             block_grads: list[Tensor] = []
             for i in range(n_trans - 1, -1, -1):
                 block_grads.append(err.T @ acts[i] / batch)
-                err = err @ blocks[i]  # ruff: ignore[non-augmented-assignment]
+                err = _apply_credit_norm(
+                    [err @ blocks[i]], self.config.credit_norm, [acts[i]]
+                )[0]
             block_grads.reverse()
             return geometry.scatter_block_grads(block_grads)
 
@@ -579,11 +662,15 @@ class RandomProjectionsCredit:
         # err_at[L] = ∂L/∂a_L; err_at[k] = err_at[k+1] @ B_k.
         # During the sweep, err is err_at[i + 1] on entering iteration i.
         grads: list[Tensor] = []
-        err = delta_out
-        hidden_err = delta_out
+        err = _apply_credit_norm([delta_out], self.config.credit_norm)[0]
+        hidden_err = err
         for i in range(n_trans - 1, -1, -1):
             grads.append(err.T @ acts[i] / batch)
-            err = err @ self._feedback_weights[weight_names[i]]  # ruff: ignore[non-augmented-assignment]
+            err = _apply_credit_norm(
+                [err @ self._feedback_weights[weight_names[i]]],
+                self.config.credit_norm,
+                [acts[i]],
+            )[0]
             if i == n_trans - 1:
                 # Error at the last hidden layer: upstream of the recurrent
                 # self-connection.
@@ -635,6 +722,8 @@ class LocalGoodnessCredit:
     def __init__(self, config: CreditAssignmentConfig | None = None):
         self.config = config or CreditAssignmentConfig.local_goodness()
         self._feedback: dict[tuple[str, tuple[int, int], str, str], Tensor] = {}
+        self._learned: dict[tuple[str, tuple[int, int], str, str], Tensor] = {}
+        self._feedback_step = 0
 
     def _inverse_projection(
         self, name: str, width: int, out_dim: int, device: str, dtype
@@ -651,6 +740,94 @@ class LocalGoodnessCredit:
                 b.normal_(generator=gen)
             self._feedback[key] = b.to(dtype) * self.config.feedback_scale
         return self._feedback[key]
+
+    def _learned_projection(
+        self, name: str, width: int, out_dim: int, device: str, dtype
+    ) -> Tensor:
+        """Credit-internal learned B: (out_dim, width), same deterministic
+        init as the fixed projection until the first reconstruction update."""
+        key = (name, (out_dim, width), device, str(dtype))
+        if key not in self._learned:
+            self._learned[key] = self._inverse_projection(
+                name, width, out_dim, device, dtype
+            ).clone()
+        return self._learned[key]
+
+    def _update_learned_feedback(
+        self,
+        free_acts: list[Tensor],
+        e1: Tensor,
+        weight_names: list[str],
+        n_trans: int,
+    ) -> None:
+        """Transport-free reconstruction update of the learned B matrices.
+
+        Objective (RESEARCH4 Fix 1a): B_i maps the broadcast output error
+        e₁ back into weight i's post-synaptic activity space. The ridge
+        solution is the closed-form local regression post @ C ≈ e₁ with
+        B_i = Cᵀ — autoencoder-style, autograd-free, reads only settled
+        activations and e₁ (never ``param.data``: the L3 transport lock).
+        """
+        self._feedback_step += 1
+        if (self._feedback_step - 1) % max(1, self.config.feedback_update_every):
+            return
+        for k, name in enumerate(weight_names):
+            if k >= n_trans:
+                continue
+            post = free_acts[k + 1].detach()
+            width = post.shape[-1]
+            key = (name, (e1.shape[-1], width), str(post.device), str(e1.dtype))
+            if key not in self._learned:
+                continue
+            if not (torch.isfinite(post).all() and torch.isfinite(e1).all()):
+                continue  # diverged settle: skip, don't poison B
+            a = post.float()
+            g = a.T @ a
+            lam = 1e-3 * g.diagonal().mean().clamp_min(1e-12)
+            c = torch.linalg.solve(
+                g + lam * torch.eye(g.shape[0], device=g.device), a.T @ e1.float()
+            )
+            b_new = (c.T * self.config.feedback_scale).to(e1.dtype)
+            if not torch.isfinite(b_new).all():
+                continue
+            cur = self._learned[key]
+            lr = self.config.feedback_lr
+            self._learned[key] = ((1.0 - lr) * cur.float() + lr * b_new.float()).to(
+                cur.dtype
+            )
+
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        """Snapshot protocol (A1 precedent): learned-B matrices + step counter."""
+        if not self._learned:
+            return {}
+        return {
+            "learned_feedback": {
+                f"{name}|{shape[0]}x{shape[1]}|{device}|{dtype}": t.detach().clone()
+                for (name, shape, device, dtype), t in self._learned.items()
+            },
+            "step": {"counter": torch.tensor(self._feedback_step)},
+        }
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        step_group = state.get("step", {})
+        step = step_group.get("counter") if isinstance(step_group, dict) else None
+        if not isinstance(step, Tensor):
+            msg = "learned-feedback credit state is missing the step counter"
+            raise RuntimeError(msg)  # ruff: ignore[type-check-without-type-error]
+        self._feedback_step = int(step.item())
+        for key, tensor in state.get("learned_feedback", {}).items():
+            name, shape_s, device, dtype = key.split("|", 3)
+            rows, cols = (int(s) for s in shape_s.split("x"))
+            t_key = (name, (rows, cols), device, dtype)
+            cached = self._learned.get(t_key)
+            if cached is not None and cached.shape != tensor.shape:
+                msg = (
+                    f"learned-feedback state shape mismatch for {name!r}: "
+                    f"state {tuple(tensor.shape)} vs cache {tuple(cached.shape)} "
+                    "(system-scoped state cannot be re-targeted)"
+                )
+                raise RuntimeError(msg)
+            self._learned[t_key] = tensor.detach().clone()
 
     def _pepita_gradient(
         self,
@@ -674,6 +851,9 @@ class LocalGoodnessCredit:
         e1 = (onehot - torch.softmax(out, dim=-1)).detach()
         out_dim = e1.shape[1]
         batch = e1.shape[0]
+        learned = self.config.learned_feedback
+        if learned:
+            self._update_learned_feedback(free_acts, e1, weight_names, n_trans)
         grads: list[Tensor] = []
         for k, name in enumerate(weight_names):
             if k >= n_trans:
@@ -681,14 +861,24 @@ class LocalGoodnessCredit:
                 grads.append(torch.zeros_like(geometry.params[name]))
                 continue
             width = geometry.params[name].shape[0]
-            b = self._inverse_projection(
-                name,
-                width,
-                out_dim,
-                str(e1.device),
-                e1.dtype,
-            )
+            if learned:
+                b = self._learned_projection(
+                    name,
+                    width,
+                    out_dim,
+                    str(e1.device),
+                    e1.dtype,
+                )
+            else:
+                b = self._inverse_projection(
+                    name,
+                    width,
+                    out_dim,
+                    str(e1.device),
+                    e1.dtype,
+                )
             err = e1 @ b  # (batch, width)
+            err = _apply_credit_norm([err], self.config.credit_norm, [free_acts[k]])[0]
             grads.append(-(err.T @ nudged_acts[k].detach()) / batch)
         return grads
 

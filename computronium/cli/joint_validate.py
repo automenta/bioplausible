@@ -109,7 +109,7 @@ def _list_axis_options():
     print(
         "    euclidean, adam, ortho_adam, riemannian_orthogonal, spectral_constrained,"
     )
-    print("    natural_gradient, elastic_consolidation")
+    print("    mean_norm, elastic_consolidation")
     print()
     print(
         "Example coordinate: digital/recurrent/energy_minimization/null/thermodynamic_contrast/euclidean"
@@ -299,9 +299,9 @@ def _validate_coordinate(coord: dict[str, str], quick: bool = False) -> bool:  #
                 EuclideanUpdate(ParameterUpdateConfig.spectral_constrained()),
                 ParameterUpdateConfig.spectral_constrained(),
             ),
-            "natural_gradient": lambda: (
-                EuclideanUpdate(ParameterUpdateConfig.natural_gradient()),
-                ParameterUpdateConfig.natural_gradient(),
+            "mean_norm": lambda: (
+                EuclideanUpdate(ParameterUpdateConfig.mean_norm()),
+                ParameterUpdateConfig.mean_norm(),
             ),
             "elastic_consolidation": lambda: (
                 EuclideanUpdate(ParameterUpdateConfig.elastic_consolidation()),

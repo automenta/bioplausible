@@ -26,7 +26,7 @@ class ParameterUpdateConfig:
 
     Attributes:
         update_type: "riemannian_orthogonal", "spectral_constrained",
-            "natural_gradient", "elastic_consolidation", "euclidean"
+            "mean_norm", "elastic_consolidation", "euclidean"
         step_size: Learning rate
         momentum: Momentum coefficient (for euclidean)
         ortho_steps: Newton-Schulz iterations (for riemannian)
@@ -125,7 +125,7 @@ class ParameterUpdateConfig:
         )
 
     @classmethod
-    def natural_gradient(
+    def mean_norm(
         cls,
         *,
         step_size: float = 0.01,
@@ -136,13 +136,55 @@ class ParameterUpdateConfig:
         ewc_lambda: float = 1000.0,
     ) -> ParameterUpdateConfig:
         return cls(
-            update_type="natural_gradient",
+            update_type="mean_norm",
             step_size=step_size,
             momentum=momentum,
             ortho_steps=ortho_steps,
             spectral_norm=spectral_norm,
             fisher_damping=fisher_damping,
             ewc_lambda=ewc_lambda,
+        )
+
+    @classmethod
+    def unit_rms(
+        cls,
+        *,
+        step_size: float = 0.01,
+        momentum: float = 0.9,
+        grad_clip: float = 1.0,
+    ) -> ParameterUpdateConfig:
+        """Unit-RMS momentum config (the magnitude-only ladder rung)."""
+        return cls(
+            update_type="unit_rms",
+            step_size=step_size,
+            momentum=momentum,
+            ortho_steps=0,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
+            grad_clip=grad_clip,
+        )
+
+    @classmethod
+    def local_adam(
+        cls,
+        *,
+        step_size: float = 0.01,
+        momentum: float = 0.9,
+        beta2: float = 0.999,
+        grad_clip: float = 1.0,
+    ) -> ParameterUpdateConfig:
+        """Per-tensor scalar-second-moment Adam config (LAMB-style)."""
+        return cls(
+            update_type="local_adam",
+            step_size=step_size,
+            momentum=momentum,
+            ortho_steps=0,
+            spectral_norm=1.0,
+            fisher_damping=1e-3,
+            ewc_lambda=1000.0,
+            grad_clip=grad_clip,
+            beta2=beta2,
         )
 
     @classmethod
@@ -258,7 +300,7 @@ class ParameterUpdate(Protocol):
     parameter deltas. The five canonical types:
     - RiemannianOrthogonal: Muon-style orthogonal updates
     - SpectralConstrained: Lipschitz-bounded updates
-    - NaturalGradient: Fisher-information geometry updates
+    - MeanNorm: mean-magnitude-normalized gradient step (NOT Fisher; A0 verdict)
     - ElasticConsolidation: EWC-style importance-weighted updates
     - Euclidean: Standard SGD/Adam in flat space
 
@@ -348,6 +390,153 @@ class EuclideanUpdate:
 
         return apply_pseudo_gradients(params, self._clip(list(pseudo_grads)), apply)
 
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        """Snapshot protocol: named groups of state tensors (clones)."""
+        return {
+            "momentum": {
+                k: v.detach().clone() for k, v in self._momentum_buffers.items()
+            }
+        }
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        self._momentum_buffers = {
+            k: v.clone() for k, v in state.get("momentum", {}).items()
+        }
+
+
+class UnitRMSUpdate:
+    """Unit-RMS momentum: the magnitude-only ladder rung (TODO12 A1).
+
+    The EMA momentum buffer is normalized to unit RMS per tensor —
+    Muon's step-scale control with NO orthogonalization. The decisive
+    rung of the magnitude-vs-direction ladder: UnitRMS ≈ Muon on the
+    fragile cells ⇒ magnitude is the whole story; UnitRMS < Muon ⇒
+    orthogonalization carries direction signal beyond scale. Optimizer
+    state is system-scoped (fail-loud reuse, Euclidean precedent).
+    """
+
+    def __init__(self, config: ParameterUpdateConfig | None = None):
+        self.config = config or ParameterUpdateConfig.unit_rms()
+        self._momentum_buffers: dict[str, Tensor] = {}
+
+    def _buffer(self, name: str, param: Tensor) -> Tensor:
+        buf = self._momentum_buffers.get(name)
+        if buf is not None and buf.shape != param.shape:
+            msg = (
+                f"Momentum buffer for {name!r} has shape "
+                f"{tuple(buf.shape)} but parameter has "
+                f"{tuple(param.shape)} — the update instance is "
+                "being reused across different geometries; create "
+                "one update per system (optimizer state is "
+                "system-scoped)"
+            )
+            raise RuntimeError(msg)
+        if buf is None:
+            buf = torch.zeros_like(param)
+        return buf
+
+    def step(
+        self,
+        params: dict[str, Tensor],
+        pseudo_grads: list[Tensor],
+        geometry: Geometry,
+    ) -> dict[str, Tensor]:
+        def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
+            buf = self._buffer(name, param)
+            buf.mul_(self.config.momentum).add_(grad)
+            self._momentum_buffers[name] = buf
+            if self.config.momentum <= 0:
+                buf = grad
+            rms = buf.square().mean().sqrt().add_(1e-8)
+            return param - self.config.step_size * buf / rms
+
+        return apply_pseudo_gradients(params, list(pseudo_grads), apply)
+
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        return {
+            "momentum": {
+                k: v.detach().clone() for k, v in self._momentum_buffers.items()
+            }
+        }
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        self._momentum_buffers = {
+            k: v.clone() for k, v in state.get("momentum", {}).items()
+        }
+
+
+class LocalAdamUpdate:
+    """Per-tensor scalar-second-moment Adam (LAMB-style; RESEARCH4 A1 rung).
+
+    ``u = m̂ / sqrt(mean(v̂))`` — the denominator is ONE scalar per
+    tensor, not per-coordinate: a local second-moment normalizer that
+    preserves within-tensor relative gradient structure (unlike Adam).
+    Optimizer state is system-scoped (fail-loud reuse, Adam precedent).
+    """
+
+    def __init__(self, config: ParameterUpdateConfig | None = None):
+        self.config = config or ParameterUpdateConfig.local_adam()
+        self._m: dict[str, Tensor] = {}
+        self._v: dict[str, Tensor] = {}
+        self._t = 0
+
+    def _state(self, name: str, param: Tensor, store: dict[str, Tensor]) -> Tensor:
+        buf = store.get(name)
+        if buf is not None and buf.shape != param.shape:
+            msg = (
+                f"LocalAdam state for {name!r} has shape "
+                f"{tuple(buf.shape)} but parameter has "
+                f"{tuple(param.shape)} — the update instance is "
+                "being reused across different geometries; create "
+                "one update per system (optimizer state is "
+                "system-scoped)"
+            )
+            raise RuntimeError(msg)
+        if buf is None:
+            buf = torch.zeros_like(param)
+            store[name] = buf
+        return buf
+
+    def step(
+        self,
+        params: dict[str, Tensor],
+        pseudo_grads: list[Tensor],
+        geometry: Geometry,
+    ) -> dict[str, Tensor]:
+        self._t += 1
+        beta1 = self.config.momentum
+        beta2 = self.config.beta2
+        bias1 = 1 - beta1**self._t
+        bias2 = 1 - beta2**self._t
+
+        def apply(name: str, param: Tensor, grad: Tensor) -> Tensor:
+            m = self._state(name, param, self._m)
+            v = self._state(name, param, self._v)
+            m.mul_(beta1).add_(grad, alpha=1 - beta1)
+            v.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
+            m_hat = m / bias1
+            v_hat = v / bias2
+            denom = v_hat.mean().sqrt().add_(self.config.eps)
+            return param - self.config.step_size * m_hat / denom
+
+        return apply_pseudo_gradients(params, list(pseudo_grads), apply)
+
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        def group(store: dict[str, Tensor]) -> dict[str, Tensor]:
+            return {k: v.detach().clone() for k, v in store.items()}
+
+        return {
+            "m": group(self._m),
+            "v": group(self._v),
+            "counters": {"t": torch.tensor(self._t)},
+        }
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        self._m = {k: v.clone() for k, v in state.get("m", {}).items()}
+        self._v = {k: v.clone() for k, v in state.get("v", {}).items()}
+        t = state.get("counters", {}).get("t")
+        self._t = int(t.item()) if t is not None else 0
+
 
 class AdamUpdate:
     """Adam (Kingma & Ba 2015) on pseudo-gradients.
@@ -417,6 +606,22 @@ class AdamUpdate:
 
         return apply_pseudo_gradients(params, grads, apply)
 
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        def group(store: dict[str, Tensor]) -> dict[str, Tensor]:
+            return {k: v.detach().clone() for k, v in store.items()}
+
+        return {
+            "m": group(self._m),
+            "v": group(self._v),
+            "counters": {"t": torch.tensor(self._t)},
+        }
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        self._m = {k: v.clone() for k, v in state.get("m", {}).items()}
+        self._v = {k: v.clone() for k, v in state.get("v", {}).items()}
+        t = state.get("counters", {}).get("t")
+        self._t = int(t.item()) if t is not None else 0
+
 
 class OrthoAdamUpdate(AdamUpdate):
     """Orthogonalized Adam: Adam moments, Muon's matrix direction.
@@ -477,7 +682,9 @@ class OrthoAdamUpdate(AdamUpdate):
                 else:
                     try:
                         U, _, Vh = torch.linalg.svd(m_hat, full_matrices=False)
-                    except RuntimeError:  # svd convergence failure surfaces as RuntimeError
+                    except (
+                        RuntimeError
+                    ):  # svd convergence failure surfaces as RuntimeError
                         return param  # ill-conditioned moment — skip
                     ortho = U @ Vh
                 ortho *= adam_step.norm() / (ortho.norm() + 1e-8)
@@ -548,6 +755,18 @@ class RiemannianOrthogonalUpdate:
 
         return apply_pseudo_gradients(params, list(pseudo_grads), apply)
 
+    def get_state(self) -> dict[str, dict[str, Tensor]]:
+        return {
+            "momentum": {
+                k: v.detach().clone() for k, v in self._momentum_buffers.items()
+            }
+        }
+
+    def load_state(self, state: dict[str, dict[str, Tensor]]) -> None:
+        self._momentum_buffers = {
+            k: v.clone() for k, v in state.get("momentum", {}).items()
+        }
+
 
 class SpectralConstrainedUpdate:
     """Lipschitz-bounded update: constrain spectral norm of updates."""
@@ -571,11 +790,11 @@ class SpectralConstrainedUpdate:
         return apply_pseudo_gradients(params, list(pseudo_grads), apply)
 
 
-class NaturalGradientUpdate:
+class MeanNormUpdate:
     """Fisher-information geometry update (natural gradient)."""
 
     def __init__(self, config: ParameterUpdateConfig | None = None):
-        self.config = config or ParameterUpdateConfig.natural_gradient()
+        self.config = config or ParameterUpdateConfig.mean_norm()
 
     def step(
         self,

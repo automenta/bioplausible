@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, cast, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, cast, runtime_checkable
 
 import torch
 from torch import Tensor
@@ -24,6 +24,41 @@ from computronium.ontology._settle_kernel import (
     extract_layered_params,
 )
 from computronium.ontology.geometry import layer_stack
+
+GainControlMode = Literal["none", "unit_rms", "spectral"]
+
+
+def _apply_gain_control(acts: list[Tensor], mode: GainControlMode) -> list[Tensor]:
+    """Settle-path gain homeostasis (TODO12 A5, RESEARCH4 Lever 3).
+
+    Renormalizes hidden-layer activations at settle emit — the structural
+    pipeline primitive replacing scattered per-rule renorms. "unit_rms" is
+    the μPC recipe (a·√d/‖a‖ per sample); "spectral" rescales each hidden
+    layer's batch matrix to unit spectral norm. Input and output layers
+    pass through untouched (the output carries the readout logits); zero
+    and non-finite layers pass through untouched — never fabricated signal.
+    """
+    if mode == "none" or len(acts) < 3:
+        return acts
+    out = list(acts)
+    for i in range(1, len(acts) - 1):
+        a = acts[i]
+        if not torch.isfinite(a).all():
+            continue
+        if mode == "unit_rms":
+            norm = a.float().norm(dim=-1, keepdim=True)
+            scale = torch.where(
+                norm > 0,
+                a.shape[-1] ** 0.5 / (norm + 1e-8),
+                torch.ones_like(norm),
+            ).to(a.dtype)
+            out[i] = a * scale
+        else:  # "spectral"
+            sigma = torch.linalg.matrix_norm(a.float(), ord=2)
+            if sigma > 0:
+                out[i] = (a.float() / (sigma + 1e-8)).to(a.dtype)
+    return out
+
 
 # ============================================================
 # State type detection helpers (duck typing for SystemState + CompositeState)
@@ -196,6 +231,15 @@ class StateDynamicsConfig:
             no per-iteration energy tracking; other combinations fall back
             to the eager path). First call pays a one-time compile; measured
             ~2x end-to-end train_step speedup at depth 8 / 60 steps.
+        gain_control: Settle-path gain homeostasis (TODO12 A5, RESEARCH4
+            Lever 3): renormalize hidden-layer activations at settle emit.
+            "unit_rms" rescales each hidden layer per-sample to unit RMS
+            (μPC-style: a·√d/‖a‖); "spectral" rescales each hidden layer's
+            batch matrix to unit spectral norm. Input and output layers
+            pass through untouched (the output carries the readout
+            logits); non-finite layers pass through untouched. Realized on
+            instantaneous and error_predictive_coding settles; other
+            dynamics ignore it until their own audited pull.
     """
 
     dynamics_type: str
@@ -209,9 +253,10 @@ class StateDynamicsConfig:
     threshold: float = 1.0
     gradient_checkpointing: bool = False
     compiled: bool = False
+    gain_control: GainControlMode = "none"
 
     @classmethod
-    def energy_minimization(
+    def energy_minimization(  # ruff: ignore[too-many-arguments] (config mirrors the knobs)
         cls,
         *,
         max_steps: int = 30,
@@ -223,6 +268,7 @@ class StateDynamicsConfig:
         track_free_energy_per_iter: bool = False,
         gradient_checkpointing: bool = False,
         compiled: bool = False,
+        gain_control: GainControlMode = "none",
     ) -> StateDynamicsConfig:
         return cls(
             dynamics_type="energy_minimization",
@@ -235,6 +281,7 @@ class StateDynamicsConfig:
             track_free_energy_per_iter=track_free_energy_per_iter,
             gradient_checkpointing=gradient_checkpointing,
             compiled=compiled,
+            gain_control=gain_control,
         )
 
     @classmethod
@@ -300,6 +347,7 @@ class StateDynamicsConfig:
         beta: float = 0.1,
         momentum: float = 0.0,
         track_free_energy_per_iter: bool = False,
+        gain_control: GainControlMode = "none",
     ) -> StateDynamicsConfig:
         return cls(
             dynamics_type="instantaneous",
@@ -310,6 +358,7 @@ class StateDynamicsConfig:
             beta=beta,
             momentum=momentum,
             track_free_energy_per_iter=track_free_energy_per_iter,
+            gain_control=gain_control,
         )
 
     @classmethod
@@ -380,6 +429,7 @@ class StateDynamicsConfig:
         beta: float = 0.5,
         momentum: float = 0.0,
         track_free_energy_per_iter: bool = False,
+        gain_control: GainControlMode = "none",
     ) -> StateDynamicsConfig:
         """Error-parameterized PC (ePC, Goemaere et al., arXiv:2505.20137, ICML 2026).
 
@@ -397,6 +447,7 @@ class StateDynamicsConfig:
             beta=beta,
             momentum=momentum,
             track_free_energy_per_iter=track_free_energy_per_iter,
+            gain_control=gain_control,
         )
 
 
@@ -1306,6 +1357,7 @@ class ErrorPredictiveCodingDynamics:
         states, _ = self._build_forward_with_errors(
             xf, transitions, substrate, eps, residual=layered.residual
         )
+        states = _apply_gain_control(states, self.config.gain_control)
         self._last_errors = eps
 
         if target is None:
@@ -1519,6 +1571,8 @@ class InstantaneousDynamics:
                     ]
         else:
             acts = state.activations if state.activations is not None else []
+        if isinstance(acts, list):
+            acts = _apply_gain_control(acts, self.config.gain_control)
         if target is None:
             state.free_state = acts
         else:

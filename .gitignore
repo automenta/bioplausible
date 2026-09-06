@@ -45,3 +45,6 @@ docs/figures/*.png
 # Registered benchmark artifacts stay local (user directive 2026-09-02).
 benchmark_results/
 autoscientist_campaigns
+
+# probe-local dataset caches (tiny-shakespeare etc.)
+scripts/probes/data/

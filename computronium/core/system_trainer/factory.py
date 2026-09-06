@@ -19,7 +19,8 @@ from computronium.ontology import (
     FeedforwardGeometry,
     GeometryConfig,
     InstantaneousDynamics,
-    NaturalGradientUpdate,
+    LocalAdamUpdate,
+    MeanNormUpdate,
     OrthoAdamUpdate,
     ParameterUpdateConfig,
     RecurrentGeometry,
@@ -29,6 +30,7 @@ from computronium.ontology import (
     SubstrateConfig,
     System,
     ThermodynamicContrast,
+    UnitRMSUpdate,
     dynamics_from_config,
     geometry_from_config,
     substrate_from_config,
@@ -237,8 +239,8 @@ def compose_system[  # ruff: ignore[complex-structure]
                 update = RiemannianOrthogonalUpdate(update_cfg)
             elif update_type in ("spectral_constrained", "spectral"):  # ruff: ignore[literal-membership]
                 update = SpectralConstrainedUpdate(update_cfg)
-            elif update_type in ("natural_gradient", "fisher"):  # ruff: ignore[literal-membership]
-                update = NaturalGradientUpdate(update_cfg)
+            elif update_type == "mean_norm":
+                update = MeanNormUpdate(update_cfg)
             elif update_type in ("elastic_consolidation", "ewc"):  # ruff: ignore[literal-membership]
                 update = ElasticConsolidationUpdate(update_cfg)
             elif update_type == "euclidean":
@@ -613,12 +615,16 @@ def compose_system_from_configs(
         update_instance = RiemannianOrthogonalUpdate(update)
     elif update_type in ("spectral_constrained", "spectral"):  # ruff: ignore[literal-membership]
         update_instance = SpectralConstrainedUpdate(update)
-    elif update_type in ("natural_gradient", "fisher"):  # ruff: ignore[literal-membership]
-        update_instance = NaturalGradientUpdate(update)
+    elif update_type == "mean_norm":
+        update_instance = MeanNormUpdate(update)
     elif update_type in ("elastic_consolidation", "ewc"):  # ruff: ignore[literal-membership]
         update_instance = ElasticConsolidationUpdate(update)
     elif update_type == "euclidean":
         update_instance = EuclideanUpdate(update)
+    elif update_type == "unit_rms":
+        update_instance = UnitRMSUpdate(update)
+    elif update_type == "local_adam":
+        update_instance = LocalAdamUpdate(update)
     else:
         raise ValueError(f"Unknown update_type: {update_type!r}")
 

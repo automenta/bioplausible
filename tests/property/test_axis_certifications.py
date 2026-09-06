@@ -31,7 +31,7 @@ from computronium.ontology import (
     InstantaneousDynamics,
     LocalGoodnessCredit,
     MemristiveSubstrate,
-    NaturalGradientUpdate,
+    MeanNormUpdate,
     NeuromorphicSubstrate,
     OpticalSubstrate,
     ParameterUpdateConfig,
@@ -635,19 +635,19 @@ class TestUAxisSpectralConstrainedUpdate:
         )
 
 
-class TestUAxisNaturalGradientUpdate:
-    """U-Axis: NaturalGradientUpdate (Fisher) whitening direction preservation."""
+class TestUAxisMeanNormUpdate:
+    """U-Axis: MeanNormUpdate (Fisher) whitening direction preservation."""
 
     @pytest.mark.parametrize("seed", [42, 123, 456, 789])
     def test_fisher_whitening_direction_preserved(self, seed: int) -> None:
-        """NaturalGradientUpdate: whitening preserves gradient direction (sign matches)."""
+        """MeanNormUpdate: whitening preserves gradient direction (sign matches)."""
         device = select_device()
         if device.type == "cuda":
             enable_deterministic_cuda()
 
         with seeded(seed):
-            update = NaturalGradientUpdate(
-                ParameterUpdateConfig.natural_gradient(fisher_damping=1e-3)
+            update = MeanNormUpdate(
+                ParameterUpdateConfig.mean_norm(fisher_damping=1e-3)
             )
             grad = torch.randn(10, 10, device=device)
 

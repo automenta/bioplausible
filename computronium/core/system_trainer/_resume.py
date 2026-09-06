@@ -9,7 +9,7 @@ position — the guarantee campaign checkpoint/resume (R11.3.1) builds on.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -52,14 +52,20 @@ class TrainerSnapshot:
         global_step: Optimizer steps taken so far.
         history: Per-epoch metric dicts from the completed epochs.
         theta: Geometry parameter tensors (clones; device-agnostic).
-        opt_state: Optimizer-side state (e.g. Euclidean momentum buffers).
+        opt_state: Optimizer-side state as named groups of tensors per
+            the update's ``get_state``/``load_state`` protocol (e.g.
+            momentum buffers, Adam moments, step counters).
+        credit_state: Credit-internal state as named groups per the
+            credit's ``get_state``/``load_state`` protocol (e.g. B1's
+            learned feedback matrices). Empty for stateless credits.
     """
 
     epoch: int
     global_step: int
     history: tuple[dict[str, float], ...]
     theta: dict[str, Tensor]
-    opt_state: dict[str, Tensor]
+    opt_state: dict[str, dict[str, Tensor]]
+    credit_state: dict[str, dict[str, Tensor]] = field(default_factory=dict)
 
 
 __all__ = [

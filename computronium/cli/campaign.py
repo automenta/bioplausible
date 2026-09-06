@@ -228,7 +228,7 @@ def _get_search_space(space_name: str) -> dict:
                 "euclidean",
                 "riemannian_orthogonal",
                 "spectral_constrained",
-                "natural_gradient",
+                "mean_norm",
                 "elastic_consolidation",
             ],
         },

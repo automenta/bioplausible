@@ -309,7 +309,7 @@ _UPDATE_FACTORIES = {
     "spectral_constrained": _thunk(
         ParameterUpdateConfig.spectral_constrained, step_size=0.01
     ),
-    "natural_gradient": _thunk(ParameterUpdateConfig.natural_gradient, step_size=0.01),
+    "mean_norm": _thunk(ParameterUpdateConfig.mean_norm, step_size=0.01),
     "elastic_consolidation": _thunk(
         ParameterUpdateConfig.elastic_consolidation, step_size=0.01
     ),

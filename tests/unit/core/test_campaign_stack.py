@@ -485,10 +485,10 @@ class TestReplicationGate:
             for s in range(5)
             for task in ("mnist", "cartpole")
         ]
-        bad = [make_record(self.COORD.replace("euclidean", "natural_gradient"))]
+        bad = [make_record(self.COORD.replace("euclidean", "mean_norm"))]
         failing = unreplicated(good + bad)
         assert len(failing) == 1
-        assert "natural_gradient" in failing[0].coordinate
+        assert "mean_norm" in failing[0].coordinate
 
 
 # --- Counterfactual attribution -----------------------------------------------

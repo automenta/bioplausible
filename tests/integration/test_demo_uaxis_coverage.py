@@ -39,9 +39,20 @@ accuracy:
     competitive on the mlp geometry — the "natural gradient at chance"
     cell was a step-size artifact, not a learning boundary.
 6. **The local reference trails the global rule here:** ff-credit ×
-    Muon < bp × Muon on all four geometries at this budget (contrast
-    D13/D15's parity at their regimes) — except on Adam × ff, where the
-    local rule reaches the global rule (0.899 vs 0.892).
+   Muon < bp × Muon on all four geometries at this budget (contrast
+   D13/D15's parity at their regimes) — except on Adam × ff, where the
+   local rule reaches the global rule (0.899 vs 0.892).
+7. **unit_rms is a regime-dependent rung (unit_rms column, TODO12 A6
+   re-pin):** at matched step/momentum with Muon it stays at chance on
+   mlp/graph/lattice and clearly trails Muon on attention (lr grid
+   0.002–0.1 measured at chance, single-seed probe; the training loss
+   oscillates min 0.80 / last 2.17 over 150 batches — RMS normalization
+   holds the step magnitude fixed as the loss approaches the floor, so
+   the update random-walks instead of converging). Contrast D18: on the
+   LM width-fragility cells unit_rms BEATS Muon (high-loss regime, far
+   from the floor). The magnitude-only normalizer buys width-fragility
+   immunity where the loss floor is far, and pays a convergence noise
+   floor where it is near — the rung boundary is regime-shaped.
 
 Capacity-matched per the D8–D12 convention: 47.7k–57.5k params across
 geometries (max/min < 1.25, asserted); identical within each geometry.
@@ -80,7 +91,7 @@ from computronium import (
     GraphGeometry,
     InstantaneousDynamics,
     LocalGoodnessCredit,
-    NaturalGradientUpdate,
+    MeanNormUpdate,
     OrthoAdamUpdate,
     ParameterUpdateConfig,
     SpatialLattice3DGeometry,
@@ -90,6 +101,7 @@ from computronium import (
     SystemState,
     SystemTrainer,
     SystemTrainerConfig,
+    UnitRMSUpdate,
     compose_system,
     create_task,
 )
@@ -159,13 +171,18 @@ def _updates() -> dict[str, Callable]:
         "spectral": lambda: SpectralConstrainedUpdate(
             ParameterUpdateConfig.spectral_constrained(step_size=0.1)
         ),
-        "natural": lambda: NaturalGradientUpdate(
+        "natural": lambda: MeanNormUpdate(
             # mean-|grad|-normalized update: effective step ≈ step_size.
             # lr 0.1 destabilizes every geometry into collapse (measured);
             # 1e-3 is the working lr (0.875 on mlp, hunt micro-probe).
-            ParameterUpdateConfig.natural_gradient(step_size=1e-3)
+            ParameterUpdateConfig.mean_norm(step_size=1e-3)
         ),
         "adam": lambda: AdamUpdate(ParameterUpdateConfig.adam(step_size=1e-3)),
+        "unit_rms": lambda: UnitRMSUpdate(
+            # matched-step with muon (A6 map, TODO12): momentum-EMA
+            # normalize-the-momentum vs orthogonalize-the-momentum.
+            ParameterUpdateConfig.unit_rms(step_size=0.02, momentum=0.9)
+        ),
         "ortho_adam": lambda: OrthoAdamUpdate(
             ParameterUpdateConfig.ortho_adam(step_size=1e-3, ortho_lr=3e-3)
         ),
@@ -256,6 +273,19 @@ def _assert_geometry_claims(arms: dict, name: str) -> None:
     assert arms[f"{name}/ff_muon"]["mean"] < muon, (
         f"{name}: local ff×Muon trails bp×Muon at this budget"
     )
+    unit = arms[f"{name}/unit_rms"]["mean"]
+    assert unit < muon, (
+        f"{name}: unit_rms must not beat Muon in the vision-quick regime "
+        f"(unit_rms {unit:.3f} vs muon {muon:.3f}) — the RMS-normalized "
+        "rung has a convergence noise floor near the loss floor (D18 "
+        "holds the LM-side win)"
+    )
+    if name != "attention":
+        assert unit < CHANCE + 0.05, (
+            f"{name}: unit_rms stays near chance at matched lr (measured "
+            f"{unit:.3f}) — regime boundary, not a tuning artifact (lr "
+            "grid 0.002–0.1 probed at chance)"
+        )
 
 
 # Slow tier: ~290 s (4 geometries × 8 arms × 3 seeds at capacity-match).

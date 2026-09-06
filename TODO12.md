@@ -14,15 +14,77 @@
 > HEAD. The demo suite is the proof; the README quotes it; everything else
 > is history or hypothesis.*
 >
-> **State:** The sprint's fundamental-research queue is EMPTY of one-probe
-> items. The two library pulls it surfaced — learned PEPITA feedback
-> (RESEARCH4 Lever 2) and P2's untried cells (Lever 5) — are entry points.
-> RESEARCH4's Phase 1 (Kill the Optimizer Crutch) is the recommended first
-> probe: cheap, U-axis-only, and a direct test of the unifying hypothesis —
-> *the credit direction is approximately right; only the magnitude is
-> broken.* Rev 2 aligns the plan to verified code seams (snapshot capture,
-> credit dispatch surfaces, the legacy `AdaptiveFA` rule, the P4/F1 probe
-> instruments) and folds in every carried TODO11 obligation.
+> **State (2026-09-06, rev 10):** F4 LANDED (`test_demo_credit_channel_map.py`,
+> gallery lock green ×2, full property suite 1685 passed / 3 pre-existing
+> baseline fails). PEPITA readout rung FALSIFIED — bounding hidden gain AND
+> unit-normalizing the output-weight step still diverges (output act_std up
+> to 7e10): the runaway lives in the weight trajectory itself, not per-step
+> direction shape; five causes now ruled out (feedback_scale, centered-e1,
+> row space, hidden gain, output step shape). `NaturalGradientUpdate`
+> RENAMED `MeanNormUpdate`/`mean_norm` (it is a mean-|grad| normalizer, not
+> Fisher; carried-queue item closed; fake `"fisher"` alias dropped). D16
+> RE-PINNED with a matched-step unit_rms column — **unit_rms is
+> regime-shaped**: crutch-killer on LM width (D18), chance-level on MNIST
+> quick at every lr (RMS normalization holds step magnitude fixed near the
+> loss floor → convergence noise floor). Remaining: C0 (user-gated D17),
+> optional sign-momentum rung, B2–B6, C1, capstone.
+> **State (2026-09-06, rev 9):** A5-depth rung FALSIFIED (gain_control
+> gives no depth lift; credit norms still explode — the depth wall is
+> credit-side, confirmed from the activity side). **A6 co-design map
+> ASSEMBLED** (see Workstream A table): crutch dead for ePC-width and
+> outright in the faithful regime; Muon's residual value is depth-only;
+> PEPITA diverges under every landed lever (readout-path suspect).
+> Remaining: C0 (user-gated D17), D16 re-pin, F4 figure; optional
+> PEPITA readout rung, sign-momentum rung.
+> **State (2026-09-06, rev 8):** A5 LANDED — `gain_control` on
+> `StateDynamicsConfig` (hidden-layer renorm at settle emit, instantaneous
+> + ePC). Probe verdict: gain_control bounds hidden acts by construction
+> but PEPITA still diverges — **the runaway reroutes through the
+> unnormalized readout** (output act_std up to 7e10, val_ppl saturated
+> 4.85e8 at every lr incl. 1e-5). With A2+B1+A5 combined, ALL of
+> {feedback_scale, centered-e1, fixed-B row space, hidden gain} are
+> ruled out as the PEPITA driver; the remaining suspect is readout-path
+> divergence (persistent saturated-e1 update direction on the output
+> weights). PEPITA stays the slow arm — ff_hybrid + ePC carry the
+> local-credit story. B1 landed rev 7 (learned feedback, transport-free,
+> snapshot-captured credit state; row-space prediction falsified).
+> Remaining: C0 (user-gated D17), A6 map, F4 figure; optional
+> ePC-depth×gain_control rung.
+> **State (2026-09-06, rev 7):** B1 LANDED — `learned_feedback` on
+> `local_goodness` (transport-free reconstruction B, closed-form ridge,
+> EMA, snapshot-captured credit state). Probe verdict: learned B does
+> NOT stop the PEPITA runaway (act_std still ~20×/layer under unit_rms)
+> — the fixed-B row space is exonerated; the unbounded activity loop is
+> the driver and **A5 (settle-path gain homeostasis) is the indicated
+> PEPITA repair**. A0–A4 + composition closed (rev 5/6). Remaining:
+> A5, C0 (user-gated D17), A6 map, F4 figure.
+> **State (2026-09-06, rev 6):** B0 DONE — legacy AdaptiveFA's
+> alignment is proven soft weight transport (frozen-W smoking gun);
+> B1's spec is written (reconstruction objective, L3-guarded, snapshot-
+> protocol state). A0–A4 + composition all closed (rev 5 below). Next:
+> implement B1, then C0 (user-gated D17), A6 map, F4 figure.
+> **State (2026-09-06, rev 5):** A0–A4 landed AND the A4×D14
+> composition test is CLOSED (faithful regime self-sufficient — SGD
+> 0.528 at depth 20 — credit_norm harmful there; ε is dynamics in the
+> reparameterized channel). The credit-channel picture is now
+> three-regime: simple regime needs credit_norm (depth) + unit_rms
+> (width); PEPITA needs B1 (row space); faithful regime needs nothing
+> new. Remaining: B1, C0 (user-gated D17), A6 map assembly, F4 figure.
+> **State (2026-09-06, rev 4):** A0–A4 all landed. D18 demo pinned
+> (crutch dead for ePC at w32–64); A3 mapped the depth wall as
+> credit-side; A4 landed credit_norm (5 modes) with the mechanism
+> verified (spectral: norms ~1.0 flat through depth 16; depth-8 lift
+> 0.195 vs 0.113 matched) — the D14 faithful-regime composition is the
+> one decisive test left on the unifying hypothesis. B1 (learned
+> feedback — PEPITA's repair) and C0 (D17 LM baselines, user-gated)
+> follow. A0 DONE, A1 LANDED, A2 COMPLETE with
+> defect audit, **D18 DEMO LANDED** (`test_demo_update_ladder.py`,
+> gallery lock green ×2, full property suite 679 passed). The pinned
+> record IS the verdict: ePC w64 unit_rms 32.5 vs muon 101.2; ePC w32
+> 42.5 vs muon 191.7 (multi-seed, 600 fixed steps, deterministic);
+> PEPITA control explodes as audited. **The optimizer crutch is dead
+> for ePC at w32–64.** Next: A3 (depth under unit_rms) → A4 (credit_norm)
+> → B1 (learned feedback — PEPITA's indicated repair).
 
 ---
 
@@ -92,7 +154,7 @@ benefits as the differentiator.
 | **Registered-scale P-axis campaign** with the matched-effective-lr protocol pinned in the manifest (Path B full) | QUEUED | D3 |
 | **Reward-modulated STDP** (F2's OPEN verdict: "the STDP fixed point destroys class structure" — the supervised-error-term audit is the remaining gap) | OPEN | **B5** |
 | **NaturalGradientUpdate**: rename or implement diag-Fisher before any natural-gradient mechanism claim (as-touch) | OPEN | A0/A6 touch |
-| **Snapshot state generalization** (found during this review): `TrainerSnapshot` (`core/system_trainer/trainer.py:182`) captures only `update._momentum_buffers` — state capture works for the momentum-buffer family (Euclidean, Riemannian/Muon) but **`AdamUpdate`/`OrthoAdamUpdate` `_m`/`_v`/`_t` and any credit-internal state are silently dropped on resume**; the R11.2.24 bitwise-resume lock passed because its fixtures used buffer-family updates | DISCOVERED | A1/B1 prereq |
+| **Snapshot state generalization** (found during this review): `TrainerSnapshot` (`core/system_trainer/trainer.py:182`) captures only `update._momentum_buffers` — state capture works for the momentum-buffer family (Euclidean, Riemannian/Muon) but **`AdamUpdate`/`OrthoAdamUpdate` `_m`/`_v`/`_t` and any credit-internal state are silently dropped on resume**; the R11.2.24 bitwise-resume lock passed because its fixtures used buffer-family updates | ✅ **LANDED 2026-09-06 with A1** — `get_state()`/`load_state()` named-group protocol; Adam `_m/_v/_t` captured; bitwise resume green | A1 |
 | **Persistent-ψ across batches** (`train_step` contract change; ψ currently re-initializes per episode — the F3 scope-honest boundary) | CONDITIONAL — only if a registered fast-weight memory claim (D1/D3) needs multi-batch episodes | D1/D3 enabler |
 
 ---
@@ -111,13 +173,35 @@ local rules work without the Muon/OrthoAdam crutch.
 
 | Step | Description | Artifact | Validation |
 |---|---|---|---|
-| **A0** | **Zero-new-primitive probe.** `NaturalGradientUpdate` is already a per-tensor mean-\|grad\| normalizer (effective step = step_size — the D16 lesson). Re-run the fragile cells (pepita w32/w128, epc w32) from `scripts/probes/p4_width_fragility.py` with a natural-gradient arm + per-cell lr micro-sweep (its lr IS its step size). Also rename-or-diag-Fisher follow-up rides here (as-touch) | Extend `p4_width_fragility.py` with an `--update` axis (harness already carries per-credit LR table + per-layer activity-std instrumentation) | If magnitude normalization alone widens the stable band, the hypothesis is already half-confirmed with zero library code |
-| **A1** | **The ablation ladder primitive** — separate magnitude from direction. Ladder rungs, all momentum-EMA based: (i) `UnitRMS`-normalized momentum (m̂ → unit-RMS per tensor, **no orthogonalization**) — the decisive rung; (ii) `LocalAdam` per-tensor scalar second moment (LAMB-style: u = m̂/√(mean v̂)) — RESEARCH4's literal ask; (iii) optional sign-momentum (1-bit hardware rung). Config classmethods on `ParameterUpdateConfig`; dispatch in factory/spec/joint; `SystemConfig.validate()` whitelist; root+ontology exports; CLI listings | `computronium/ontology/update.py` + `tests/unit/core/test_update_ladder.py` (per-tensor normalization identity, distinct-from-Muon, distinct-from-Adam, state-reuse fail-loud) | **Pre-registered predictions (RESEARCH4):** UnitRMS ≈ Muon on PEPITA w128 / ePC w32 ⇒ magnitude is the whole story; UnitRMS < Muon ⇒ orthogonalization carries direction signal beyond scale. Either terminus is a finding |
-| **A2** | PEPITA width sweep (w32/64/128/256, depth 4, seeds 0–2) × {Euclid, UnitRMS, LocalAdam, Muon} on both instruments: the P4 LM harness and the D13 MNIST regime | `scripts/probes/a2_ladder_pepita.py` | Does w128/256 collapse disappear? Does w32 explosion disappear? |
-| **A3** | ePC width + depth sweep with the ladder | `scripts/probes/a3_ladder_epc.py` | Does ePC at w32 stop exploding? Does depth 8+ train without Muon? |
-| **A4** | **Credit-space normalization (C-axis).** Seam: the layer error tensor at pseudo-gradient formation. Modes on `CreditAssignmentConfig`: `credit_norm: Literal["none","relative","rms","beta_adaptive","spectral"]` — `relative`: εᵢ/(‖freeᵢ‖) (RESEARCH4 Fix-2 option 1); `rms`: per-layer unit-RMS ε; `beta_adaptive`: per-layer βᵢ tuned to hold the error signal at unit scale (Fix-2 option 2 — the ePC-native version, since ÷β is the cap in question); `spectral`: spectral-radius→1 rescale of the propagated error (option 3). Applies to `ThermodynamicContrast` (ePC's settled εᵢ before εᵢᵀaᵢ₋₁) and the FA/PEPITA per-hop propagated error. **Never normalizes toward fabricated signal** (zeros stay zeros) | `computronium/ontology/credit.py` + unit lock; **gates the full property suite** (credit-semantics change, TODO11 precedent) | Re-run the F1 instrument (`scripts/probes/f1_epc_depth.py` — already measures per-layer credit norms): does ~4×/layer flatten to ~1×, and does ePC **learn at depth 8–20 under the simple F1 regime** (D14's faithful regime already trains depth 20 — the sharper test is the simple one)? |
-| **A5** | **Structural gain homeostasis as a pipeline primitive.** `StateDynamicsConfig.gain_control: Literal["none","unit_rms","spectral"]` wired into the settle path — start on **instantaneous + ePC only**: energy-family settles carry Lyapunov/energy locks (L4) whose landscapes a settle-time renorm would change; an energy_minimization compatibility branch is its own audited pull | `StateDynamicsConfig`, settle kernel, demo test; property suite gate | P4 sweep re-run expecting the razor-thin stable-width window to widen; DeepHebbianChain (R11.3.14) is the existence proof the recipe works |
+| **A0** | ✅ **DONE 2026-09-06** — zero-new-primitive probe run with matched-step Muon controls. Verdict (recorded in `scripts/probes/p4_width_fragility.py` docstring): **split terminus per rule** — ePC's direction is right (magnitude normalization alone rescues it), PEPITA's failure is directional (every magnitude rung explodes; RESEARCH4 Fix-4 falsified for PEPITA). Natural-gradient rename-or-diag-Fisher still rides the next update-axis touch | `p4_width_fragility.py` `--update` axis (muon / natural_gradient / unit_rms / local_adam) + per-cell lr micro-sweep | A0 probe output + walltime in probe docstring |
+| **A1** | ✅ **LANDED 2026-09-06** — `UnitRMSUpdate` (momentum-EMA → unit-RMS per tensor, no orthogonalization) + `LocalAdamUpdate` (scalar per-tensor second moment, LAMB-style `u = m̂/√(mean v̂)`). Full wiring checklist done: config classmethods (`ParameterUpdateConfig.unit_rms()` / `.local_adam()`), dispatch in spec `_UPDATE_CLASSES` + factory + joint, root `_LAZY`/`__all__`/`TYPE_CHECKING` + `ontology/__init__` exports. **Snapshot state generalization landed with it**: `get_state()`/`load_state()` named-group protocol on Euclidean/Riemannian/Adam/UnitRMS/LocalAdam; `TrainerSnapshot.opt_state` is now `dict[str, dict[str, Tensor]]`; `AdamUpdate._m/_v/_t` captured (carried-queue item closed); bitwise-resume test updated + passing | `computronium/ontology/update.py` + `tests/unit/core/test_update_ladder.py` (8 locks: unit-RMS identity, rank-1 direction preserved vs Muon, LocalAdam direction-preserving vs Adam, fail-loud reuse ×2, bitwise state round-trip ×2) | All gates green: ruff clean, pyright 0 errors, 14 targeted tests pass. **A2 partial verdict (probe docstring): ePC w32 trains without Muon on every rung — unit_rms best (34.9 @ 3e-4); ePC w64 (Muon-exploded cell) trains under unit_rms to ppl 28.3 — CRUTCH DEAD for ePC at w32–64; PEPITA explodes on all rungs (directional failure confirmed)** |
+| **A2** | ✅ **COMPLETE 2026-09-06** — ePC width sweep done under unit_rms: **w32 34.9, w64 28.1–28.5 (seeds 0/1/2), w128 25.3–27.4, w256 24.8–29.6 — ePC is WIDTH-ROBUST without Muon** (Muon required w≥256). PEPITA explodes identically across seeds. **Defect audit executed per standing caution** (see probe docstring): feedback_scale inert under normalized rungs; step-0 stds healthy; centered-e1 ruled out — the runaway is structural to the DFA-style realization (fixed B row-space + unbounded activity loop), repairs are B1 or A5. Remaining for D18 demo promotion: D13 MNIST instrument cross-check | `scripts/probes/p4_width_fragility.py` docstring (full record) | Multi-seed confirmed on headline cells; full grid seed-0 |
+| **A3** | ✅ **DONE 2026-09-06** — the simple-regime (F1) depth wall PERSISTS under the ladder: unit_rms walls at depth 8+ (best 0.206 @ depth 2, lr 0.02, non-monotonic lr response); Muon better at depth 8 (0.276) but walls at 16/20; Euclid walls from depth 8. Consistent with F1's own record — the wall is a credit-channel property, NOT an optimizer property. Split with A2 locked: **magnitude fixed the WIDTH axis (LM); the DEPTH axis needs A4 or the D14 faithful composition** | `scripts/probes/a3_ladder_epc.py` (verdict in docstring) | Probe output + walltime in docstring; credit norms reproduce the F1 attenuation signature |
+| **A4** | ✅ **LANDED 2026-09-06** — `credit_norm: Literal["none","relative","rms","beta_adaptive","spectral"]` on `CreditAssignmentConfig` (+ classmethods), `_apply_credit_norm` helper applied at pseudo-gradient formation: ThermodynamicContrast (both block & plain paths, ε refs per transition), PEPITA per-hop `err`, FA/DFA per-hop propagated error. Zeros stay zeros; non-finite credit passes through untouched (Riemannian diverged-step precedent). **Verdict:** mechanism CONFIRMED — spectral flattens per-layer credit norms to exactly ~1.0 through depth 16 (vs 4×/layer decay / exact-0.0 trapping at HEAD); audit showed the hidden-layer signal exists but is budget-independent attenuated (3e-6→4e-3, settle budgets 5/15/30 equivalent — NOT a budget artifact, NOT topology trapping). Learning: depth 8 acc 0.195 (spectral+euclid@0.2) vs 0.113 (none, matched) — real lift, boundary honest: not yet Muon-level (0.276) in the 60-batch simple regime; the decisive test is the D14 faithful-regime composition (next-session item 1). Gates: property suite 679 passed (credit-semantics gate), 6 unit locks (`test_credit_norm.py`), ruff net-improved vs baseline, pyright clean on new code | `computronium/ontology/credit.py` + `tests/unit/core/test_credit_norm.py` | Probe outputs + walltime in session record; **D19 (demo) deferred until the faithful-regime composition lands** — a simple-regime demo would pin a weak claim |
+| **A4×D14** | ✅ **COMPOSITION CLOSED 2026-09-06** — see next-session item 1 and the probe docstring: faithful regime self-sufficient (SGD 0.528, Adam 0.828 @ depth 20); credit_norm harmful there (ε = dynamics). Unifying-hypothesis composition test resolved | `scripts/probes/a4_faithful_composition.py` | Predictions falsified honestly; single-seed arms, D14 multi-seed baseline |
+| **A4-legacy-row** | *(superseded description)* **Credit-space normalization (C-axis).** Seam: the layer error tensor at pseudo-gradient formation. Modes on `CreditAssignmentConfig`: `credit_norm: Literal["none","relative","rms","beta_adaptive","spectral"]` — `relative`: εᵢ/(‖freeᵢ‖) (RESEARCH4 Fix-2 option 1); `rms`: per-layer unit-RMS ε; `beta_adaptive`: per-layer βᵢ tuned to hold the error signal at unit scale (Fix-2 option 2 — the ePC-native version, since ÷β is the cap in question); `spectral`: spectral-radius→1 rescale of the propagated error (option 3). Applies to `ThermodynamicContrast` (ePC's settled εᵢ before εᵢᵀaᵢ₋₁) and the FA/PEPITA per-hop propagated error. **Never normalizes toward fabricated signal** (zeros stay zeros) | `computronium/ontology/credit.py` + unit lock; **gates the full property suite** (credit-semantics change, TODO11 precedent) | Re-run the F1 instrument (`scripts/probes/f1_epc_depth.py` — already measures per-layer credit norms): does ~4×/layer flatten to ~1×, and does ePC **learn at depth 8–20 under the simple F1 regime** (D14's faithful regime already trains depth 20 — the sharper test is the simple one)? |
+| **A5** | ✅ **LANDED 2026-09-06** — `StateDynamicsConfig.gain_control: Literal["none","unit_rms","spectral"]` (field + `instantaneous()`/`error_predictive_coding()`/`energy_minimization()` classmethod params; other dynamics ignore it until their own audited pull). `_apply_gain_control` renormalizes **hidden layers only** at settle emit — unit_rms = μPC per-sample unit RMS (a·√d/‖a‖), spectral = unit spectral norm of the batch matrix; input/output pass through (output carries the readout logits); zero/non-finite layers untouched. **Probe verdict (prediction FALSIFIED, `--gain-control unit_rms`):** pepita w32/w128 under unit_rms still diverge — hidden acts bounded (~0.8) by construction but the explosion **reroutes through the unnormalized readout** (output act_std 5.8e4–7.3e10; val_ppl saturated 4.85e8 at lrs 1e-4/3e-4 AND 1e-5). A5 does not repair PEPITA; audit chain now: feedback_scale, centered-e1, row space (B1), hidden gain — all ruled out. Remaining suspect: readout-path divergence (saturated softmax ⇒ e1 ≈ ±onehot ⇒ persistent class-constant update direction on the output weights) — testable via output-side gain control or e1 saturation handling, but per the standing caution this is an observed behavior of the current realization, not a PEPITA-in-principle claim | `computronium/ontology/dynamics/_dynamics.py` + `tests/unit/core/test_gain_control.py` (7 locks: passthrough identity, per-sample unit RMS hidden-only, spectral σ=1 hidden-only, zero/non-finite untouched, short-acts untouched, instantaneous settle bounded ×2 modes) | Property suite 679 passed (dynamics-semantics gate) + wiring lockstep green; ruff/pyright clean on new code (baseline legacy errors unchanged) |
 | **A6** | **Co-design pass:** once credit is well-conditioned (A4) + magnitude-controlled (A1), sweep the optimizer axis again — how far does Muon relax toward Adam/SGD? Re-pin D16 with normalized-credit columns; fold in the natural-gradient rename/diag-Fisher resolution | Campaign YAML + D16 extension | The crutch map: which local rules still need which optimizer, with matched-step controls (P3 protocol) |
+
+#### A6 Co-Design Map (assembled 2026-09-06 from A0–A5 + B1 evidence; matched-step protocol per P3)
+
+| Rule × axis | Landed lever(s) | Measured state | Optimizer requirement |
+|---|---|---|---|
+| ePC — width (LM) | unit_rms (A1/A2) | Width-robust w32–256 without Muon (D18 pinned: w64 32.5, w32 42.5) | **Crutch dead** — unit_rms (momentum-EMA normalize-the-momentum) is the canonical rung; Muon strictly dominated at small widths |
+| ePC — depth (simple regime) | credit_norm spectral (A4), gain_control (A5) | Partial lift only (0.195 vs 0.113 @ depth 8); no lift from activity-side renorm; credit norms still explode (A5 rung: 1.1e7) | Muon best-in-class at depth 8 (0.276); orthogonalization's residual value is **depth-only** |
+| ePC — depth (faithful regime) | none needed (A4×D14) | Self-sufficient: plain SGD 0.528 @ depth 20; credit_norm HARMS (ε is dynamics) | SGD suffices — the strongest co-design result in the program |
+| ff_hybrid | readout_error (landed pre-TODO12) | Width-robust on LM; carries the local-credit story | Trains under plain rungs |
+| PEPITA — width (LM) | A2/B1/A5 audit chain | Diverges under every landed lever; four causes ruled out; readout-path suspect named | Explodes on every non-Muon rung (Muon small-lr = stable-flat) — the one rule still Muon- (or anything-) dependent |
+| NaturalGradientUpdate | — | Mean-\|grad\| magnitude normalizer, not Fisher (A0) | ✅ **RESOLVED 2026-09-06 — renamed `MeanNormUpdate`/`mean_norm`** (touching `_UPDATE_CLASSES`, factory, joint, CLI listings, evaluation map, probes/tests; fake `"fisher"` alias dropped). No diag-Fisher was implemented — the A6 map shows the momentum-EMA family (unit_rms) dominates it, so the honest resolution is the rename |
+
+**Map-level conclusions:** (1) the optimizer crutch is dead for ePC on
+the width axis and dead outright in the faithful regime; (2) Muon's
+irreplaceable signal, where it exists, is depth-side — but A4/A5 show
+credit/activity-side normalization does not substitute for it yet;
+(3) the momentum-EMA normalizer (unit_rms) beats instantaneous
+normalizers (natgrad) and per-coordinate Adam (local_adam) — the
+magnitude family to standardize on; (4) D16 re-pin should add the
+unit_rms-vs-Muon matched-step column and the faithful-regime SGD row.
 
 ### Workstream B — Learned Feedback & Task Coupling (Levers 2, 4; Phases 2 & 4)
 
@@ -128,8 +212,9 @@ separate storage).
 
 | Step | Description | Artifact | Validation |
 |---|---|---|---|
-| **B0** | **Audit the legacy seam first.** `computronium/core/local_learning/rules/fa.py:148` has `AdaptiveFA` (Akrout et al. 2019) — but its `_update_feedback_weights` pulls `fb` toward `param.data` (or `param.data.T`): **it reads forward weights, i.e. soft weight transport**; its bio-alignment property test sits xfail'd (`tests/property/biology/test_biology_axioms.py:365`, "feedback LR too small to show alignment in 50 steps"). Extract what's reusable (slow feedback timescale, alignment metric) and record the transport verdict | Probe note + `b0` docstring citing this file | The ontology port must NOT inherit the transport; the xfail stays xfail until a transport-free rule passes it |
-| **B1** | **`LearnedFeedbackCredit` (C-axis).** B becomes credit-internal state updated by a secondary local rule, three transport-free objectives (RESEARCH4 Fix 1): (a) **reconstruction** — B trained to map post-synaptic error back to pre-synaptic activity (autoencoder-style local objective); (b) **update-direction alignment** — minimize angle between B·e and the realized ΔW direction (self-supervised from the update itself, no W read); (c) **slow co-adaptation** — B on a slower timescale tracking the changing Jacobian through local signals only. Config: `CreditAssignmentConfig.local_goodness(learned_feedback=…, feedback_lr=, feedback_update_every=)` | `computronium/ontology/credit.py` + unit lock. Integration requirements: system-scoped state (AdamUpdate precedent) + fail-loud reuse; **TrainerSnapshot must capture credit state** (see carried queue — generalize snapshot to a per-axis state protocol); deterministic under seed (R11.2.24 bitwise resume); campaign `_CREDIT_FACTORIES`/`_CREDIT_ALIASES` dispatch (`core/campaign/evaluation.py:290`); full property-suite gate (credit semantics) | P4/P5 sweeps re-run: does learned B eliminate bidirectional width fragility? Does the D13 `ff − pepita > 0.2` ratchet gap close? |
+| **B0** | ✅ **DONE 2026-09-06** — smoking-gun probe (`scripts/probes/b0_adaptive_fa_audit.py`): with W FROZEN, no activity, and zero gradients (only enabling the branch), legacy `AdaptiveFA._update_feedback_weights` drives cos(B, Wᵀ) monotonically up (0.116→0.160, 0.288→0.447 over 5000 updates) — **the legacy alignment is pure soft weight transport** (it reads `param.data`; Akrout's non-transport activity term was dropped in the port). The xfail's reason ("feedback LR too small to show alignment in 50 steps") = the transport is present but slow; the xfail stays xfail forever under the L3 lock, by construction. Reusable for B1: slow feedback timescale (feedback_lr 1e-4 ≪ lr), cos(B, Wᵀ) metric, feedback_scale | `scripts/probes/b0_adaptive_fa_audit.py` | Probe output + walltime in docstring; transport verdict recorded |
+| **B0-legacy-row** | *(original description)* **Audit the legacy seam first.** `computronium/core/local_learning/rules/fa.py:148` has `AdaptiveFA` (Akrout et al. 2019) — but its `_update_feedback_weights` pulls `fb` toward `param.data` (or `param.data.T`): **it reads forward weights, i.e. soft weight transport**; its bio-alignment property test sits xfail'd (`tests/property/biology/test_biology_axioms.py:365`, "feedback LR too small to show alignment in 50 steps"). Extract what's reusable (slow feedback timescale, alignment metric) and record the transport verdict | Probe note + `b0` docstring citing this file | The ontology port must NOT inherit the transport; the xfail stays xfail until a transport-free rule passes it |
+| **B1** | ✅ **LANDED 2026-09-06** — `CreditAssignmentConfig.local_goodness(learned_feedback=, feedback_lr=0.5, feedback_update_every=1)`; extended `local_goodness`, NOT a new credit_type (registry surfaces untouched). Learned B is credit-internal state (`LocalGoodnessCredit._learned`, same deterministic CRC-seeded init as fixed B): per weight, closed-form ridge regression `post @ C ≈ e1` with `B = Cᵀ·feedback_scale` (autoencoder-style, autograd-free, reads only settled activations + the e₁ broadcast — never `param.data`, L3 honored), EMA-blended at `feedback_lr` every `feedback_update_every` steps; non-finite settles skip the update (diverged-step precedent). `get_state()`/`load_state()` per the A1 protocol (learned-B matrices + step counter, string keys, fail-loud shape-mismatch reuse); **TrainerSnapshot now captures credit state** (`credit_state` named-group axis, restore fails loud — carried-queue lesson closed for credits too). **PROBE VERDICT (pre-registered prediction FALSIFIED):** `p4_width_fragility.py --learned-feedback --update unit_rms` — pepita w32/w128 STILL explode (val_ppl 4.8e8; act_std ~20×/layer at lrs 1e-4/3e-4, ~5 min on RTX 3080). Learned B changes the update's row space and the runaway persists ⇒ the fixed-B row space is exonerated; the driver is the unbounded settle-activity loop. **A5 (settle-path gain homeostasis) is the indicated PEPITA repair**, per the pre-registration's else-branch. Library-side B1 stands as honest infrastructure (unit locks + bitwise resume green) | `computronium/ontology/credit.py` + `tests/unit/core/test_learned_feedback.py` (5 locks: B moves + reconstruction strictly improves, transport-free trajectory vs perturbed W, bitwise state round-trip, fail-loud reuse, fixed path untouched) + `tests/integration/test_learned_feedback_resume.py` (snapshot carries credit state; resume bitwise) | Full property suite 679 passed (credit-semantics gate); ruff clean on new code; pyright clean on new code (legacy findings unchanged) |
 | **B2** | Fixed-vs-learned B at depths 4/8/16, capacity-matched, MNIST + LM cells | `scripts/probes/b2_learned_feedback_depth.py` | Does the depth-attenuation problem dissolve for the FA/PEPITA family? |
 | **B3** | **Predictive targets for FF (C-axis):** each layer predicts the next layer's activity; the prediction error IS the credit signal (predictive coding's error, FF's architecture). New credit type `local_predictive` — full registry wiring per the checklist below. Design note: `TargetInversionCredit` currently propagates targets through `Wᵀ` (**weight transport by construction**) — the honest variant propagates targets through learned B (compose with B1) | `computronium/ontology/credit.py` + demo test | vs `ff_hybrid` on MNIST + LM: does it match without global CE? |
 | **B4** | **Per-layer contrastive targets:** each layer sees its activity under (a) correct-class input, (b) corrupted-class input; the activity difference is the layer-local signal (FF's original idea, made per-layer) | `computronium/ontology/credit.py` | Does it beat ff_hybrid on LM (where pure FF's global-goodness fails)? |
@@ -192,13 +277,13 @@ paragraph with numbers.
 | Target | Description | Workstream | Demo Test |
 |---|---|---|---|
 | **D17** | LM ladder result at 10–20-min arms (carried TODO11 numbering — first claim on the number) | C0 | per static-arms convention |
-| **D18** | The optimizer crutch killed or mapped: PEPITA/ePC train at fragile cells under ladder updates; magnitude-vs-direction verdict locked | A1–A3 | `test_demo_update_ladder.py` |
+| **D18** | ✅ **LANDED 2026-09-06** — crutch killed for ePC w32–64: ePC trains at both fragile widths under unit_rms (w64 32.5, w32 42.5 multi-seed means) while Muon at its registered lr explodes (101.2 / 191.7); PEPITA control explodes (audit-backed structural). Demo: fixed-step arms (deterministic — walltime budgets CANNOT be gallery-pinned), LM task, seeds 0–2, CPU | A0–A2 | `test_demo_update_ladder.py` + `docs/figures/run_records/d18_update_ladder.json` |
 | **D19** | Credit-space normalization: ePC learns at depth 8–20 under the simple regime; per-layer decay ~1× | A4 | `test_demo_credit_norm_epc_depth.py` |
 | **D20** | Learned feedback: PEPITA with learned B competitive at depth 16, width-matched | B1–B2 | `test_demo_learned_feedback_pepita.py` |
 | **D21** | Predictive/contrastive local targets train without global CE | B3/B4 | `test_demo_local_targets.py` |
 | **F2-close** | Reward-modulated STDP verdict (either terminus) | B5 | re-audit inside `test_demo_spiking_plateau.py` |
 | **D22** | ψ-only adaptation (θ frozen) solves the switch | D1 | `test_demo_psi_only_adaptation.py` |
-| **F4** | The credit-channel failure map: all 8 failure modes + their repairs in one figure, mechanism ratchets locked | A/B/C | `test_demo_credit_channel_map.py` |
+| **F4** | ✅ **LANDED 2026-09-06** — `test_demo_credit_channel_map.py`: all 8 failure modes in one figure; two mechanisms LIVE (A4 spectral repair: ePC depth-8 0.108→0.170 with per-layer credit norms flattened to ~1.0; blocked channel: sPC hidden norms exactly 0.0 vs ePC > 0) + record ratchets locked against D18/D16/F1/F2/D14 pinned data. **D19 supersedes the deferred simple-regime demo** — F4's live cell IS the A4 demonstration | A/B/C | `test_demo_credit_channel_map.py` + `docs/figures/run_records/f4_credit_channel_map.json` |
 
 ---
 
@@ -270,14 +355,112 @@ paragraph with numbers.
 
 ---
 
-## 🎯 The Next-Session Plan (Ordered)
+## 🎯 The Next-Session Plan (Ordered, rev 3 — A0/A1/A2 landed)
 
-1. **A0 probe** — natural-gradient magnitude-normalization arm on the P4 fragile cells (zero new primitives; extends `p4_width_fragility.py`).
-2. **A1** — the ablation ladder primitive (`UnitRMS` + `LocalAdam`) per the wiring checklist; snapshot-state generalization lands with it.
-3. **A2/A3 probes** — PEPITA/ePC sweeps across the ladder on both instruments; verdict against the pre-registered predictions.
-4. **B0 audit → B1 pull** — legacy-AdaptiveFA audit, then `LearnedFeedbackCredit` (reconstruction objective first — cheapest local objective).
-5. **C0** — the carried LM ladder runs (user-gated) bank D17 baselines while A/B probes iterate.
-6. **A4 probe** — credit_norm on the F1 depth instrument (the decisive novelty lever).
+1. ✅ **A4×D14 composition — DONE 2026-09-06, clean informative
+   negative** (`scripts/probes/a4_faithful_composition.py`): faithful
+   regime is SELF-SUFFICIENT (mupc+adam 0.828 at depth 20 replicates
+   D14; **plain SGD reaches 0.528** — the dynamics do the heavy
+   lifting); credit_norm actively HARMS it (spectral/adam 0.545,
+   spectral/euclid 0.258, rms ≈ chance) because ε in the
+   reparameterized regime is injected into the FORWARD — it is
+   dynamics, not just credit, and rescaling breaks the μPC/β scale
+   structure. Both pre-registered predictions falsified → the A6
+   co-design map's key entry: **levers do not naively compose;
+   credit_norm is a simple-regime tool, the faithful regime needs
+   none.** The unifying hypothesis's composition test is CLOSED.
+2. ✅ **B1 pull — LANDED 2026-09-06 (see B1 row).** Reconstruction
+   objective shipped transport-free with snapshot-captured credit state;
+   the probe falsified the row-space prediction: learned B does not stop
+   the PEPITA runaway. **Consequence: A5 is now the next pull** (the
+   pre-registration's else-branch — settle-path gain homeostasis bounds
+   the unbounded activity loop). B1's remaining objectives (b)
+   update-direction alignment, (c) slow co-adaptation stay available if
+   A5 also fails to stabilize PEPITA.
+3. **C0** — the carried LM ladder runs (user-gated) bank D17 baselines.
+4. **A6 map assembly** — fold A0–A5 verdicts into the co-design table:
+   ePC needs magnitude (unit_rms) + nothing else; ff_hybrid needs
+   readout_error; PEPITA diverges under every landed lever (A2/B1/A5
+   audit chain) — its row is "current realization diverges; readout-path
+   suspect"; Muon's residual value is depth-only (A3). Re-pin D16 with
+   normalized-credit columns; natural-gradient rename/diag-Fisher rides
+   this touch.
+5. **F4 figure** — assemble the credit-channel failure map from the
+   landed audit chains (each failure mode now has measured evidence and
+   ruled-out causes).
+6. **Optional cheap rungs** — ✅ **(a) DONE 2026-09-06: ePC depth ×
+   gain_control — prediction FALSIFIED** (`a3_ladder_epc.py
+   --gain-control unit_rms`, 48 s CPU): no depth lift (unit_rms
+   0.245@2 → walls at 8+ as before; credit norms still explode —
+   1.1e7 at depth 8). The depth wall is credit-side, now confirmed from
+   the activity side too. (b) output-side gain control / e1 saturation
+   handling for the PEPITA readout suspect remains open (probe-only,
+   standing caution applies).
+7. **Sign-momentum rung** (A1 iii, optional) — D18 pinned unit_rms
+   clearly ahead of Muon on ePC at w32–64; orthogonalization's residual
+   value is now a DEPTH question (A3 decides the hardware story).
+
+**Landed this session (rev 10, 2026-09-06):**
+- **PEPITA readout rung** (`p4_width_fragility.py --readout-norm
+  unit_rms`, new `_ReadoutNormProxy`): both pre-registered predictions
+  FALSIFIED (~10 min RTX 3080). Readout step shape ruled out — the
+  divergence survives hidden-gain bounding + output-step normalization;
+  output act_std 5e4–7e10 means the output-weight MAGNITUDE grows
+  through the weight trajectory, not the normalized step. PEPITA's
+  five-cause audit chain is complete; realization stays retired.
+- **`NaturalGradientUpdate` → `MeanNormUpdate`** (carried queue closed):
+  honest rename, `"fisher"` alias dropped; wiring locks + full suite
+  green. If a Fisher mechanism is ever wanted, it is a NEW primitive
+  with a diag-Fisher implementation, not this class.
+- **D16 re-pin** (matched-step unit_rms column): **unit_rms is
+  regime-shaped** — vision-quick chance at every lr 0.002–0.1 (lr grid
+  probed; loss oscillates min 0.80/last 2.17 — RMS normalization
+  random-walks near the loss floor) while D18 holds the LM-side win.
+  Asserted in the demo as a boundary lock; D14 keeps the faithful-regime
+  row (no duplication).
+- **F4 landed** (see demo table row): the completion criterion "credit-
+  channel failure map is live" is met.
+
+**Demo-infrastructure lessons (for future D-table landings):**
+- Walltime-budgeted arms can never be gallery-pinned (record drifts) —
+  fixed-step arms are the pattern (D18: 600 steps, ~25 s/arm CPU).
+- Walltime is printed, never recorded — putting it in the record dict
+  silently breaks the lock's byte-stability.
+- MNIST quick does NOT reproduce the LM width-fragility regime (ePC
+  trains at w32 under both updates there) — D18-style LM demos must run
+  the tiny-Shakespeare harness; MNIST demos can't carry LM findings.
+- Manifest re-pin: render_gallery → merge per-capability updates →
+  never reorder/shuffle existing sha pins (verified additive-only).
+
+**Session-context notes for future work:**
+- A5 probe command (reuse verbatim):
+  `uv run python scripts/probes/p4_width_fragility.py --update unit_rms
+  --cells pepita:32 pepita:128 --lrs 1e-4 3e-4 --gain-control unit_rms`
+  (+ a 1e-5 rung). CAVEAT: under gain_control, post-settle act_std is
+  bounded by construction on hidden layers — stability reads are
+  val_ppl/finite loss, not act_std. The saturated val_ppl sentinel
+  485165195.41 (= exp(23.0)) appears in every diverged arm — treat it
+  as "diverged", not a measured perplexity.
+- B1 probe command (reuse verbatim, do not re-derive):
+  `uv run python scripts/probes/p4_width_fragility.py --update unit_rms
+  --cells pepita:32 pepita:128 --lrs 1e-4 3e-4 --learned-feedback`
+  (~5 min, RTX 3080). Learned-B knobs: `feedback_lr=0.5`,
+  `feedback_update_every=1` were used — a slower cadence is untested.
+- The P4 harness now takes `--update {muon,natural_gradient,unit_rms,
+  local_adam}`, `--cells credit:width …`, `--lrs …` — reuse it; do not
+  write a new width-sweep instrument.
+- ePC arm lrs: unit_rms best at 3e-4 (w32) / 1e-4–3e-4 (w64); natgrad
+  best at 1e-4. PEPITA explodes at ≥3e-5 on every non-Muon rung — don't
+  re-litigate with higher lrs.
+- Probe arms are 75 s walltime on CUDA (`lmc.DEVICE`); a full
+  A2 sweep is ~25 arms ≈ 35 min. Budget accordingly.
+- `NaturalGradientUpdate` rename-or-diag-Fisher (A0 as-touch) still
+  open — it is a mean-|grad| magnitude normalizer, not Fisher; rename
+  touches `_UPDATE_CLASSES`, factory, joint, CLI listings.
+- Gate discipline: A1 landed without running the full property suite
+  (update-axis change, not credit/dynamics semantics); run the full
+  suite once before the D18 demo promotion since demo locks pin across
+  axes.
 
 **Gate after each step:** probe output + walltime visible → ruff
 format/check on changed files → pyright on new modules → targeted tests →
@@ -290,11 +473,139 @@ green if a demo was promoted.
 
 | Question | If YES | If NO |
 |---|---|---|
-| Does magnitude normalization alone rescue the fragile cells (A0/A1: UnitRMS ≈ Muon)? | The crutch is scale; A4/A5 become the depth levers; parity-with-cheap-optimizer is in reach | Direction (orthogonalization) carries signal; the crutch map (A6) documents *why* per rule — RESEARCH4's prediction falsified is still a finding |
-| Does credit_norm flatten ePC's ~4×/layer decay (A4)? | The unifying hypothesis validated at the credit channel; levers compose toward parity | The attenuation lives in settle geometry, not credit propagation → C2 (error buses) is promoted |
-| Does learned B eliminate PEPITA's width fragility (B1)? | PEPITA becomes a competitive local rule; D13 upgraded; B3 composes on top | PEPITA stays the slow arm; ff_hybrid + ePC carry the local-credit story (they already do on LM) |
+| Does magnitude normalization alone rescue the fragile cells (A0/A1: UnitRMS ≈ Muon)? | **ANSWERED (split terminus, 2026-09-06):** YES for ePC (w32/w64 train without Muon under unit_rms); NO for PEPITA (directional failure — B1 is the repair). The unifying hypothesis holds per-rule | — |
+| Does credit_norm flatten ePC's ~4×/layer decay (A4)? | **ANSWERED (2026-09-06, split):** the decay flattens (spectral: norms exactly ~1.0 through depth 16) and depth-8 learning lifts at matched lr — but simple-regime parity with Muon is not reached; the faithful-regime composition is the decisive remaining test. NOT a settle-geometry/topology problem (audit: hidden ε exists, budget-independent) — C2 not promoted yet |
+
+| A3/A4 sharpened branch (2026-09-06): width = optimizer-side (D18
+| pinned); depth = credit-side (A4 landed, composition pending). The
+| honest claim so far: "the crutch is magnitude on width, direction on
+| PEPITA, and per-layer attenuation on depth" — each axis has its
+| lever landed and measured.
+| Does learned B eliminate PEPITA's width fragility (B1)? | PEPITA becomes a competitive local rule; D13 upgraded; B3 composes on top | **ANSWERED (2026-09-06, NO — for the reconstruction objective):** learned B (row-space changed, transport-free) does not stop the runaway; the fixed-B row space is exonerated, the unbounded activity loop is the driver → **A5 is the indicated repair**. Objectives (b)/(c) remain untried |
 | Do the P2 untried cells + contrastive repairs close LM (C1)? | PC-family LM demo lands; the objective-consistency lever is validated | The boundary is mapped honestly: contrastive+repairs is the working instrument, frozen-error retired with evidence |
 | Does ψ-only adaptation solve the switch (D1)? | The plasticity payoff is demonstrated, not claimed | The ψ-timescale boundary is mapped; metaplasticity (D2) is the next lever |
+
+---
+
+## 💡 New Improvement Opportunities (surfaced rev 10, 2026-09-06)
+
+- **unit_rms's convergence noise floor** — RMS normalization holds step
+  magnitude fixed as the loss approaches the floor (measured: MNIST
+  quick loss oscillates min 0.80 / last 2.17 over 150 batches at every
+  lr). A decayed step_size schedule (or floor-relative normalization)
+  would make the momentum-EMA family viable in easy regimes — candidate
+  `unit_rms_decay` mode if a demo needs it.
+- **PEPITA weight-trajectory channel** — the last ruled-out-free
+  observation: output-weight magnitude grows even with unit-normalized
+  steps and bounded hidden acts. Candidate mechanism: the momentum EMA
+  on the output weight accumulates a persistent direction while
+  normalization removes only its scale... yet per-step displacement is
+  lr-bounded, so the growth rate (~1e4 in ~600 steps) implies the
+  explosion enters through a non-step path (feedback-weight B growth?
+  settle-internal state?). A probe tracking ‖W_out‖ per step vs ‖B‖
+  per step would close it — cheap, probe-only.
+- **F4's ratchet pattern is the template** for future consolidated
+  claims: live arms for the mechanisms not otherwise demoed, record-
+  derived asserts for the pinned ones — no duplicate harnesses.
+- **`MeanNormUpdate` is now honestly named but load-bearing** in D16
+  (natural column) — if it is ever removed, D16's column and the
+  boundary story must be re-pinned, not silently dropped.
+- **Diverged-arm sentinel hygiene** (carried from rev 9): still worth
+  fixing — `lm_comparison._eval` reports exp(23.0) for every diverged
+  arm; an explicit NaN/flag would make F4-style ratchets cleaner.
+
+---
+
+## 💡 New Improvement Opportunities (surfaced by A5, 2026-09-06)
+
+- **The diverged-arm val_ppl sentinel** (exp(23.0) exactly, all arms):
+  `lm_comparison._eval` likely clamps/saturates on non-finite logits —
+  worth a look so diverged arms report NaN or an explicit flag instead
+  of a plausible-looking number (evidence-hygiene defect).
+- **Output-layer gain control is the untested half of A5** — the A5
+  verdict is strictly "hidden-layer renorm is insufficient"; a
+  readout-side bound (or e1 saturation handling) is the direct follow-up
+  for the PEPITA readout suspect. Design caution: normalizing logits
+  changes the CE landscape — needs its own pre-registration.
+- **ePC × gain_control depth rung is free to try** — the flag is already
+  on `error_predictive_coding()`; adding `--gain-control` pass-through
+  to `a3_ladder_epc.py` is a one-line change and answers whether
+  settle-path gain control beats credit_norm's partial depth-8 lift.
+- **μPC-unit-RMS as the canonical A5 mode**: hidden acts settle to
+  ~0.8 std under unit_rms (slightly below 1.0 — the √d/‖a‖ scale
+  interacts with the batch matrix norm); if a demo pins A5, assert on
+  the per-row RMS identity (the unit lock), not raw std.
+- **F4 map input**: the PEPITA misaligned-channel row is now the
+  deepest audit chain in the program — four ruled-out causes
+  (feedback_scale, centered-e1, row space, hidden gain) with the
+  readout-path suspect explicitly named.
+
+---
+
+## 💡 New Improvement Opportunities (surfaced by B1, 2026-09-06)
+
+- **B1 library infra is reusable beyond PEPITA**: the reconstruction
+  learned-B machinery + `TrainerSnapshot.credit_state` axis work for any
+  credit that holds matrices (B3's predictive targets compose with it
+  directly; RandomProjectionsCredit could adopt learned B via the same
+  ridge update — its per-hop chained structure differs, don't assume).
+- **PEPITA diagnosis is now three-for-three on ruled-out causes**:
+  feedback_scale (inert, A2), centered-e1 (inert, A2), fixed-B row
+  space (exonerated, B1). The unbounded settle-activity loop is the
+  only remaining candidate — A5's validation has a sharp target: if
+  gain_control alone stabilizes pepita w32/w128, the causal chain is
+  closed (Muon's orthogonalization was masking the loop via step shape).
+- **Ridge regression as a local-learning primitive**: the closed-form
+  `post @ C ≈ e1` solver (float32, trace-scaled λ, non-finite guard) is
+  a general transport-free local rule — candidate for a future
+  `LocalRegressionUpdate`/credit primitive if B3 needs it.
+- **F4 map input**: PEPITA's misaligned-channel row now carries a
+  mechanism-audit chain (3 ruled-out causes, loop identified) — the
+  strongest-audited row of the figure.
+- **Standing caution still binds (user directive)**: the runaway is
+  "structural to the current DFA-style realization at HEAD", not
+  "PEPITA-in-principle"; A5 verdict language should keep the same
+  honesty (a faithful forward-modulation PEPITA remains untested).
+
+---
+
+## 💡 New Improvement Opportunities (surfaced by A0–A2, 2026-09-06)
+
+- **unit_rms as the new default local-update rung** — it beat both
+  natural_gradient and local_adam on ePC and needs no SVD. If the A2
+  sweep holds multi-seed, D16's optimizer map should add a
+  unit_rms-vs-Muon matched-step column (Muon may be strictly dominated
+  at small widths; orthogonalization's value would then be depth-only).
+- **Momentum-EMA matters for normalized rungs** (unit_rms 34.9 vs
+  natgrad 41.2 on ePC w32): the A6 co-design map should treat
+  "normalize-the-momentum" (not "normalize-the-gradient") as the
+  canonical magnitude family.
+- **B1 credit state must implement `get_state()`/`load_state()`** — the
+  new snapshot protocol is the pattern; learned-B matrices are
+  credit-internal state (the carried-queue failure mode, now fixed for
+  updates, must not reappear for credits).
+- **`LocalAdamUpdate` direction-preservation property** (scalar
+  denominator keeps pseudo-gradient direction) may be reusable as a
+  credit-side normalizer for A4's `rms` mode — same math, C-axis.
+- **PEPITA directional diagnosis is now quantitative**: non-Muon rungs
+  explode at act_std growth ~20×/layer regardless of lr — a clean
+  input for the F4 credit-channel failure map (misaligned-channel row).
+- **⚠️ Standing caution (user directive 2026-09-06): do not prematurely
+  condemn possibilities that may be implementation defects.** The PEPITA
+  "directional failure" verdict is an observed behavior at HEAD, not a
+  settled mechanism claim. Before B1's design locks it in, audit: (a) is
+  `feedback_scale=0.01` Muon-specific — retune per update rung (its
+  effective step shape differs from orthogonalized steps)? (b) does the
+  PEPITA error path lack the per-hop normalization the ladder rungs
+  implicitly removed, i.e. is the explosion in the credit channel rather
+  than the update? (c) is the act-std explosion a cause or a symptom
+  (compare free-settle stds at step 0 vs after training)? Muon's
+  orthogonalization may have been silently acting as the missing gain
+  control — in which case A5 (settle-path gain homeostasis) + unit_rms,
+  not learned-B, is the honest PEPITA repair. Verdict language in
+  RESULTS/docs should say "PEPITA fails under the current fixed-B
+  configuration at these step shapes", not "PEPITA's direction is
+  fundamentally wrong" until (a)–(c) are measured.
 
 ---
 
@@ -317,3 +628,10 @@ green if a demo was promoted.
 The plan is **adaptive**: each probe result re-orders the remaining work.
 The unifying hypothesis (credit-channel fidelity) is the compass; the demo
 suite is the proof.
+
+**Status at rev 10 (2026-09-06):** criteria 1–4 MET (D18 pinned; A4+B1
+demo-grade via F4's live cell + D18; F4 live with ratchets; A6 map
+re-pinned into D16). Criterion 5: D17 user-gated (C0), P2 cells /
+transformer-ePC prereq slotted C1, P-axis campaign D3, F2 verdict B5 —
+all explicitly queued, none silently dropped. Criterion 6 (capstone
+resource-vector table) is the remaining open deliverable.
