@@ -301,7 +301,8 @@ class TestContinualJointSystem:
 
         metrics = fast_weight_model.train_step(x, y, task_id=0)
         assert "loss" in metrics
-        assert "accuracy" in metrics
+        # imp-46 closed metric schema: bare `accuracy` never reappears.
+        assert "nudged_fit_accuracy" in metrics
 
     def test_reset_plastic_state(self, fast_weight_model, mnist_batch):
         """Test plastic state reset at task boundaries."""

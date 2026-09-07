@@ -599,7 +599,7 @@ dev = [
 requires-dist = [
     { name = "botorch", marker = "extra == 'knowledgebase'" },
     { name = "build", marker = "extra == 'dev'" },
-    { name = "computronium", extras = ["vision", "lm", "rl", "spiking", "lightning", "analysis", "ml", "plot", "deploy", "export", "p2p", "ui", "monitoring", "knowledgebase", "graphs", "llm", "nn", "stability"], marker = "extra == 'full'" },
+    { name = "computronium", extras = ["vision", "lm", "rl", "spiking", "lightning", "analysis", "ml", "plot", "deploy", "export", "p2p", "ui", "monitoring", "knowledgebase", "graphs", "llm", "nn"], marker = "extra == 'full'" },
     { name = "cryptography", marker = "extra == 'dev'", specifier = "==50.0.0" },
     { name = "cupy-cuda13x", marker = "extra == 'spiking'", specifier = ">=14.1.1" },
     { name = "datasets", marker = "extra == 'dev'" },

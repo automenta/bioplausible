@@ -563,7 +563,7 @@ class ExecutionEngine:
         # Update Optuna if trial exists
         if trial:
             if metrics:
-                acc = metrics.get("accuracy", 0.0)
+                acc = metrics.get("nudged_fit_accuracy", metrics.get("accuracy", 0.0))
 
                 # Save extended metrics (like robustness scores)
                 for k, v in metrics.items():
@@ -739,7 +739,7 @@ class ExecutionEngine:
     ) -> None:
         """Handle the result of a trial execution."""
         if metrics:
-            acc = metrics.get("accuracy", 0.0)
+            acc = metrics.get("nudged_fit_accuracy", metrics.get("accuracy", 0.0))
             loss = metrics.get("loss", float("inf"))
             self._events.log(
                 f"Result: Acc={acc:.2%}, Loss={loss:.4f}", style="bold green"

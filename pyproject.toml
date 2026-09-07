@@ -2,14 +2,11 @@
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools.package-dir]
-computronium_stability = "computronium/stability"
-
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["computronium*", "computronium_stability*"]
+include = ["computronium*"]
 
 [project]
 name = "computronium"
@@ -117,7 +114,7 @@ llm = ["openai>=1.0"]
 
 # --- Full install ---
 full = [
-    "computronium[vision,lm,rl,spiking,lightning,analysis,ml,plot,deploy,export,p2p,ui,monitoring,knowledgebase,graphs,llm,nn,stability]",
+    "computronium[vision,lm,rl,spiking,lightning,analysis,ml,plot,deploy,export,p2p,ui,monitoring,knowledgebase,graphs,llm,nn]",
 ]
 
 [project.urls]
