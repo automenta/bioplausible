@@ -29,6 +29,34 @@ Metrics per arm: wall-clock budget, steps, tokens seen, train loss +
 val loss/ppl curves on a FIXED val window set (materialized once,
 shared across arms), chars/s. Output: stdout table + JSON in
 benchmark_results/ (untracked by standing directive).
+
+D17 PRE-REGISTRATION (TODO12 rev 12 — written BEFORE the registered
+run, per the E-11 discipline; do not edit after seeing results):
+
+- Arms: ``transformer/ff_hybrid/muon`` vs ``transformer/bp/adam``
+  (+ ``mlp/ff_hybrid/muon`` as local reference), 15-minute arms,
+  seeds 0, 1, 2.
+- REPORTED NUMBER: the MEAN val_ppl over seeds 0–2 per arm; per-seed
+  values recorded alongside; the full val_ppl curve is the artifact,
+  not the endpoint (the gap may widen late if bp/adam converges
+  faster — the curve shows it either way).
+- The gap metric: (ff_hybrid mean − bp/adam mean) / bp/adam mean.
+  VERDICT BAND, fixed in advance:
+    * < 15%  → headline parity: "forward-local credit matches
+      backprop at this scale" (D17 pins the table).
+    * 15–25% → competitive-with-caveat: D17 pins the table and the
+      gap; no parity claim; F5 proceeds on measured accuracy.
+    * > 25%  → MISS: triggers the C1 fallback mechanically
+      (propagation-repair cells re-open; no post-hoc argument).
+- CANONICAL CLAIM WORDING (used in every artifact, never shortened):
+  "forward-local credit with a single readout supervision term — no
+  backward sweep through the hidden layers." Never "fully local";
+  never "local learning beats backprop". Muon/OrthoAdam are global
+  per-matrix operations (SVD polar over the whole weight tensor) —
+  they are NOT part of the locality claim, only of the performance
+  configuration. Claim A (credit locality) and Claim B (physical
+  advantage: no stored activations, no backward sweep) are reported
+  on separate lines.
 """
 
 from __future__ import annotations
