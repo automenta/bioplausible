@@ -7,6 +7,14 @@ Run modes:
     uv run python scripts/probes/lm_comparison.py --smoke      # ~10 min total
     uv run python scripts/probes/lm_comparison.py --minutes 60 # the real runs
 
+REGISTERED-RUN DEFECT FIX (2026-09-06, found on the D17 seed-0 run):
+`_val_sets` used to cut BOTH families' windows at max(ctx) — fine at
+smoke scale (equal ctxs) but the registered mlp arm (ctx 64, input
+4160) crashed its eval against ctx-128 windows (input 8320). Val
+windows are now cut per family at its own ctx. Seed-0 transformer arms
+completed before the crash and were salvaged
+(benchmark_results/d17_seed0_partial.json).
+
 Data: tiny Shakespeare char-level (computronium.data.lm.get_lm_dataset;
 HF fallback verified: 1.004M train / 55.8K val chars, vocab 65). Both
 splits are encoded through ONE train-built vocab (per-split vocab ids
@@ -159,19 +167,28 @@ def load_tokens() -> tuple[torch.Tensor, torch.Tensor]:
 
 
 def _val_sets(
-    val_t: torch.Tensor, vctx: int
+    val_t: torch.Tensor, tctx: int, mctx: int
 ) -> tuple[
     list[tuple[torch.Tensor, torch.Tensor]], list[tuple[torch.Tensor, torch.Tensor]]
 ]:
-    """Fixed val batches (transformer dense, mlp window) shared by all arms."""
-    gen = torch.Generator().manual_seed(0)
-    vidx = torch.randint(0, len(val_t) - vctx - 1, (VAL_WINDOWS,), generator=gen)
-    offs = torch.arange(vctx + 1)
-    vwin = val_t[vidx.unsqueeze(1) + offs]
+    """Fixed val batches (transformer dense, mlp window) shared by all arms.
+
+    Each family's windows are cut at ITS OWN context — the mlp geometry's
+    input is mctx*VOCAB and the transformer's is dense over tctx positions
+    (mixed contexts crashed the registered-scale mlp arm's eval).
+    """
+
+    def _windows(ctx: int):
+        gen = torch.Generator().manual_seed(0)
+        vidx = torch.randint(0, len(val_t) - ctx - 1, (VAL_WINDOWS,), generator=gen)
+        offs = torch.arange(ctx + 1)
+        return val_t[vidx.unsqueeze(1) + offs]
+
+    vwin = _windows(tctx)
     t_val = [(w[:, :-1], w[:, 1:].reshape(-1)) for w in vwin.split(256)]
     eye = torch.eye(VOCAB)
     m_val = []
-    for w in vwin.split(256):
+    for w in _windows(mctx).split(256):
         x = eye[w[:, :-1]].reshape(w.size(0), -1)
         m_val.append((x, w[:, -1]))
     return t_val, m_val
@@ -390,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
     train_t, val_t = load_tokens()
     tcfg = TRANSFORMER_SMOKE if args.smoke else TRANSFORMER_CFG
     mcfg = MLP_SMOKE if args.smoke else MLP_CFG
-    t_val, m_val = _val_sets(val_t, max(tcfg["ctx"], mcfg["ctx"]))
+    t_val, m_val = _val_sets(val_t, tcfg["ctx"], mcfg["ctx"])
 
     geoms: dict[str, tuple[dict, list]] = {
         "transformer": (tcfg, t_val),

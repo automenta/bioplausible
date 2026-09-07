@@ -121,6 +121,18 @@
       "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
     },
     {
+      "capability_id": "F5",
+      "capability_name": "resource_vector",
+      "data_sha256": "f08d31e848f3d839cab3851d90172211ae79a310389a0e210d8f05bbbd327c4e",
+      "demo_test": "tests/integration/test_demo_resource_vector.py",
+      "figure_png": "f5_resource_vector.png",
+      "provenance": {
+        "config_sha256": "f08d31e848f3d839cab3851d90172211ae79a310389a0e210d8f05bbbd327c4e",
+        "git_commit": "3dd39615e01fabbd5ca13d529412fd1bf56de94b"
+      },
+      "scope_label": "live demo scale (HEAD, CPU, fixed seeds)"
+    },
+    {
       "capability_id": "D7",
       "capability_name": "spike_settle",
       "data_sha256": "479da64f1c471dbcda8975917a6ee241d9cdc2dd3c800973c3088a98c856a0d6",

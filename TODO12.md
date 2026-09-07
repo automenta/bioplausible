@@ -14,6 +14,37 @@
 > HEAD. The demo suite is the proof; the README quotes it; everything else
 > is history or hypothesis.*
 >
+> **State (2026-09-06, rev 13 — D22 honest-miss; F5 landed as pinned
+> miss; ⚠️ CLAIM A SCOPE AUDIT: ff_hybrid's autograd chain IS the
+> learning signal (output-pseudo-loss backprop) — canonical locality
+> wording holds verbatim only for requires_autograd=False credits +
+> PEPITA-style routing; per-layer contrastive targets (B3/B4) promoted
+> to the top of the lever queue; D17 PAUSED after seed 0):** F5 (`test_demo_resource_vector.py`,
+> gallery-locked ×2) executed the pre-registered schema with measured
+> bytes/FLOPs: both physical-advantage targets FALSIFIED at HEAD
+> (ff_hybrid autograd realization stores ≥ backprop, costs ~1.3× FLOPs;
+> thermo's exactly-0 proves the O(1) class is real) — Claim A stands,
+> Claim B awaits a non-autograd local-rule realization. Rev-13 items: (1) Highlight-Reel Step 3
+> (D22 ψ-only adaptation) CLOSED as a mapped boundary — both
+> pre-registered predictions falsified in `scripts/probes/d22_psi_only.py`:
+> no landed ψ law consumes a task-loss signal, so ψ-only adaptation cannot
+> acquire Task B with θ bitwise frozen; demo withheld per probe-first
+> rule 3; revival condition = a supervised ψ-law primitive,
+> pre-registered. (2) F5's resource-accounting schema WRITTEN before any
+> measurement (`scripts/probes/f5_resource_vector.py` docstring — memory
+> leads, energy footnoted, OrthoAdam SVD charged honestly, both variants
+> reported). (3) D17 (Step 1) run started and **PAUSED at seed 0** (user
+> budget directive 2026-09-06: no multi-hour runs — time/electricity).
+> Seed-0 salvaged arms (`benchmark_results/d17_seed0.json`): 
+> **transformer/ff_hybrid/muon val_ppl 5.05 (2,200 steps) vs
+> transformer/bp/adam 27.55 (15,217 steps)** — ff_hybrid far AHEAD at
+> 15 min, single-seed, protocol INCOMPLETE (seeds 1–2 not run; verdict
+> band NOT adjudicable). Also fixed en route: `_val_sets` mixed-ctx
+> defect (both families' windows were cut at max(ctx) — fine at smoke
+> scale, crashed the registered mlp arm's eval; per-family ctx now).
+> **Standing lesson: smoke-verify every registered arm end-to-end
+> (1-min arms) before launching minute-scale arms.**
+>
 > **State (2026-09-06, rev 12 — pre-registration tightening + suite green):**
 > external review applied. (1) D17's target is now a fixed **verdict band**,
 > not a point (<15% headline parity / 15–25% competitive-with-caveat /
@@ -135,8 +166,8 @@
 | Step | Goal | Action | Pre-registered target (honest fallback: record what measures) |
 |---|---|---|---|
 | **1 — D17 headline** | Local, biologically-plausible learning trains a Transformer on LM | Un-gate and run the C0 ladder: `transformer/ff_hybrid/muon` vs `transformer/bp/adam` (+ `mlp/ff_hybrid/muon` local reference), 10–20-min arms, matched-step protocol, seeds 0–2; promote to a fixed-step D17 demo (walltime-budgeted arms can never be gallery-pinned — walltime printed, never recorded). **Pre-registration lives in the probe docstring (`lm_comparison.py`) — written before the run** | Reported number = **mean val_ppl over seeds 0–2** (per-seed values recorded; the full curve is the artifact, not the endpoint). Gap = (ff_hybrid − bp/adam)/bp/adam, verdict band fixed in advance: **<15% = headline parity** · **15–25% = competitive-with-caveat** (table + gap pinned, no parity claim, F5 proceeds on measured accuracy) · **>25% = MISS → C1 fallback triggers mechanically** (no post-hoc argument) |
-| **2 — Capstone figure (F5)** | High performers are physically superior for next-gen hardware | Resource-vector accounting on the Step-1 winner: extend the D4 memory profiler to ff_hybrid (no stored-activation sweep), simulated-energy per the substrate models' stated terms (local updates vs global matmuls), per-episode compute at matched accuracy; one FrontierRecord table + Pareto frontier figure. **The accounting schema (which substrate terms count, what a local update costs vs a backward matmul, whether optimizer bookkeeping — momentum buffers, SVD — is charged) is WRITTEN before any measurement** — no computing the ratio after seeing it. Report **both** the plain-update variant (clean locality) and the OrthoAdam variant (best performance) | Order-of-magnitude memory-bandwidth saving (**~10×** target) LEADS — backprop must store all layer activations; ff_hybrid doesn't; the ratio scales with depth and is near-definitionally true. **~5×** simulated-energy saving is the carefully-footnoted SECONDARY: charge OrthoAdam's SVD honestly; if it eats the win, that is a real finding ("the physical advantage survives on the forward pass; the optimizer is the cost") — report, don't hide |
-| **3 — D22 instant adaptation** | Something backprop physically cannot do | ψ-only adaptation (D1→D22): train Task A, freeze θ completely, learn Task B **only** via routing ψ (the F3 per-gate/per-unit realization is already landed). **Controls designed in BEFORE the adaptation run (the F3 lesson):** lr-/effective-step-matched ψ-adaptation controls; a θ-fine-tuning comparison on the SAME switch (the value claim: ψ-only beats fine-tuning on time-to-adapt and compute, at what accuracy cost — assert both); Task-A retention measured on the same matched footing | Single-episode adaptation with **‖θ_after − θ_before‖ = 0 asserted exactly** — that is the MECHANISM claim and needs no prose defense. The VALUE claim (speed/cost vs fine-tuning) stands or falls on the matched controls; if it evaporates under matching like F3's did, record that honestly |
+| **2 — Capstone figure (F5)** | ✅ **CLOSED rev 13 — honest miss pinned** (see the F5 demo row): the physical advantage is NOT realized at HEAD; the non-autograd local-rule realization is the lever | High performers are physically superior for next-gen hardware | Resource-vector accounting on the Step-1 winner: extend the D4 memory profiler to ff_hybrid (no stored-activation sweep), simulated-energy per the substrate models' stated terms (local updates vs global matmuls), per-episode compute at matched accuracy; one FrontierRecord table + Pareto frontier figure. **The accounting schema (which substrate terms count, what a local update costs vs a backward matmul, whether optimizer bookkeeping — momentum buffers, SVD — is charged) is WRITTEN before any measurement** — no computing the ratio after seeing it. Report **both** the plain-update variant (clean locality) and the OrthoAdam variant (best performance) | Order-of-magnitude memory-bandwidth saving (**~10×** target) LEADS — backprop must store all layer activations; ff_hybrid doesn't; the ratio scales with depth and is near-definitionally true. **~5×** simulated-energy saving is the carefully-footnoted SECONDARY: charge OrthoAdam's SVD honestly; if it eats the win, that is a real finding ("the physical advantage survives on the forward pass; the optimizer is the cost") — report, don't hide |
+| **3 — D22 instant adaptation** | ✅ **CLOSED rev 13 — honest miss.** Probe verdict (`scripts/probes/d22_psi_only.py`): ψ-only adaptation cannot acquire Task B with θ bitwise frozen — the ψ contract carries no task-loss signal (controls designed in before the run caught it: lr-matched fine-tune acquires B 0.984 at real forgetting cost, ψ-only sits at the frozen-null floor). Lever: supervised ψ term (B5-generalization) or D2 metaplasticity — *revival condition: a ψ-law primitive with a local supervised term, pre-registered* | Single-episode adaptation with **‖θ_after − θ_before‖ = 0 asserted exactly** was demonstrated (bitwise) but the mechanism is empty without acquisition — demo withheld per probe-first rule 3 |
 
 **Ruthlessly parked (rev 11) — each with its explicit revival CONDITION
 (no parked item may read as silently dropped):**
@@ -165,6 +196,29 @@ configuration. **Claim A (credit locality)** and **Claim B (physical
 advantage: no stored activations, no backward sweep — true regardless of
 optimizer)** are always reported on separate lines so a skeptic's "the
 SVD isn't local" cannot sink the memory/energy result.
+
+⚠️ **CLAIM A SCOPE AUDIT (rev 13, `scripts/probes/f5b_closed_form_ff.py`
+— pre-registered P4 CONFIRMED):** under `InstantaneousDynamics`, the
+nudged pass differs from free ONLY at the output act (β·onehot nudge);
+hidden nudged acts == free hidden acts, so every hidden-layer goodness
+term in the ff objective is EXACTLY ZERO. The autograd ff realization's
+sole nonzero term is the output pseudo-loss ‖out_f‖²−‖out_n‖², and its
+gradient reaches the hidden weights ONLY via the autograd chain
+(closed-form detached variant: exactly 0 hidden gradient → chance
+0.104 vs autograd 0.778 on mnist quick d4/w128/300 batches, seeds 0–2;
+and 0 bytes saved vs 1108 KiB). **The chain IS the learning signal —
+ff_hybrid at HEAD performs a backward sweep through the hidden layers**
+(output-pseudo-loss backprop). Consequences: (1) the canonical wording
+above is FALSE for ff_hybrid specifically — it holds verbatim only for
+the requires_autograd=False credit family (thermo, measured 0 bytes)
+and PEPITA-style closed-form inverse routing; every artifact quoting
+Claim A must scope it to those credits until per-layer nudged passes
+exist. (2) F5's memory miss is now fully EXPLAINED (the chain is
+load-bearing — 1108 KiB at d4/w128, 48.5→74.5 M FLOPs with it).
+(3) The honest path to a true layer-local ff with the physical
+advantage is per-layer contrastive/predictive targets (B3/B4), which
+give each hidden layer its own nudged pass — promoted to the top of
+the lever queue as the Claim A repair.
 
 **Identity-clause scope (rev 12):** the two-minute re-demonstration
 identity applies to the **fast demo tier**; registered-scale claims
@@ -305,7 +359,7 @@ separate storage).
 | **B0-legacy-row** | *(original description)* **Audit the legacy seam first.** `computronium/core/local_learning/rules/fa.py:148` has `AdaptiveFA` (Akrout et al. 2019) — but its `_update_feedback_weights` pulls `fb` toward `param.data` (or `param.data.T`): **it reads forward weights, i.e. soft weight transport**; its bio-alignment property test sits xfail'd (`tests/property/biology/test_biology_axioms.py:365`, "feedback LR too small to show alignment in 50 steps"). Extract what's reusable (slow feedback timescale, alignment metric) and record the transport verdict | Probe note + `b0` docstring citing this file | The ontology port must NOT inherit the transport; the xfail stays xfail until a transport-free rule passes it |
 | **B1** | ✅ **LANDED 2026-09-06** — `CreditAssignmentConfig.local_goodness(learned_feedback=, feedback_lr=0.5, feedback_update_every=1)`; extended `local_goodness`, NOT a new credit_type (registry surfaces untouched). Learned B is credit-internal state (`LocalGoodnessCredit._learned`, same deterministic CRC-seeded init as fixed B): per weight, closed-form ridge regression `post @ C ≈ e1` with `B = Cᵀ·feedback_scale` (autoencoder-style, autograd-free, reads only settled activations + the e₁ broadcast — never `param.data`, L3 honored), EMA-blended at `feedback_lr` every `feedback_update_every` steps; non-finite settles skip the update (diverged-step precedent). `get_state()`/`load_state()` per the A1 protocol (learned-B matrices + step counter, string keys, fail-loud shape-mismatch reuse); **TrainerSnapshot now captures credit state** (`credit_state` named-group axis, restore fails loud — carried-queue lesson closed for credits too). **PROBE VERDICT (pre-registered prediction FALSIFIED):** `p4_width_fragility.py --learned-feedback --update unit_rms` — pepita w32/w128 STILL explode (val_ppl 4.8e8; act_std ~20×/layer at lrs 1e-4/3e-4, ~5 min on RTX 3080). Learned B changes the update's row space and the runaway persists ⇒ the fixed-B row space is exonerated; the driver is the unbounded settle-activity loop. **A5 (settle-path gain homeostasis) is the indicated PEPITA repair**, per the pre-registration's else-branch. Library-side B1 stands as honest infrastructure (unit locks + bitwise resume green) | `computronium/ontology/credit.py` + `tests/unit/core/test_learned_feedback.py` (5 locks: B moves + reconstruction strictly improves, transport-free trajectory vs perturbed W, bitwise state round-trip, fail-loud reuse, fixed path untouched) + `tests/integration/test_learned_feedback_resume.py` (snapshot carries credit state; resume bitwise) | Full property suite 679 passed (credit-semantics gate); ruff clean on new code; pyright clean on new code (legacy findings unchanged) |
 | **B2** | 🅿️ **PARKED (rev 11 — PEPITA family).** Fixed-vs-learned B at depths 4/8/16, capacity-matched, MNIST + LM cells | `scripts/probes/b2_learned_feedback_depth.py` | Does the depth-attenuation problem dissolve for the FA/PEPITA family? |
-| **B3** | **Predictive targets for FF (C-axis):** each layer predicts the next layer's activity; the prediction error IS the credit signal (predictive coding's error, FF's architecture). New credit type `local_predictive` — full registry wiring per the checklist below. Design note: `TargetInversionCredit` currently propagates targets through `Wᵀ` (**weight transport by construction**) — the honest variant propagates targets through learned B (compose with B1) | `computronium/ontology/credit.py` + demo test | vs `ff_hybrid` on MNIST + LM: does it match without global CE? |
+| **B3** | ▶️ **PROMOTED rev 13 — the Claim A repair** (see the scope audit above): per-layer targets give each hidden layer its own nudged pass, the only honest route to a true layer-local ff with the physical advantage. **Predictive targets for FF (C-axis):** each layer predicts the next layer's activity; the prediction error IS the credit signal (predictive coding's error, FF's architecture). New credit type `local_predictive` — full registry wiring per the checklist below. Design note: `TargetInversionCredit` currently propagates targets through `Wᵀ` (**weight transport by construction**) — the honest variant propagates targets through learned B (compose with B1) | `computronium/ontology/credit.py` + demo test | vs `ff_hybrid` on MNIST + LM: does it match without global CE? |
 | **B4** | **Per-layer contrastive targets:** each layer sees its activity under (a) correct-class input, (b) corrupted-class input; the activity difference is the layer-local signal (FF's original idea, made per-layer) | `computronium/ontology/credit.py` | Does it beat ff_hybrid on LM (where pure FF's global-goodness fails)? |
 | **B5** | 🅿️ **PARKED (rev 11 — naive-STDP rescue).** **Reward-modulated STDP** — the supervised error term `TemporalTraceCredit` lacks by construction (F2: "declares `phases=(FREE,)` and never consumes `loss`"). Add a config-gated reward/error term on the timing-STDP path; closes F2's OPEN verdict either way | `credit.py` + F2 test re-audit | Collapse stops + readout ≥ random-init ⇒ F2 was a missing term; persists ⇒ a verified constraint of timing-STDP, honestly closed |
 | **B6** | *(optional, last)* **Temporal targets:** use the settling trajectory (not just the final equilibrium) as credit — EqProp-adjacent; only if B3–B5 leave the target-delivery question open | probe only | — |
@@ -368,14 +422,14 @@ paragraph with numbers. Pre-registered targets: ~10× memory bandwidth,
 
 | Target | Description | Workstream | Demo Test |
 |---|---|---|---|
-| **D17** | ▶️ **ACTIVE — Highlight-Reel Step 1 (un-gated rev 11).** LM ladder result at 10–20-min arms: transformer/ff_hybrid vs transformer/bp, seeds 0–2, fixed-step arms (gallery-pinnable), walltime printed never recorded | C0 | per static-arms convention |
+| **D17** | ▶️ **PAUSED at seed 0 (rev 13 — user budget directive).** Seed-0 arms salvaged (`benchmark_results/d17_seed0.json`): transformer/ff_hybrid/muon **5.05** vs transformer/bp/adam **27.55** vs mlp/ff_hybrid/muon 27.94 — ff_hybrid far ahead at 15 min, but SINGLE-SEED; the pre-registered verdict band (<15% / 15–25% / >25% gap, seeds 0–2 mean) is NOT adjudicable until seeds 1–2 run. Resume = seeds 1–2 only (~90 min GPU; user-gated). If resumed and the gap holds, D17 lands as headline parity | C0 | probe JSONs + D17 demo promotion after verdict |
 | **D18** | ✅ **LANDED 2026-09-06** — crutch killed for ePC w32–64: ePC trains at both fragile widths under unit_rms (w64 32.5, w32 42.5 multi-seed means) while Muon at its registered lr explodes (101.2 / 191.7); PEPITA control explodes (audit-backed structural). Demo: fixed-step arms (deterministic — walltime budgets CANNOT be gallery-pinned), LM task, seeds 0–2, CPU | A0–A2 | `test_demo_update_ladder.py` + `docs/figures/run_records/d18_update_ladder.json` |
 | **D19** | Credit-space normalization: ePC learns at depth 8–20 under the simple regime; per-layer decay ~1× | A4 | `test_demo_credit_norm_epc_depth.py` |
 | **D20** | Learned feedback: PEPITA with learned B competitive at depth 16, width-matched | B1–B2 | `test_demo_learned_feedback_pepita.py` |
 | **D21** | Predictive/contrastive local targets train without global CE | B3/B4 | `test_demo_local_targets.py` |
 | **F2-close** | Reward-modulated STDP verdict (either terminus) | B5 | re-audit inside `test_demo_spiking_plateau.py` |
-| **D22** | ▶️ **ACTIVE — Highlight-Reel Step 3.** ψ-only adaptation (θ frozen, exact ‖Δθ‖=0 assert) solves the A→B switch | D1 | `test_demo_psi_only_adaptation.py` |
-| **F5** | ▶️ **ACTIVE — Highlight-Reel Step 2.** Resource-vector accounting: memory/energy/compute Pareto, repaired local rules vs backprop at matched accuracy | Capstone | `test_demo_resource_vector.py` |
+| **D22** | ❌ **HONEST MISS (rev 13, probe verdict — NOT promoted).** `scripts/probes/d22_psi_only.py`: θ bitwise frozen (SHA identical) but routing-ψ does NOT acquire Task B — b 0.656 → 0.637–0.668 across psi_lr {0.05,0.2,0.5} × ep {200,600} (noise); FastWeight-ψ same (0.637–0.648; lr 0.5 degrades A to 0.566). lr-matched θ-fine-tune acquires B 0.984 at real forgetting (A 0.660 vs ψ 0.969≈null 0.973). ROOT CAUSE: the ψ-step contract feeds ψ only the FREE (target-free) settled activity — no landed plasticity law consumes a loss/target term (the B5 missing-supervised-term disease, confirmed on the P-axis). Mechanism assert (‖Δθ‖=0) trivially true; value claim evaporated exactly as the pre-registration's else-branch allowed. ψ-timescale boundary mapped; lever = supervised ψ term (B5-generalization) or D2 metaplasticity | D1 | probe only — demo withheld per probe-first rule 3 |
+| **F5** | ✅ **LANDED 2026-09-06 (rev 13) — the capstone miss pinned.** `test_demo_resource_vector.py` (~5 s CPU, gallery lock green ×2, manifest re-pinned additive-only, RESULTS.md paragraph): measured saved-bytes + measured FLOPs at depths 4/16. **~10× memory target FALSIFIED at HEAD** — ff_hybrid's autograd realization saves MORE than backprop (177.5 vs 143.5 KiB @d16, peak==total); **~5× energy target FALSIFIED** — ff_hybrid ~1.3× bp FLOPs (1.349 vs 0.939 M), ortho premium real (muon 1.349 vs euclid 1.218 M = "the optimizer is the cost"), thermo ties bp. The O(1)-memory class is real (thermo saves EXACTLY 0 at every depth) — Claim A (algorithmic locality) stands, Claim B NOT demonstrated at HEAD; asserts are the ratchet a non-autograd ff_hybrid must flip (implementation artifact per standing caution) | Capstone | `test_demo_resource_vector.py` + `docs/figures/run_records/f5_resource_vector.json` |
 | **F4** | ✅ **LANDED 2026-09-06** — `test_demo_credit_channel_map.py`: all 8 failure modes in one figure; two mechanisms LIVE (A4 spectral repair: ePC depth-8 0.108→0.170 with per-layer credit norms flattened to ~1.0; blocked channel: sPC hidden norms exactly 0.0 vs ePC > 0) + record ratchets locked against D18/D16/F1/F2/D14 pinned data. **D19 supersedes the deferred simple-regime demo** — F4's live cell IS the A4 demonstration | A/B/C | `test_demo_credit_channel_map.py` + `docs/figures/run_records/f4_credit_channel_map.json` |
 
 ---
@@ -443,29 +497,41 @@ paragraph with numbers. Pre-registered targets: ~10× memory bandwidth,
 - **Device policy:** demo suite on CPU (measured: kernel-launch-bound); GPU where FLOP-bound (registered-scale campaigns, large widths).
 - **DataLoader workers:** `num_workers=2` at demo scale; `0` is flake mitigation.
 - **GitHub CI not in use:** local gates are the acceptance criteria.
-- **Runs budget:** gradual scaling — next trial budget ~10–20 min/arm; 60-min runs only as findings stabilize (user directive 2026-09-06).
+- **Runs budget (TIGHTENED 2026-09-06):** no multi-hour or unattended
+  long runs — they waste time and electricity (user directive). Per-arm
+  budgets stay ~10–20 min ONLY with explicit per-batch approval;
+  smoke-verify every registered arm end-to-end at ~1-min arms first
+  (the D17 seed-0 ctx defect would have surfaced in minutes);
+  registered-scale claims may re-show via the `slow` tier at their
+  budget, but launching them is a per-session user decision, never a
+  background default.
 - **Demo API publishability roadmap deferred — research first** (user directive 2026-09-05). This plan is research-scoped accordingly; the roadmap resumes after the repair program.
 
 ---
 
 ## 🎯 The Next-Session Plan (Ordered, rev 11 — Highlight Reel)
 
-1. **D17 ladder (Step 1)** — the pre-registration is ALREADY in the
-   probe docstring (`lm_comparison.py`, rev 12): verdict band, seed-mean
-   convention, curve artifact, canonical claim wording. Run it:
+1. **D17 ladder (Step 1) — PAUSED at seed 0.** Seed-0 salvaged:
+   ff_hybrid 5.05 vs bp/adam 27.55 (single-seed). Resume = seeds 1–2
+   only, after explicit user approval of the ~90-min GPU budget:
    `uv run python scripts/probes/lm_comparison.py --minutes 15 --arms
-   transformer/ff_hybrid/muon transformer/bp/adam mlp/ff_hybrid/muon`
-   (verify the exact arm syntax in the script first), seeds 0–2, then
-   promote to the fixed-step D17 demo + gallery lock. The verdict band
-   in the output is final — no post-hoc reading.
+   transformer/ff_hybrid/muon,transformer/bp/adam,mlp/ff_hybrid/muon
+   --seed 1` (then `--seed 2`); copy `benchmark_results/lm_comparison.json`
+   → `d17_seed<N>.json` after each. Compute the seed-mean, apply the
+   pre-registered band mechanically, then promote to the fixed-step D17
+   demo (scaled pinned regime — walltime-budgeted arms can never be
+   gallery-pinned) + gallery lock.
 2. **F5 resource-vector demo (Step 2)** — winner of Step 1 through the
    capstone accounting: extend the D4 memory profiler to ff_hybrid,
    simulated-energy per substrate terms, per-episode compute; one
    FrontierRecord table + Pareto figure; static-arms convention.
-3. **D22 ψ-only adaptation (Step 3)** — Z3 frozen-θ machinery (D5) is
-   the precedent; assert ‖θ_after − θ_before‖ = 0 exactly, Task-A
-   retention, adaptation time measured by episode count; no terminology
-   defense in prose — the assert is the claim.
+3. ✅ **D22 probe verdict (Step 3) — HONEST MISS, 2026-09-06.** Both
+   pre-registered predictions falsified (`scripts/probes/d22_psi_only.py`,
+   ~2 s CPU): ψ-only adaptation cannot acquire Task B with θ bitwise
+   frozen — no landed ψ law consumes a task-loss signal (root cause,
+   same disease as B5's STDP error term). Demo NOT promoted (probe-first
+   rule 3); fine-tune-vs-ψ value comparison recorded honestly in the
+   probe docstring. Step 3 is closed as a mapped boundary, not a pin.
 4. Only if Step 1 misses its target: re-open C1 (P2 contrastive-LM
    parity + propagation repair) — the reel's fallback path.
 
@@ -603,9 +669,52 @@ green if a demo was promoted.
 | lever landed and measured.
 | Does learned B eliminate PEPITA's width fragility (B1)? | PEPITA becomes a competitive local rule; D13 upgraded; B3 composes on top | **ANSWERED (2026-09-06, NO — for the reconstruction objective):** learned B (row-space changed, transport-free) does not stop the runaway; the fixed-B row space is exonerated, the unbounded activity loop is the driver → **A5 is the indicated repair**. Objectives (b)/(c) remain untried |
 | Do the P2 untried cells + contrastive repairs close LM (C1)? | PC-family LM demo lands; the objective-consistency lever is validated | The boundary is mapped honestly: contrastive+repairs is the working instrument, frozen-error retired with evidence |
-| Does ψ-only adaptation solve the switch (D1)? | The plasticity payoff is demonstrated, not claimed | The ψ-timescale boundary is mapped; metaplasticity (D2) is the next lever |
+| Does ψ-only adaptation solve the switch (D1)? | The plasticity payoff is demonstrated, not claimed | **ANSWERED (2026-09-06, rev 13, NO — `d22_psi_only.py`):** routing-ψ and FastWeight-ψ both fail to acquire Task B with θ bitwise frozen (the ψ contract carries no task-loss signal); fine-tune acquires B at real forgetting cost. The ψ-timescale boundary is mapped; the next lever is a supervised ψ term (B5-generalization to the P-axis) or metaplasticity (D2) |
 
 ---
+
+## 💡 New Improvement Opportunities (surfaced rev 13 — F5, 2026-09-06)
+
+- **Non-autograd ff_hybrid realization is the memory/energy lever** —
+  F5 pinned that LocalGoodnessCredit's autograd realization stores
+  ≥ backprop and costs ~1.3× FLOPs. The O(1)-memory class is real
+  (thermo: exactly 0 bytes). A hand-written local-goodness update
+  (per-layer closed-form/elementwise ops, no autograd graph — the B1
+  ridge-solver pattern is precedent) would flip F5's ratchets and turn
+  the capstone miss into the ~10×/~5× headline. This is a dynamics/
+  credit-realization pull, pre-register before building.
+- **Peak-vs-total saved bytes are identical for every landed credit** —
+  even "local" losses hold all layers' graphs simultaneously at HEAD.
+  A time-resolved live-bytes probe (pack/unpack hooks with a running
+  set) is the instrument that would distinguish O(1)-peak from
+  O(depth)-peak if the non-autograd realization lands.
+- **Muon's SVD premium is scale-dependent** (1.349 vs 1.218 M FLOPs at
+  16-wide demo scale = +11%) — at D17 scale (320-wide) the premium
+  grows as d³; the F5 schema's per-matrix SVD charge is the right
+  accounting when the registered-scale F5 rerun happens.
+
+## 💡 New Improvement Opportunities (surfaced rev 13, 2026-09-06)
+
+- **Supervised ψ term is the missing P-axis primitive** — D22's root
+  cause generalizes F2's B5 finding: neither RoutingPlasticity nor
+  FastWeightPlasticity consumes a loss/target term, so no ψ-only
+  adaptation claim is possible at HEAD. The indicated lever: a
+  `plasticity` law whose `step` receives the NUDGED-phase settled
+  activity (target-conditioned Hebbian outer — ψ becomes a local
+  associative readout learned with one supervision term, composing
+  with the credit-locality story). Pre-register before building;
+  the D22 probe is the reusable instrument.
+- **Pipeline ψ-step phase choice** — `run_train_step` steps ψ on
+  `credit.phases[0]` (always FREE for landed credits). A
+  `psi_phase: Literal["free","nudged"]` knob (or NUDGED-first credit)
+  would let supervised ψ laws exist without a new settle path. Design
+  caution: modulation of the nudged settle interacts with contrastive
+  credit semantics — needs its own audit.
+- **D22 probe instrument is reusable** for any future ψ claim:
+  `_probe`/`_probe_modulated`/`_theta_sha256` + the A→B switching-task
+  batch helper — do not re-derive (flattened `create_switching_task`,
+  settle-path probing — note `forward_pass` returns per-sample outputs
+  for flat MLPs; probes must read through `dynamics.settle`).
 
 ## 💡 New Improvement Opportunities (surfaced rev 10, 2026-09-06)
 
@@ -769,11 +878,15 @@ quarantined with mechanism, or retired):**
   updated to `nudged_fit_accuracy`.
 - Verification: full suite **1772 passed / 0 failed** (60 skipped,
   32 xfailed, 1 pre-existing non-strict xpass) — 11m14s walltime.
-2. **F5 pinned** — the resource-vector FrontierRecord table + Pareto
-   figure over the Step-1 winner at matched accuracy (targets: ~10×
-   memory bandwidth, ~5× energy — measured ratios stand); the
-   accounting schema is written first; both the plain-update and
-   OrthoAdam variants reported; memory leads, energy footnoted.
+2. ✅ **F5 pinned (rev 13) — landed as an HONEST MISS.** The
+   FrontierRecord table + figure exist (`test_demo_resource_vector.py`,
+   gallery-locked ×2); the accounting schema was written first; both the
+   plain-update and ortho variants reported. The pre-registered ~10×
+   memory / ~5× energy targets are falsified at HEAD — ff_hybrid's
+   autograd realization stores more than backprop and costs ~1.3×
+   FLOPs; the O(1)-memory class is real (thermo saves exactly 0).
+   The miss is the finding: Claim B needs a non-autograd local-rule
+   realization — that is the next capstone lever, not a silent drop.
 3. **D22 pinned** — ψ-only adaptation demo with exact ‖Δθ‖=0 assert,
    lr-matched controls, the θ-fine-tuning comparison, and Task-A
    retention on the matched footing.
